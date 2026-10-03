@@ -157,7 +157,7 @@ func hashTree(root string) (string, error) {
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(h, "%s\x00%o\x00%d\x00", filepath.ToSlash(rel), info.Mode().Perm(), info.Size())
+		_, _ = fmt.Fprintf(h, "%s\x00%o\x00%d\x00", filepath.ToSlash(rel), info.Mode().Perm(), info.Size())
 		f, err := os.Open(p) //nolint:gosec // inside our scratch dir
 		if err != nil {
 			return err

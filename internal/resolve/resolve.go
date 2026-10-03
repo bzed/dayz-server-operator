@@ -42,7 +42,7 @@ const (
 	defaultBackupMinKeep  = 3
 	defaultRestartWindow  = 30 * time.Minute
 	stopTimeout           = 120 * time.Second
-	restartSec            = 15 * time.Second
+	restartSec            = 15 * time.Second //nolint:staticcheck // mirrors RestartSec=
 	startTimeoutSlack     = 15 * time.Minute
 	dzoBinary             = "/usr/bin/dzo"
 )

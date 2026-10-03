@@ -75,8 +75,8 @@ type ContainerSpec struct {
 	// PreStart commands become [Service] ExecStartPre= lines (the in-place
 	// mission render, §C5).
 	PreStart        []string
-	RestartSec      time.Duration // 0 omits
-	TimeoutStartSec time.Duration // 0 omits
+	RestartSec      time.Duration //nolint:staticcheck // the systemd directive name; 0 omits
+	TimeoutStartSec time.Duration //nolint:staticcheck // the systemd directive name; 0 omits
 
 	Health Health
 

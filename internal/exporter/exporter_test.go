@@ -21,6 +21,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -239,13 +241,13 @@ func TestMissionDriftIsCounted(t *testing.T) {
 
 func TestSnapshotIsCachedAndRefreshes(t *testing.T) {
 	f := newFixture(t)
-	calls := 0
-	f.query = func() (a2s.InfoResponse, error) { calls++; return a2s.InfoResponse{Players: byte(calls)}, nil }
+	var calls atomic.Int32
+	f.query = func() (a2s.InfoResponse, error) { return a2s.InfoResponse{Players: byte(calls.Add(1))}, nil }
 	if i := f.inst(); i.Players != 1 {
 		t.Fatalf("players = %d", i.Players)
 	}
-	if i := f.inst(); i.Players != 1 || calls != 1 {
-		t.Errorf("a scrape must not query the server again: players %d, %d queries", i.Players, calls)
+	if i := f.inst(); i.Players != 1 || calls.Load() != 1 {
+		t.Errorf("a scrape must not query the server again: players %d, %d queries", i.Players, calls.Load())
 	}
 	f.c.Refresh(context.Background())
 	if i := f.inst(); i.Players != 2 {
@@ -256,8 +258,8 @@ func TestSnapshotIsCachedAndRefreshes(t *testing.T) {
 	f.c.Start(ctx)
 	time.Sleep(150 * time.Millisecond)
 	cancel()
-	if calls < 4 {
-		t.Errorf("the background loop must keep refreshing: %d queries", calls)
+	if calls.Load() < 4 {
+		t.Errorf("the background loop must keep refreshing: %d queries", calls.Load())
 	}
 }
 
@@ -386,24 +388,25 @@ func serial(t *testing.T, addr string, clientCert *tls.Certificate) (int64, erro
 	return conn.ConnectionState().PeerCertificates[0].SerialNumber.Int64(), nil
 }
 
-func startTLS(t *testing.T, c config.Exporter) (addr string, reload chan struct{}, logs *[]string) {
+func startTLS(t *testing.T, c config.Exporter) (addr string, reload chan struct{}, logs func() []string) {
 	t.Helper()
 	c.Listen = "127.0.0.1:0"
 	reload = make(chan struct{})
+	var mu sync.Mutex
 	var lines []string
 	ready := make(chan string, 1)
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 	go func() {
 		_ = Serve(ctx, c, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { _, _ = io.WriteString(w, "ok") }), reload,
-			func(a string) { ready <- a }, func(f string, a ...any) { lines = append(lines, f) })
+			func(a string) { ready <- a }, func(f string, a ...any) { mu.Lock(); lines = append(lines, f); mu.Unlock() })
 	}()
 	select {
 	case addr = <-ready:
 	case <-time.After(3 * time.Second):
 		t.Fatal("the server did not start")
 	}
-	return addr, reload, &lines
+	return addr, reload, func() []string { mu.Lock(); defer mu.Unlock(); return append([]string(nil), lines...) }
 }
 
 func TestTLSCertificateIsReloadedWithoutARestart(t *testing.T) {
@@ -433,11 +436,11 @@ func TestTLSCertificateIsReloadedWithoutARestart(t *testing.T) {
 		t.Fatalf("after a broken certificate: serial = %d %v", s, err)
 	}
 	found := false
-	for _, l := range *logs {
+	for _, l := range logs() {
 		found = found || strings.Contains(l, "rejected")
 	}
 	if !found {
-		t.Errorf("the rejection must be logged: %v", *logs)
+		t.Errorf("the rejection must be logged: %v", logs())
 	}
 
 	// and files that are replaced are noticed by themselves

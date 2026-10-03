@@ -145,7 +145,7 @@ func installGeneration(store *cache.Store, id, scratch string) (bool, error) {
 	if err := store.EnsureRoot(); err != nil {
 		return false, err
 	}
-	err := os.Rename(scratch, filepath.Join(store.Root, id))
+	err := os.Rename(scratch, filepath.Join(store.Root, id)) //nolint:gosec // scratch is our own dir, id a generation id
 	switch {
 	case err == nil:
 		return true, nil
@@ -159,7 +159,7 @@ func installGeneration(store *cache.Store, id, scratch string) (bool, error) {
 func nextRefreshID(store *cache.Store, base string) string {
 	for n := 1; ; n++ {
 		id := base + "-r" + strconv.Itoa(n)
-		if _, err := os.Lstat(filepath.Join(store.Root, id)); err != nil {
+		if _, err := os.Lstat(filepath.Join(store.Root, id)); err != nil { //nolint:gosec // id is base plus a counter
 			return id
 		}
 	}

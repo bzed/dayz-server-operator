@@ -72,7 +72,7 @@ func newEnv(t *testing.T, extra string) *env {
 	write(t, filepath.Join(data, "site", "instances", "x", "instance.yaml"), instanceYAML+extra)
 	ev.build("1")
 	ev.mod("g1")
-	ev.deploy()
+	_ = ev.deploy()
 	ev.e = &Engine{
 		Cfg: cfg, Load: func() (*site.Tree, error) { return site.LoadTree(cfg.Paths.Site) },
 		Now: func() time.Time { return ev.now },
@@ -409,7 +409,7 @@ func TestGCKeepsWhatIsInUse(t *testing.T) {
 	if err := os.Chtimes(filepath.Join(root, "g3"), old, old); err != nil {
 		t.Fatal(err)
 	}
-	ev.deploy() // the unit now runs g4; g1 and g3 are no longer used
+	_ = ev.deploy() // the unit now runs g4; g1 and g3 are no longer used
 	_ = os.Chtimes(filepath.Join(root, "g1"), old, old)
 	removed, _ = ev.e.GC(14 * 24 * time.Hour)
 	if len(removed) != 2 {
