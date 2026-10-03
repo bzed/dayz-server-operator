@@ -19,10 +19,14 @@ LDFLAGS     := -s -w \
 COVERAGE_MIN := 85
 GO           ?= go
 
-.PHONY: all build build-static test test-race cover coverage-check cover-html lint vet fmt fmt-check \
+.PHONY: all docs build build-static test test-race cover coverage-check cover-html lint vet fmt fmt-check \
         licenses reuse deb clean tidy generate servermods
 
 all: lint reuse test build
+
+## docs: build the Sphinx documentation into docs/_build/html (warnings are errors).
+docs:
+	sphinx-build -q -W -b html docs docs/_build/html
 
 ## build: compile the dzo binary for the host platform (static, CGO disabled).
 build:
