@@ -107,7 +107,9 @@ StopTimeout=120
 [Service]
 ExecStartPre=/usr/bin/dzo instance render beta
 Restart=always
+SuccessExitStatus=255
 RestartSec=15s
+TimeoutStopSec=150s
 TimeoutStartSec=45m
 
 [Install]

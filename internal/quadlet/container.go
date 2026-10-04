@@ -231,8 +231,17 @@ func RenderContainer(spec ContainerSpec) (string, error) {
 			kv.set("ExecStartPre", c)
 		}
 		kv.set("Restart", "always")
+		// DayZServer exits with 255 on the SIGTERM of a requested stop (journal of a real
+		// stop: "status=255/EXCEPTION"); without this the unit ends up "failed" after
+		// every clean stop.
+		kv.set("SuccessExitStatus", "255")
 		if spec.RestartSec > 0 {
 			kv.set("RestartSec", formatDuration(spec.RestartSec))
+		}
+		if spec.StopTimeout > 0 {
+			// systemd's default (90s) is shorter than the grace podman gives the server: without
+			// this, systemd kills conmon first and leaves the container behind ("Exited (-1)").
+			kv.set("TimeoutStopSec", formatDuration(spec.StopTimeout+30*time.Second))
 		}
 		if spec.TimeoutStartSec > 0 {
 			kv.set("TimeoutStartSec", formatDuration(spec.TimeoutStartSec))
