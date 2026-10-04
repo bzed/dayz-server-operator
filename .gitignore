@@ -19,3 +19,4 @@ test-report.xml
 /debian/*.debhelper.log
 /debian/*.substvars
 /debian/files
+.private/*

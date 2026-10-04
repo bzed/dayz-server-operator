@@ -53,13 +53,14 @@ The service user and group
 .. code-block:: sh
 
    groupadd --system dayz
-   useradd --system --gid dayz --home-dir /var/lib/dzo --create-home \
+   useradd --system --gid dayz --home-dir /var/lib/dzo --no-create-home \
        --shell /bin/bash --comment "DayZ server operator" dayz
-   chmod 0750 /var/lib/dzo
 
 (The package uses systemd-sysusers with ``u dayz - "DayZ server operator"
 /var/lib/dzo -``; the shell is ``nologin`` there. On a development host a real
-shell makes ``sudo -iu dayz`` and ``machinectl shell`` easier.)
+shell makes ``sudo -iu dayz`` and ``machinectl shell`` easier.) The home
+directory is not created here: it is the mount point of the btrfs filesystem
+below, so it is created once, empty, together with the mount.
 
 Rootless podman needs a range of subordinate ids, and the user's services must
 keep running without a login:
@@ -108,19 +109,21 @@ A file on an existing filesystem is enough for a throw-away test:
    # mount with -o loop,... instead of the fstab line below
 
 Mount it on the data directory (the default is ``/var/lib/dzo``; the user's home
-is on it, which is fine) with the options dzo wants:
+is on it) with the options dzo wants:
 
 .. code-block:: sh
 
    echo 'LABEL=dzo /var/lib/dzo btrfs noatime,compress=zstd:1,user_subvol_rm_allowed 0 0' >> /etc/fstab
    systemctl daemon-reload
+   mkdir -p /var/lib/dzo
    mount /var/lib/dzo
    chown dayz:dayz /var/lib/dzo
    chmod 0750 /var/lib/dzo
    findmnt -no FSTYPE,OPTIONS /var/lib/dzo
 
-If ``/var/lib/dzo`` already contains files (the home directory with a profile),
-mount on a temporary directory, copy them over with ``cp -a`` and mount again.
+If ``/var/lib/dzo`` already contains files (for example a home directory that
+was created earlier), mount on a temporary directory, copy them over with
+``cp -a`` and mount again.
 
 What the users need for snapshots
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -154,8 +157,8 @@ Data directories and configuration
 
 ``/run`` is a tmpfs, so these two directories vanish at reboot. The package
 recreates them with a tmpfiles.d snippet; do the same. ``/var/lib/dzo`` is the
-user's home and persistent, so it is not part of the snippet (the ``useradd
---create-home`` above created it):
+user's home and the btrfs mount point, so it is not part of the snippet (it was
+created with the mount above):
 
 .. code-block:: sh
 
