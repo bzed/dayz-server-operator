@@ -18,7 +18,10 @@
 // a success marker, or a failure marker, or the process exits/times out.
 package steam
 
-import "strings"
+import (
+	"regexp"
+	"strings"
+)
 
 // PromptKind identifies which piece of interactive input steamcmd is
 // currently waiting for.
@@ -78,6 +81,10 @@ const (
 	FailureUnknown               FailureReason = "unknown"
 )
 
+// ansiRe matches the colour codes steamcmd prints on a terminal, which sit
+// inside its messages ("Waiting for user info...\x1b[0mOK").
+var ansiRe = regexp.MustCompile(`\x1b\[[0-9;?]*[A-Za-z]`)
+
 // classification is one entry in the marker table: any of substrs matching
 // (case-insensitively) inside newly observed steamcmd output triggers this
 // outcome.
@@ -99,7 +106,8 @@ var markers = []classification{
 		"two-factor code mismatch", "steam guard code is incorrect", "invalidloginauthcode",
 	}},
 	{event: EventFailure, reason: FailureNoSubscription, substrs: []string{"no subscription"}},
-	{event: EventFailure, reason: FailureCachedCredentialsGone, substrs: []string{"cached credentials not found"}},
+	// "Cached credentials not found." is no failure: steamcmd prints it and
+	// then asks for the password (seen with a real steamcmd), so it is not a marker.
 	{event: EventFailure, reason: FailureAccountLogonDenied, substrs: []string{"account logon denied"}},
 	{event: EventFailure, reason: FailureUnknown, substrs: []string{"login failure", "failed ("}},
 	{event: EventAppConfirmWaiting, substrs: []string{"confirm", "mobile app"}},
@@ -107,14 +115,14 @@ var markers = []classification{
 		"steam guard code", "two-factor code", "enter the code",
 	}},
 	{event: EventPrompt, kind: PromptPassword, substrs: []string{"password:"}},
-	{event: EventSuccess, substrs: []string{"logged in ok", "waiting for user info...ok"}},
+	{event: EventSuccess, substrs: []string{"logged in ok", "waiting for user info...ok", "to steam public...ok"}},
 }
 
 // classify scans buf (accumulated, not-yet-handled steamcmd output) for the
 // first marker whose substring appears. It returns EventNone if nothing
 // recognisable has appeared yet.
 func classify(buf string) (event Event, kind PromptKind, reason FailureReason) {
-	lower := strings.ToLower(buf)
+	lower := strings.ToLower(ansiRe.ReplaceAllString(buf, ""))
 	for _, m := range markers {
 		for _, s := range m.substrs {
 			if strings.Contains(lower, s) {

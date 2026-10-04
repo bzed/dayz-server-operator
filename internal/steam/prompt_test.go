@@ -46,13 +46,25 @@ func TestClassifySuccess(t *testing.T) {
 	}
 }
 
+func TestClassifySuccessWithColourCodes(t *testing.T) {
+	// Captured from a real steamcmd on a terminal: colour codes sit inside the messages.
+	cases := []string{
+		"Logging in user 'x' [U:1:0] to Steam Public...\x1b[0mOK\n\x1b[0mWaiting for client config...",
+		"Waiting for user info...\x1b[0mOK\n",
+	}
+	for _, c := range cases {
+		if event, _, _ := classify(c); event != EventSuccess {
+			t.Errorf("classify(%q) = %v, want EventSuccess", c, event)
+		}
+	}
+}
+
 func TestClassifyFailures(t *testing.T) {
 	cases := map[string]FailureReason{
 		"FAILED (Invalid Password)":                                    FailureInvalidPassword,
 		"FAILED (Rate Limit Exceeded)":                                 FailureRateLimited,
 		"FAILED (Two-factor code mismatch)":                            FailureGuardCodeMismatch,
 		"FAILED (No subscription)":                                     FailureNoSubscription,
-		"Cached credentials not found":                                 FailureCachedCredentialsGone,
 		"FAILED (Account Logon Denied)":                                FailureAccountLogonDenied,
 		"ERROR! Login Failure: something else went unexpectedly wrong": FailureUnknown,
 	}
@@ -65,6 +77,16 @@ func TestClassifyFailures(t *testing.T) {
 		if reason != want {
 			t.Errorf("classify(%q) reason = %v, want %v", input, reason, want)
 		}
+	}
+}
+
+func TestClassifyCachedCredentialsNotFoundIsNoFailure(t *testing.T) {
+	// Real steamcmd: the line is followed by the password prompt.
+	if event, _, _ := classify("Cached credentials not found.\n\n"); event != EventNone {
+		t.Fatalf("event = %v, want EventNone", event)
+	}
+	if event, kind, _ := classify("Cached credentials not found.\n\npassword: "); event != EventPrompt || kind != PromptPassword {
+		t.Fatalf("event=%v kind=%v, want the password prompt", event, kind)
 	}
 }
 
