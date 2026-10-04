@@ -353,7 +353,11 @@ func buildQuadlet(inst *Instance) quadlet.ContainerSpec {
 	rt := inst.Paths.Runtime
 	vols := []quadlet.Volume{
 		{Source: dzoBinary, Destination: "/usr/local/bin/dzo", ReadOnly: true},
-		{Source: inst.Product.Dir, Destination: "/dayz", ReadOnly: true},
+		// An overlay, not ":ro": a server that finds the build or a mod on a read-only
+		// mount silently skips its extra addon directories (DLC such as sakhal, and every
+		// -servermod/-mod), with no error and no script from them (verified on 1.29). The
+		// overlay is writable for the server and leaves the immutable generation untouched.
+		{Source: inst.Product.Dir, Destination: "/dayz", Overlay: true},
 		{Source: filepath.Join(rt, "keys"), Destination: "/dayz/keys", ReadOnly: true},
 		{Source: filepath.Dir(inst.Paths.Manifest), Destination: "/dayz/mpmissions"},
 		{Source: inst.Paths.Profiles, Destination: "/profiles"},
@@ -362,7 +366,7 @@ func buildQuadlet(inst *Instance) quadlet.ContainerSpec {
 	}
 	var clientMods, serverMods []string
 	for _, m := range inst.Mods {
-		vols = append(vols, quadlet.Volume{Source: m.Dir, Destination: "/dayz/" + m.Name, ReadOnly: true})
+		vols = append(vols, quadlet.Volume{Source: m.Dir, Destination: "/dayz/" + m.Name, Overlay: true})
 		if m.Server {
 			serverMods = append(serverMods, m.Name)
 		} else {

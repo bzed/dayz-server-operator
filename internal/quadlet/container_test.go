@@ -45,7 +45,7 @@ func TestRenderContainerHostNetwork(t *testing.T) {
 		Network:     NetworkHost,
 		Volumes: []Volume{
 			{Source: "/var/lib/dzo/instances/deerisle/mpmissions", Destination: "/dayz/mpmissions"},
-			{Source: "/var/lib/dzo/cache/products/dayz-stable/current", Destination: "/dayz", ReadOnly: true},
+			{Source: "/var/lib/dzo/cache/products/dayz-stable/current", Destination: "/dayz", Overlay: true},
 		},
 		Environment: map[string]string{"B": "2", "A": "1"},
 		Health: Health{
@@ -74,7 +74,7 @@ func TestRenderContainerHostNetwork(t *testing.T) {
 		"ContainerName=dzo-deerisle",
 		"Network=host",
 		"Volume=/var/lib/dzo/instances/deerisle/mpmissions:/dayz/mpmissions\n",
-		"Volume=/var/lib/dzo/cache/products/dayz-stable/current:/dayz:ro\n",
+		"Volume=/var/lib/dzo/cache/products/dayz-stable/current:/dayz:O\n",
 		"Environment=A=1\n",
 		"Environment=B=2\n",
 		"HealthCmd=/usr/local/bin/dzo health startup",
@@ -86,7 +86,7 @@ func TestRenderContainerHostNetwork(t *testing.T) {
 		"HealthRetries=5",
 		"HealthOnFailure=kill",
 		"PodmanArgs=--memory=24G",
-		"ContainerStopTimeout=30s",
+		"StopTimeout=30",
 		"[Service]",
 		"Restart=always",
 		"[Install]",

@@ -81,13 +81,13 @@ PublishPort=2402:2402/udp
 PublishPort=2403:2403/udp
 PublishPort=27116:27116/udp
 Volume=/usr/bin/dzo:/usr/local/bin/dzo:ro
-Volume=/DATA/cache/products/dayz-experimental/200:/dayz:ro
+Volume=/DATA/cache/products/dayz-experimental/200:/dayz:O
 Volume=/DATA/instances/beta/runtime/keys:/dayz/keys:ro
 Volume=/DATA/instances/beta/mpmissions:/dayz/mpmissions
 Volume=/DATA/instances/beta/profiles:/profiles
 Volume=/DATA/instances/beta/storage/empty.beta:/storage
 Volume=/DATA/instances/beta/runtime/serverDZ.cfg:/profiles/serverDZ.cfg:ro
-Volume=/DATA/cache/local/dzo-admin/abcd:/dayz/@dzo-admin:ro
+Volume=/DATA/cache/local/dzo-admin/abcd:/dayz/@dzo-admin:O
 Volume=/var/lib/GeoIP:/var/lib/GeoIP:ro
 Environment=LANG=C
 WorkingDir=/dayz
@@ -102,7 +102,7 @@ HealthStartupRetries=60
 HealthStartupSuccess=1
 Notify=healthy
 PodmanArgs=--memory=24G
-ContainerStopTimeout=2m
+StopTimeout=120
 
 [Service]
 ExecStartPre=/usr/bin/dzo instance render beta

@@ -88,14 +88,14 @@ Image=localhost/dzo-runtime:test
 ContainerName=dzo-alpha
 Network=host
 Volume=/usr/bin/dzo:/usr/local/bin/dzo:ro
-Volume=/DATA/cache/products/dayz-stable/100:/dayz:ro
+Volume=/DATA/cache/products/dayz-stable/100:/dayz:O
 Volume=/DATA/instances/alpha/runtime/keys:/dayz/keys:ro
 Volume=/DATA/instances/alpha/mpmissions:/dayz/mpmissions
 Volume=/DATA/instances/alpha/profiles:/profiles
 Volume=/DATA/instances/alpha/storage/dayzOffline.chernarusplus:/storage
 Volume=/DATA/instances/alpha/runtime/serverDZ.cfg:/profiles/serverDZ.cfg:ro
-Volume=/DATA/cache/workshop/221100/1559212036/111:/dayz/@1559212036:ro
-Volume=/DATA/cache/workshop/221100/1828439124/222:/dayz/@1828439124:ro
+Volume=/DATA/cache/workshop/221100/1559212036/111:/dayz/@1559212036:O
+Volume=/DATA/cache/workshop/221100/1828439124/222:/dayz/@1828439124:O
 Environment=LANG=C
 WorkingDir=/dayz
 Exec=./DayZServer -config=/profiles/serverDZ.cfg -port=2302 -profiles=/profiles -storage=/storage -BEpath=/profiles/battleye -mod=@1559212036 -servermod=@1828439124 -cpuCount=4 -limitFPS=60 -netlog
@@ -108,7 +108,7 @@ HealthStartupInterval=30s
 HealthStartupRetries=60
 HealthStartupSuccess=1
 Notify=healthy
-ContainerStopTimeout=2m
+StopTimeout=120
 
 [Service]
 ExecStartPre=/usr/bin/dzo instance render alpha

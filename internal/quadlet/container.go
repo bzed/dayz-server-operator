@@ -36,6 +36,9 @@ type Volume struct {
 	Source      string
 	Destination string
 	ReadOnly    bool
+	// Overlay mounts the source as a podman overlay (":O"): the container can
+	// write, the source is never touched. Use it where ":ro" must not be used.
+	Overlay bool
 }
 
 // Health describes the container's startup/liveness probe (FR-18, D18).
@@ -83,7 +86,7 @@ type ContainerSpec struct {
 	Memory string // e.g. "24G"; empty omits Memory
 	CPUs   string // e.g. "4"; empty omits CPUs
 
-	StopTimeout time.Duration // 0 omits ContainerStopTimeout
+	StopTimeout time.Duration // 0 omits StopTimeout
 
 	// RestartLimitBurst/RestartLimitInterval configure systemd's own
 	// start-rate limiting (StartLimitBurst=/StartLimitIntervalSec=, in the
@@ -155,7 +158,10 @@ func RenderContainer(spec ContainerSpec) (string, error) {
 		volumes := append([]Volume(nil), spec.Volumes...)
 		for _, v := range volumes {
 			val := v.Source + ":" + v.Destination
-			if v.ReadOnly {
+			switch {
+			case v.Overlay:
+				val += ":O"
+			case v.ReadOnly:
 				val += ":ro"
 			}
 			kv.set("Volume", val)
@@ -215,7 +221,8 @@ func RenderContainer(spec ContainerSpec) (string, error) {
 			kv.set("PodmanArgs", "--cpus="+spec.CPUs)
 		}
 		if spec.StopTimeout > 0 {
-			kv.set("ContainerStopTimeout", formatDuration(spec.StopTimeout))
+			// StopTimeout= takes whole seconds (podman --stop-timeout); there is no ContainerStopTimeout.
+			kv.set("StopTimeout", strconv.FormatInt(int64((spec.StopTimeout+time.Second-1)/time.Second), 10))
 		}
 	})
 
