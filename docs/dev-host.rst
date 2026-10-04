@@ -153,12 +153,13 @@ Data directories and configuration
    install -d /etc/dzo
 
 ``/run`` is a tmpfs, so these two directories vanish at reboot. The package
-recreates them with a tmpfiles.d snippet; do the same:
+recreates them with a tmpfiles.d snippet; do the same. ``/var/lib/dzo`` is the
+user's home and persistent, so it is not part of the snippet (the ``useradd
+--create-home`` above created it):
 
 .. code-block:: sh
 
    cat > /etc/tmpfiles.d/dzo.conf <<'EOT'
-   d /var/lib/dzo 0750 dayz dayz -
    d /run/dzo 0750 dayz dayz -
    d /run/dzo/status 0750 dayz dayz -
    EOT

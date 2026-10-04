@@ -15,6 +15,10 @@ set -e
 # exists yet; leave an existing range alone so a reinstall/upgrade never
 # disturbs a running instance's container namespace mapping.
 if [ "$1" = "configure" ]; then
+	# The home and data directory is persistent state, not a tmpfiles.d entry
+	# (sysusers.d does not create home directories). Never chown recursively.
+	install -d -o dayz -g dayz -m 0750 /var/lib/dzo
+
 	if command -v usermod >/dev/null 2>&1 \
 		&& ! grep -q '^dayz:' /etc/subuid 2>/dev/null; then
 		usermod --add-subuids 100000-165535 --add-subgids 100000-165535 dayz || true

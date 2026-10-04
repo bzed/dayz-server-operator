@@ -1,5 +1,4 @@
 # SPDX-FileCopyrightText: 2026 Bernd Zeimetz <bernd@bzed.de>
 # SPDX-License-Identifier: AGPL-3.0-or-later
-d /var/lib/dzo 0750 dayz dayz -
 d /run/dzo 0750 dayz dayz -
 d /run/dzo/status 0750 dayz dayz -

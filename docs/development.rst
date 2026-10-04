@@ -30,12 +30,59 @@ Modules are vendored, so builds work offline.
 .. code-block:: sh
 
    make build      # static binary
-   make servermods # pack the dzo-admin mod into dist/servermods/ (needs the submodules)
+   make servermods # pack the dzo-admin mod into dist/servermods/ (needs the submodules; see below)
    make test       # tests with race detector and coverage gate
    make lint       # includes reuse lint (licence headers)
    make licenses   # dependency licences must be AGPL-compatible
    make docs       # this documentation (needs python3-sphinx)
    make deb        # Debian package
+
+Building and testing the servermod
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``make servermods`` packs ``servermods/*/src/*`` with dzo's own Go packer (no
+DayZ Tools, no armake2) into ``dist/servermods/<mod>/addons/*.pbo`` and writes
+``compat.yaml``. The output is reproducible, and servermods are never sent to
+clients, so nothing is signed and no key is needed. The scripts go in as plain
+text and ``config.cpp`` is not rapified; the server reads both.
+
+While 1.30 is experimental, a servermod has to load on **both** 1.29 (stable,
+Steam app 223350) and 1.30 (experimental, app 1042420, "DayZ Server Exp"). One
+PBO serves both; version-specific code belongs behind ``#ifdef DAYZ_1_29`` with
+the new code in ``#else``. Boot it on each, one server tree per version, never
+two servers on one tree and never default ports. ``dzo test boot --server
+<dir>`` takes the experimental install directory; ``--server steam`` is the
+stable one. Each server build needs its own vanilla baseline
+(``dzo test boot --vanilla``).
+
+A quick check without a configured instance: symlink ``dist/servermods/dzo-admin``
+into a tree of each server as ``@dzo-admin``, start it with
+``-servermod=@dzo-admin`` (a relative path), and compare the script module file
+counts with an unmodded boot of the same version. Both of these must hold:
+
+* no ``SCRIPT    (E)`` line that the vanilla boot does not also log (the
+  experimental server logs ``Leaked 'BunkerBroadcastManager'`` without any mod);
+* the counts rise by the mod's files: ``DZO_ADMIN`` appears in the ``defines``
+  of the ``Module:`` lines, and the Game, World and Mission counts are higher
+  than vanilla.
+
+Measured with dzo-admin at ``a0e644b``:
+
+.. list-table::
+   :header-rows: 1
+
+   * - Server
+     - Game
+     - World
+     - Mission
+   * - 1.29.163709 (build 24570360), vanilla / with mod
+     - 416 / 422
+     - 2123 / 2125
+     - 209 / 210
+   * - 1.30.164014 (build 25319221), vanilla / with mod
+     - 440 / 446
+     - 2321 / 2323
+     - 219 / 220
 
 Tests
 -----
