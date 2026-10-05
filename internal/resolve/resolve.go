@@ -42,6 +42,8 @@ const (
 	defaultBackupMinKeep  = 3
 	defaultRestartWindow  = 30 * time.Minute
 	stopTimeout           = 120 * time.Second
+	defaultStopTimeout    = 30 * time.Second
+	killStopTimeout       = 1 * time.Second
 	restartSec            = 15 * time.Second //nolint:staticcheck // mirrors RestartSec=
 	startTimeoutSlack     = 15 * time.Minute
 	dzoBinary             = "/usr/bin/dzo"
@@ -102,6 +104,7 @@ type Instance struct {
 	Restarts     site.RestartsConfig  `yaml:"restarts"`
 	Health       site.HealthConfig    `yaml:"health"`
 	RestartLimit site.RestartLimit    `yaml:"restart_limit"`
+	Stop         site.StopConfig      `yaml:"stop"`
 	Notify       site.NotifyConfig    `yaml:"notify"`
 	Container    site.ContainerConfig `yaml:"container"`
 	Hooks        site.HooksConfig     `yaml:"hooks"`
@@ -142,7 +145,7 @@ func Resolve(cfg *config.Config, t *site.Tree, name string) (*Instance, error) {
 	}
 	// Site defaults fill every field the instance leaves unset.
 	def := reflect.ValueOf(t.Site.Defaults)
-	for _, f := range []string{"Params", "Updates", "Restarts", "Health", "RestartLimit", "Notify", "Container", "Backup"} {
+	for _, f := range []string{"Params", "Updates", "Restarts", "Health", "RestartLimit", "Stop", "Notify", "Container", "Backup"} {
 		fillZero(reflect.ValueOf(&raw).Elem().FieldByName(f), def.FieldByName(f))
 	}
 
@@ -159,7 +162,7 @@ func Resolve(cfg *config.Config, t *site.Tree, name string) (*Instance, error) {
 	inst := &Instance{
 		Name: name, Map: raw.Map, Ports: raw.Ports, Network: raw.Network, Image: t.Site.Image,
 		Params: raw.Params, Overlays: raw.Overlays, Updates: raw.Updates, Restarts: raw.Restarts,
-		Health: raw.Health, RestartLimit: raw.RestartLimit, Notify: raw.Notify, Container: raw.Container, Hooks: raw.Hooks, Backup: raw.Backup, Admin: raw.Admin, AdminMap: raw.AdminMap,
+		Health: raw.Health, RestartLimit: raw.RestartLimit, Stop: raw.Stop, Notify: raw.Notify, Container: raw.Container, Hooks: raw.Hooks, Backup: raw.Backup, Admin: raw.Admin, AdminMap: raw.AdminMap,
 		Mission: Mission{Source: src, Fallback: raw.FallbackMission, Unmanaged: raw.Mission.Unmanaged, Drift: raw.Mission.Drift},
 		Product: Product{Name: raw.Product, Product: prod},
 		Paths: Paths{
@@ -248,6 +251,17 @@ func fillZero(dst, src reflect.Value) {
 
 func missionSource(t *site.Tree, raw site.Instance) (site.MissionSource, error) {
 	src := raw.MissionSource
+	if src.Git == "" && src.Preset == "" {
+		// The default: Bohemia's Central Economy repository, the folder named like the map.
+		out := site.MissionSource{Git: site.CentralEconomyRepo, Ref: site.CentralEconomyRef, Path: raw.Map}
+		if src.Ref != "" {
+			out.Ref = src.Ref
+		}
+		if src.Path != "" {
+			out.Path = src.Path
+		}
+		return out, nil
+	}
 	if src.Preset == "" {
 		return src, nil
 	}
@@ -266,6 +280,16 @@ func missionSource(t *site.Tree, raw site.Instance) (site.MissionSource, error) 
 }
 
 func applyDefaults(inst *Instance) {
+	if inst.Stop.Method == "" {
+		inst.Stop.Method = site.StopRCon
+	}
+	if inst.Stop.Timeout == 0 {
+		inst.Stop.Timeout = site.Duration(defaultStopTimeout)
+	}
+	if inst.Stop.StdinQuit == nil {
+		t := true
+		inst.Stop.StdinQuit = &t
+	}
 	if inst.Image == "" {
 		inst.Image = defaultImage
 	}
@@ -430,6 +454,24 @@ func buildQuadlet(inst *Instance) quadlet.ContainerSpec {
 		RestartLimitBurst:    inst.RestartLimit.Burst,
 		RestartLimitInterval: inst.RestartLimit.Interval.Std(),
 	}
+	if inst.Stop.StdinQuit == nil || *inst.Stop.StdinQuit {
+		// The server ends every shutdown by reading stdin until it sees "quit"; a stdin at EOF
+		// makes it spin forever (see site.StopConfig). A file holding the line does the job and
+		// keeps the server PID 1, so signals reach it.
+		spec.Volumes = append(spec.Volumes, quadlet.Volume{Source: filepath.Join(rt, "stdin"), Destination: "/stdin", ReadOnly: true})
+		spec.Exec = []string{"/bin/sh", "-c", "exec " + shellJoin(exec) + " </stdin"}
+	}
+	switch inst.Stop.Method {
+	case site.StopKill:
+		// No shutdown request: podman stops the container with a one-second grace.
+		spec.StopTimeout = killStopTimeout
+		spec.TimeoutStopSec = 30 * time.Second
+	default:
+		// Ask over RCon first (dzo instance shutdown), then podman's own stop as the fallback.
+		to := inst.Stop.Timeout.Std()
+		spec.ExecStop = []string{dzoBinary + " instance shutdown " + inst.Name + " --timeout " + to.String()}
+		spec.TimeoutStopSec = to + stopTimeout + 30*time.Second
+	}
 	if inst.Container.Memory != nil {
 		spec.Memory = *inst.Container.Memory
 	}
@@ -444,6 +486,15 @@ func buildQuadlet(inst *Instance) quadlet.ContainerSpec {
 		}
 	}
 	return spec
+}
+
+// shellJoin quotes every word for /bin/sh, so that -mod=@a;@b stays one word.
+func shellJoin(words []string) string {
+	q := make([]string, len(words))
+	for i, w := range words {
+		q[i] = "'" + strings.ReplaceAll(w, "'", `'\''`) + "'"
+	}
+	return strings.Join(q, " ")
 }
 
 // parseMount parses a container.mounts entry "src:dst[:ro]".

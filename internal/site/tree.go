@@ -24,6 +24,7 @@ type Defaults struct {
 	Restarts     RestartsConfig  `yaml:"restarts,omitempty"`
 	Health       HealthConfig    `yaml:"health,omitempty"`
 	RestartLimit RestartLimit    `yaml:"restart_limit,omitempty"`
+	Stop         StopConfig      `yaml:"stop,omitempty"`
 	Notify       NotifyConfig    `yaml:"notify,omitempty"`
 	Container    ContainerConfig `yaml:"container,omitempty"`
 	Backup       BackupConfig    `yaml:"backup,omitempty"`

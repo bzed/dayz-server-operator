@@ -59,9 +59,20 @@ type Params struct {
 	Extra    []string `yaml:"extra,omitempty"`
 }
 
+// The default mission source: the dayzOffline.<map> folders of Bohemia
+// Interactive's Central Economy repository, at master. An instance that sets
+// no git and no preset gets this, with the path taken from its map name.
+const (
+	CentralEconomyRepo = "https://github.com/BohemiaInteractive/DayZ-Central-Economy"
+	CentralEconomyRef  = "master"
+	// CentralEconomyPrefix starts the folder names of that repository.
+	CentralEconomyPrefix = "dayzOffline."
+)
+
 // MissionSource describes where an instance's pristine mission comes from:
-// either a direct git repo, or a named preset from
-// site/integrations/maps/<name>.yaml.
+// a direct git repo, a named preset from site/integrations/maps/<name>.yaml,
+// or (neither set) the Central Economy repository, see CentralEconomyRepo.
+// ref and path override the preset's or the default's.
 type MissionSource struct {
 	Git    string `yaml:"git,omitempty"`
 	Preset string `yaml:"preset,omitempty"`
@@ -214,6 +225,29 @@ type HealthConfig struct {
 	Retries        int      `yaml:"retries,omitempty"`
 }
 
+// How an instance's server is brought down (stop, restart, updates, a reboot).
+const (
+	// StopRCon sends #shutdown over RCon, waits for the process to exit and kills
+	// it when it does not within the timeout. The default.
+	StopRCon = "rcon"
+	// StopKill kills the server at once, without asking it to shut down.
+	StopKill = "kill"
+)
+
+// StopConfig is how the server is stopped (`stop:` in instance.yaml or site.yaml).
+type StopConfig struct {
+	// Method is StopRCon (default) or StopKill.
+	Method string `yaml:"method,omitempty"`
+	// Timeout is how long StopRCon waits for the process to exit on its own
+	// before it is killed. Default 30s.
+	Timeout Duration `yaml:"timeout,omitempty"`
+	// StdinQuit (default true) starts the server with a stdin that holds the line
+	// "quit". The server ends every shutdown in a console loop that reads stdin and
+	// leaves on "quit"; with stdin at end-of-file (a container, a service) it spins
+	// forever instead (seen on 1.30 experimental; some modded maps do the same).
+	StdinQuit *bool `yaml:"stdin_quit,omitempty"`
+}
+
 // RestartLimit is the crash/render-loop brake (F3).
 type RestartLimit struct {
 	Burst    int       `yaml:"burst,omitempty"`
@@ -342,6 +376,7 @@ type Instance struct {
 	Restarts        RestartsConfig  `yaml:"restarts,omitempty"`
 	Health          HealthConfig    `yaml:"health,omitempty"`
 	RestartLimit    RestartLimit    `yaml:"restart_limit,omitempty"`
+	Stop            StopConfig      `yaml:"stop,omitempty"`
 	Notify          NotifyConfig    `yaml:"notify,omitempty"`
 	Container       ContainerConfig `yaml:"container,omitempty"`
 	Hooks           HooksConfig     `yaml:"hooks,omitempty"`
@@ -365,8 +400,16 @@ func (i Instance) Validate() error {
 	if i.Map == "" {
 		errs = append(errs, "map is required")
 	}
-	if err := i.MissionSource.Validate(); err != nil {
+	if i.MissionSource.Git == "" && i.MissionSource.Preset == "" {
+		// The default source: Bohemia's repository has no folder for a map it does not ship.
+		if i.MissionSource.Path == "" && i.Map != "" && !strings.HasPrefix(i.Map, CentralEconomyPrefix) {
+			errs = append(errs, fmt.Sprintf("mission_source is required for map %q: only %s<map> folders of %s are the default", i.Map, CentralEconomyPrefix, CentralEconomyRepo))
+		}
+	} else if err := i.MissionSource.Validate(); err != nil {
 		errs = append(errs, err.Error())
+	}
+	if m := i.Stop.Method; m != "" && m != StopRCon && m != StopKill {
+		errs = append(errs, fmt.Sprintf("stop.method must be %q or %q, got %q", StopRCon, StopKill, m))
 	}
 	if i.Network != NetworkHost && i.Network != NetworkPublish {
 		errs = append(errs, fmt.Sprintf("network must be %q or %q, got %q", NetworkHost, NetworkPublish, i.Network))

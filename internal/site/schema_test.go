@@ -80,6 +80,28 @@ func TestInstanceValidateAcceptsEmptyUpdatePolicy(t *testing.T) {
 	}
 }
 
+func TestInstanceDefaultMissionSource(t *testing.T) {
+	i := validInstance()
+	i.MissionSource = MissionSource{}
+	i.Map = "dayzOffline.chernarusplus"
+	if err := i.Validate(); err != nil {
+		t.Errorf("a Bohemia map needs no mission_source: %v", err)
+	}
+	i.MissionSource = MissionSource{Ref: "DZ_1.29"} // the default repository, pinned
+	if err := i.Validate(); err != nil {
+		t.Errorf("a ref alone must be allowed: %v", err)
+	}
+	i.MissionSource = MissionSource{}
+	i.Map = "empty.deerisle"
+	if err := i.Validate(); err == nil {
+		t.Error("a map the Central Economy repository does not ship needs a mission_source")
+	}
+	i.MissionSource = MissionSource{Path: "empty.deerisle"}
+	if err := i.Validate(); err != nil {
+		t.Errorf("an explicit path is a deliberate choice: %v", err)
+	}
+}
+
 func TestMissionSourceValidateRequiresExactlyOne(t *testing.T) {
 	cases := []MissionSource{
 		{},                      // neither

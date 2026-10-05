@@ -77,7 +77,13 @@ type ContainerSpec struct {
 	NotifyHealthy bool
 	// PreStart commands become [Service] ExecStartPre= lines (the in-place
 	// mission render, §C5).
-	PreStart        []string
+	PreStart []string
+	// ExecStop commands become [Service] ExecStop= lines. They run before the
+	// ExecStop quadlet itself adds (podman rm -f), so they can shut the server
+	// down gracefully first.
+	ExecStop []string
+	// TimeoutStopSec is the whole stop budget of the unit (0 omits it).
+	TimeoutStopSec  time.Duration //nolint:staticcheck // the systemd directive name
 	RestartSec      time.Duration //nolint:staticcheck // the systemd directive name; 0 omits
 	TimeoutStartSec time.Duration //nolint:staticcheck // the systemd directive name; 0 omits
 
@@ -238,7 +244,12 @@ func RenderContainer(spec ContainerSpec) (string, error) {
 		if spec.RestartSec > 0 {
 			kv.set("RestartSec", formatDuration(spec.RestartSec))
 		}
-		if spec.StopTimeout > 0 {
+		for _, c := range spec.ExecStop {
+			kv.set("ExecStop", c)
+		}
+		if spec.TimeoutStopSec > 0 {
+			kv.set("TimeoutStopSec", formatDuration(spec.TimeoutStopSec))
+		} else if spec.StopTimeout > 0 {
 			// systemd's default (90s) is shorter than the grace podman gives the server: without
 			// this, systemd kills conmon first and leaves the container behind ("Exited (-1)").
 			kv.set("TimeoutStopSec", formatDuration(spec.StopTimeout+30*time.Second))

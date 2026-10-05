@@ -147,6 +147,57 @@ func TestPresetOverride(t *testing.T) {
 	}
 }
 
+func TestDefaultMissionSourceIsCentralEconomy(t *testing.T) {
+	cfg, tree, _ := fixture(t, false)
+	raw := tree.Instances["alpha"]
+	raw.MissionSource = site.MissionSource{}
+	raw.Map = "dayzOffline.enoch"
+	tree.Instances["alpha"] = raw
+	inst, err := Resolve(cfg, tree, "alpha")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := site.MissionSource{Git: site.CentralEconomyRepo, Ref: "master", Path: "dayzOffline.enoch"}
+	if got := inst.Mission.Source; got != want {
+		t.Errorf("source = %+v, want %+v", got, want)
+	}
+	raw.MissionSource = site.MissionSource{Ref: "DZ_1.29"}
+	tree.Instances["alpha"] = raw
+	inst, _ = Resolve(cfg, tree, "alpha")
+	if inst.Mission.Source.Ref != "DZ_1.29" || inst.Mission.Source.Git != site.CentralEconomyRepo {
+		t.Errorf("a ref must pin the default repository: %+v", inst.Mission.Source)
+	}
+}
+
+func TestStopMethods(t *testing.T) {
+	cfg, tree, _ := fixture(t, true)
+	raw := tree.Instances["alpha"]
+	no := false
+	raw.Stop = site.StopConfig{Method: site.StopKill, StdinQuit: &no}
+	tree.Instances["alpha"] = raw
+	inst, err := Resolve(cfg, tree, "alpha")
+	if err != nil {
+		t.Fatal(err)
+	}
+	q := inst.Quadlet
+	if len(q.ExecStop) != 0 || q.StopTimeout != killStopTimeout {
+		t.Errorf("kill: ExecStop=%v StopTimeout=%v, want no shutdown request and a one-second grace", q.ExecStop, q.StopTimeout)
+	}
+	if len(q.Exec) == 0 || q.Exec[0] != "./DayZServer" {
+		t.Errorf("stdin_quit: false must leave the plain command line: %v", q.Exec)
+	}
+	raw.Stop = site.StopConfig{}
+	tree.Instances["alpha"] = raw
+	inst, _ = Resolve(cfg, tree, "alpha")
+	q = inst.Quadlet
+	if len(q.ExecStop) != 1 || !strings.Contains(q.ExecStop[0], "instance shutdown alpha --timeout 30s") {
+		t.Errorf("default must ask over RCon first: %v", q.ExecStop)
+	}
+	if len(q.Exec) < 3 || q.Exec[0] != "/bin/sh" || !strings.HasSuffix(q.Exec[2], " </stdin") || !strings.Contains(q.Exec[2], "'-mod=@1559212036'") {
+		t.Errorf("default must feed the server a stdin with \"quit\" and quote every word: %v", q.Exec)
+	}
+}
+
 func TestResolveErrors(t *testing.T) {
 	tests := []struct {
 		name   string

@@ -4,9 +4,12 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -35,7 +38,7 @@ func newInstanceCmd() *cobra.Command {
 		Use:   "instance",
 		Short: "Instance lifecycle: start/stop/restart, the F3 failure gate (§C5/§C8)",
 	}
-	cmd.AddCommand(newInstanceShowCmd(), newInstanceRenderCmd(), newInstanceStartCmd(), newInstanceStopCmd(), newInstanceRestartCmd(), newInstanceAckFailureCmd())
+	cmd.AddCommand(newInstanceShowCmd(), newInstanceRenderCmd(), newInstanceStartCmd(), newInstanceStopCmd(), newInstanceRestartCmd(), newInstanceShutdownCmd(), newInstanceAckFailureCmd())
 	return cmd
 }
 
@@ -276,6 +279,51 @@ func newInstanceRestartCmd() *cobra.Command {
 	cmd.Flags().DurationVar(&delay, "delay", 3*time.Second, "wait after the final kick before restarting")
 	cmd.Flags().IntVar(&kickPasses, "kick-passes", 3, "number of players+kick rounds before the final #kick -1")
 	cmd.Flags().DurationVar(&rconTimeout, "rcon-timeout", 5*time.Second, "RCon login handshake timeout")
+	return cmd
+}
+
+// newInstanceShutdownCmd is what the unit's ExecStop runs for stop.method rcon: ask the
+// server to shut down over RCon and wait for its container to stop. It never fails the stop.
+func newInstanceShutdownCmd() *cobra.Command {
+	var configPath string
+	var timeout time.Duration
+	cmd := &cobra.Command{
+		Use:   "shutdown <name>",
+		Short: "Ask the server to shut down over RCon and wait for it to exit (the unit's ExecStop)",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, inst, err := loadInstance(configPath, args[0])
+			if err != nil {
+				return err
+			}
+			out := cmd.OutOrStdout()
+			logf := func(format string, a ...any) {
+				_, _ = fmt.Fprintf(out, "dzo shutdown "+inst.Name+": "+format+"\n", a...)
+			}
+			pw, err := runfiles.RConPassword(cfg.Paths.Secrets, inst.Name)
+			if err != nil {
+				logf("%v", err)
+				return nil
+			}
+			running := func(ctx context.Context) (bool, error) {
+				b, err := exec.CommandContext(ctx, "podman", "inspect", "-f", "{{.State.Running}}", "dzo-"+inst.Name).Output() //nolint:gosec // our container's name
+				if err != nil {
+					return false, nil // no such container: nothing runs
+				}
+				return strings.TrimSpace(string(b)) == "true", nil
+			}
+			client, err := battleye.Dial("127.0.0.1:"+strconv.Itoa(inst.Ports.RCon), pw, battleye.WithLoginTimeout(5*time.Second))
+			if err != nil {
+				logf("RCon unreachable (%v), leaving it to the hard stop", err)
+				return nil
+			}
+			defer func() { _ = client.Close() }()
+			_, err = instance.Shutdown(cmd.Context(), client, instance.ShutdownOptions{Timeout: timeout, Running: running, Log: logf})
+			return err
+		},
+	}
+	configFlag(cmd, &configPath)
+	cmd.Flags().DurationVar(&timeout, "timeout", 30*time.Second, "how long to wait for the server to exit before the hard stop")
 	return cmd
 }
 

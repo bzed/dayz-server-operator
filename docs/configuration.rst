@@ -150,8 +150,9 @@ Main keys:
    ``dzo instance upgrade`` (see :doc:`mods-and-updates`).
 
 ``map`` and ``mission_source``
-   The mission folder name and where its pristine copy comes from. See
-   :doc:`missions`.
+   The mission folder name and where its pristine copy comes from. Without a
+   ``mission_source``, a ``dayzOffline.<map>`` folder is taken from Bohemia's Central
+   Economy repository at ``master``. See :doc:`missions`.
 
 ``ports``
    Game, RCon and Steam query port. dzo refuses overlapping ports between
@@ -179,6 +180,19 @@ Main keys:
    What happens when a mod update is found: ``auto`` restarts the server
    gracefully within the update windows, ``notify`` only reports, ``manual``
    only records it.
+
+``stop``
+   How the server is brought down, for ``dzo instance stop``, every restart (maintenance,
+   updates, ``dzo restart``) and a reboot of the host. ``method: rcon`` (the default)
+   sends ``#shutdown`` over RCon, waits up to ``timeout`` (default ``30s``) for the
+   process to exit, and kills it when it does not; the restart that follows is
+   immediate, players are not announced to (use ``dzo restart`` for a countdown).
+   ``method: kill`` skips the request and kills the server at once. ``stdin_quit``
+   (default ``true``) starts the server with a stdin that holds the line ``quit``:
+   the server ends every shutdown in a console loop that reads stdin and leaves on
+   ``quit``, and with a stdin at end-of-file (any container) that loop spins forever.
+   Seen on 1.30 experimental, and modded maps may do the same. Set it to ``false`` to
+   start the server unchanged. See :doc:`operations`.
 
 ``restarts.schedule``
    Maintenance restarts, as systemd calendar expressions.

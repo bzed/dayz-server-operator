@@ -19,6 +19,32 @@ container runs. Under the hood these are plain systemd user units
 (``dzo-deerisle.service``), so ``systemctl --user`` and ``journalctl --user``
 work too.
 
+.. _stopping-the-server:
+
+Stopping the server
+-------------------
+
+Every stop goes through the unit: ``dzo stop``, every restart, an update, a reboot.
+``stop.method`` in ``instance.yaml`` (or the site defaults) chooses how:
+
+``rcon`` (default)
+   ``dzo instance shutdown`` sends ``#shutdown`` over RCon and waits up to
+   ``stop.timeout`` (30 s) for the process to exit; then podman stops the container
+   (``SIGTERM``, ``SIGKILL`` after 120 s). The restart is immediate.
+``kill``
+   No request: ``SIGTERM`` and, one second later, ``SIGKILL``.
+
+**Why stdin matters.** DayZ ends every shutdown in a console loop that reads
+standard input until it sees ``quit``. With stdin at end-of-file (a container, a
+systemd service, ``nohup``) that loop never blocks and never ends: the process spins
+at 100 % of a core after "Destroying game" and has to be killed. Seen on 1.30
+experimental (1.30.164014) with no mod loaded; 1.29 does not have it. Modded maps may
+trigger it on other versions. dzo therefore starts every server with a stdin that
+holds the line ``quit`` (``stop.stdin_quit``, default on): measured on 1.30
+experimental, a stop then takes 3 seconds (``SIGTERM``) to 13 seconds (RCon
+``#shutdown``) instead of hanging. A server that is stuck anyway is killed after the
+timeouts, and the unit does not stay "failed" after a clean stop.
+
 Graceful restarts
 -----------------
 
@@ -35,9 +61,9 @@ A graceful restart
 #. kicks the remaining players (several passes, then everyone),
 #. waits the delay and restarts the service.
 
-dzo talks to the server over its own BattlEye RCon client. It never sends
-``#shutdown``, which can hang DayZ. If RCon does not answer, the server is
-restarted through systemd right away.
+dzo talks to the server over its own BattlEye RCon client. The restart itself
+goes through the unit's stop (see :ref:`stopping-the-server`). If RCon does not
+answer, the server is restarted through systemd right away.
 
 The restart runs as its own systemd unit, so it continues if your SSH session
 ends. When a maintenance restart and an update restart fall together, they are

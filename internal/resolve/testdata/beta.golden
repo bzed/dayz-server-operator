@@ -51,6 +51,10 @@ health:
 restart_limit:
     burst: 5
     interval: 30m0s
+stop:
+    method: rcon
+    timeout: 30s
+    stdin_quit: true
 notify:
     discord: []
 container:
@@ -89,9 +93,10 @@ Volume=/DATA/instances/beta/storage/empty.beta:/storage
 Volume=/DATA/instances/beta/runtime/serverDZ.cfg:/profiles/serverDZ.cfg:ro
 Volume=/DATA/cache/local/dzo-admin/abcd:/dayz/@dzo-admin:O
 Volume=/var/lib/GeoIP:/var/lib/GeoIP:ro
+Volume=/DATA/instances/beta/runtime/stdin:/stdin:ro
 Environment=LANG=C
 WorkingDir=/dayz
-Exec=./DayZServer -config=/profiles/serverDZ.cfg -port=2402 -profiles=/profiles -storage=/storage -BEpath=/profiles/battleye -servermod=@dzo-admin
+Exec=/bin/sh -c "exec './DayZServer' '-config=/profiles/serverDZ.cfg' '-port=2402' '-profiles=/profiles' '-storage=/storage' '-BEpath=/profiles/battleye' '-servermod=@dzo-admin' </stdin"
 HealthCmd=/usr/local/bin/dzo health live --query 127.0.0.1:27116
 HealthInterval=1m
 HealthRetries=5
@@ -109,7 +114,8 @@ ExecStartPre=/usr/bin/dzo instance render beta
 Restart=always
 SuccessExitStatus=255
 RestartSec=15s
-TimeoutStopSec=150s
+ExecStop=/usr/bin/dzo instance shutdown beta --timeout 30s
+TimeoutStopSec=3m
 TimeoutStartSec=45m
 
 [Install]

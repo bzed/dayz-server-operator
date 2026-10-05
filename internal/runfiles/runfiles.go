@@ -139,6 +139,10 @@ func Write(in Input) error {
 	if err := os.WriteFile(filepath.Join(in.RuntimeDir, "serverDZ.cfg"), cfg.Bytes(), 0o600); err != nil {
 		return err
 	}
+	// The server's stdin (mounted at /stdin): its shutdown ends in a console loop that leaves on "quit".
+	if err := os.WriteFile(filepath.Join(in.RuntimeDir, "stdin"), []byte("quit\n"), 0o640); err != nil { //nolint:gosec // read by the container's root
+		return err
+	}
 	if in.StorageDir != "" {
 		if err := os.MkdirAll(in.StorageDir, 0o750); err != nil {
 			return err

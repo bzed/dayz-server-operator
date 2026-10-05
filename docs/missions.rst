@@ -92,12 +92,21 @@ instance's ``map`` and ``steamQueryPort`` to ``ports.query``; everything else st
 as you wrote it. A missing or unparsable ``serverDZ.cfg`` fails the render before
 the live mission is touched, also with ``--dry-run``.
 
-The pristine mission is fetched from ``mission_source`` (a git repo, ``ref`` and
-``path``) the first time it is missing, and never again on its own, so a start
+The pristine mission is fetched from ``mission_source`` the first time it is missing, and never again on its own, so a start
 does not need the network. ``--update-pristine`` fetches it again; the live
 mission follows on that same render. A base file the map lacks (for example
 ``cfgweather.xml``) is taken from ``fallback_mission`` in the installed server
 build, when a build is installed.
+
+**The default source** is Bohemia Interactive's `Central Economy repository
+<https://github.com/BohemiaInteractive/DayZ-Central-Economy>`_: an instance without
+``mission_source`` uses the folder named like its ``map`` (``dayzOffline.chernarusplus``,
+``dayzOffline.enoch``, ``dayzOffline.sakhal``) at ``master``, not the files that ship
+inside the server build. ``ref`` and ``path`` alone change that default, for example
+``mission_source: {ref: DZ_1.29}`` pins a tag. A map the repository does not have (a
+modded map) needs a ``mission_source`` of its own (``git``/``ref``/``path``, or a
+``preset``). ``dzo instance render <name> --update-pristine`` fetches the repository
+again; the live mission follows, with the usual drift handling.
 
 How mod files are merged
 ------------------------
