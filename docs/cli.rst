@@ -31,8 +31,9 @@ Site repository
 .. list-table::
    :widths: 45 55
 
-   * - ``dzo site pull | status | commit | validate``
-     - update, inspect, commit and validate the site checkout
+   * - ``dzo site pull | validate``
+     - update the site checkout (clone it the first time), load it and resolve every
+       instance (``status`` and ``commit`` are not built yet)
 
 Products and updates
 --------------------
@@ -77,8 +78,9 @@ Instances
      - server console
    * - ``dzo shell <name>`` / ``dzo exec <name> …``
      - debug container with the same mounts
-   * - ``dzo rcon <name> [command]`` / ``dzo rcon rotate <name>``
-     - RCon console, new RCon password
+   * - ``dzo rcon exec --instance <name> <command>``
+     - one RCon command with the instance's port and password (an interactive
+       console and ``dzo rcon rotate`` are not built yet)
    * - ``dzo wipe <name>``
      - wipe the world (confirmation and snapshot)
 

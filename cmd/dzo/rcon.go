@@ -6,11 +6,13 @@ package main
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/bzed/dayz-server-operator/internal/battleye"
+	"github.com/bzed/dayz-server-operator/internal/runfiles"
 )
 
 func newRconCmd() *cobra.Command {
@@ -23,13 +25,27 @@ func newRconCmd() *cobra.Command {
 }
 
 func newRconExecCmd() *cobra.Command {
-	var addr, password string
+	var addr, password, instanceName, configPath string
 	var timeout time.Duration
 	c := &cobra.Command{
 		Use:   "exec <command...>",
 		Short: "Send one RCon command and print its response",
 		Args:  cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if instanceName != "" {
+				// The address and password of a dzo instance: its RCon port on localhost and the
+				// password dzo generated for it.
+				cfg, inst, err := loadInstance(configPath, instanceName)
+				if err != nil {
+					return err
+				}
+				if password, err = runfiles.RConPassword(cfg.Paths.Secrets, inst.Name); err != nil {
+					return err
+				}
+				addr = "127.0.0.1:" + strconv.Itoa(inst.Ports.RCon)
+			} else if addr == "" || password == "" {
+				return fmt.Errorf("give --instance <name>, or --addr and --password")
+			}
 			client, err := battleye.Dial(addr, password)
 			if err != nil {
 				return fmt.Errorf("rcon: connect: %w", err)
@@ -51,10 +67,10 @@ func newRconExecCmd() *cobra.Command {
 			return nil
 		},
 	}
-	c.Flags().StringVar(&addr, "addr", "", "RCon host:port")
-	c.Flags().StringVar(&password, "password", "", "RCon password")
+	c.Flags().StringVar(&instanceName, "instance", "", "a dzo instance: its RCon port and generated password are used")
+	configFlag(c, &configPath)
+	c.Flags().StringVar(&addr, "addr", "", "RCon host:port (without --instance)")
+	c.Flags().StringVar(&password, "password", "", "RCon password (without --instance)")
 	c.Flags().DurationVar(&timeout, "timeout", 10*time.Second, "command timeout")
-	_ = c.MarkFlagRequired("addr")
-	_ = c.MarkFlagRequired("password")
 	return c
 }

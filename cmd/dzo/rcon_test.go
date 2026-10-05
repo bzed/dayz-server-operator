@@ -105,3 +105,20 @@ func bePacket(typ byte, rest ...byte) []byte {
 	copy(buf[6:], body)
 	return buf
 }
+
+func TestRconExecNeedsATarget(t *testing.T) {
+	_, err := runCmd(t, "rcon", "exec", "players")
+	if err == nil || !strings.Contains(err.Error(), "--instance") {
+		t.Errorf("err = %v, want the hint to give --instance or --addr and --password", err)
+	}
+}
+
+func TestRconExecUnknownInstance(t *testing.T) {
+	cfg := exporterSite(t, "")
+	if _, err := runCmd(t, "rcon", "exec", "--instance", "nope", "--config", cfg, "players"); err == nil {
+		t.Error("an instance that is not in the site must be an error")
+	}
+	if _, err := runCmd(t, "instance", "shutdown", "nope", "--config", cfg); err == nil {
+		t.Error("dzo instance shutdown of an unknown instance must be an error")
+	}
+}
