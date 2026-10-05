@@ -148,3 +148,24 @@ func TestStream(t *testing.T) {
 		t.Fatal("bad token must fail the stream")
 	}
 }
+
+func TestTileRejectsABadPathAndRelaysTheAnswer(t *testing.T) {
+	c, _, _ := setup(t)
+	if _, err := c.Tile(context.Background(), "../x", "metadata.json"); err == nil {
+		t.Error("a bad tile path must not be sent")
+	}
+	resp, err := c.Tile(context.Background(), "chernarusplus", "metadata.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode == 200 {
+		t.Errorf("no tiles are built in this test, got %d", resp.StatusCode)
+	}
+}
+
+func TestErrorText(t *testing.T) {
+	if got := (&apiclient.Error{Status: 404, Message: "no such instance"}).Error(); got != "api: 404 no such instance" {
+		t.Errorf("Error() = %q", got)
+	}
+}

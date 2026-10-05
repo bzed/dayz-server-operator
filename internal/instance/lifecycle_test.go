@@ -176,3 +176,20 @@ func equalStrings(a, b []string) bool {
 	}
 	return true
 }
+
+func TestLifecycleEnableNowAndDisable(t *testing.T) {
+	argsFile := filepath.Join(t.TempDir(), "args.txt")
+	l := Lifecycle{Command: writeFakeSystemctl(t, argsFile, "", 0)}
+	if err := l.EnableNow(context.Background(), "a.timer", "b.timer"); err != nil {
+		t.Fatal(err)
+	}
+	if got := readArgsFile(t, argsFile); !equalStrings(got, []string{"enable", "--now", "a.timer", "b.timer"}) {
+		t.Errorf("enable args = %v", got)
+	}
+	if err := l.Disable(context.Background(), "a.timer"); err != nil {
+		t.Fatal(err)
+	}
+	if got := readArgsFile(t, argsFile); !equalStrings(got, []string{"disable", "--now", "a.timer"}) {
+		t.Errorf("disable args = %v", got)
+	}
+}

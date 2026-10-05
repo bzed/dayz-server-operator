@@ -6,6 +6,7 @@ package site
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -384,5 +385,24 @@ admin_map:
 	v.AdminMap.Watch[0].OnlyIf = "burning"
 	if err := v.Validate(); err == nil || !strings.Contains(err.Error(), "only_if") {
 		t.Fatalf("only_if must be rejected: %v", err)
+	}
+}
+
+func TestAgeParsesDaysAndDurations(t *testing.T) {
+	var s struct {
+		A Age `yaml:"a"`
+		B Age `yaml:"b"`
+		C Age `yaml:"c"`
+	}
+	if err := yaml.Unmarshal([]byte("a: 30d\nb: 90m\nc: \"\"\n"), &s); err != nil {
+		t.Fatal(err)
+	}
+	if s.A.Std() != 30*24*time.Hour || s.B.Std() != 90*time.Minute || s.C != 0 {
+		t.Errorf("ages = %v %v %v", s.A.Std(), s.B.Std(), s.C.Std())
+	}
+	for _, bad := range []string{"a: xd", "a: -3d", "a: soon"} {
+		if err := yaml.Unmarshal([]byte(bad), &s); err == nil {
+			t.Errorf("%q must be rejected", bad)
+		}
 	}
 }
