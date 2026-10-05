@@ -139,8 +139,9 @@ func Write(in Input) error {
 	if err := os.WriteFile(filepath.Join(in.RuntimeDir, "serverDZ.cfg"), cfg.Bytes(), 0o600); err != nil {
 		return err
 	}
-	// The server's stdin (mounted at /stdin): its shutdown ends in a console loop that leaves on "quit".
-	if err := os.WriteFile(filepath.Join(in.RuntimeDir, "stdin"), []byte("quit\n"), 0o640); err != nil { //nolint:gosec // read by the container's root
+	// The server's stdin (mounted at /stdin): the answer "Ignore" to the assertion prompt that
+	// the experimental builds show at shutdown ("Script is leaking!", (A)bort (R)etry (I)gnore).
+	if err := os.WriteFile(filepath.Join(in.RuntimeDir, "stdin"), []byte("i\n"), 0o640); err != nil { //nolint:gosec // read by the container's root
 		return err
 	}
 	if in.StorageDir != "" {

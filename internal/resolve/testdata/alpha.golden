@@ -67,7 +67,7 @@ restart_limit:
 stop:
     method: rcon
     timeout: 30s
-    stdin_quit: true
+    ignore_asserts: true
 notify: {}
 container:
     env:

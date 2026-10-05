@@ -286,9 +286,9 @@ func applyDefaults(inst *Instance) {
 	if inst.Stop.Timeout == 0 {
 		inst.Stop.Timeout = site.Duration(defaultStopTimeout)
 	}
-	if inst.Stop.StdinQuit == nil {
+	if inst.Stop.IgnoreAsserts == nil {
 		t := true
-		inst.Stop.StdinQuit = &t
+		inst.Stop.IgnoreAsserts = &t
 	}
 	if inst.Image == "" {
 		inst.Image = defaultImage
@@ -454,9 +454,10 @@ func buildQuadlet(inst *Instance) quadlet.ContainerSpec {
 		RestartLimitBurst:    inst.RestartLimit.Burst,
 		RestartLimitInterval: inst.RestartLimit.Interval.Std(),
 	}
-	if inst.Stop.StdinQuit == nil || *inst.Stop.StdinQuit {
-		// The server ends every shutdown by reading stdin until it sees "quit"; a stdin at EOF
-		// makes it spin forever (see site.StopConfig). A file holding the line does the job and
+	if inst.Stop.IgnoreAsserts == nil || *inst.Stop.IgnoreAsserts {
+		// The experimental builds stop at "Assertion failed ... (A)bort (R)etry (I)gnore" when
+		// they shut down with leaked scripts and read the answer from stdin; a stdin at EOF makes
+		// them spin forever (see site.StopConfig). A file holding the answer does the job and
 		// keeps the server PID 1, so signals reach it.
 		spec.Volumes = append(spec.Volumes, quadlet.Volume{Source: filepath.Join(rt, "stdin"), Destination: "/stdin", ReadOnly: true})
 		spec.Exec = []string{"/bin/sh", "-c", "exec " + shellJoin(exec) + " </stdin"}

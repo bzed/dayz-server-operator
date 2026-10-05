@@ -34,16 +34,21 @@ Every stop goes through the unit: ``dzo stop``, every restart, an update, a rebo
 ``kill``
    No request: ``SIGTERM`` and, one second later, ``SIGKILL``.
 
-**Why stdin matters.** DayZ ends every shutdown in a console loop that reads
-standard input until it sees ``quit``. With stdin at end-of-file (a container, a
-systemd service, ``nohup``) that loop never blocks and never ends: the process spins
-at 100 % of a core after "Destroying game" and has to be killed. Seen on 1.30
-experimental (1.30.164014) with no mod loaded; 1.29 does not have it. Modded maps may
-trigger it on other versions. dzo therefore starts every server with a stdin that
-holds the line ``quit`` (``stop.stdin_quit``, default on): measured on 1.30
-experimental, a stop then takes 3 seconds (``SIGTERM``) to 13 seconds (RCon
-``#shutdown``) instead of hanging. A server that is stuck anyway is killed after the
-timeouts, and the unit does not stay "failed" after a clean stop.
+**Why stdin matters.** The experimental (diag) builds of DayZ raise an assertion at
+shutdown: ``Assertion failed ... enf_scriptmodule.cpp ... Script is leaking! Check
+log!`` followed by ``(A)bort (R)etry (I)gnore``. Vanilla leaks a script instance
+(``BunkerBroadcastManager``) at every shutdown, so this happens without any mod. The
+build waits for the answer on standard input. With stdin at end-of-file (a container, a
+systemd service, ``nohup``) the read never blocks and never ends: the process spins at
+100 % of a core after "Destroying game" and has to be killed. Seen on 1.30
+experimental (1.30.164014); the stable 1.29 server shows no such prompt. Other builds
+or modded maps may raise assertions of their own at shutdown.
+
+dzo therefore starts every server with a stdin that holds the answer ``i`` (Ignore,
+``stop.ignore_asserts``, default on). Measured on 1.30 experimental, a stop then takes
+3 seconds (``SIGTERM``) to 13 seconds (RCon ``#shutdown``) instead of hanging. A server
+that is stuck anyway is killed after the timeouts, and the unit does not stay "failed"
+after a clean stop.
 
 Graceful restarts
 -----------------
@@ -115,9 +120,11 @@ Console and RCon
 
 .. code-block:: sh
 
-   dzo rcon deerisle                  # interactive console
-   dzo rcon deerisle players          # one command
-   dzo rcon rotate deerisle           # new RCon password
+   dzo rcon exec --instance deerisle players        # one command, the instance's own port and password
+   dzo rcon exec --addr 127.0.0.1:2303 --password <password> players
+
+An interactive console and ``dzo rcon rotate`` (a new password) are not built yet; the
+password lives in ``<paths.secrets>/rcon/<instance>``.
 
 The RCon password is generated per instance and bound to localhost where the
 network mode allows it.

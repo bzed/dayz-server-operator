@@ -187,12 +187,12 @@ Main keys:
    sends ``#shutdown`` over RCon, waits up to ``timeout`` (default ``30s``) for the
    process to exit, and kills it when it does not; the restart that follows is
    immediate, players are not announced to (use ``dzo restart`` for a countdown).
-   ``method: kill`` skips the request and kills the server at once. ``stdin_quit``
-   (default ``true``) starts the server with a stdin that holds the line ``quit``:
-   the server ends every shutdown in a console loop that reads stdin and leaves on
-   ``quit``, and with a stdin at end-of-file (any container) that loop spins forever.
-   Seen on 1.30 experimental, and modded maps may do the same. Set it to ``false`` to
-   start the server unchanged. See :doc:`operations`.
+   ``method: kill`` skips the request and kills the server at once. ``ignore_asserts``
+   (default ``true``) starts the server with a stdin that answers "Ignore" to the
+   ``(A)bort (R)etry (I)gnore`` prompt of an assertion: the experimental builds raise one
+   at every shutdown ("Script is leaking!") and, with a stdin at end-of-file (any
+   container), spin forever waiting for the answer. Set it to ``false`` to start the
+   server unchanged. See :doc:`operations`.
 
 ``restarts.schedule``
    Maintenance restarts, as systemd calendar expressions.

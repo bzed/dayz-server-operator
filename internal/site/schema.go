@@ -241,11 +241,12 @@ type StopConfig struct {
 	// Timeout is how long StopRCon waits for the process to exit on its own
 	// before it is killed. Default 30s.
 	Timeout Duration `yaml:"timeout,omitempty"`
-	// StdinQuit (default true) starts the server with a stdin that holds the line
-	// "quit". The server ends every shutdown in a console loop that reads stdin and
-	// leaves on "quit"; with stdin at end-of-file (a container, a service) it spins
-	// forever instead (seen on 1.30 experimental; some modded maps do the same).
-	StdinQuit *bool `yaml:"stdin_quit,omitempty"`
+	// IgnoreAsserts (default true) starts the server with a stdin that answers the
+	// "(A)bort (R)etry (I)gnore" prompt of an assertion with Ignore. The experimental
+	// (diag) builds raise "Script is leaking!" at every shutdown (the vanilla
+	// BunkerBroadcastManager leaks) and wait for that answer on stdin; with stdin at
+	// end-of-file (a container, a service) they spin forever instead.
+	IgnoreAsserts *bool `yaml:"ignore_asserts,omitempty"`
 }
 
 // RestartLimit is the crash/render-loop brake (F3).

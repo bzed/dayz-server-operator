@@ -173,7 +173,7 @@ func TestStopMethods(t *testing.T) {
 	cfg, tree, _ := fixture(t, true)
 	raw := tree.Instances["alpha"]
 	no := false
-	raw.Stop = site.StopConfig{Method: site.StopKill, StdinQuit: &no}
+	raw.Stop = site.StopConfig{Method: site.StopKill, IgnoreAsserts: &no}
 	tree.Instances["alpha"] = raw
 	inst, err := Resolve(cfg, tree, "alpha")
 	if err != nil {
@@ -184,7 +184,7 @@ func TestStopMethods(t *testing.T) {
 		t.Errorf("kill: ExecStop=%v StopTimeout=%v, want no shutdown request and a one-second grace", q.ExecStop, q.StopTimeout)
 	}
 	if len(q.Exec) == 0 || q.Exec[0] != "./DayZServer" {
-		t.Errorf("stdin_quit: false must leave the plain command line: %v", q.Exec)
+		t.Errorf("ignore_asserts: false must leave the plain command line: %v", q.Exec)
 	}
 	raw.Stop = site.StopConfig{}
 	tree.Instances["alpha"] = raw
@@ -194,7 +194,7 @@ func TestStopMethods(t *testing.T) {
 		t.Errorf("default must ask over RCon first: %v", q.ExecStop)
 	}
 	if len(q.Exec) < 3 || q.Exec[0] != "/bin/sh" || !strings.HasSuffix(q.Exec[2], " </stdin") || !strings.Contains(q.Exec[2], "'-mod=@1559212036'") {
-		t.Errorf("default must feed the server a stdin with \"quit\" and quote every word: %v", q.Exec)
+		t.Errorf("default must feed the server a stdin that answers the assertion prompt and quote every word: %v", q.Exec)
 	}
 }
 
@@ -290,5 +290,19 @@ func TestQuadletPublishPortsAndMemory(t *testing.T) {
 	}
 	if len(beta.Quadlet.Ports) != 3 || beta.Quadlet.Memory != "24G" {
 		t.Errorf("quadlet = %+v", beta.Quadlet)
+	}
+}
+
+func TestAdminEnabled(t *testing.T) {
+	inst := &Instance{Mods: []Mod{{ID: 1}, {Local: AdminName, Server: true}}}
+	if !inst.AdminEnabled() {
+		t.Error("the local dzo-admin mod enables the integration")
+	}
+	inst.Admin.Disabled = true
+	if inst.AdminEnabled() {
+		t.Error("admin.disabled switches it off")
+	}
+	if (&Instance{Mods: []Mod{{ID: 1}}}).AdminEnabled() {
+		t.Error("without the mod there is no integration")
 	}
 }
