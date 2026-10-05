@@ -195,6 +195,9 @@ type SyncReply struct {
 	Error    string    `json:"error,omitempty"`
 	Proto    int       `json:"protocol"`
 	Commands []Command `json:"commands"`
+	// Hello asks the mod to send its hello again (with the world name): set while the hub
+	// does not know the world, for example after dzo serve restarted under a running server.
+	Hello bool `json:"hello,omitempty"`
 }
 
 // Normalise drops the parts a mod request lists as not included. A request

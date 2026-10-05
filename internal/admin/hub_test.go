@@ -260,3 +260,23 @@ func TestMatchGlobs(t *testing.T) {
 		t.Fatal("MatchGlobs")
 	}
 }
+
+func TestHubAsksForTheHelloItMissed(t *testing.T) {
+	h := NewHub("alpha")
+	// dzo serve restarted under a running server: the first sync it sees is no hello.
+	if r := h.Sync(SyncRequest{Proto: 1}); !r.Hello {
+		t.Error("a hub that does not know the world must ask for the hello")
+	}
+	if !h.Status().Connected {
+		t.Error("a mod without a hello is still connected")
+	}
+	if r := h.Sync(SyncRequest{Proto: 1, Hello: true, World: "chernarusplus"}); r.Hello {
+		t.Error("the hello arrived: stop asking")
+	}
+	if got := h.Status().Hello.World; got != "chernarusplus" {
+		t.Errorf("world = %q", got)
+	}
+	if r := h.Sync(SyncRequest{Proto: 1}); r.Hello {
+		t.Error("a known world is not asked for again")
+	}
+}

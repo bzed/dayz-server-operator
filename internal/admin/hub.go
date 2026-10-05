@@ -139,7 +139,7 @@ func (h *Hub) Sync(req SyncRequest) SyncReply {
 		h.finishLocked(req.Results[i])
 	}
 
-	reply := SyncReply{OK: true, Proto: ProtocolVersion, Commands: []Command{}}
+	reply := SyncReply{OK: true, Proto: ProtocolVersion, Commands: []Command{}, Hello: h.hello != nil && h.hello.World == ""}
 	live := h.queue[:0]
 	for _, p := range h.queue {
 		switch {
