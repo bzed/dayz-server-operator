@@ -124,11 +124,18 @@ func newInstanceRenderCmd() *cobra.Command {
 				return err
 			}
 			if inst.AdminEnabled() {
-				// Every render rotates the mod's token (§C13).
-				if err := serve.WriteModConfig(cfg, inst); err != nil {
-					return fmt.Errorf("writing the dzo-admin config: %w", err)
+				// Every render rotates the mod's token (§C13). The mod reads its config once, at
+				// start: rotating it under a running server cuts the server off (HTTP 401 until the
+				// next restart), and a changed config would not apply anyway. The render that starts
+				// the unit (ExecStartPre) runs while the unit is "activating", not "active".
+				if active, _ := (instance.Lifecycle{UserMode: true}).IsActive(cmd.Context(), inst.Name); active {
+					_, _ = fmt.Fprintln(cmd.OutOrStdout(), "dzo-admin config kept (the server is running; it is written at the next start)")
+				} else {
+					if err := serve.WriteModConfig(cfg, inst); err != nil {
+						return fmt.Errorf("writing the dzo-admin config: %w", err)
+					}
+					_, _ = fmt.Fprintln(cmd.OutOrStdout(), "dzo-admin config written")
 				}
-				_, _ = fmt.Fprintln(cmd.OutOrStdout(), "dzo-admin config written")
 			}
 			return nil
 		},
