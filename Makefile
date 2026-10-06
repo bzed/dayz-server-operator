@@ -20,7 +20,7 @@ COVERAGE_MIN := 85
 GO           ?= go
 
 .PHONY: all cheatsheet docs build build-static test test-race cover coverage-check cover-html lint vet fmt fmt-check \
-        licenses reuse deb clean tidy generate servermods
+        licenses reuse deb clean tidy generate servermods test-findfile
 
 all: lint reuse test build
 
@@ -108,6 +108,10 @@ licenses:
 	go run github.com/google/go-licenses@v1.6.0 check ./... \
 		--allowed_licenses="MIT,BSD-2-Clause,BSD-3-Clause,Apache-2.0,ISC,0BSD" \
 		--ignore $(MODULE)
+
+## test-findfile: boot an experimental server with CF-Test and the FindFile probe servermod (needs the Steam server and CF-Test)
+test-findfile:
+	scripts/test-findfile.sh
 
 ## servermods: pack servermods/*/src/* into dist/servermods/<mod>/addons/*.pbo
 ## (reproducible; needs the submodules: git submodule update --init).

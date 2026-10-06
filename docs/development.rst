@@ -55,6 +55,17 @@ two servers on one tree and never default ports. ``dzo test boot --server
 stable one. Each server build needs its own vanilla baseline
 (``dzo test boot --vanilla``).
 
+The 1.30 ``FindFile`` bug has a test of its own. ``make test-findfile`` (``scripts/test-findfile.sh``)
+boots an experimental server with CF-Test (workshop item 1625463737, subscribed in the Steam
+client) and the servermod ``testmods/dzo-findfile-probe``. The probe waits five seconds after the
+mission started, writes two files into ``$profile:dzo_probe/`` and looks up files with
+``CF.FindFileEx`` on ``$profile:`` (the server's ``.RPT``, the two probe files) and on ``$mission:``
+(``*.xml``, ``db/*.xml``, ``*.c``). Each lookup logs a ``DZO-PROBE <name> OK|FAIL`` line and the run ends
+with ``DZO-PROBE RESULT OK|FAIL``; the script passes the lines to ``dzo test boot --expect``. ``control``
+lines show what the engine's own ``FindFile`` finds for the same patterns (nothing for ``$profile:`` on
+1.30, which is the bug). Like every boot test it needs a machine that does not run dzo instances, and
+network access for the vanilla mission.
+
 A quick check without a configured instance: symlink ``dist/servermods/dzo-admin``
 into a tree of each server as ``@dzo-admin``, start it with
 ``-servermod=@dzo-admin`` (a relative path), and compare the script module file

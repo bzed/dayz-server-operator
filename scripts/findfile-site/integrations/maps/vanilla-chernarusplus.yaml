@@ -1,0 +1,10 @@
+# SPDX-FileCopyrightText: 2026 Bernd Zeimetz <bernd@bzed.de>
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# The vanilla chernarusplus mission from Bohemia Interactive's central economy repo.
+# Copy it to integrations/maps/ in your site repo, and use it in an instance:
+#   mission_source: {preset: vanilla-chernarusplus}
+# `ref` follows master; pin a tag (DZ_<version>) to update only when you decide to.
+git: https://github.com/BohemiaInteractive/DayZ-Central-Economy
+ref: master
+path: dayzOffline.chernarusplus

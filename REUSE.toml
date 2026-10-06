@@ -42,3 +42,9 @@ SPDX-License-Identifier = "OFL-1.1"
 path = "docs/cheatsheet/dzo-cheatsheet.pdf"
 SPDX-FileCopyrightText = ["2026 Bernd Zeimetz <bernd@bzed.de>", "2017 IBM Corp. (IBM Plex, https://github.com/IBM/plex)"]
 SPDX-License-Identifier = "AGPL-3.0-or-later AND OFL-1.1"
+
+# PBO prefix files hold a bare prefix string and cannot carry a header.
+[[annotations]]
+path = "testmods/**/$PBOPREFIX$"
+SPDX-FileCopyrightText = "2026 Bernd Zeimetz <bernd@bzed.de>"
+SPDX-License-Identifier = "AGPL-3.0-or-later"

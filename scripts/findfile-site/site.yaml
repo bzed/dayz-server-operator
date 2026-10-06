@@ -1,0 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Bernd Zeimetz <bernd@bzed.de>
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# The site of scripts/test-findfile.sh: one experimental instance with CF-Test and the probe servermod.
+local_mods:
+  dzo-findfile-probe: {path: /nonexistent}   # the test boots from --mods-from, never from this path
