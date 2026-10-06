@@ -20,8 +20,8 @@ settled by building the code and running it on a development host: Debian 13, ke
      - In one line
    * - S0
      - Golden master of the legacy renderer
-     - not run
-     - needs the legacy images and about 25 workshop downloads
+     - partly run
+     - three branches compared as data; found and fixed a real merge bug
    * - S1
      - Read-only server root, experimental
      - run
@@ -66,12 +66,49 @@ settled by building the code and running it on a development host: Debian 13, ke
 S0: golden master
 -----------------
 
-Not run. It needs the legacy server image built for each of the five branches and every mod of
-every server downloaded with a Steam account that owns DayZ (the legacy repository keeps integration
-files for about 25 mods). What exists instead are the two golden files of the resolver
-(``internal/resolve/testdata``) and the S3 cross-check below, which compares the merge with the
-legacy tool on real mod files. Until S0 runs, "same bytes as the legacy render" is not proven for
-the merge.
+The legacy ``mergexml`` function (and ``xml.sh``, unchanged) was run in a Debian container
+(``scripts/s0/legacy-render.sh``: xmlstarlet, ``xmlmerge``, jq, patch) on the files of a legacy branch, with
+Bohemia's Central Economy repository as the pristine mission and every mod of the branch active. The result
+was compared with what dzo builds for the converted branch (``TestGoldenAgainstLegacyRender`` in
+``internal/legacy``, run with ``DZO_S0_LEGACY``, ``DZO_S0_SITE``, ``DZO_S0_INSTANCE`` and ``DZO_S0_CE``). The two
+cannot be byte-equal by design (the legacy tool concatenates, dzo replaces by name, the formatting differs), so
+the files are compared as data: the elements below the root as a multiset, JSON as a tree.
+
+Run for ``chernarus``, ``livonia`` and ``onlyup-prisonbreak``, the branches whose maps are Bohemia's. Not run: ``deerisle``
+and ``hashima`` (their mission repositories are not the Central Economy one), the files that live inside a
+workshop mod (``source: mod``: not downloaded here, so left out on both sides), and the ``start.sh`` hooks (they need
+xmlstarlet and were not run on the dzo side). The legacy merge order is the order ``find`` lists the mod
+links in, dzo's is the mod list; where two mods replace one file (``cfgweather.xml``), the winners differ.
+
+What it found:
+
+* **A bug in dzo, fixed.** ``mapgrouppos.xml`` has many ``<group>`` elements of one name, one per position, and dzo
+  replaced the *first* group of a name when a mod or overlay brought one of the same name: hundreds of placements
+  were lost (673 on Chernarus). Groups are now matched by name and position (``ce.MergeXMLChildren`` takes a list of
+  attributes). Every other file keeps matching by name.
+* **The legacy start breaks files.** ``cfgeventspawns.xml`` (and on Livonia ``cfgrandompresets.xml``) came out of the legacy
+  merge as an empty file: ``xmlmerge`` failed on a mod file, ``xmlstarlet fo`` wrote nothing, the lint failed inside a
+  subshell that cannot stop the script, and the empty file replaced the mission's. dzo merges the normalised
+  files: 118 events.
+* **Duplicates collapse.** The legacy merge keeps both copies of an element: ``HypeTrain_Myshkino`` and
+  ``HypeTrain_Petrovka`` twice in ``cfgeventgroups.xml``, and on Livonia 194 groups of ``mapgrouppos.xml`` that two overlays
+  both bring (the same object twice at the same position). dzo keeps one.
+* **``init.c`` made the legacy start skip a file.** ``xml.sh`` runs under ``set -e`` and ``INIT=local`` asks for an ``init.c`` that does not exist,
+  so for mod 2981609048 it stopped before ``types.xml``: dzo registers ``mod_2981609048`` (and the converter keeps the
+  patch but does not activate it, see :doc:`migration`).
+* **Registration of ``globals.xml``.** The legacy start registered the ``globals.xml`` of an overlay as a Central Economy file; dzo copies it
+  and does not.
+* **Extra files.** The legacy start copied the merged files into ``custom_<name>/`` again and the other files only when the overlay had
+  a Central Economy file; dzo copies the files it did not merge, always (so the JSON files that ``cfggameplay.json`` points at
+  are there).
+* **Same data, other bytes** for ``cfgenvironment.xml``, ``mapgroupproto.xml``, ``cfgundergroundtriggers.json`` and several
+  ``types.xml``: the formatting.
+* **The ``Land_Train_*`` groups** of Chernarus are still in dzo's ``mapgrouppos.xml`` here only because the HypeTrain ``start.sh`` that removes them was not run.
+
+The converter learned two things from this: a ``github.com/…/blob/…`` URL in an ``xml.env`` (the page, not the file) is turned into the raw URL,
+and an ``init.c`` patch is no longer activated, because the legacy start never applied it and the one that was tried does not apply
+to the current Central Economy ``init.c``. The "same bytes as the legacy render" of the plan is therefore replaced by "the same data,
+except for the listed fixes".
 
 S1: a read-only server root
 ---------------------------

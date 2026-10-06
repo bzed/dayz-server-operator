@@ -78,7 +78,7 @@ func TestIntegrateMergesXMLAndJSON(t *testing.T) {
 	d := stagingTree(t)
 	_, err := Integrate(d, []Contribution{
 		{Name: "mod 1", Folder: "mod_1", Files: []ContribFile{
-			{Name: "mapgrouppos.xml", Data: []byte(`<map><group name="B" pos="4 5 6"/><group name="A" pos="9 9 9"/></map>`)},
+			{Name: "mapgrouppos.xml", Data: []byte(`<map><group name="B" pos="4 5 6"/><group name="A" pos="9 9 9"/><group name="A" pos="1 2 3" a="7"/></map>`)},
 			{Name: "cfggameplay.json", Data: []byte(`{"WorldsData":{"objectSpawnersArr":["base.json","mod.json"]},"x":1}`)},
 		}},
 	})
@@ -86,8 +86,10 @@ func TestIntegrateMergesXMLAndJSON(t *testing.T) {
 		t.Fatal(err)
 	}
 	m := readStaging(t, d, "mapgrouppos.xml")
-	if !strings.Contains(m, `name="B"`) || !strings.Contains(m, `pos="9 9 9"`) || strings.Contains(m, `pos="1 2 3"`) {
-		t.Errorf("a group of the same name is replaced, a new one appended:\n%s", m)
+	// mapgrouppos.xml has many groups of one name, one per position: a group is replaced only when
+	// name and position are the same, a group of the same name elsewhere is added
+	if strings.Count(m, `name="A"`) != 2 || !strings.Contains(m, `pos="9 9 9"`) || !strings.Contains(m, `a="7"`) || !strings.Contains(m, `name="B"`) {
+		t.Errorf("a group is replaced by name and position, others are appended:\n%s", m)
 	}
 	g := readStaging(t, d, "cfggameplay.json")
 	if strings.Count(g, "base.json") != 1 || !strings.Contains(g, "mod.json") || !strings.Contains(g, `"x": 1`) {

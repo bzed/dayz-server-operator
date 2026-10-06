@@ -42,8 +42,8 @@ documentation is a [Sphinx site](docs/) under `docs/`.
 > part of the web platform: the `dzo-admin` servermod, the JSON API and a web
 > interface for players, vehicles and a live map. Not built yet: web users
 > with passwords and TOTP, the player/ban database, one-off restart timers and
-> scheduled broadcasts, and the golden-master tests against the legacy renderer
-> (spike S0), see
+> scheduled broadcasts, and golden-master tests for the maps whose mission is not
+> Bohemia's (spike S0 compared three branches), see
 > [MILESTONES.md](MILESTONES.md) and the [spikes page](docs/spikes.rst). See
 > [Needs live verification](#needs-live-verification) below for what
 > hasn't been checked against a real Steam account or DayZ server, and

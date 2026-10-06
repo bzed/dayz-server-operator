@@ -154,7 +154,7 @@ the site defaults) is a list of regular expressions, matched against the path be
 
    logs:
      rotate:                 # added to the site's list; the default is the server's own files
-       - {match: '^DayZServer_x64_.*\.RPT$'}
+       - {match: '^DayZServer(_x64)?_.*\.RPT$'}
        - {match: '^script_.*\.log$'}
        - {match: '\.mdmp$', max_age: 14d}
        - {match: '^VPPAdminTools/Logs/.*\.txt$'}

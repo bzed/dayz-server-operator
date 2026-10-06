@@ -235,7 +235,8 @@ the live mission is touched. Notes on what is built:
   registered.
 * Two contributors that replace the same file (``cfgweather.xml``, ``messages.xml``) are reported
   as a conflict; the later one wins. Elements of the XML files that are merged by ``name`` are
-  replaced silently.
+  replaced silently; in ``mapgrouppos.xml`` a group is identified by ``name`` and ``pos``, because the file
+  has many groups of one name (one per position).
 * ``normalize:`` in an integration repairs the quirks of mod files before they are merged:
   ``eventposdef-root`` renames the root ``<events>`` of ``cfgeventspawns.xml`` to ``<eventposdef>``,
   ``wrap-root`` wraps a file that is a bare list of elements into the root element of its kind (the

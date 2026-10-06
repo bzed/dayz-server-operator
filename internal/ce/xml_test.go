@@ -4,6 +4,7 @@
 package ce
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/beevik/etree"
@@ -165,5 +166,30 @@ func TestMergeXMLChildrenIgnoresBlankMatchAttrValue(t *testing.T) {
 	// each other and must both be present (appended, not merged).
 	if len(base.Root().ChildElements()) != 2 {
 		t.Fatalf("expected 2 children, got %d", len(base.Root().ChildElements()))
+	}
+}
+
+func TestMergeXMLChildrenByNameAndPosition(t *testing.T) {
+	parse := func(s string) *etree.Document {
+		d := etree.NewDocument()
+		if err := d.ReadFromString(s); err != nil {
+			t.Fatal(err)
+		}
+		return d
+	}
+	base := parse(`<map><group name="A" pos="1"/><group name="A" pos="2"/><group name="B" pos="3"/></map>`)
+	over := parse(`<map><group name="A" pos="2" x="new"/><group name="A" pos="9"/><group name="C"/></map>`)
+	if err := MergeXMLChildren(base, over, "name,pos"); err != nil {
+		t.Fatal(err)
+	}
+	out, _ := base.WriteToString()
+	// the position-2 group is replaced in place, the one at 9 is added, C has no pos and is added
+	for _, want := range []string{`pos="1"/>`, `pos="2" x="new"`, `pos="9"`, `name="C"`, `name="B"`} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing %s in %s", want, out)
+		}
+	}
+	if strings.Count(out, "<group") != 5 {
+		t.Errorf("5 groups expected: %s", out)
 	}
 }

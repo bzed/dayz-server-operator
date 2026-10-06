@@ -68,6 +68,21 @@ func TestPlanKeepsNewestAndYoung(t *testing.T) {
 	}
 }
 
+func TestDefaultRulesMatchBothRPTNames(t *testing.T) {
+	root := t.TempDir()
+	put(t, root, "DayZServer_2026-10-04_23-37-16.RPT", "1.30 old", 5*time.Hour)
+	put(t, root, "DayZServer_2026-10-05_00-00-25.RPT", "1.30 new", time.Hour)
+	put(t, root, "DayZServer_2026-10-04_23-37-16.ADM", "adm old", 5*time.Hour)
+	put(t, root, "DayZServer_2026-10-05_00-00-25.ADM", "adm new", time.Hour)
+	p, err := MakePlan(root, site.LogsConfig{}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := rels(p.Move); got != "DayZServer_2026-10-04_23-37-16.ADM,DayZServer_2026-10-04_23-37-16.RPT" {
+		t.Fatalf("moves: %s", got)
+	}
+}
+
 func TestExcludedFilesAreNeverMoved(t *testing.T) {
 	root := profile(t)
 	cfg := site.LogsConfig{Rotate: []site.LogRule{{Match: `.*`}}}

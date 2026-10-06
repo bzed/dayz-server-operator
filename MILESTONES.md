@@ -122,8 +122,9 @@ runtime files the boot needs (keys, `serverDZ.cfg`, BattlEye config).
 
 Status: the converter is done (`dzo legacy convert-config`, `internal/legacy`): it
 converted all five legacy branches into a site that validates and resolves
-(`dzo site validate`). The golden tests against the legacy renderer (spike S0) are not
-done, and the first instance of the converted config has not been rolled out.
+(`dzo site validate`). Spike S0 compared the mission of three converted branches with the legacy render
+(`docs/spikes.rst`); it is an env-gated test, not a CI test, because it needs podman and
+the legacy repository. The first instance of the converted config has not been rolled out.
 
 - `dzo legacy convert-config` from `../dayzdockerserver` for hashima first,
   then the other four; `CONVERSION_REPORT.md` with unresolved decisions.

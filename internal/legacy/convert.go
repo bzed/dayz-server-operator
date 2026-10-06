@@ -154,7 +154,6 @@ func Convert(src Source, o Options) (*Result, error) {
 	}
 	rep := &report{}
 	var branches []*branch
-	templates := map[string]bool{}
 	for _, ref := range o.Refs {
 		entries, err := src.List(ref)
 		if err != nil {
@@ -164,19 +163,11 @@ func Convert(src Source, o Options) (*Result, error) {
 		for _, e := range entries {
 			b.files[e.Path] = e
 		}
-		if t := parseTemplate(b.show("files/serverDZ.cfg")); t != "" {
-			templates[t] = true
-		}
 		branches = append(branches, b)
 	}
-	var tmplList []string
-	for t := range templates {
-		tmplList = append(tmplList, t)
-	}
-	sort.Strings(tmplList)
 	for _, b := range branches {
 		b.mods = readMods(b)
-		b.integr = buildIntegrations(b, tmplList, rep)
+		b.integr = buildIntegrations(b, rep)
 		b.overlays = readOverlays(b, rep)
 	}
 

@@ -28,10 +28,10 @@ import (
 // DefaultRules are the server's own files; BattlEye and mod logs are site configuration.
 func DefaultRules() []site.LogRule {
 	return []site.LogRule{
-		{Match: `^DayZServer_x64_.*\.RPT$`},
+		{Match: `^DayZServer(_x64)?_.*\.RPT$`},
 		{Match: `^script_.*\.log$`},
 		{Match: `^crash_.*\.log$`},
-		{Match: `^DayZServer_x64_.*\.ADM$`},
+		{Match: `^DayZServer(_x64)?_.*\.ADM$`},
 		{Match: `\.mdmp$`, MaxAge: site.Age(14 * 24 * time.Hour)},
 	}
 }
@@ -393,7 +393,7 @@ func ArchiveSize(archive string) int64 {
 }
 
 // crashFiles are the logs a crash summary quotes: the newest file of each pattern.
-var crashFiles = []string{"error.log", "script_*.log", "crash_*.log", "DayZServer_x64_*.RPT"}
+var crashFiles = []string{"error.log", "script_*.log", "crash_*.log", "DayZServer_*.RPT"}
 
 // CrashSummary returns the last lines of the newest server logs in profiles, for the journal and
 // Discord after an unclean exit. It has to run before the next start rotates them.

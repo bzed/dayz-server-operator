@@ -98,15 +98,20 @@ func parseEnv(data []byte) map[string]string {
 	return env
 }
 
-// matchesMap says whether the suffix of an init.c.<name> file names the template of a branch.
-func matchesMap(suffix, template string) bool {
-	return template == suffix || strings.HasSuffix(template, "."+suffix) || strings.Contains(template, suffix)
+var githubBlob = regexp.MustCompile(`^https://github\.com/([^/]+)/([^/]+)/blob/(.+)$`)
+
+// rawURL turns the URL of a file's page on GitHub into the URL of the file.
+func rawURL(u string) string {
+	if m := githubBlob.FindStringSubmatch(u); m != nil {
+		return "https://raw.githubusercontent.com/" + m[1] + "/" + m[2] + "/" + m[3]
+	}
+	return u
 }
 
 func yamlQuote(s string) string { return strconv.Quote(s) }
 
 // buildIntegrations converts the files/mods/<id>/ directories of a branch.
-func buildIntegrations(b *branch, templates []string, rep *report) map[uint64]integration {
+func buildIntegrations(b *branch, rep *report) map[uint64]integration {
 	byID := map[uint64]map[string]Entry{}
 	for _, e := range b.list {
 		m := idFile.FindStringSubmatch(e.Path)
@@ -142,45 +147,22 @@ func buildIntegrations(b *branch, templates []string, rep *report) map[uint64]in
 			val := env[key]
 			switch {
 			case strings.HasPrefix(val, "http"):
+				if fixed := rawURL(val); fixed != val {
+					rep.add(b.name, "mod %d (%s): %s pointed at a GitHub web page (%s), which the legacy start downloaded as HTML and that failed its lint test; it now points at the raw file", id, name, f, val)
+					val = fixed
+				}
 				lines = append(lines, fmt.Sprintf("  %s: {source: url, url: %s}", f, yamlQuote(val)))
+			case strings.HasPrefix(val, "local") && f == "init.c":
+				// The legacy start applied an init.c patch only if the workshop directory had both
+				// init.c.<map> (which nothing ever copied there) and init.c: it never ran. The files
+				// stay in files/ for a decision, and nothing is activated.
+				rep.add(b.name, "mod %d (%s): INIT=local did not work in the legacy start (it never applied a patch); the init.c files are kept in files/ and not activated; to use one, add `init.c: {source: local, path: files/<file>, maps: [<map>]}` after checking that the diff still applies to the mission", id, name)
 			case strings.HasPrefix(val, "local"):
 				if _, ok := entries[f]; ok {
 					files["files/"+f] = b.show(dir + f)
 					used[f] = true
 					lines = append(lines, fmt.Sprintf("  %s: {source: local, path: files/%s}", f, f))
 					break
-				}
-				if f == "init.c" {
-					var variants []string
-					for n := range entries {
-						if strings.HasPrefix(n, "init.c.") {
-							variants = append(variants, n)
-						}
-					}
-					sort.Strings(variants)
-					if len(variants) > 0 {
-						v := variants[0]
-						suffix := strings.TrimPrefix(v, "init.c.")
-						var maps []string
-						for _, t := range templates {
-							if matchesMap(suffix, t) {
-								maps = append(maps, t)
-							}
-						}
-						if len(maps) == 0 {
-							maps = []string{suffix}
-						}
-						files["files/"+v] = b.show(dir + v)
-						for _, x := range variants {
-							used[x] = true
-						}
-						lines = append(lines, fmt.Sprintf("  init.c: {source: local, path: files/%s, maps: [%s]}", v, strings.Join(maps, ", ")))
-						rep.add(b.name, "mod %d (%s): init.c comes from %s, a unified diff for the map(s) %s; the legacy start asked for a file called init.c, which does not exist (a legacy quirk), so this patch was never applied there", id, name, v, strings.Join(maps, ", "))
-						if len(variants) > 1 {
-							rep.add(b.name, "mod %d (%s): more than one init.c variant (%s); only %s was converted, decide which maps need the others", id, name, strings.Join(variants, ", "), v)
-						}
-						break
-					}
 				}
 				rep.add(b.name, "mod %d (%s): xml.env says %s=local, but the branch has no %s; dropped", id, name, key, f)
 			case strings.HasPrefix(val, "./"):

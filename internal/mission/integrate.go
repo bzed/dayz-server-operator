@@ -50,14 +50,16 @@ type IntegrateResult struct {
 var (
 	ceTypes = map[string]string{"types.xml": "types", "cfgspawnabletypes.xml": "spawnabletypes", "events.xml": "events"}
 	// xmlAppend: file name -> mission path and root element.
-	xmlAppend = map[string]struct{ path, root string }{
-		"mapgrouppos.xml":        {"mapgrouppos.xml", "map"},
-		"mapgroupproto.xml":      {"mapgroupproto.xml", "prototype"},
-		"cfgeventgroups.xml":     {"cfgeventgroups.xml", "eventgroupdef"},
-		"cfgeventspawns.xml":     {"cfgeventspawns.xml", "eventposdef"},
-		"cfgenvironment.xml":     {"cfgenvironment.xml", "env"},
-		"cfgrandompresets.xml":   {"cfgrandompresets.xml", "randompresets"},
-		"zombie_territories.xml": {"env/zombie_territories.xml", "territory-type"},
+	// key says which attributes identify an element: most files have one element per name, but
+	// mapgrouppos.xml has many groups of the same name, one for each position.
+	xmlAppend = map[string]struct{ path, root, key string }{
+		"mapgrouppos.xml":        {"mapgrouppos.xml", "map", "name,pos"},
+		"mapgroupproto.xml":      {"mapgroupproto.xml", "prototype", "name"},
+		"cfgeventgroups.xml":     {"cfgeventgroups.xml", "eventgroupdef", "name"},
+		"cfgeventspawns.xml":     {"cfgeventspawns.xml", "eventposdef", "name"},
+		"cfgenvironment.xml":     {"cfgenvironment.xml", "env", "name"},
+		"cfgrandompresets.xml":   {"cfgrandompresets.xml", "randompresets", "name"},
+		"zombie_territories.xml": {"env/zombie_territories.xml", "territory-type", "name"},
 	}
 	jsonAppendKeys = map[string][]string{
 		"cfggameplay.json":            {"objectSpawnersArr", "spawnGearPresetFiles", "playerRestrictedAreaFiles"},
@@ -100,7 +102,7 @@ func Integrate(staging string, cs []Contribution) (IntegrateResult, error) {
 				res.Notes = append(res.Notes, c.Name+": globals.xml is not a Central Economy file type, it is copied to "+c.Folder+"/ but not registered")
 			case xmlAppend[base].path != "":
 				x := xmlAppend[base]
-				err = MergeXMLFile(staging, x.path, x.root, f.Data, "name")
+				err = MergeXMLFile(staging, x.path, x.root, f.Data, x.key)
 				touch(x.path)
 			case jsonAppendKeys[base] != nil:
 				err = MergeJSONFile(staging, base, f.Data, jsonAppendKeys[base])

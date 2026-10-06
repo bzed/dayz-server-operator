@@ -142,7 +142,6 @@ func TestConvertIntegrationDetails(t *testing.T) {
 		"types.xml: {source: local, path: files/types.xml}",
 		"events.xml: {source: mod, path: \"./info/events.xml\"}",
 		"cfgspawnabletypes.xml: {source: url, url: \"https://example.invalid/s.xml\"}",
-		"init.c: {source: local, path: files/init.c.chern, maps: [dayzOffline.chernarusplus]}",
 		"normalize: [eventposdef-root, wrap-root, xml-decl]",
 		"post_merge: [hooks/start.sh]",
 		"aliases: [2291785546]",
@@ -150,6 +149,12 @@ func TestConvertIntegrationDetails(t *testing.T) {
 		if !strings.Contains(y, want) {
 			t.Errorf("integration.yaml lacks %q:\n%s", want, y)
 		}
+	}
+	if strings.Contains(y, "init.c:") {
+		t.Errorf("an init.c patch the legacy start never applied must not be activated:\n%s", y)
+	}
+	if _, ok := res.Files["integrations/mods/2291785308/files/init.c.chern"]; !ok {
+		t.Error("the init.c file is kept")
 	}
 	if strings.Contains(y, "cfgeventspawns.xml") {
 		t.Errorf("CFGEVENTSPAWNS=local without a file must be dropped:\n%s", y)
@@ -186,7 +191,7 @@ func TestConvertOverlaysAndReport(t *testing.T) {
 	if _, ok := res.Files["overlays/stamina/cfggameplay.json"]; ok {
 		t.Error("an overlay one branch has is not shared")
 	}
-	for _, want := range []string{"## Shared", "## Instance a", "files/custom-disabled/old", "does nothing active", "LogZ", "start.sh became a post_merge hook", "the legacy start asked for a file called init.c"} {
+	for _, want := range []string{"## Shared", "## Instance a", "files/custom-disabled/old", "does nothing active", "LogZ", "start.sh became a post_merge hook", "INIT=local did not work in the legacy start"} {
 		if !strings.Contains(res.Report, want) {
 			t.Errorf("report lacks %q", want)
 		}
@@ -224,8 +229,8 @@ func TestConvertErrorsAndHelpers(t *testing.T) {
 	if env := parseEnv([]byte("export A=\"x y\"  # c\nB='z'\nC=v # c\nD=${A}1\n\nnot a line\n")); env["A"] != "x y" || env["B"] != "z" || env["C"] != "v" || env["D"] != "x y1" {
 		t.Errorf("parseEnv: %v", env)
 	}
-	if !matchesMap("chernarus", "dayzOffline.chernarusplus") || matchesMap("livonia", "empty.deerisle") {
-		t.Error("matchesMap")
+	if got := rawURL("https://github.com/o/r/blob/main/a%20b/x.xml"); got != "https://raw.githubusercontent.com/o/r/main/a%20b/x.xml" || rawURL("https://example.invalid/x") != "https://example.invalid/x" {
+		t.Errorf("rawURL: %s", got)
 	}
 	if hasActiveCommand([]byte("#!/bin/bash\nX=1\nmkdir -p a\nset -e\n# run x\nexit 0\n")) || !hasActiveCommand([]byte("curl -s x\n")) {
 		t.Error("hasActiveCommand")
