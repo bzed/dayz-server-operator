@@ -464,3 +464,17 @@ func TestLegacyConvertConfig(t *testing.T) {
 		t.Error("an unknown branch must fail")
 	}
 }
+
+func TestBackupPruneSkipsInstancesThatCannotBeBackedUp(t *testing.T) {
+	data := t.TempDir()
+	cfg, root, _ := renderSetupIn(t, data)
+	if err := os.MkdirAll(root, 0o750); err != nil { // a plain directory: not a btrfs subvolume
+		t.Fatal(err)
+	}
+	if out, err := runCmd(t, "backup", "prune", "--config", cfg); err != nil || !strings.Contains(out, "skipping x") {
+		t.Fatalf("prune of all instances must skip x: %v\n%s", err, out)
+	}
+	if _, err := runCmd(t, "backup", "prune", "x", "--config", cfg); err == nil {
+		t.Error("prune of x by name must say why it cannot")
+	}
+}

@@ -140,6 +140,12 @@ func newBackupPruneCmd() *cobra.Command {
 			for _, n := range names {
 				m, err := backupFor(configPath, n)
 				if err != nil {
+					if len(args) == 0 {
+						// the timer prunes every instance: one that cannot be backed up (not on btrfs, created
+						// before it was a subvolume) has no snapshots to prune and must not fail the run
+						_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "skipping %s: %v\n", n, err)
+						continue
+					}
 					failed = append(failed, err.Error())
 					continue
 				}
