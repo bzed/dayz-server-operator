@@ -50,7 +50,7 @@ type Options struct {
 	Cfg       *config.Config
 	ImagesDir string // default DefaultImagesDir
 	UnitDir   string // systemd user unit directory, default ~/.config/systemd/user
-	DzoBinary string // what the refresh timer runs, default this executable
+	DzoBinary string // what the refresh timer runs, default config.yaml binary
 	DryRun    bool
 	// ImagesOnly rebuilds the images (pulling the base image again), prunes
 	// the old ones, and does nothing else. The weekly timer runs it.
@@ -274,9 +274,10 @@ func (r *runner) refreshTimer(ctx context.Context) {
 	}
 	bin := r.DzoBinary
 	if bin == "" {
-		if bin, _ = os.Executable(); bin == "" {
-			bin = "/usr/bin/dzo"
-		}
+		bin = r.Cfg.Binary
+	}
+	if bin == "" {
+		bin = "/usr/bin/dzo"
 	}
 	t := instance.TimerUnit{
 		Name: refreshTimer, Description: "Rebuild the dzo container images (security updates)",

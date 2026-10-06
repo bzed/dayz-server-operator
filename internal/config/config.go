@@ -143,6 +143,10 @@ type MapSource struct {
 
 // Config is the root of /etc/dzo/config.yaml.
 type Config struct {
+	// Binary is the dzo executable the units run and mount into the containers
+	// (default /usr/bin/dzo). A host that deploys by hand points it at a directory
+	// it can write, so a new build is moved into place while the old one runs.
+	Binary   string             `yaml:"binary"`
 	Paths    Paths              `yaml:"paths"`
 	Site     Site               `yaml:"site"`
 	Steam    Steam              `yaml:"steam"`
@@ -161,6 +165,7 @@ type Config struct {
 // gets every other path derived from it.
 func defaultsTemplated() *Config {
 	return &Config{
+		Binary: "/usr/bin/dzo",
 		//nolint:gosec // G101: "Secrets" here is a directory path field (paths.secrets), not a credential value
 		Paths: Paths{
 			Data:      "/var/lib/dzo",
@@ -248,6 +253,9 @@ func (c *Config) resolvePaths() {
 // "dzo setup"'s job (btrfs checks, ownership, free space).
 func (c *Config) Validate() error {
 	var errs []string
+	if !filepath.IsAbs(c.Binary) {
+		errs = append(errs, "binary: must be an absolute path")
+	}
 
 	pathFields := map[string]string{
 		"paths.data":      c.Paths.Data,

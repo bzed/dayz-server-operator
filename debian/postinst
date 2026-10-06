@@ -31,6 +31,28 @@ if [ "$1" = "configure" ]; then
 	fi
 fi
 
+# An upgrade: rewrite the generated units for the new version and restart the services that run
+# from the binary (the exporter, serve, web). dpkg replaces the file by renaming, so every process
+# keeps the old binary until it is restarted. A game server is never restarted here: it keeps
+# running on the old binary (mounted into its container) and picks up the new units and the new
+# binary at its next restart, which dzo schedules or the operator does (dzo restart <name>).
+if [ "$1" = "configure" ] && [ -n "$2" ] && id dayz >/dev/null 2>&1; then
+	uid=$(id -u dayz)
+	if [ -S "/run/user/$uid/bus" ] && command -v runuser >/dev/null 2>&1; then
+		as_dayz() {
+			runuser -u dayz -- env "XDG_RUNTIME_DIR=/run/user/$uid" "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$uid/bus" "$@"
+		}
+		if [ -r /etc/dzo/config.yaml ] && [ -d /var/lib/dzo/site ]; then
+			as_dayz /usr/bin/dzo units sync || echo "dzo: units sync failed after the upgrade; run it as dayz" >&2
+		fi
+		for unit in dzo-exporter dzo-serve dzo-web; do
+			if as_dayz systemctl --user is-active --quiet "$unit.service"; then
+				as_dayz systemctl --user restart "$unit.service" || true
+			fi
+		done
+	fi
+fi
+
 # No game server is ever started here: bringing up an instance is always an
 # explicit "dzo setup"/"dzo instance start" step (D18/§C14).
 

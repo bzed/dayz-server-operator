@@ -94,6 +94,18 @@ Every step reports ``ok``, ``todo`` (what a dry run would do), ``warn`` or
 after an upgrade too. ``dzo setup --images-only`` rebuilds the images right now
 (that is what the timer runs).
 
+Upgrading
+---------
+
+``apt install ./dzo_<version>.deb`` (or ``apt upgrade``) replaces ``/usr/bin/dzo`` by renaming, so
+running processes keep the old build until they restart. The package then runs ``dzo units sync`` as
+``dayz`` (it rewrites the generated units for the new version) and restarts the services that run from
+the binary: the exporter, ``dzo serve`` and ``dzo web``, when they are active. **A game server is
+never restarted by an upgrade.** It keeps running on the old build (the binary is mounted into its
+container) and uses the new units and the new binary at its next restart: the next scheduled restart,
+or ``dzo restart <name>``. Settings that did not exist before get their defaults, so no config edit
+is needed. Check ``dzo version`` and ``dzo status`` afterwards.
+
 Log in to Steam
 ---------------
 

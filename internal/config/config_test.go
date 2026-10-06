@@ -275,3 +275,16 @@ func TestProductsShareStableWorkshop(t *testing.T) {
 		t.Fatalf("workshop app ids: %+v", c.Products)
 	}
 }
+
+func TestBinaryDefaultAndValidation(t *testing.T) {
+	if Default().Binary != "/usr/bin/dzo" {
+		t.Errorf("default binary = %q", Default().Binary)
+	}
+	c, err := Parse([]byte("binary: /var/lib/dzo/bin/dzo\n"))
+	if err != nil || c.Binary != "/var/lib/dzo/bin/dzo" {
+		t.Fatalf("%v %q", err, c.Binary)
+	}
+	if _, err := Parse([]byte("binary: dzo\n")); err == nil {
+		t.Error("a relative binary must be rejected")
+	}
+}

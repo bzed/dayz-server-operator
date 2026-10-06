@@ -369,3 +369,16 @@ func TestInstanceIsPinnedToItsBuild(t *testing.T) {
 		t.Errorf("an instance deployed before the pin existed stays on its applied build: %s", b)
 	}
 }
+
+func TestUnitsUseTheConfiguredBinary(t *testing.T) {
+	cfg, tree, _ := fixture(t, true)
+	cfg.Binary = "/opt/dzo/bin/dzo"
+	inst, err := Resolve(cfg, tree, "alpha")
+	if err != nil {
+		t.Fatal(err)
+	}
+	q := inst.Quadlet
+	if q.PreStart[len(q.PreStart)-1] != "/opt/dzo/bin/dzo instance render alpha" || q.Volumes[0].Source != "/opt/dzo/bin/dzo" {
+		t.Errorf("prestart %v, first volume %+v", q.PreStart, q.Volumes[0])
+	}
+}

@@ -142,10 +142,12 @@ type Instance struct {
 	Notify       site.NotifyConfig    `yaml:"notify"`
 	Container    site.ContainerConfig `yaml:"container"`
 	Hooks        site.HooksConfig     `yaml:"hooks"`
-	Backup       site.BackupConfig    `yaml:"backup"`
-	Logs         site.LogsConfig      `yaml:"logs"`
-	Admin        site.AdminConfig     `yaml:"admin,omitempty"`
-	AdminMap     site.AdminMap        `yaml:"admin_map,omitempty"`
+	// Binary is the dzo executable the unit runs and mounts (config.yaml binary).
+	Binary   string            `yaml:"-"`
+	Backup   site.BackupConfig `yaml:"backup"`
+	Logs     site.LogsConfig   `yaml:"logs"`
+	Admin    site.AdminConfig  `yaml:"admin,omitempty"`
+	AdminMap site.AdminMap     `yaml:"admin_map,omitempty"`
 
 	// Missing lists what is not downloaded yet; Quadlet is only populated
 	// when it is empty.
@@ -200,7 +202,8 @@ func Resolve(cfg *config.Config, t *site.Tree, name string) (*Instance, error) {
 
 	root := filepath.Join(cfg.Paths.Instances, name)
 	inst := &Instance{
-		Name: name, Map: raw.Map, Ports: raw.Ports, Network: raw.Network, Image: t.Site.Image,
+		Binary: cfg.Binary,
+		Name:   name, Map: raw.Map, Ports: raw.Ports, Network: raw.Network, Image: t.Site.Image,
 		Params: raw.Params, Overlays: raw.Overlays, Updates: raw.Updates, Restarts: raw.Restarts,
 		Health: raw.Health, RestartLimit: raw.RestartLimit, Stop: raw.Stop, Notify: raw.Notify, Container: raw.Container, Hooks: raw.Hooks, Backup: raw.Backup, Logs: raw.Logs, Admin: raw.Admin, AdminMap: raw.AdminMap,
 		Mission: Mission{Source: src, Fallback: raw.FallbackMission, Unmanaged: raw.Mission.Unmanaged, Drift: raw.Mission.Drift},
@@ -419,9 +422,13 @@ func LocalSource(t *site.Tree, name string) (product.LocalSource, error) {
 // read-only with per-instance keys/, mpmissions/ and mod mounts nested on
 // top (§C5), plus the DayZServer command line (§C6 step 8).
 func buildQuadlet(inst *Instance) quadlet.ContainerSpec {
+	dzoBin := inst.Binary
+	if dzoBin == "" {
+		dzoBin = dzoBinary
+	}
 	rt := inst.Paths.Runtime
 	vols := []quadlet.Volume{
-		{Source: dzoBinary, Destination: "/usr/local/bin/dzo", ReadOnly: true},
+		{Source: dzoBin, Destination: "/usr/local/bin/dzo", ReadOnly: true},
 		// An overlay, not ":ro": a server that finds the build or a mod on a read-only
 		// mount silently skips its extra addon directories (DLC such as sakhal, and every
 		// -servermod/-mod), with no error and no script from them (verified on 1.29). The
@@ -492,8 +499,8 @@ func buildQuadlet(inst *Instance) quadlet.ContainerSpec {
 			StartupRetries:  int((startup + startupProbeInterval - 1) / startupProbeInterval),
 		},
 		NotifyHealthy:        true,
-		PreStart:             []string{"-" + dzoBinary + " logs rotate " + inst.Name, dzoBinary + " instance render " + inst.Name},
-		PostStop:             []string{dzoBinary + " logs crash-summary " + inst.Name},
+		PreStart:             []string{"-" + dzoBin + " logs rotate " + inst.Name, dzoBin + " instance render " + inst.Name},
+		PostStop:             []string{dzoBin + " logs crash-summary " + inst.Name},
 		StopTimeout:          stopTimeout,
 		RestartSec:           restartSec,
 		TimeoutStartSec:      startup + startTimeoutSlack,
@@ -509,10 +516,10 @@ func buildQuadlet(inst *Instance) quadlet.ContainerSpec {
 		spec.Exec = []string{"/bin/sh", "-c", "exec " + shellJoin(exec) + " </stdin"}
 	}
 	if len(inst.Hooks.PreStart) > 0 {
-		spec.PreStart = append(spec.PreStart, dzoBinary+" instance hook "+inst.Name+" pre_start")
+		spec.PreStart = append(spec.PreStart, dzoBin+" instance hook "+inst.Name+" pre_start")
 	}
 	if len(inst.Hooks.PostStop) > 0 {
-		spec.PostStop = append(spec.PostStop, dzoBinary+" instance hook "+inst.Name+" post_stop")
+		spec.PostStop = append(spec.PostStop, dzoBin+" instance hook "+inst.Name+" post_stop")
 	}
 	switch inst.Stop.Method {
 	case site.StopKill:
@@ -522,7 +529,7 @@ func buildQuadlet(inst *Instance) quadlet.ContainerSpec {
 	default:
 		// Ask over RCon first (dzo instance shutdown), then podman's own stop as the fallback.
 		to := inst.Stop.Timeout.Std()
-		spec.ExecStop = []string{dzoBinary + " instance shutdown " + inst.Name + " --timeout " + to.String()}
+		spec.ExecStop = []string{dzoBin + " instance shutdown " + inst.Name + " --timeout " + to.String()}
 		spec.TimeoutStopSec = to + stopTimeout + 30*time.Second
 	}
 	if inst.Container.Memory != nil {

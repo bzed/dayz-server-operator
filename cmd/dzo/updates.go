@@ -167,11 +167,7 @@ func unitOptions(cfg *config.Config, configPath, quadletDir, unitDir string) uni
 	if unitDir != "" {
 		u = unitDir
 	}
-	bin, err := os.Executable()
-	if err != nil || strings.Contains(bin, "/go-build") {
-		bin = "/usr/bin/dzo"
-	}
-	return units.Options{Cfg: cfg, DzoBin: bin, ConfigPath: configPath, QuadletDir: q, UnitDir: u}
+	return units.Options{Cfg: cfg, DzoBin: cfg.Binary, ConfigPath: configPath, QuadletDir: q, UnitDir: u}
 }
 
 // mergeSets is the union of two mod sets.

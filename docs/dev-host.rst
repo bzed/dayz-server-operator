@@ -192,10 +192,16 @@ and as root:
 
 ``dzo setup --images-dir <dir>`` takes another directory for the Containerfiles,
 so you can leave them in the checkout. The ``dzo-*`` timers and quadlets that
-dzo writes call the binary by the path it is run from; a ``go run`` or test
-binary in a build cache is replaced by ``/usr/bin/dzo``, so on a test host keep
-the binary in ``/usr/bin`` or ``/usr/local/bin`` and link it:
-``ln -s /usr/local/bin/dzo /usr/bin/dzo``.
+dzo writes call the binary named by ``binary:`` in ``config.yaml`` (default
+``/usr/bin/dzo``), and the containers mount it.
+
+A running binary cannot be overwritten ("Text file busy"), but it can be replaced: write the
+new build next to it and ``mv`` it over the old one. That needs a directory you may write to, which
+``/usr/bin`` is not for the service user. So on a host where you deploy by hand, set
+``binary: /var/lib/dzo/bin/dzo`` in ``config.yaml``, run ``dzo units sync`` once, and
+deploy with ``install -m 0755 bin/dzo /var/lib/dzo/bin/dzo.new && mv /var/lib/dzo/bin/dzo.new /var/lib/dzo/bin/dzo``.
+Running processes (and the containers, which mount the old file) keep the old build until they are
+restarted.
 
 Check and continue
 ------------------

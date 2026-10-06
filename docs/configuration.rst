@@ -18,6 +18,8 @@ Operator configuration
 
 .. code-block:: yaml
 
+   binary: /usr/bin/dzo       # what the units run and the containers mount
+
    paths:
      data: /var/lib/dzo
      instances: ${data}/instances
