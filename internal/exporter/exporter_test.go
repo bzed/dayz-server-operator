@@ -266,6 +266,8 @@ func TestSnapshotIsCachedAndRefreshes(t *testing.T) {
 func TestMetricsEndToEnd(t *testing.T) {
 	f := newFixture(t)
 	write(t, filepath.Join(f.data, "instances", "x", "mpmissions", ".dzo-manifest.json"), "{}")
+	write(t, filepath.Join(f.data, "logs", "x", "2026-10-01", "script_1.log.gz"), "12345")
+	write(t, filepath.Join(f.data, "instances", "x", "profiles", "huge.dat"), strings.Repeat("x", 2<<20))
 	write(t, filepath.Join(f.data, "snapshots", "x", "index.json"), `{"snapshots":[{"id":"a","reason":"manual","state":"complete","created":"2026-10-01T10:00:00Z"}]}`)
 	srv := httptest.NewServer(monitor.Handler(f.c))
 	defer srv.Close()
@@ -275,7 +277,7 @@ func TestMetricsEndToEnd(t *testing.T) {
 	}
 	b, _ := io.ReadAll(resp.Body)
 	_ = resp.Body.Close()
-	for _, want := range []string{`dzo_instance_up{instance="x"} 1`, `dzo_instance_players{instance="x"} 3`, `dzo_build_info{version="v-test"} 1`, `dzo_backup_count{instance="x"} 1`, `dzo_backup_last_success_timestamp{instance="x",reason="manual"}`, `dzo_product_build_info{buildid="7",product="dayz-stable"} 1`} {
+	for _, want := range []string{`dzo_instance_up{instance="x"} 1`, `dzo_instance_players{instance="x"} 3`, `dzo_build_info{version="v-test"} 1`, `dzo_backup_count{instance="x"} 1`, `dzo_logs_archive_bytes{instance="x"} 5`, `dzo_profile_unmatched_bytes{instance="x"} 2.097152e+06`, `dzo_backup_last_success_timestamp{instance="x",reason="manual"}`, `dzo_product_build_info{buildid="7",product="dayz-stable"} 1`} {
 		if !strings.Contains(string(b), want) {
 			t.Errorf("metrics lack %s", want)
 		}

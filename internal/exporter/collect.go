@@ -27,6 +27,7 @@ import (
 	"github.com/bzed/dayz-server-operator/internal/backup"
 	"github.com/bzed/dayz-server-operator/internal/config"
 	"github.com/bzed/dayz-server-operator/internal/instance"
+	"github.com/bzed/dayz-server-operator/internal/logs"
 	"github.com/bzed/dayz-server-operator/internal/mission"
 	"github.com/bzed/dayz-server-operator/internal/monitor"
 	"github.com/bzed/dayz-server-operator/internal/product"
@@ -158,6 +159,9 @@ func (c *Collector) collect(ctx context.Context) monitor.Snapshot {
 		snap.Global.UpdatesPending += up.PendingByInstance[n]
 		if bs, ok := c.backups(tree, n); ok {
 			snap.Backups = append(snap.Backups, bs)
+		}
+		if ls, ok := c.logStatus(tree, n); ok {
+			snap.Logs = append(snap.Logs, ls)
 		}
 	}
 	snap.Global.CacheBytes = slow.cacheBytes
@@ -351,6 +355,21 @@ func message(st monitor.InstanceStatus, active string) string {
 		return "not installed as a unit"
 	}
 	return "stopped (" + active + ")"
+}
+
+// logStatus sizes the log archive of an instance and the profile files no rotation rule matches.
+func (c *Collector) logStatus(tree *site.Tree, name string) (monitor.LogStatus, bool) {
+	inst, err := resolve.Resolve(c.Cfg, tree, name)
+	if err != nil {
+		return monitor.LogStatus{}, false
+	}
+	ls := monitor.LogStatus{Instance: name, ArchiveBytes: logs.ArchiveSize(filepath.Join(c.Cfg.Paths.Logs, name))}
+	if p, err := logs.MakePlan(inst.Paths.Profiles, inst.Logs, time.Now()); err == nil {
+		for _, a := range p.Unmatched {
+			ls.UnmatchedBytes += a.Size
+		}
+	}
+	return ls, true
 }
 
 func (c *Collector) backups(tree *site.Tree, name string) (monitor.BackupStatus, bool) {

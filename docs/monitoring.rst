@@ -77,6 +77,10 @@ Main metrics
      - complete snapshots
    * - ``dzo_backup_last_success_timestamp{instance,reason}``
      - time of the newest snapshot per reason
+   * - ``dzo_logs_archive_bytes{instance}``
+     - size of the archive of rotated profile logs
+   * - ``dzo_profile_unmatched_bytes{instance}``
+     - large files in ``profiles/`` that no log rotation rule matches (a new mod log shows up here)
    * - ``dzo_product_update_available``
      - a new server build is available (manual upgrade needed)
    * - ``dzo_steam_session_valid``

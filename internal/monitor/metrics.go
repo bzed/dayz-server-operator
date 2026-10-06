@@ -208,6 +208,13 @@ func WriteMetrics(w io.Writer, s Snapshot) error {
 		}
 	}
 
+	b.declare("dzo_logs_archive_bytes", "Size of the archive of rotated profile logs.", "gauge")
+	b.declare("dzo_profile_unmatched_bytes", "Size of large files in profiles/ that no log rotation rule matches.", "gauge")
+	for _, ls := range s.Logs {
+		b.addInt("dzo_logs_archive_bytes", map[string]string{"instance": ls.Instance}, int(ls.ArchiveBytes))
+		b.addInt("dzo_profile_unmatched_bytes", map[string]string{"instance": ls.Instance}, int(ls.UnmatchedBytes))
+	}
+
 	return b.render(w)
 }
 

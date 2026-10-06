@@ -70,11 +70,19 @@ type BackupStatus struct {
 	LastSuccess map[string]int64 `json:"last_success_timestamp"` // by reason, unix seconds
 }
 
+// LogStatus is the state of one instance's profile logs (FR-20).
+type LogStatus struct {
+	Instance       string `json:"instance"`
+	ArchiveBytes   int64  `json:"archive_bytes"`   // the archive of rotated logs
+	UnmatchedBytes int64  `json:"unmatched_bytes"` // large files in profiles/ that no rotation rule matches
+}
+
 // Snapshot is the full payload behind /metrics and /status.
 type Snapshot struct {
 	Global    GlobalStatus     `json:"global"`
 	Instances []InstanceStatus `json:"instances"`
 	Backups   []BackupStatus   `json:"backups,omitempty"`
+	Logs      []LogStatus      `json:"logs,omitempty"`
 }
 
 // Source supplies a fresh Snapshot at scrape time (pull-based, matching
