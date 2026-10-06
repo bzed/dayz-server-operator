@@ -28,6 +28,7 @@ type Defaults struct {
 	Notify       NotifyConfig    `yaml:"notify,omitempty"`
 	Container    ContainerConfig `yaml:"container,omitempty"`
 	Backup       BackupConfig    `yaml:"backup,omitempty"`
+	Logs         LogsConfig      `yaml:"logs,omitempty"`
 }
 
 // LocalModSource is one site.yaml `local_mods` entry (§C7): a release

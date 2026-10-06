@@ -143,6 +143,7 @@ type Instance struct {
 	Container    site.ContainerConfig `yaml:"container"`
 	Hooks        site.HooksConfig     `yaml:"hooks"`
 	Backup       site.BackupConfig    `yaml:"backup"`
+	Logs         site.LogsConfig      `yaml:"logs"`
 	Admin        site.AdminConfig     `yaml:"admin,omitempty"`
 	AdminMap     site.AdminMap        `yaml:"admin_map,omitempty"`
 
@@ -179,8 +180,13 @@ func Resolve(cfg *config.Config, t *site.Tree, name string) (*Instance, error) {
 	}
 	// Site defaults fill every field the instance leaves unset.
 	def := reflect.ValueOf(t.Site.Defaults)
-	for _, f := range []string{"Params", "Updates", "Restarts", "Health", "RestartLimit", "Stop", "Notify", "Container", "Backup"} {
+	ownRules := raw.Logs.Rotate
+	for _, f := range []string{"Params", "Updates", "Restarts", "Health", "RestartLimit", "Stop", "Notify", "Container", "Backup", "Logs"} {
 		fillZero(reflect.ValueOf(&raw).Elem().FieldByName(f), def.FieldByName(f))
+	}
+
+	if len(ownRules) > 0 {
+		raw.Logs.Rotate = append(append([]site.LogRule{}, t.Site.Defaults.Logs.Rotate...), ownRules...)
 	}
 
 	prod, ok := cfg.Products[raw.Product]
@@ -196,7 +202,7 @@ func Resolve(cfg *config.Config, t *site.Tree, name string) (*Instance, error) {
 	inst := &Instance{
 		Name: name, Map: raw.Map, Ports: raw.Ports, Network: raw.Network, Image: t.Site.Image,
 		Params: raw.Params, Overlays: raw.Overlays, Updates: raw.Updates, Restarts: raw.Restarts,
-		Health: raw.Health, RestartLimit: raw.RestartLimit, Stop: raw.Stop, Notify: raw.Notify, Container: raw.Container, Hooks: raw.Hooks, Backup: raw.Backup, Admin: raw.Admin, AdminMap: raw.AdminMap,
+		Health: raw.Health, RestartLimit: raw.RestartLimit, Stop: raw.Stop, Notify: raw.Notify, Container: raw.Container, Hooks: raw.Hooks, Backup: raw.Backup, Logs: raw.Logs, Admin: raw.Admin, AdminMap: raw.AdminMap,
 		Mission: Mission{Source: src, Fallback: raw.FallbackMission, Unmanaged: raw.Mission.Unmanaged, Drift: raw.Mission.Drift},
 		Product: Product{Name: raw.Product, Product: prod},
 		Paths: Paths{
@@ -486,7 +492,8 @@ func buildQuadlet(inst *Instance) quadlet.ContainerSpec {
 			StartupRetries:  int((startup + startupProbeInterval - 1) / startupProbeInterval),
 		},
 		NotifyHealthy:        true,
-		PreStart:             []string{dzoBinary + " instance render " + inst.Name},
+		PreStart:             []string{"-" + dzoBinary + " logs rotate " + inst.Name, dzoBinary + " instance render " + inst.Name},
+		PostStop:             []string{dzoBinary + " logs crash-summary " + inst.Name},
 		StopTimeout:          stopTimeout,
 		RestartSec:           restartSec,
 		TimeoutStartSec:      startup + startTimeoutSlack,
@@ -505,7 +512,7 @@ func buildQuadlet(inst *Instance) quadlet.ContainerSpec {
 		spec.PreStart = append(spec.PreStart, dzoBinary+" instance hook "+inst.Name+" pre_start")
 	}
 	if len(inst.Hooks.PostStop) > 0 {
-		spec.PostStop = []string{dzoBinary + " instance hook " + inst.Name + " post_stop"}
+		spec.PostStop = append(spec.PostStop, dzoBinary+" instance hook "+inst.Name+" post_stop")
 	}
 	switch inst.Stop.Method {
 	case site.StopKill:

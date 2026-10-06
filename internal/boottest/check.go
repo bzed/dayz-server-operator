@@ -70,6 +70,8 @@ func (b *Baseline) Save(path string) error {
 var (
 	moduleRe  = regexp.MustCompile(`Module: (\w+); loaded (\d+)x? files`)
 	scriptErr = regexp.MustCompile(`SCRIPT\s+\(E\)`)
+	// Leaked 'X' script instance (1x)! and ==== Total Leaks (2x)! come at shutdown, as errors on a diag build.
+	scriptLeak = regexp.MustCompile(`SCRIPT\s+\(E\): (Leaked '.*' script instance|=+ Total Leaks)`)
 	// The engine's own error classes, in error.log and the RPT: "ANIMATION (E)",
 	// "SCRIPT (E)", and plain words in the RPT.
 	engineErr = regexp.MustCompile(`^!!!|\(E\)|(?i:\b(error|cannot|can't|failed|missing|not found|invalid)\b)`)
@@ -219,10 +221,14 @@ func Evaluate(e Eval) []Check {
 	}
 
 	var compile []string
+	leaks := 0
 	scripts, _ := filepath.Glob(filepath.Join(e.Profiles, "script_*.log"))
 	for _, f := range scripts {
 		for _, l := range lines(f) {
-			if scriptErr.MatchString(l) {
+			switch {
+			case scriptLeak.MatchString(l):
+				leaks++ // reported when the server stops; the diag builds log them as errors
+			case scriptErr.MatchString(l):
 				compile = append(compile, strings.TrimSpace(l))
 			}
 		}
@@ -234,7 +240,11 @@ func Evaluate(e Eval) []Check {
 		}
 		add("scripts", Fail, "%d script compile error(s):\n%s", len(compile), strings.Join(shown, "\n"))
 	} else if len(scripts) > 0 {
-		add("scripts", Pass, "no script compile errors")
+		detail := "no script compile errors"
+		if leaks > 0 {
+			detail += fmt.Sprintf(" (%d leak report(s) at shutdown, not counted)", leaks)
+		}
+		add("scripts", Pass, "%s", detail)
 	} else {
 		add("scripts", Fail, "no script log was written")
 	}

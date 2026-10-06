@@ -76,6 +76,9 @@ func fakeServer() {
 		errlog += "XML (E): types.xml line 5: unexpected end\n"
 	}
 	rpt := "12:00:00 Version 1.29\n12:00:01 Mission read\n12:00:02 MOD LOADED marker\n12:00:03 !!! [CE][VehicleRespawner] (PRIBoat) :: Init: \"VehicleBoat\" - Failed to spawn the requested amount (17 < 22) within 66 attempts.\n"
+	if fake["storagedirs"] {
+		rpt += "12:00:03 [StorageDirs] :: Selected storage directory: /x/storage_2/\n"
+	}
 	if fake["ceerr"] {
 		rpt += "12:00:04 !!! [ERROR][XML] :: load [db/types.xml] failed\n12:00:04 !!! [CE][offlineDB] :: Failed to read types file 'db/types.xml'.\n"
 	}
@@ -590,5 +593,78 @@ func TestRealServerLogs(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// A fake podman: `run` changes into the -w directory and runs the command after the image
+// name, `rm` records that it was called.
+func TestBootInAContainer(t *testing.T) {
+	e := newEnv(t)
+	c := e.config("")
+	write(t, filepath.Join(e.root, "cf", "addons", "x"), "x")
+	c.Mods = []Mod{{Name: "@CF", Dir: filepath.Join(e.root, "cf")}}
+	log := filepath.Join(e.root, "podman.log")
+	fake := filepath.Join(e.root, "podman")
+	script := `#!/bin/sh
+echo "$@" >> ` + log + `
+if [ "$1" = rm ]; then exit 0; fi
+shift
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -w) cd "$2"; shift 2;;
+    --rm) shift;;
+    --name|--network|-v) shift 2;;
+    *) break;;
+  esac
+done
+shift # the image
+exec "$@"
+`
+	if err := os.WriteFile(fake, []byte(script), 0o755); err != nil { //nolint:gosec // test fixture
+		t.Fatal(err)
+	}
+	c.Image, c.Podman = "localhost/dzo-runtime:test", fake
+	r := mustRun(t, c)
+	if Failed(r.Checks) {
+		t.Fatalf("a boot in a container must pass:\n%s", Text(r.Checks))
+	}
+	b, _ := os.ReadFile(log)
+	tree, _ := filepath.Abs(c.TreeDir)
+	srv, _ := filepath.Abs(e.server)
+	cf, _ := filepath.Abs(filepath.Join(e.root, "cf"))
+	for _, want := range []string{
+		"run --rm --name dzo-boottest-", "--network host", "-v " + tree + ":" + tree, "-v " + srv + ":" + srv + ":O",
+		"-v " + cf + ":" + cf + ":O", "-w " + tree, "localhost/dzo-runtime:test /bin/sh -c", "rm -f -t 0 dzo-boottest-",
+	} {
+		if !strings.Contains(string(b), want) {
+			t.Errorf("podman was not called with %q:\n%s", want, b)
+		}
+	}
+	if s, _ := os.ReadFile(filepath.Join(tree, "stdin")); string(s) != "i\n" {
+		t.Errorf("stdin file: %q", s)
+	}
+}
+
+// 1.30 logs no script module for init.c; the economy's storage directory says the mission started.
+func TestMissionLoadedOnTheStorageDirectoryLine(t *testing.T) {
+	e := newEnv(t)
+	r := mustRun(t, e.config("nomission,storagedirs"))
+	if st, d := status(r.Checks, "mission"); st == Fail {
+		t.Fatalf("mission check = %s %s", st, d)
+	}
+}
+
+func TestShutdownLeakReportsAreNotScriptErrors(t *testing.T) {
+	dir := t.TempDir()
+	write(t, filepath.Join(dir, "script_x.log"), "SCRIPT       : Module: Game; loaded 1x files\n"+
+		"09:06:09.911   SCRIPT    (E): Leaked 'BunkerBroadcastManager' script instance (1x)!\n"+
+		"09:06:09.911   SCRIPT    (E): ==== Total Leaks (2x)! ====\n")
+	cs := Evaluate(Eval{Profiles: dir, Ready: true})
+	if st, d := status(cs, "scripts"); st != Pass || !strings.Contains(d, "2 leak report") {
+		t.Errorf("scripts = %s %s", st, d)
+	}
+	write(t, filepath.Join(dir, "script_y.log"), "SCRIPT    (E): Can't find variable 'x'\n")
+	if st, _ := status(Evaluate(Eval{Profiles: dir, Ready: true}), "scripts"); st != Fail {
+		t.Error("a real script error must still fail")
 	}
 }

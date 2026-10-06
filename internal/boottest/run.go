@@ -57,6 +57,15 @@ type Config struct {
 	Baseline   *Baseline
 	ModScripts map[string]int
 	Log        io.Writer
+	// Image runs the server in this container image instead of natively (the image the units
+	// use). The tree, the server install and the mods are mounted at their own paths, the
+	// install and the mods as overlays, so the tree's links resolve and nothing is written
+	// into them.
+	Image string
+	// PortRange is [from, to) for the three test ports; the default is 20000-60000.
+	PortRange [2]int
+	// Podman is the podman binary (default "podman").
+	Podman string
 }
 
 // Result is the outcome of a boot.
@@ -99,10 +108,14 @@ func Args(game int, mods []Mod, extra []string) ([]string, error) {
 // FreePorts returns n ports that are free for UDP and TCP right now, apart
 // from each other by at least 10 (the server uses the ports next to its game
 // port), and not any default of the game, Steam query or RCon.
-func FreePorts(n int) ([]int, error) {
+func FreePorts(n int) ([]int, error) { return FreePortsIn(n, 20000, 60000) }
+
+// FreePortsIn is FreePorts within [from, to): a host that reserves a port range for the game
+// says which.
+func FreePortsIn(n, from, to int) ([]int, error) {
 	var out []int
-	base := 20000 + int(time.Now().UnixNano()/1000)%20000
-	for p := base; len(out) < n && p < 60000; p += 17 {
+	base := from + int(time.Now().UnixNano()/1000)%max(to-from-100, 1)
+	for p := base; len(out) < n && p < to; p += 17 {
 		if (p >= 2300 && p <= 2310) || (p >= 27015 && p <= 27017) || !free(p) {
 			continue
 		}
@@ -146,7 +159,11 @@ func Run(ctx context.Context, c Config) (*Result, error) {
 			_, _ = fmt.Fprintf(c.Log, format+"\n", a...)
 		}
 	}
-	ps, err := FreePorts(3)
+	from, to := c.PortRange[0], c.PortRange[1]
+	if to <= from {
+		from, to = 20000, 60000
+	}
+	ps, err := FreePortsIn(3, from, to)
 	if err != nil {
 		return nil, err
 	}
@@ -175,9 +192,10 @@ func Run(ctx context.Context, c Config) (*Result, error) {
 		return nil, err
 	}
 	defer func() { _ = out.Close() }()
-	// ulimit -c 0: a crashing server writes up to 5 GB of core otherwise.
-	cmd := exec.Command("sh", append([]string{"-c", `ulimit -c 0 && exec "$@"`, "sh", "./DayZServer"}, args...)...) //nolint:gosec // our own tree and arguments
-	cmd.Dir = c.TreeDir
+	cmd, container, err := serverCommand(c, args)
+	if err != nil {
+		return nil, err
+	}
 	cmd.Stdout, cmd.Stderr = out, out
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	if err := cmd.Start(); err != nil {
@@ -185,7 +203,7 @@ func Run(ctx context.Context, c Config) (*Result, error) {
 	}
 	logf("server started, pid %d, game %d, query %d, rcon %d", cmd.Process.Pid, ports.Game, ports.Query, ports.RCon)
 	// The server is tracked by its process group, never by name: it shows up as enfMain.
-	p := &proc{cmd: cmd, done: make(chan struct{})}
+	p := &proc{cmd: cmd, done: make(chan struct{}), container: container, podman: podmanBin(c)}
 	go func() { p.err = cmd.Wait(); close(p.done) }()
 	defer p.stop()
 
@@ -280,7 +298,8 @@ func waitFor(ctx context.Context, timeout time.Duration, p *proc, cond func() bo
 }
 
 // MissionLoaded reports whether the server has started the mission's scripts:
-// its init.c shows up as a script module in the script log.
+// its init.c shows up as a script module in the script log (1.29), or the economy has chosen its
+// storage directory, which init.c's start triggers (1.30 logs no module for init.c).
 func MissionLoaded(profiles string) bool {
 	files, _ := filepath.Glob(filepath.Join(profiles, "script_*.log"))
 	for _, f := range files {
@@ -290,14 +309,23 @@ func MissionLoaded(profiles string) bool {
 			}
 		}
 	}
+	rpts, _ := filepath.Glob(filepath.Join(profiles, "*.RPT"))
+	for _, f := range rpts {
+		for _, l := range lines(f) {
+			if strings.Contains(l, "[StorageDirs] :: Selected storage directory") {
+				return true
+			}
+		}
+	}
 	return false
 }
 
 // proc is the running server.
 type proc struct {
-	cmd  *exec.Cmd
-	done chan struct{} // closed when the process has exited
-	err  error         // its exit error, valid once done is closed
+	container, podman string // the container to remove at the end, in container mode
+	cmd               *exec.Cmd
+	done              chan struct{} // closed when the process has exited
+	err               error         // its exit error, valid once done is closed
 }
 
 func (p *proc) alive() bool {
@@ -325,7 +353,56 @@ func (p *proc) stop() {
 		_ = syscall.Kill(-p.cmd.Process.Pid, syscall.SIGKILL)
 		<-p.done
 	}
+	if p.container != "" {
+		// podman run forwards the signal; make sure that nothing is left behind.
+		_ = exec.Command(p.podman, "rm", "-f", "-t", "0", p.container).Run() //nolint:gosec // our own container name
+	}
 }
+
+func podmanBin(c Config) string {
+	if c.Podman != "" {
+		return c.Podman
+	}
+	return "podman"
+}
+
+// serverCommand is the command that runs the server: natively, or in the container image. The
+// second result is the container's name in container mode.
+func serverCommand(c Config, args []string) (*exec.Cmd, string, error) {
+	// ulimit -c 0: a crashing server writes up to 5 GB of core otherwise.
+	if c.Image == "" {
+		cmd := exec.Command("sh", append([]string{"-c", `ulimit -c 0 && exec "$@"`, "sh", "./DayZServer"}, args...)...) //nolint:gosec // our own tree and arguments
+		cmd.Dir = c.TreeDir
+		return cmd, "", nil
+	}
+	tree, err := filepath.Abs(c.TreeDir)
+	if err != nil {
+		return nil, "", err
+	}
+	srv, err := filepath.Abs(c.ServerDir)
+	if err != nil {
+		return nil, "", err
+	}
+	// The experimental builds read the answer to an assertion prompt from stdin (see site.StopConfig).
+	if err := os.WriteFile(filepath.Join(tree, "stdin"), []byte(runfiles.StdinAnswer), 0o600); err != nil {
+		return nil, "", err
+	}
+	name := "dzo-boottest-" + runfiles.Hex(4)
+	a := []string{"run", "--rm", "--name", name, "--network", "host",
+		"-v", tree + ":" + tree, "-v", srv + ":" + srv + ":O", "-w", tree}
+	for _, m := range c.Mods {
+		dir, err := filepath.Abs(m.Dir)
+		if err != nil {
+			return nil, "", err
+		}
+		a = append(a, "-v", dir+":"+dir+":O")
+	}
+	a = append(a, c.Image, "/bin/sh", "-c", `ulimit -c 0 && exec "$@" <`+shellQuote(filepath.Join(tree, "stdin")), "sh", "./DayZServer")
+	a = append(a, args...)
+	return exec.Command(podmanBin(c), a...), name, nil //nolint:gosec // the podman binary and our own arguments
+}
+
+func shellQuote(s string) string { return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'" }
 
 // startAdminEndpoint serves the endpoint the dzo-admin mod posts to, on a
 // free local port, and writes the mod's config.json for it.

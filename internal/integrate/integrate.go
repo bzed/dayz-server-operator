@@ -42,7 +42,7 @@ type Options struct {
 	Get func(ctx context.Context, url string) ([]byte, error)
 	// HookTimeout bounds one post_merge script; 0 means ten minutes.
 	HookTimeout time.Duration
-	// Log gets warnings (a normalisation that is not supported, ...).
+	// Log gets the output of hooks.
 	Log func(format string, args ...any)
 	// Env is added to the hook environment (DZO_LIVE_MISSION, ...).
 	Env map[string]string
@@ -53,11 +53,6 @@ type Options struct {
 // (in the order of the overlays list), then the instance's own post_merge hooks.
 func Collect(ctx context.Context, t *site.Tree, inst *resolve.Instance, o Options) ([]mission.Contribution, error) {
 	var out []mission.Contribution
-	logf := func(format string, a ...any) {
-		if o.Log != nil {
-			o.Log(format, a...)
-		}
-	}
 	instDir := filepath.Join(t.Dir, "instances", inst.Name)
 	if data, err := os.ReadFile(filepath.Join(instDir, "messages.xml")); err == nil { //nolint:gosec // the site checkout
 		out = append(out, mission.Contribution{Name: "instance messages.xml", Folder: "custom_instance", Files: []mission.ContribFile{{Name: "messages.xml", Data: data}}})
@@ -88,10 +83,10 @@ func Collect(ctx context.Context, t *site.Tree, inst *resolve.Instance, o Option
 			if err != nil {
 				return nil, fmt.Errorf("mod %d (%s): files.%s: %w", m.ID, li.Name, k, err)
 			}
+			if data, err = Normalize(k, data, li.Normalize); err != nil {
+				return nil, fmt.Errorf("mod %d (%s): normalize: %w", m.ID, li.Name, err)
+			}
 			c.Files = append(c.Files, mission.ContribFile{Name: k, Data: data})
-		}
-		for _, n := range li.Normalize {
-			logf("mod %d (%s): normalize %q is not supported yet and was ignored", m.ID, li.Name, n)
 		}
 		c.AfterMerge = hookRunner(inst, li.Hooks.PostMerge, li.Dir, o)
 		out = append(out, c)

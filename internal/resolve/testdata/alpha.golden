@@ -82,6 +82,7 @@ backup:
         - config_change
     keep: 20
     min_keep: 3
+logs: {}
 ---
 [Unit]
 Description=DayZ server alpha (dzo)
@@ -117,10 +118,12 @@ Notify=healthy
 StopTimeout=120
 
 [Service]
+ExecStartPre=-/usr/bin/dzo logs rotate alpha
 ExecStartPre=/usr/bin/dzo instance render alpha
 Restart=always
 SuccessExitStatus=255
 RestartSec=15s
+ExecStopPost=-/usr/bin/dzo logs crash-summary alpha
 ExecStop=/usr/bin/dzo instance shutdown alpha --timeout 30s
 TimeoutStopSec=3m
 TimeoutStartSec=45m

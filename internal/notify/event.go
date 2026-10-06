@@ -26,6 +26,7 @@ const (
 	KindHealthUnhealthy        Kind = "health_unhealthy"
 	KindHealthRecovered        Kind = "health_recovered"
 	KindCrashLoop              Kind = "crash_loop"
+	KindCrash                  Kind = "crash"
 	KindRenderFailed           Kind = "render_failed"
 	KindDriftDetected          Kind = "drift_detected"
 	KindSteamLoginRequired     Kind = "steam_login_required"

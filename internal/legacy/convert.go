@@ -1,0 +1,263 @@
+// SPDX-FileCopyrightText: 2026 Bernd Zeimetz <bernd@bzed.de>
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
+package legacy
+
+import (
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
+	"path"
+	"regexp"
+	"sort"
+	"strconv"
+	"strings"
+)
+
+// Options of a conversion.
+type Options struct {
+	Refs []string // one branch per server; the instance is named like the branch
+	// PortOffset is added to every port, so that the new servers can run next to the legacy ones.
+	PortOffset int
+	// Image is the runtime image name written to site.yaml.
+	Image string
+}
+
+// Result is the site tree: file path (relative to the site directory) to content, and the report.
+type Result struct {
+	Files  map[string][]byte
+	Report string
+}
+
+// The files the legacy xml.sh knows, in its order.
+var xmlEnvFiles = []string{
+	"cfgrandompresets.xml", "mapgrouppos.xml", "mapgroupproto.xml", "cfgeventgroups.xml", "cfgenvironment.xml",
+	"cfgeventspawns.xml", "cfggameplay.json", "cfgspawnabletypes.xml", "cfgweather.xml", "events.xml", "init.c", "types.xml",
+}
+
+type report struct {
+	sections map[string][]string // by instance, "" for the shared part
+	order    []string
+}
+
+func (r *report) add(inst, format string, a ...any) {
+	if r.sections == nil {
+		r.sections = map[string][]string{}
+	}
+	if _, ok := r.sections[inst]; !ok {
+		r.order = append(r.order, inst)
+	}
+	r.sections[inst] = append(r.sections[inst], fmt.Sprintf(format, a...))
+}
+
+type branch struct {
+	ref, name string
+	src       Source
+	files     map[string]Entry
+	list      []Entry
+	integr    map[uint64]integration
+	overlays  map[string]overlayDir
+	mods      map[uint64]*modInfo
+}
+
+func (b *branch) show(p string) []byte {
+	data, err := b.src.Show(b.ref, p)
+	if err != nil {
+		return nil
+	}
+	return data
+}
+
+// integration is one mod's integration of one branch, ready to be written.
+type integration struct {
+	yaml  string
+	files map[string][]byte // relative to the integration directory
+	sig   string
+}
+
+// overlayDir is one files/custom/<name>/ of one branch.
+type overlayDir struct {
+	files map[string][]byte
+	sig   string
+}
+
+func signature(files map[string][]byte, extra ...string) string {
+	var names []string
+	for n := range files {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+	h := sha256.New()
+	for _, e := range extra {
+		h.Write([]byte(e + "\x00"))
+	}
+	for _, n := range names {
+		s := sha256.Sum256(files[n])
+		h.Write([]byte(n + "\x00" + hex.EncodeToString(s[:]) + "\x00"))
+	}
+	return hex.EncodeToString(h.Sum(nil))
+}
+
+// split divides what the branches have under one key into the part shared by the most branches
+// and the parts that differ, which become per-instance overrides.
+func split[K comparable, V any](branches []*branch, get func(*branch) map[K]V, sig func(V) string, less func(a, b K) bool) (shared map[K]V, over map[string]map[K]V, differing []K) {
+	shared, over = map[K]V{}, map[string]map[K]V{}
+	var keys []K
+	seen := map[K]bool{}
+	for _, b := range branches {
+		for k := range get(b) {
+			if !seen[k] {
+				seen[k] = true
+				keys = append(keys, k)
+			}
+		}
+	}
+	sort.Slice(keys, func(i, j int) bool { return less(keys[i], keys[j]) })
+	for _, k := range keys {
+		groups := map[string][]*branch{}
+		for _, b := range branches {
+			if v, ok := get(b)[k]; ok {
+				groups[sig(v)] = append(groups[sig(v)], b)
+			}
+		}
+		best := ""
+		for s, bs := range groups {
+			if best == "" || len(bs) > len(groups[best]) || (len(bs) == len(groups[best]) && s < best) {
+				best = s
+			}
+		}
+		for s, bs := range groups {
+			v := get(bs[0])[k]
+			if s == best {
+				shared[k] = v
+				continue
+			}
+			differing = append(differing, k)
+			for _, b := range bs {
+				if over[b.name] == nil {
+					over[b.name] = map[K]V{}
+				}
+				over[b.name][k] = v
+			}
+		}
+	}
+	return shared, over, differing
+}
+
+// Convert reads the branches of src and builds the example site tree.
+func Convert(src Source, o Options) (*Result, error) {
+	if len(o.Refs) == 0 {
+		return nil, fmt.Errorf("legacy: no branch given")
+	}
+	if o.Image == "" {
+		o.Image = "localhost/dzo-runtime:latest"
+	}
+	rep := &report{}
+	var branches []*branch
+	templates := map[string]bool{}
+	for _, ref := range o.Refs {
+		entries, err := src.List(ref)
+		if err != nil {
+			return nil, fmt.Errorf("legacy: %s: %w", ref, err)
+		}
+		b := &branch{ref: ref, name: strings.TrimPrefix(ref, "origin/"), src: src, files: map[string]Entry{}, list: entries}
+		for _, e := range entries {
+			b.files[e.Path] = e
+		}
+		if t := parseTemplate(b.show("files/serverDZ.cfg")); t != "" {
+			templates[t] = true
+		}
+		branches = append(branches, b)
+	}
+	var tmplList []string
+	for t := range templates {
+		tmplList = append(tmplList, t)
+	}
+	sort.Strings(tmplList)
+	for _, b := range branches {
+		b.mods = readMods(b)
+		b.integr = buildIntegrations(b, tmplList, rep)
+		b.overlays = readOverlays(b, rep)
+	}
+
+	out := map[string][]byte{}
+	out["site.yaml"] = []byte("# Generated by dzo legacy convert-config. Review it.\nimage: " + o.Image + "\n")
+
+	sharedI, overI, diffI := split(branches, func(b *branch) map[uint64]integration { return b.integr },
+		func(i integration) string { return i.sig }, func(a, b uint64) bool { return a < b })
+	for id, in := range sharedI {
+		writeFiles(out, path.Join("integrations", "mods", strconv.FormatUint(id, 10)), in.yaml, in.files)
+	}
+	for n, m := range overI {
+		for id, in := range m {
+			writeFiles(out, path.Join("instances", n, "integrations", strconv.FormatUint(id, 10)), in.yaml, in.files)
+		}
+	}
+	reported := map[uint64]bool{}
+	for _, id := range diffI {
+		if reported[id] {
+			continue
+		}
+		reported[id] = true
+		rep.add("", "mod %d: the integration is not the same on every branch; the version most branches have is shared, the others are overrides in instances/<name>/integrations/%d/", id, id)
+	}
+
+	sharedO, overO, _ := split(branches, func(b *branch) map[string]overlayDir { return b.overlays },
+		func(o overlayDir) string { return o.sig }, func(a, b string) bool { return a < b })
+	// An overlay that only one branch has is that instance's own.
+	count := map[string]int{}
+	for _, b := range branches {
+		for n := range b.overlays {
+			count[n]++
+		}
+	}
+	isShared := map[string]bool{}
+	for n, ov := range sharedO {
+		if count[n] > 1 || len(branches) == 1 {
+			isShared[n] = true
+			writeFiles(out, path.Join("overlays", n), "", ov.files)
+		} else {
+			for _, b := range branches {
+				if _, ok := b.overlays[n]; ok {
+					writeFiles(out, path.Join("instances", b.name, "overlays", n), "", ov.files)
+				}
+			}
+		}
+	}
+	for bn, m := range overO {
+		for n, ov := range m {
+			writeFiles(out, path.Join("instances", bn, "overlays", n), "", ov.files)
+		}
+	}
+	if len(isShared) > 0 {
+		var ns []string
+		for n := range isShared {
+			ns = append(ns, n)
+		}
+		sort.Strings(ns)
+		rep.add("", "overlays shared by several branches (overlays/): %s", strings.Join(ns, ", "))
+	}
+
+	for _, b := range branches {
+		convertInstance(out, rep, b, o)
+	}
+	return &Result{Files: out, Report: renderReport(rep, o)}, nil
+}
+
+func writeFiles(out map[string][]byte, dir, yaml string, files map[string][]byte) {
+	if yaml != "" {
+		out[path.Join(dir, "integration.yaml")] = []byte(yaml)
+	}
+	for f, data := range files {
+		out[path.Join(dir, f)] = data
+	}
+}
+
+var templateRe = regexp.MustCompile(`(?m)^\s*template\s*=\s*"([^"]*)"`)
+
+func parseTemplate(cfg []byte) string {
+	if m := templateRe.FindSubmatch(cfg); m != nil {
+		return string(m[1])
+	}
+	return ""
+}

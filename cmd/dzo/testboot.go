@@ -29,10 +29,11 @@ func newTestCmd() *cobra.Command {
 }
 
 type bootFlags struct {
-	configPath, server, modsFrom, out string
-	timeout, settle                   time.Duration
-	keepTree, vanilla, asJSON         bool
-	expect                            []string
+	configPath, server, modsFrom, out    string
+	timeout, settle                      time.Duration
+	keepTree, vanilla, asJSON, container bool
+	expect                               []string
+	portFrom, portTo                     int
 }
 
 func newTestBootCmd() *cobra.Command {
@@ -64,6 +65,9 @@ func newTestBootCmd() *cobra.Command {
 	cmd.Flags().StringVar(&f.modsFrom, "mods-from", "", "where the mods come from: cache (dzo's cache), steam-client (the client's workshop directory), or a directory of @Mod folders (default steam-client with --server steam, else cache)")
 	cmd.Flags().DurationVar(&f.timeout, "timeout", 3*time.Minute, "how long the server may take to answer the Steam query")
 	cmd.Flags().DurationVar(&f.settle, "settle", 20*time.Second, "how long to let it run after the mission has loaded (with dzo-admin, it then waits for the mod to make contact)")
+	cmd.Flags().BoolVar(&f.container, "container", false, "boot in the container image of the instance (the runtime image the units use) instead of natively")
+	cmd.Flags().IntVar(&f.portFrom, "port-from", 0, "first port of the range the test ports are taken from (default 20000)")
+	cmd.Flags().IntVar(&f.portTo, "port-to", 0, "end (exclusive) of that range (default 60000)")
 	cmd.Flags().BoolVar(&f.keepTree, "keep-tree", false, "keep the server tree afterwards")
 	cmd.Flags().BoolVar(&f.vanilla, "vanilla", false, "boot the unmodded server mission and record the baseline for this server build")
 	cmd.Flags().StringArrayVar(&f.expect, "expect", nil, "a regular expression that must appear in the script log or the RPT (repeatable)")
@@ -115,7 +119,13 @@ func runBoot(cmd *cobra.Command, name string, f bootFlags) error {
 
 	bc := boottest.Config{
 		ServerDir: serverDir, TreeDir: filepath.Join(run, "tree"), Template: inst.Map,
-		Timeout: f.timeout, Settle: f.settle, Expect: f.expect, Log: cmd.ErrOrStderr(),
+		Timeout: f.timeout, Settle: f.settle, PortRange: [2]int{f.portFrom, f.portTo}, Expect: f.expect, Log: cmd.ErrOrStderr(),
+	}
+	if f.container {
+		bc.Image = inst.Image
+		if bc.Image == "" {
+			return fmt.Errorf("instance %s has no container image (site.yaml image)", inst.Name)
+		}
 	}
 	blPath, err := boottest.BaselinePath(cfg.Paths.Cache, inst.Product.Name, serverDir)
 	if err != nil {

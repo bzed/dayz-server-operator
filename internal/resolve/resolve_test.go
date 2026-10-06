@@ -317,16 +317,16 @@ func TestHooksBecomeUnitLines(t *testing.T) {
 		t.Fatal(err)
 	}
 	q := inst.Quadlet
-	if len(q.PreStart) != 2 || q.PreStart[1] != "/usr/bin/dzo instance hook alpha pre_start" {
+	if len(q.PreStart) != 3 || q.PreStart[2] != "/usr/bin/dzo instance hook alpha pre_start" || q.PreStart[1] != "/usr/bin/dzo instance render alpha" {
 		t.Errorf("pre_start must follow the render: %v", q.PreStart)
 	}
-	if len(q.PostStop) != 1 || q.PostStop[0] != "/usr/bin/dzo instance hook alpha post_stop" {
+	if len(q.PostStop) != 2 || q.PostStop[1] != "/usr/bin/dzo instance hook alpha post_stop" || q.PostStop[0] != "/usr/bin/dzo logs crash-summary alpha" {
 		t.Errorf("post_stop: %v", q.PostStop)
 	}
 	raw.Hooks = site.HooksConfig{}
 	tree.Instances["alpha"] = raw
 	inst, _ = Resolve(cfg, tree, "alpha")
-	if len(inst.Quadlet.PreStart) != 1 || len(inst.Quadlet.PostStop) != 0 {
+	if len(inst.Quadlet.PreStart) != 2 || len(inst.Quadlet.PostStop) != 1 {
 		t.Errorf("no hooks, no extra lines: %v %v", inst.Quadlet.PreStart, inst.Quadlet.PostStop)
 	}
 }

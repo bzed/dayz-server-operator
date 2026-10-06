@@ -17,7 +17,7 @@ func newMissionCmd() *cobra.Command {
 		Use:   "mission",
 		Short: "Live mission render/apply pipeline primitives (§C6)",
 	}
-	cmd.AddCommand(newMissionDiffCmd(), newMissionApplyCmd(), newMissionUpdateCmd(), newMissionInitCmd(), newMissionRollbackCmd(), newMissionReinitCmd())
+	cmd.AddCommand(newMissionDiffCmd(), newMissionApplyCmd(), newMissionUpdateCmd(), newMissionInitCmd(), newMissionStatusCmd(), newMissionRollbackCmd(), newMissionReinitCmd())
 	return cmd
 }
 

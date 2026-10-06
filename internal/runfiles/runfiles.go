@@ -58,6 +58,9 @@ func ServerCfg(src []byte, template string, queryPort int) (*servercfg.File, err
 	return f, nil
 }
 
+// StdinAnswer is what the server reads from its stdin: "Ignore" to an assertion prompt.
+const StdinAnswer = "i\n"
+
 // BattlEyeCfg is the seed for profiles/battleye/beserver_x64.cfg. The server
 // reads it once and keeps working in a beserver_x64_active_<hex>.cfg beside it.
 // ip is the address RCon listens on; "" leaves it to BattlEye (every interface).
@@ -147,7 +150,7 @@ func Write(in Input) error {
 	}
 	// The server's stdin (mounted at /stdin): the answer "Ignore" to the assertion prompt that
 	// the experimental builds show at shutdown ("Script is leaking!", (A)bort (R)etry (I)gnore).
-	if err := os.WriteFile(filepath.Join(in.RuntimeDir, "stdin"), []byte("i\n"), 0o640); err != nil { //nolint:gosec // read by the container's root
+	if err := os.WriteFile(filepath.Join(in.RuntimeDir, "stdin"), []byte(StdinAnswer), 0o640); err != nil { //nolint:gosec // read by the container's root
 		return err
 	}
 	if in.StorageDir != "" {

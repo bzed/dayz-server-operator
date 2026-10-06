@@ -2,7 +2,7 @@ Source: dayz-server-operator
 Section: admin
 Priority: optional
 Maintainer: Bernd Zeimetz <bernd@bzed.de>
-Build-Depends: debhelper-compat (= 13), dh-sequence-installsysusers
+Build-Depends: debhelper-compat (= 13), dh-sequence-installsysusers, python3-sphinx, dh-sequence-sphinxdoc
 Standards-Version: 4.6.2
 Homepage: https://github.com/bzed/dayz-server-operator
 Rules-Requires-Root: no
@@ -11,6 +11,7 @@ Package: dzo
 Architecture: any
 Depends:
  ${misc:Depends},
+ ${sphinxdoc:Depends},
  podman (>= 5.4),
  systemd (>= 257),
  git,

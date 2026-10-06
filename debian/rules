@@ -19,12 +19,14 @@ export CGO_ENABLED = 0
 	dh $@ --buildsystem=makefile
 
 override_dh_auto_build:
-	$(MAKE) build servermods
+	$(MAKE) build servermods docs
+	bin/dzo gen-man debian/man
 
 override_dh_auto_test:
 	$(MAKE) cover
 
 override_dh_auto_clean:
+	rm -rf debian/man
 	$(MAKE) clean
 	dh_auto_clean
 

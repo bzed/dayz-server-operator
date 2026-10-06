@@ -317,3 +317,150 @@ func loadCfg(t *testing.T, path string) *config.Config {
 	}
 	return c
 }
+
+func addInstanceY(t *testing.T, data, repo string) {
+	t.Helper()
+	writeFile(t, filepath.Join(data, "site", "instances", "y", "instance.yaml"), `name: y
+product: dayz-stable
+map: empty.m
+mission_source: {git: `+repo+`, ref: main, path: empty.m}
+fallback_mission: dayzOffline.fb
+ports: {game: 2402, rcon: 2406, query: 27116}
+network: host
+`)
+	writeFile(t, filepath.Join(data, "site", "instances", "y", "serverDZ.cfg"), "hostname = \"y\";\n")
+}
+
+func TestInstanceCloneAndRemove(t *testing.T) {
+	isolatedHome(t)
+	data := t.TempDir()
+	cfg, root, repo := renderSetupIn(t, data)
+	addInstanceY(t, data, repo)
+	if _, err := runCmd(t, "instance", "create", "x", "--config", cfg); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, filepath.Join(root, "storage", "empty.m", "data", "marker"), "world")
+	writeFile(t, filepath.Join(root, "runtime", "build"), "1")
+	writeFile(t, filepath.Join(root, "profiles", "old.log"), "log")
+
+	for _, bad := range [][]string{{"x", "x"}, {"x", "nope"}} {
+		if _, err := runCmd(t, append([]string{"instance", "clone"}, append(bad, "--config", cfg)...)...); err == nil {
+			t.Errorf("clone %v must fail", bad)
+		}
+	}
+	out, err := runCmd(t, "instance", "clone", "x", "y", "--config", cfg)
+	if err != nil || !strings.Contains(out, "cloned x to y") {
+		t.Fatalf("clone: %v\n%s", err, out)
+	}
+	y := filepath.Join(data, "instances", "y")
+	if b, err := os.ReadFile(filepath.Join(y, "storage", "empty.m", "data", "marker")); err != nil || string(b) != "world" {
+		t.Errorf("the world was not copied: %q %v", b, err)
+	}
+	if b, _ := os.ReadFile(filepath.Join(y, "runtime", "build")); string(b) != "1" {
+		t.Errorf("the build pin was lost: %q", b)
+	}
+	if _, err := os.Stat(filepath.Join(y, "profiles", "old.log")); err == nil {
+		t.Error("the profile logs were copied")
+	}
+	if _, err := runCmd(t, "instance", "clone", "x", "y", "--config", cfg); err == nil {
+		t.Error("clone onto an existing instance must fail")
+	}
+
+	// remove: units are deleted, the data directory is gone, the site stays
+	q, u := userDirs()
+	writeFile(t, filepath.Join(q, "dzo-y.container"), "x")
+	writeFile(t, filepath.Join(u, "dzo-restart-y.timer"), "x")
+	writeFile(t, filepath.Join(data, "snapshots", "y", "s1", "f"), "x")
+	out, err = runCmd(t, "instance", "remove", "y", "--yes", "--config", cfg)
+	if err != nil || !strings.Contains(out, "and 2 unit file") || !strings.Contains(out, "removed 1 snapshot(s)") {
+		t.Fatalf("remove: %v\n%s", err, out)
+	}
+	for _, p := range []string{y, filepath.Join(q, "dzo-y.container"), filepath.Join(data, "snapshots", "y")} {
+		if _, err := os.Lstat(p); err == nil {
+			t.Errorf("%s is still there", p)
+		}
+	}
+	if _, err := runCmd(t, "instance", "remove", "y", "--yes", "--config", cfg); err == nil {
+		t.Error("removing an instance twice must fail")
+	}
+	if _, err := runCmd(t, "instance", "remove", "../x", "--yes", "--config", cfg); err == nil {
+		t.Error("a path as the name must fail")
+	}
+	if _, err := runCmd(t, "instance", "remove", "x", "--keep-snapshots", "--delete-logs", "--config", cfg); err == nil {
+		t.Error("without --yes and without input remove must abort")
+	}
+}
+
+func TestMissionStatusAndSiteStatusCommit(t *testing.T) {
+	isolatedHome(t)
+	data := t.TempDir()
+	cfg, _, _ := renderSetupIn(t, data)
+	site := filepath.Join(data, "site")
+	out, err := runCmd(t, "mission", "status", "x", "--config", cfg)
+	if err != nil || !strings.Contains(out, "pristine: not fetched yet") || !strings.Contains(out, "live mission: not created") {
+		t.Fatalf("status before create: %v\n%s", err, out)
+	}
+	if _, err := runCmd(t, "instance", "create", "x", "--config", cfg); err != nil {
+		t.Fatal(err)
+	}
+	out, err = runCmd(t, "mission", "status", "x", "--config", cfg)
+	if err != nil || !strings.Contains(out, "managed file(s)") || !strings.Contains(out, "next render:") {
+		t.Fatalf("status: %v\n%s", err, out)
+	}
+
+	if _, err := runCmd(t, "site", "status", "--config", cfg); err == nil {
+		t.Error("without a checkout, site status must say so")
+	}
+	commitAll(t, site)
+	writeFile(t, filepath.Join(site, "instances", "x", "note"), "n")
+	out, err = runCmd(t, "site", "status", "--config", cfg)
+	if err != nil || !strings.Contains(out, "note") {
+		t.Fatalf("site status: %v\n%s", err, out)
+	}
+	t.Setenv("GIT_AUTHOR_NAME", "t")
+	t.Setenv("GIT_AUTHOR_EMAIL", "t@example.invalid")
+	t.Setenv("GIT_COMMITTER_NAME", "t")
+	t.Setenv("GIT_COMMITTER_EMAIL", "t@example.invalid")
+	out, err = runCmd(t, "site", "commit", "-m", "note", "--config", cfg)
+	if err != nil || !strings.Contains(out, "committed") {
+		t.Fatalf("site commit: %v\n%s", err, out)
+	}
+	out, err = runCmd(t, "site", "commit", "-m", "again", "--config", cfg)
+	if err != nil || !strings.Contains(out, "nothing to commit") {
+		t.Fatalf("second commit: %v\n%s", err, out)
+	}
+}
+
+func TestLegacyConvertConfig(t *testing.T) {
+	repo := t.TempDir()
+	writeFile(t, filepath.Join(repo, "files", "serverDZ.cfg"), "template=\"dayzOffline.chernarusplus\";\npassword = \"s\";\n")
+	writeFile(t, filepath.Join(repo, "config", "containers", "server.json"), `{"ports": ["3302:3302/udp","3303:3303/udp","37016:37016/udp"]}`)
+	writeFile(t, filepath.Join(repo, "server", "bin", "dz"), "parameters=\"-cpuCount=2 -config=x -port=1\"\n")
+	commitAll(t, repo)
+	out := filepath.Join(t.TempDir(), "site")
+	if _, err := runCmd(t, "legacy", "convert-config", "--repo", repo, "--out", out); err == nil {
+		t.Error("--ref is required")
+	}
+	o, err := runCmd(t, "legacy", "convert-config", "--repo", repo, "--ref", "main", "--out", out, "--dry-run")
+	if err != nil || !strings.Contains(o, "would write instances/main/instance.yaml") {
+		t.Fatalf("dry run: %v\n%s", err, o)
+	}
+	if _, err := os.Stat(out); err == nil {
+		t.Fatal("a dry run wrote files")
+	}
+	o, err = runCmd(t, "legacy", "convert-config", "--repo", repo, "--ref", "main", "--out", out, "--port-offset", "100")
+	if err != nil || !strings.Contains(o, "the site validates") {
+		t.Fatalf("convert: %v\n%s", err, o)
+	}
+	b, _ := os.ReadFile(filepath.Join(out, "instances", "main", "instance.yaml"))
+	if !strings.Contains(string(b), "game: 3402") {
+		t.Errorf("instance.yaml:\n%s", b)
+	}
+	o, err = runCmd(t, "legacy", "convert-config", "--repo", repo, "--ref", "main", "--out", out, "--port-offset", "100")
+	if err != nil || !strings.Contains(o, "0 of ") {
+		t.Fatalf("a second run changes nothing: %v\n%s", err, o)
+	}
+	if _, err := runCmd(t, "legacy", "convert-config", "--repo", repo, "--ref", "nope", "--out", out); err == nil {
+		t.Error("an unknown branch must fail")
+	}
+}

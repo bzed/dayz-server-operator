@@ -13,7 +13,7 @@ SPDX-License-Identifier = "AGPL-3.0-or-later"
 # Debian source control metadata in formats that don't conventionally (or
 # cannot, per their own file format) carry an SPDX comment header.
 [[annotations]]
-path = ["debian/control", "debian/changelog", "debian/copyright", "debian/source/format", "debian/*.install"]
+path = ["debian/control", "debian/changelog", "debian/copyright", "debian/source/format", "debian/*.install", "debian/*.manpages"]
 SPDX-FileCopyrightText = "2026 Bernd Zeimetz <bernd@bzed.de>"
 SPDX-License-Identifier = "AGPL-3.0-or-later"
 

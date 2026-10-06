@@ -42,8 +42,8 @@ documentation is a [Sphinx site](docs/) under `docs/`.
 > part of the web platform: the `dzo-admin` servermod, the JSON API and a web
 > interface for players, vehicles and a live map. Not built yet: web users
 > with passwords and TOTP, the player/ban database, one-off restart timers and
-> scheduled broadcasts, the legacy config converter (M8) and the golden-master
-> tests against the legacy renderer (spike S0), see
+> scheduled broadcasts, and the golden-master tests against the legacy renderer
+> (spike S0), see
 > [MILESTONES.md](MILESTONES.md) and the [spikes page](docs/spikes.rst). See
 > [Needs live verification](#needs-live-verification) below for what
 > hasn't been checked against a real Steam account or DayZ server, and
@@ -258,15 +258,16 @@ relying on them, roughly in the order they'd bite:
   `user_subvol_rm_allowed`. Destroying a read-only snapshot with that option
   fails with EROFS until the flag is cleared; dzo does. The snapshot index is a
   JSON file per instance, not the database the plan calls for, because there is no
-  database layer yet. Not built: the periodic and daily timers, snapshots before
-  server and mod updates, the database backup, metrics, the web page. The tests
+  database layer yet. Snapshots are taken before upgrades, mod updates, mission
+  updates and wipes, and a timer prunes them daily. Not built: the database backup,
+  metrics, the web page. The tests
   skip without a btrfs filesystem (`DZO_BTRFS_TESTDIR`); CI mounts a loopback one.
 - **The exporter** (`internal/exporter`) was run against fakes for systemd, podman
   and the Steam query, and against real files (a snapshot index, a render manifest,
   the Steam status file); not against a real user systemd or podman. It reads
   `podman inspect --format {{.State.Health.Status}}` of the container `dzo-<name>`,
   and `systemctl --user show` of `dzo-<name>.service`. The restart counter is
-  systemd's, without reasons. There is no unit that runs it yet.
+  systemd's, without reasons. `dzo units sync` writes the unit that runs it.
 - **Container images and `dzo setup`** (`images/`, `internal/setup`): both
   images were built with podman 5.8 on a development machine. Every shared
   library of the real 1.29 `DayZServer` resolves inside `dzo-runtime` (`ldd`),
@@ -280,10 +281,11 @@ relying on them, roughly in the order they'd bite:
 - **Debian's web libraries**: the package depends on `libjs-leaflet` (1.7.1 in
   trixie) and `libjs-htmx` (4.0.0-beta6). The map was checked on Leaflet 1.7.1.
   The pages were written against htmx 2 and were not run against htmx 4.
-- **Packaging gaps**: the Sphinx documentation is not part of the package yet
-  (the web interface's `/docs/` is empty without `web.docs_dir`), there are no
-  man pages (lintian warns), and `compat.yaml`'s `server_build` stays empty
-  until the boot test (M7) fills it.
+- **Packaging**: the Sphinx documentation (`/usr/share/doc/dzo/html`, which the
+  web interface serves under `/docs/`) and one man page per command
+  (`dzo gen-man`) are built into the package; a `dpkg-buildpackage` of that was
+  only run in CI. `compat.yaml`'s `server_build` stays empty until the boot test
+  (M7) fills it.
 - **A2S `AppID` truncation** (`internal/a2s`): the wire field is a signed
   16-bit int; real DayZ app ids may wrap. Documented on `InfoResponse`.
 - **The `enfMain` process name** (`internal/health`'s process-existence

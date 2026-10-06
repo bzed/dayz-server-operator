@@ -62,6 +62,8 @@ func newRootCmd() *cobra.Command {
 		newWipeCmd(),
 		newShellCmd(),
 		newExecCmd(),
+		newManCmd(),
+		newLegacyCmd(),
 	)
 	return root
 }

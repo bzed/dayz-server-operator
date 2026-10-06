@@ -6,6 +6,9 @@ package main
 import (
 	"hash/crc32"
 	"net"
+	"os"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -120,5 +123,54 @@ func TestRconExecUnknownInstance(t *testing.T) {
 	}
 	if _, err := runCmd(t, "instance", "shutdown", "nope", "--config", cfg); err == nil {
 		t.Error("dzo instance shutdown of an unknown instance must be an error")
+	}
+}
+
+func TestRconConsoleAndRotate(t *testing.T) {
+	isolatedHome(t)
+	conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 0})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = conn.Close() }()
+	go func() {
+		buf := make([]byte, 4096)
+		for {
+			n, remote, err := conn.ReadFromUDP(buf)
+			if err != nil {
+				return
+			}
+			if n >= 8 && buf[7] == 0x00 { // login
+				_, _ = conn.WriteToUDP(loginOK(), remote)
+				continue
+			}
+			if n >= 9 && buf[7] == 0x01 {
+				_, _ = conn.WriteToUDP(commandOK(buf[8], "pong"), remote)
+			}
+		}
+	}()
+	data := t.TempDir()
+	cfg, _, _ := renderSetupIn(t, data)
+	yaml := filepath.Join(data, "site", "instances", "x", "instance.yaml")
+	b, _ := os.ReadFile(yaml)
+	port := conn.LocalAddr().(*net.UDPAddr).Port
+	writeFile(t, yaml, strings.Replace(string(b), "rcon: 2306", "rcon: "+strconv.Itoa(port), 1))
+
+	out, err := runCmdWithStdin(t, "\nplayers\nexit\nignored\n", "rcon", "console", "x", "--config", cfg, "--timeout", "3s")
+	if err != nil || !strings.Contains(out, "connected to x") || !strings.Contains(out, "pong") {
+		t.Fatalf("console: %v\n%s", err, out)
+	}
+
+	pwFile := filepath.Join(data, "secrets", "rcon", "x")
+	writeFile(t, pwFile, "old\n")
+	out, err = runCmd(t, "rcon", "rotate", "x", "--config", cfg)
+	if err != nil || !strings.Contains(out, "new RCon password") {
+		t.Fatalf("rotate: %v\n%s", err, out)
+	}
+	if b, _ := os.ReadFile(pwFile); strings.TrimSpace(string(b)) == "old" || len(strings.TrimSpace(string(b))) != 24 {
+		t.Errorf("password = %q", b)
+	}
+	if _, err := runCmd(t, "rcon", "rotate", "nope", "--config", cfg); err == nil {
+		t.Error("an unknown instance must fail")
 	}
 }

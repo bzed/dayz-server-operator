@@ -82,6 +82,11 @@ func (r *Repo) IsDirty(ctx context.Context) (bool, error) {
 	return strings.TrimSpace(out) != "", nil
 }
 
+// Status returns `git status --short --branch` of the checkout.
+func (r *Repo) Status(ctx context.Context) (string, error) {
+	return r.run(ctx, r.Dir, "status", "--short", "--branch")
+}
+
 // Pull fast-forwards the checkout to the remote branch's tip. It refuses
 // (ErrDirty) when the checkout has uncommitted local changes, rather than
 // overwriting them.

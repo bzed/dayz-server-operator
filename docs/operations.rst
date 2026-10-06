@@ -123,8 +123,14 @@ Console and RCon
    dzo rcon exec --instance deerisle players        # one command, the instance's own port and password
    dzo rcon exec --addr 127.0.0.1:2303 --password <password> players
 
-An interactive console and ``dzo rcon rotate`` (a new password) are not built yet; the
-password lives in ``<paths.secrets>/rcon/<instance>``.
+.. code-block:: sh
+
+   dzo rcon console deerisle      # one command per line; server messages (connects, chat, kicks) as they come
+   dzo rcon rotate deerisle --restart   # a new password; the server reads it at its start
+
+The console reconnects when the server restarts. A new RCon password takes effect at the next start, so
+``rotate`` refuses a running instance unless ``--restart`` is given. The password lives in
+``<paths.secrets>/rcon/<instance>``.
 
 The RCon password is generated per instance and bound to localhost where the
 network mode allows it.
@@ -133,10 +139,41 @@ Logs
 ----
 
 * Server console: journald (``dzo logs <name>``).
-* Profile logs (``*.RPT``, ``script*.log``, ``*.ADM``, crash dumps) are rotated
-  into ``profiles/logs/<timestamp>/`` before each start.
-* After a crash dzo writes a crash summary (the tails of the RPT, script log and
-  ``error.log``) to the journal and to Discord.
+* Profile logs are rotated into an archive outside the instance, see below.
+* After an unclean exit the unit's ``ExecStopPost`` runs ``dzo logs crash-summary``: the last 25 lines
+  of the newest ``error.log``, script log, crash log and RPT go to the journal and to Discord. It
+  runs before the next start rotates the files.
+
+Profile log rotation
+~~~~~~~~~~~~~~~~~~~~
+
+The profiles directory collects logs from the server, BattlEye and mods. ``logs:`` in ``instance.yaml`` (or
+the site defaults) is a list of regular expressions, matched against the path below ``profiles/``:
+
+.. code-block:: yaml
+
+   logs:
+     rotate:                 # added to the site's list; the default is the server's own files
+       - {match: '^DayZServer_x64_.*\.RPT$'}
+       - {match: '^script_.*\.log$'}
+       - {match: '\.mdmp$', max_age: 14d}
+       - {match: '^VPPAdminTools/Logs/.*\.txt$'}
+       - {match: '^battleye/.*\.log$', keep_newest: 2}
+     keep_newest: 1          # per rule, the newest matches stay in place
+     min_age: 10m            # a file changed more recently is never touched
+     archive: {compress: gzip, max_age: 90d, max_size: 50GiB}
+
+Per rule the newest ``keep_newest`` files stay (the server may still write them) and every older match is
+moved to ``<paths.logs>/<instance>/<date>/<path>.gz``: copied through gzip, synced, and only then removed.
+Only regular files below ``profiles/`` are touched, links are not followed, and ``serverDZ.cfg``, the
+BattlEye configs, ``dzo-admin/`` and every ``.json``/``.xml`` file are never moved, even if a rule matches
+them. The default rules are the ``*.RPT``, ``script_*.log``, ``crash_*.log`` and ``*.ADM`` of the server and
+``*.mdmp`` crash dumps (14 days).
+
+It runs before every start (``ExecStartPre``, a failure does not stop the start) and hourly for all
+instances (``dzo-logs.timer``), which also applies the archive's ``max_age`` and ``max_size`` (oldest
+first). ``dzo logs rotate <name> --dry-run`` lists what it would move and the large files no rule matches
+(new mod logs show up there); ``dzo logs archive <name> [--since 7d] [--match <regexp>]`` lists the archive.
 
 Instances
 ---------
@@ -145,9 +182,19 @@ Instances
 
    dzo instance create <name>
    dzo instance apply <name>          # regenerate units and timers after config changes
-   dzo instance clone <old> <new>     # copy the data into a new instance
-   dzo instance remove <name>         # asks whether to keep its snapshots
+   dzo instance clone <old> <new>     # copy the data into a new instance of the site repository
+   dzo instance remove <name>         # stops it, removes units and data, asks before
    dzo wipe <name>                    # wipe the world, after confirmation and a snapshot
+
+``clone`` needs the new instance in the site repository (its own ports and settings) and the same map. It
+copies the old instance's directory with a btrfs snapshot, gives the copy its own profiles, keys and
+RCon password, and keeps the server build the old one runs. A running source needs ``--force`` (the copy
+is crash-consistent). ``remove`` deletes the data directory and, unless ``--keep-snapshots``, the
+snapshots, and removes the instance's units; then delete ``instances/<name>/`` from the site repository.
+
+Development: ``dzo instance render`` (render only, nothing is started) and ``dzo shell`` (a container with
+the instance's mounts and a shell, without starting the server) are the "development mode"; a server is
+started only by ``dzo start``.
 
 Instances cannot be renamed in place, because the name is part of unit names,
 paths and the database. Clone to the new name and remove the old instance.

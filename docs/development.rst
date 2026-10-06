@@ -116,8 +116,11 @@ neither installs it nor writes into Steam's directories; ``--server <dir>``
 uses another installation. Mods come from your client's workshop folder
 (``--mods-from steam-client``, the default with ``--server steam``), from dzo's
 cache (``--mods-from cache``), or from a directory of ``@Mod`` folders. dzo-admin
-and other local servermods always come from dzo's cache. Only the native Linux
-server is supported; booting in the runtime container is not built yet.
+and other local servermods always come from dzo's cache. With ``--container`` the
+server runs in the instance's runtime image instead (podman): the tree, the server install and the mods
+are mounted at their own paths, the install and the mods as overlays, so the links of the tree resolve and
+nothing is written into them. ``--port-from`` and ``--port-to`` choose the range of the test ports on a host that reserves
+one for the game.
 
 The test builds a throwaway tree (symlinks to the server install, a copy of the
 mission as a render would apply it, your ``serverDZ.cfg`` with test ports, a

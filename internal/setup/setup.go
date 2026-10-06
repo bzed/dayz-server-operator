@@ -115,7 +115,7 @@ func (r *runner) paths() {
 		name, dir string
 		mode      os.FileMode
 	}{
-		{"data", p.Data, 0o750}, {"instances", p.Instances, 0o750}, {"snapshots", p.Snapshots, 0o750},
+		{"data", p.Data, 0o750}, {"instances", p.Instances, 0o750}, {"snapshots", p.Snapshots, 0o750}, {"logs", p.Logs, 0o750},
 		{"cache", p.Cache, 0o750}, {"secrets", p.Secrets, 0o700}, {"db", p.DB, 0o750},
 	} {
 		switch fi, err := os.Stat(d.dir); {

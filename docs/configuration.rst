@@ -22,6 +22,7 @@ Operator configuration
      data: /var/lib/dzo
      instances: ${data}/instances
      snapshots: ${data}/snapshots
+     logs: ${data}/logs         # archive of rotated profile logs
      cache: ${data}/cache
      secrets: ${data}/secrets
      db: ${data}/db

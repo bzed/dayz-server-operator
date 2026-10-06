@@ -236,7 +236,10 @@ the live mission is touched. Notes on what is built:
 * Two contributors that replace the same file (``cfgweather.xml``, ``messages.xml``) are reported
   as a conflict; the later one wins. Elements of the XML files that are merged by ``name`` are
   replaced silently.
-* ``normalize:`` in an integration is not supported yet and is ignored with a warning.
+* ``normalize:`` in an integration repairs the quirks of mod files before they are merged:
+  ``eventposdef-root`` renames the root ``<events>`` of ``cfgeventspawns.xml`` to ``<eventposdef>``,
+  ``wrap-root`` wraps a file that is a bare list of elements into the root element of its kind (the
+  name of the file says which), and ``xml-decl`` adds the XML declaration. A JSON file is left alone.
 * A ``url`` source is downloaded once and kept in ``paths.cache``: by its ``sha256`` when it has
   one (and verified), else by its URL (and never fetched again).
 

@@ -11,6 +11,7 @@ package site
 import (
 	"fmt"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -274,6 +275,32 @@ type ContainerConfig struct {
 	Memory  *string           `yaml:"memory,omitempty"`
 }
 
+// LogRule is one profile log series: the files whose path (slash separated, relative to
+// profiles/) matches are one series, the newest of which stays in place.
+type LogRule struct {
+	Match      string `yaml:"match"`
+	KeepNewest *int   `yaml:"keep_newest,omitempty"`
+	// MaxAge is how long an archived file of this rule is kept (default: the archive's).
+	MaxAge Age `yaml:"max_age,omitempty"`
+}
+
+// LogArchive says where rotated profile logs go and how long they stay.
+type LogArchive struct {
+	// Compress is "gzip" (default) or "none".
+	Compress string `yaml:"compress,omitempty"`
+	MaxAge   Age    `yaml:"max_age,omitempty"`
+	MaxSize  Bytes  `yaml:"max_size,omitempty"`
+}
+
+// LogsConfig is the profile log rotation (`logs:` in site.yaml defaults or instance.yaml).
+// An instance adds its rules to the site's and overrides the settings.
+type LogsConfig struct {
+	Rotate     []LogRule  `yaml:"rotate,omitempty"`
+	KeepNewest *int       `yaml:"keep_newest,omitempty"`
+	MinAge     Age        `yaml:"min_age,omitempty"`
+	Archive    LogArchive `yaml:"archive,omitempty"`
+}
+
 // HooksConfig lists the hook scripts for each hook point (§C11).
 type HooksConfig struct {
 	PreStart     []string `yaml:"pre_start,omitempty"`
@@ -382,6 +409,7 @@ type Instance struct {
 	Container       ContainerConfig `yaml:"container,omitempty"`
 	Hooks           HooksConfig     `yaml:"hooks,omitempty"`
 	Backup          BackupConfig    `yaml:"backup,omitempty"`
+	Logs            LogsConfig      `yaml:"logs,omitempty"`
 	Admin           AdminConfig     `yaml:"admin,omitempty"`
 	AdminMap        AdminMap        `yaml:"admin_map,omitempty"`
 }
@@ -411,6 +439,14 @@ func (i Instance) Validate() error {
 	}
 	if m := i.Stop.Method; m != "" && m != StopRCon && m != StopKill {
 		errs = append(errs, fmt.Sprintf("stop.method must be %q or %q, got %q", StopRCon, StopKill, m))
+	}
+	for _, r := range i.Logs.Rotate {
+		if _, err := regexp.Compile(r.Match); err != nil {
+			errs = append(errs, fmt.Sprintf("logs.rotate: %q: %v", r.Match, err))
+		}
+	}
+	if c := i.Logs.Archive.Compress; c != "" && c != "gzip" && c != "none" {
+		errs = append(errs, fmt.Sprintf("logs.archive.compress must be gzip or none, got %q", c))
 	}
 	if i.Network != NetworkHost && i.Network != NetworkPublish {
 		errs = append(errs, fmt.Sprintf("network must be %q or %q, got %q", NetworkHost, NetworkPublish, i.Network))
@@ -503,6 +539,9 @@ type Integration struct {
 	Aliases   []uint64              `yaml:"aliases,omitempty"`
 }
 
+// NormalizerNames are the values `normalize:` takes (implemented in internal/integrate).
+var NormalizerNames = []string{"eventposdef-root", "wrap-root", "xml-decl"}
+
 // Validate checks the invariants Integration relies on.
 func (i Integration) Validate() error {
 	var errs []string
@@ -515,6 +554,11 @@ func (i Integration) Validate() error {
 	for key, f := range i.Files {
 		if err := f.Validate(key); err != nil {
 			errs = append(errs, err.Error())
+		}
+	}
+	for _, n := range i.Normalize {
+		if !slices.Contains(NormalizerNames, n) {
+			errs = append(errs, fmt.Sprintf("normalize: unknown %q (known: %s)", n, strings.Join(NormalizerNames, ", ")))
 		}
 	}
 	if len(errs) > 0 {

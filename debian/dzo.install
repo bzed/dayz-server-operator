@@ -3,3 +3,4 @@ contrib/dzo/config.yaml etc/dzo
 dist/servermods/* usr/share/dzo/servermods
 images/* usr/share/dzo/images
 contrib/presets/maps/* usr/share/dzo/presets/maps
+docs/_build/html/* usr/share/doc/dzo/html

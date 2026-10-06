@@ -25,6 +25,7 @@ type Paths struct {
 	Data      string `yaml:"data"`
 	Instances string `yaml:"instances"`
 	Snapshots string `yaml:"snapshots"`
+	Logs      string `yaml:"logs"` // archive of rotated profile logs
 	Cache     string `yaml:"cache"`
 	Secrets   string `yaml:"secrets"`
 	DB        string `yaml:"db"`
@@ -165,6 +166,7 @@ func defaultsTemplated() *Config {
 			Data:      "/var/lib/dzo",
 			Instances: "${data}/instances",
 			Snapshots: "${data}/snapshots",
+			Logs:      "${data}/logs",
 			Cache:     "${data}/cache",
 			Secrets:   "${data}/secrets",
 			DB:        "${data}/db",
@@ -233,6 +235,7 @@ func (c *Config) resolvePaths() {
 	}
 	c.Paths.Instances = expand(c.Paths.Instances)
 	c.Paths.Snapshots = expand(c.Paths.Snapshots)
+	c.Paths.Logs = expand(c.Paths.Logs)
 	c.Paths.Cache = expand(c.Paths.Cache)
 	c.Paths.Secrets = expand(c.Paths.Secrets)
 	c.Paths.DB = expand(c.Paths.DB)
@@ -250,6 +253,7 @@ func (c *Config) Validate() error {
 		"paths.data":      c.Paths.Data,
 		"paths.instances": c.Paths.Instances,
 		"paths.snapshots": c.Paths.Snapshots,
+		"paths.logs":      c.Paths.Logs,
 		"paths.cache":     c.Paths.Cache,
 		"paths.secrets":   c.Paths.Secrets,
 		"paths.db":        c.Paths.DB,

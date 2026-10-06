@@ -54,7 +54,7 @@ files:
   events.xml: {source: mod, path: ./info/events.xml}
   cfgeventspawns.xml: {source: local, path: files/spawns.xml, maps: [other.map]}
   cfggameplay.json: {source: local, path: files/gp.json, maps: [empty.m]}
-normalize: [fix-things]
+normalize: [xml-decl]
 `)
 	put(t, filepath.Join(dir, "integrations", "mods", "1", "files", "types.xml"), "<types/>")
 	put(t, filepath.Join(dir, "integrations", "mods", "1", "files", "spawns.xml"), "<eventposdef/>")
@@ -91,8 +91,13 @@ normalize: [fix-things]
 	if names(files) != "cfggameplay.json,events.xml,types.xml" {
 		t.Errorf("files = %v: the variant for another map is left out, the others sorted", files)
 	}
-	if len(logged) != 1 {
-		t.Errorf("an unsupported normalisation must be logged once: %v", logged)
+	for _, f := range mod.Files {
+		if f.Name == "types.xml" && !strings.HasPrefix(string(f.Data), "<?xml") {
+			t.Errorf("normalize: [xml-decl] was not applied to types.xml: %q", f.Data)
+		}
+		if f.Name == "cfggameplay.json" && strings.HasPrefix(string(f.Data), "<?xml") {
+			t.Error("a json file must not be normalised")
+		}
 	}
 	ov := cs[2]
 	if ov.Folder != "custom_loadout" || len(ov.Overlay.SpawnGearPresets) != 1 || len(ov.Files) != 2 {

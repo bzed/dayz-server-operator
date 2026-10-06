@@ -21,7 +21,7 @@ to review:
        --repo ~/src/dayzdockerserver \
        --ref chernarus --ref livonia --ref deerisle \
        --out ~/src/dayz-site \
-       [--port-offset 100] [--dry-run]
+       [--port-offset 100] [--image <runtime image>] [--dry-run]
 
 What it converts:
 
@@ -31,14 +31,17 @@ What it converts:
    * - Old
      - New
    * - ``files/serverDZ.cfg``
-     - ``instances/<name>/serverDZ.cfg`` (ports, ``template`` and
-       ``instanceId`` move to ``instance.yaml``)
-   * - container settings, ``dzpodman`` options
-     - ``ports``, ``network``, ``container.mounts``/``env``, ``health``
-   * - server parameters
-     - ``params``
-   * - map and mission settings
-     - ``map``, ``mission_source``
+     - ``instances/<name>/serverDZ.cfg``; the join and admin passwords are replaced by
+       ``CHANGE-ME`` (the old files kept them in git), and dzo sets ports, ``template`` and
+       ``instanceId`` itself
+   * - ``config/containers/server.json``
+     - ``ports`` (kept, ``--port-offset`` is added), ``container.mounts``, ``env`` and
+       ``logz_dir``; the network is ``host``
+   * - ``parameters=`` of ``server/bin/dz``
+     - ``params`` (``cpuCount``, ``limitFPS``, the other flags as ``extra``)
+   * - ``template=`` and ``map.env``
+     - ``map``; ``mission_source`` and ``fallback_mission`` for a map that is not one of the
+       ``dayzOffline.<map>`` folders of Bohemia's repository
    * - ``files/mods/@<Name>`` links
      - a **candidate** ``mods`` list, every entry marked ``# review: active?``
    * - ``files/servermods``
@@ -51,17 +54,23 @@ What it converts:
      - overlays (shared if identical across branches)
    * - ``files/messages.xml``
      - ``instances/<name>/messages.xml``
-   * - ``pre_start.sh`` (trader stock, weather)
-     - ``pre_start`` hooks
+   * - ``files/bin/pre_start.sh`` (trader stock, weather)
+     - a ``pre_start`` hook, if it does anything (a script that is commented out is dropped)
 
 Not converted: which mods were actually active, restart times and update checks
 (they lived in the host's crontab), RCon passwords, Steam credentials, and any
 game data. Instances get the site defaults with ``# review`` markers instead.
 
-Known problems of the old scripts (unreliable ``init.c`` patching, partial name
-matching for server mods, a missing newline in ``xml.env``, …) are fixed in the
-output. ``CONVERSION_REPORT.md`` lists per instance what was converted, what
+Known problems of the old scripts are fixed or reported: an ``INIT=local`` that asked for a file
+that does not exist (only ``init.c.<map>`` patches did), ``xml.env`` entries without a file, files no
+``xml.env`` line used, and ``start.sh`` files that ran inside the directory of the merged files
+(they get ``cd "$DZO_STAGING"``). The integrations get ``normalize: [eventposdef-root, wrap-root,
+xml-decl]``, which does what the old ``installxml`` did. ``CONVERSION_REPORT.md`` lists per instance what was converted, what
 needs a decision, what was dropped and why, and where branches disagree.
+
+The converter is idempotent: run it again and only changed files are rewritten; nothing is
+deleted. ``--dry-run`` lists what would change. After writing it loads the site, so a result that
+does not validate is an error.
 
 Review, then roll out
 ---------------------

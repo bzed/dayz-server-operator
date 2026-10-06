@@ -243,6 +243,7 @@ func Desired(o Options, tree *site.Tree) (files []File, warnings []string, err e
 	}
 	files = append(files, timer(o, "dzo-update-check", "Check for mod updates and apply them as the policies allow", o.cmd("update", "check", "--apply"), []string{Calendar(minCheck)}, true)...)
 	files = append(files, timer(o, "dzo-backup-prune", "Prune old snapshots", o.cmd("backup", "prune"), []string{"daily"}, true)...)
+	files = append(files, timer(o, "dzo-logs", "Rotate the profile logs of all instances", o.cmd("logs", "rotate", "--all"), []string{"hourly"}, true)...)
 	status := o.StatusDir
 	if status == "" {
 		status = "/run/dzo/status"

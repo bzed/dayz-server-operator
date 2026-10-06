@@ -150,7 +150,7 @@ jobs:
           # it present even though Debian policy lets Build-Depends omit it.
           # Running as root here (the container's default user) is why
           # there's no `sudo` in either apt-get invocation in this job.
-          apt-get install -y --no-install-recommends build-essential debhelper lintian
+          apt-get install -y --no-install-recommends build-essential debhelper lintian python3-sphinx dh-sequence-sphinxdoc
       - name: dpkg-buildpackage
         run: dpkg-buildpackage -us -uc -b
       - name: lintian

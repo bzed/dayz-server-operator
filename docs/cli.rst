@@ -33,7 +33,9 @@ Site repository
 
    * - ``dzo site pull | validate``
      - update the site checkout (clone it the first time), load it and resolve every
-       instance (``status`` and ``commit`` are not built yet)
+       instance
+   * - ``dzo site status | commit -m <msg> [--push]``
+     - uncommitted changes in the checkout (``dzo mod add`` edits it); commit and push them
 
 Products and updates
 --------------------
@@ -59,7 +61,11 @@ Instances
    * - ``dzo instance create <name>``
      - first render: subvolume, pristine mission, first live mission (fails if the instance exists)
    * - ``dzo instance apply <name> [--dry-run]``
-     - (re)generate the units and timers (``remove`` and ``clone`` are not built yet)
+     - (re)generate the units and timers
+   * - ``dzo instance clone <old> <new> [--force]``
+     - copy an instance's data into a new instance of the site repository
+   * - ``dzo instance remove <name> [--keep-snapshots] [--delete-logs] [--yes]``
+     - stop, remove units and data
    * - ``dzo instance upgrade <name> --build <id> [--wipe] [--dry-run]``
      - switch to another installed server build (see :doc:`mods-and-updates`)
    * - ``dzo instance mods <name> list | move <id> --before | --after <other>``
@@ -80,13 +86,22 @@ Instances
      - serve ``/metrics`` and ``/status`` (the exporter unit runs this)
    * - ``dzo logs <name> [-f] [-n N]``
      - server console (the unit's journal)
+   * - ``dzo logs rotate <name> | --all [--dry-run]``
+     - move old profile logs into the archive, apply its retention (see :doc:`operations`)
+   * - ``dzo logs archive <name> [--since 7d] [--match <re>]``
+     - list the archived profile logs
+   * - ``dzo logs crash-summary <name>``
+     - after an unclean exit: tails of the newest logs to the journal and Discord (the unit runs it)
    * - ``dzo shell <name> [command…]``
      - a debug container with the instance's mounts and no network (``--network host`` to reach its ports)
    * - ``dzo exec <name> <command…>``
      - a command in the running container
    * - ``dzo rcon exec --instance <name> <command>``
-     - one RCon command with the instance's port and password (an interactive
-       console and ``dzo rcon rotate`` are not built yet)
+     - one RCon command with the instance's port and password
+   * - ``dzo rcon console <name>``
+     - interactive console with the server's messages
+   * - ``dzo rcon rotate <name> [--restart]``
+     - a new RCon password (read at the next start)
    * - ``dzo wipe <name> [--restart] [--yes]``
      - wipe the world (confirmation, destructive snapshot first)
 
@@ -120,7 +135,9 @@ Missions and config
    * - ``dzo instance render <name> [--dry-run] [--update-pristine]``
      - build the mission and apply it in place, or show what would change
    * - ``dzo mission init | update <name>``
-     - first live mission; fetch a new pristine version and show the plan (``status`` is not built yet)
+     - first live mission; fetch a new pristine version and show the plan
+   * - ``dzo mission status <name>``
+     - source, age of the pristine copy, what the next render would change
    * - ``dzo mission rollback <name> [<time>] [--list]``
      - restore managed files from file history
    * - ``dzo mission reinit <name> [--yes]``
@@ -215,8 +232,10 @@ Migration and development
    :widths: 45 55
 
    * - ``dzo legacy convert-config --repo <dir> --ref <branch>… --out <dir>``
-     - example site config from dayzdockerserver branches
-   * - ``dzo test boot <name> [--server steam|<dir>] [--mods-from …] [--expect <re>] [--out <dir>]``
+     - example site config from dayzdockerserver branches (see :doc:`migration`)
+   * - ``dzo test boot <name> [--server steam|<dir>] [--mods-from …] [--container] [--expect <re>] [--out <dir>]``
      - boot a real server on a render result (development machines only)
    * - ``dzo test boot --vanilla <name>``
      - boot the unmodded server and record the baseline of this server build
+   * - ``dzo gen-man <dir>``
+     - write the man pages of every command (the Debian build runs it)

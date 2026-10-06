@@ -24,6 +24,7 @@ var defaultTemplates = map[Kind]string{
 	KindRestartFinished:        "✅ {{.Instance}}: restart finished",
 	KindHealthUnhealthy:        "🚨 {{.Instance}}: health check failing",
 	KindHealthRecovered:        "✅ {{.Instance}}: health recovered",
+	KindCrash:                  "💥 {{.Instance}}: the server exited unexpectedly ({{.Data.Result}})\n```\n{{.Data.Summary}}\n```",
 	KindCrashLoop:              "🔥 {{.Instance}}: crash loop, server stopped",
 	KindRenderFailed:           "❌ {{.Instance}}: render failed: {{.Data.Error}}",
 	KindDriftDetected:          "⚠️ {{.Instance}}: drift on {{.Data.Path}} (backed up, overwritten)",
