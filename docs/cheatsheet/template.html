@@ -176,13 +176,21 @@ SPDX-License-Identifier: AGPL-3.0-or-later
         </table>
       </section>
       <section>
-        <h3>Units and logs</h3>
-        <p class="note" style="border-left-color:var(--forest)">Each server is the user unit <code>dzo-&lt;n&gt;.service</code>. Use <code>systemctl --user</code> and <code>journalctl --user</code> on it as on any unit.</p>
+        <h3>Mission from another repo</h3>
+        <p style="margin:0 0 1.6mm;font-size:7.7pt;color:var(--ink-soft)">For a map mod or your own fork, replace <code>map</code> and add <code>mission_source</code> in <code>instance.yaml</code>:</p>
+        <pre class="yaml" style="font-size:6.7pt;padding:1.5mm 2mm"><span class="k">map:</span> empty.deerisle
+<span class="k">mission_source:</span>
+  <span class="k">git:</span> &lt;repository url&gt;
+  <span class="k">ref:</span> main
+  <span class="k">path:</span> empty.deerisle
+<span class="k">fallback_mission:</span>
+  dayzOffline.chernarusplus</pre>
+        <p class="note" style="margin-bottom:0"><code>path</code> is the mission folder inside the repo. <code>ref</code> is a branch, tag or commit; pin one so updates stay your choice. <code>fallback_mission</code> supplies files the map lacks. Add the map's mod too.</p>
+        <p class="note"><code>dzo mission update &lt;n&gt;</code> fetches a newer ref and shows the plan; <code>dzo instance render &lt;n&gt;</code> applies it.</p>
       </section>
       <section>
         <h3>Ports</h3>
-        <p class="note">Give every instance its own <b>game</b>, <b>rcon</b> and <b>query</b> port. RCon listens on localhost only. Open the game and query ports in the firewall.</p>
-        <p class="note">A new mod or build never reaches a running server on its own. It switches at the next restart.</p>
+        <p class="note">Every instance needs its own <b>game</b>, <b>rcon</b> and <b>query</b> port. RCon listens on localhost only; open the other two in the firewall.</p>
       </section>
     </aside>
   </div>
