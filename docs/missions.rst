@@ -178,12 +178,67 @@ dzo then adds the references with the right path:
 Hooks
 -----
 
-For anything the strategies cannot express, a hook runs a script:
-``post_merge`` hooks run in the staging area, ``pre_start`` hooks run against
-the live mission after it was updated (for example to update trader stock).
-Hooks get ``DZO_STAGING``, ``DZO_LIVE_MISSION``, ``DZO_INSTANCE`` and ``DZO_MAP``
-in their environment and a JSON context on stdin. A non-zero exit aborts the
-start.
+For anything the strategies cannot express, a hook runs a script. A hook is an
+executable (a path relative to ``instances/<name>/`` in the site repository, or to the
+integration's folder for an integration's ``post_merge``) that gets a JSON context on stdin
+and these variables: ``DZO_INSTANCE``, ``DZO_HOOK_POINT``, ``DZO_MAP``,
+``DZO_LIVE_MISSION`` and, for ``post_merge``, ``DZO_STAGING``. One script runs for at most
+10 minutes.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 18 50 32
+
+   * - Hook
+     - When
+     - A failing script
+   * - ``post_merge``
+     - in the staging area: an integration's own ``hooks.post_merge`` right after its files
+       were merged, the instance's ``hooks.post_merge`` after everything
+     - fails the render, the live mission stays as it was
+   * - ``post_render``
+     - after the live mission was updated, at the end of ``dzo instance render``
+     - fails the render (and so the start)
+   * - ``pre_start``
+     - before the server starts (``ExecStartPre``, after the render), against the live
+       mission, for example to update trader stock
+     - fails the start
+   * - ``post_stop``
+     - after the container is gone (``ExecStopPost``)
+     - is printed, nothing else
+   * - ``pre_update``
+     - in a restart that deploys pending mod or build generations, before the snapshot
+     - aborts the restart, the server starts again as it was
+   * - ``post_update``
+     - after those generations were deployed
+     - is printed
+   * - ``post_download``
+     - after a new generation of a mod was installed, for every instance that uses it
+     - is printed
+   * - ``post_backup``
+     - after a snapshot, see :doc:`backups`
+     - is printed
+
+``dzo instance hook <name> <point>`` runs the scripts of one point by hand.
+
+The merge itself
+~~~~~~~~~~~~~~~~
+
+The staging area is the pristine mission, then the instance's ``messages.xml``, then the
+mods in list order, then the overlays in list order. After the merge every file it wrote must
+parse, and every ``<ce folder>`` must exist with the files it names, or the render stops before
+the live mission is touched. Notes on what is built:
+
+* ``init.c`` of an integration is a unified diff, applied with ``patch`` to the mission's
+  ``init.c``; a diff that does not apply fails the render.
+* ``globals.xml`` is not a Central Economy file type: it is copied into the mod's folder and not
+  registered.
+* Two contributors that replace the same file (``cfgweather.xml``, ``messages.xml``) are reported
+  as a conflict; the later one wins. Elements of the XML files that are merged by ``name`` are
+  replaced silently.
+* ``normalize:`` in an integration is not supported yet and is ignored with a warning.
+* A ``url`` source is downloaded once and kept in ``paths.cache``: by its ``sha256`` when it has
+  one (and verified), else by its URL (and never fetched again).
 
 Mission history and reset
 -------------------------

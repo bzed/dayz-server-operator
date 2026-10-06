@@ -67,7 +67,7 @@ func deepMerge(base, overlay any, appendKeys map[string]bool) any {
 			if appendKeys[k] {
 				if bArr, ok1 := bv.([]any); ok1 {
 					if oArr, ok2 := ov.([]any); ok2 {
-						result[k] = append(append([]any{}, bArr...), oArr...)
+						result[k] = appendUnique(bArr, oArr)
 						continue
 					}
 				}
@@ -79,6 +79,27 @@ func deepMerge(base, overlay any, appendKeys map[string]bool) any {
 	// Non-object values (including arrays, unless handled by appendKeys
 	// one level up): the overlay always wins.
 	return overlay
+}
+
+// appendUnique concatenates base and overlay, dropping overlay entries that base (or an
+// earlier overlay entry) already holds, so two contributors that list the same file do not
+// register it twice. Entries are compared by their JSON form.
+func appendUnique(base, overlay []any) []any {
+	out := append([]any{}, base...)
+	seen := map[string]bool{}
+	for _, v := range out {
+		b, _ := json.Marshal(v)
+		seen[string(b)] = true
+	}
+	for _, v := range overlay {
+		b, _ := json.Marshal(v)
+		if seen[string(b)] {
+			continue
+		}
+		seen[string(b)] = true
+		out = append(out, v)
+	}
+	return out
 }
 
 // marshalDeterministic renders v with sorted object keys and 2-space

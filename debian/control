@@ -14,6 +14,7 @@ Depends:
  podman (>= 5.4),
  systemd (>= 257),
  git,
+ patch,
  uidmap,
  passt,
  libjs-htmx,

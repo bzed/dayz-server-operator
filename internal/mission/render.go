@@ -28,6 +28,10 @@ type RenderInput struct {
 	Unmanaged      []string
 	DryRun         bool
 	Options        Options
+	// Contributions are merged into the staging tree after the pristine mission, in order (the
+	// instance's mods, then its overlays). OnIntegrated, if set, gets what the merge reported.
+	Contributions []Contribution
+	OnIntegrated  func(IntegrateResult)
 }
 
 // Render builds the staging tree from the pristine mission (plus the
@@ -77,6 +81,19 @@ func BuildStaging(in RenderInput) (string, error) {
 		if err := fillFromFallback(in.FallbackDir, staging); err != nil {
 			_ = os.RemoveAll(staging)
 			return "", err
+		}
+	}
+	if len(in.Contributions) > 0 {
+		res, err := Integrate(staging, in.Contributions)
+		if err == nil {
+			err = ValidateStaging(staging, res.Touched)
+		}
+		if err != nil {
+			_ = os.RemoveAll(staging)
+			return "", err
+		}
+		if in.OnIntegrated != nil {
+			in.OnIntegrated(res)
 		}
 	}
 	return staging, nil

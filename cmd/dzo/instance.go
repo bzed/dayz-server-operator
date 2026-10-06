@@ -25,6 +25,7 @@ import (
 	"github.com/bzed/dayz-server-operator/internal/resolve"
 	"github.com/bzed/dayz-server-operator/internal/runfiles"
 	"github.com/bzed/dayz-server-operator/internal/serve"
+	"github.com/bzed/dayz-server-operator/internal/site"
 )
 
 // newInstanceCmd wires the lifecycle operations internal/instance
@@ -104,9 +105,16 @@ func newInstanceRenderCmd() *cobra.Command {
 					return err
 				}
 			}
+			tree, err := site.LoadTree(cfg.Paths.Site)
+			if err != nil {
+				return err
+			}
 			in := mission.RenderInput{
 				PristineDir: inst.Paths.Pristine, LiveDir: inst.Paths.Live, ManifestPath: inst.Paths.Manifest,
 				FileHistoryDir: inst.Paths.FileHistory, Unmanaged: inst.Mission.Unmanaged, DryRun: dryRun,
+			}
+			if err := addIntegrations(cmd, &in, cfg, tree, inst); err != nil {
+				return err
 			}
 			if inst.Mission.Fallback != "" && inst.Product.Dir != "" {
 				in.FallbackDir = filepath.Join(inst.Product.Dir, "mpmissions", inst.Mission.Fallback)

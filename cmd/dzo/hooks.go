@@ -14,6 +14,8 @@ import (
 
 	"github.com/bzed/dayz-server-operator/internal/config"
 	"github.com/bzed/dayz-server-operator/internal/hooks"
+	"github.com/bzed/dayz-server-operator/internal/integrate"
+	"github.com/bzed/dayz-server-operator/internal/mission"
 	"github.com/bzed/dayz-server-operator/internal/resolve"
 	"github.com/bzed/dayz-server-operator/internal/site"
 )
@@ -137,4 +139,27 @@ func postDownloadHooks(cmd *cobra.Command, cfg *config.Config, t *site.Tree, key
 		}
 		_ = runHooks(cmd.Context(), cmd.OutOrStdout(), cfg, raw.Hooks, name, raw.Map, hookPostDownload, nil, map[string]any{"mod": key, "generation": generation})
 	}
+}
+
+// addIntegrations collects the mod integrations and overlays of an instance into the render input
+// and makes the render print what the merge reported.
+func addIntegrations(cmd *cobra.Command, in *mission.RenderInput, cfg *config.Config, t *site.Tree, inst *resolve.Instance) error {
+	out := cmd.OutOrStdout()
+	cs, err := integrate.Collect(cmd.Context(), t, inst, integrate.Options{
+		CacheDir: cfg.Paths.Cache,
+		Log:      func(f string, a ...any) { _, _ = fmt.Fprintf(cmd.ErrOrStderr(), f+"\n", a...) },
+	})
+	if err != nil {
+		return err
+	}
+	in.Contributions = cs
+	in.OnIntegrated = func(r mission.IntegrateResult) {
+		for _, c := range r.Conflicts {
+			_, _ = fmt.Fprintf(out, "conflict: %s\n", c)
+		}
+		for _, n := range r.Notes {
+			_, _ = fmt.Fprintf(out, "note: %s\n", n)
+		}
+	}
+	return nil
 }

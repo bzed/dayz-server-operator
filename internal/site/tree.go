@@ -60,19 +60,34 @@ type Site struct {
 	LocalMods map[string]LocalModSource `yaml:"local_mods,omitempty"`
 }
 
-// Tree is a loaded site checkout: site.yaml, every instance and every map preset.
+// LoadedIntegration is an integrations/mods/<id>/integration.yaml with the directory it was
+// read from, which its local file sources and hooks are relative to.
+type LoadedIntegration struct {
+	Integration
+	Dir string
+}
+
+// Tree is a loaded site checkout: site.yaml, every instance, every map preset and the mod
+// integrations. Integrations holds the shared ones by mod id (aliases included),
+// InstanceIntegrations the per-instance overrides (instances/<name>/integrations/<id>/), which
+// replace the shared one of the same mod for that instance.
 type Tree struct {
-	Dir       string
-	Site      Site
-	Instances map[string]Instance
-	Maps      map[string]MapPreset
+	Dir                  string
+	Site                 Site
+	Instances            map[string]Instance
+	Maps                 map[string]MapPreset
+	Integrations         map[uint64]LoadedIntegration
+	InstanceIntegrations map[string]map[uint64]LoadedIntegration
 }
 
 // LoadTree reads and validates the site checkout at dir. site.yaml is
 // optional; unknown YAML keys are errors, so a typo does not silently
 // fall back to a default.
 func LoadTree(dir string) (*Tree, error) {
-	t := &Tree{Dir: dir, Instances: map[string]Instance{}, Maps: map[string]MapPreset{}}
+	t := &Tree{
+		Dir: dir, Instances: map[string]Instance{}, Maps: map[string]MapPreset{},
+		Integrations: map[uint64]LoadedIntegration{}, InstanceIntegrations: map[string]map[uint64]LoadedIntegration{},
+	}
 	var errs []error
 	if _, err := readStrict(filepath.Join(dir, "site.yaml"), &t.Site, true); err != nil {
 		errs = append(errs, err)
@@ -93,6 +108,8 @@ func LoadTree(dir string) (*Tree, error) {
 		t.Maps[strings.TrimSuffix(filepath.Base(path), ".yaml")] = m
 	}
 
+	loadIntegrations(filepath.Join(dir, "integrations", "mods"), t.Integrations, &errs)
+
 	files, _ := filepath.Glob(filepath.Join(dir, "instances", "*", "instance.yaml"))
 	for _, path := range files {
 		var inst Instance
@@ -109,11 +126,59 @@ func LoadTree(dir string) (*Tree, error) {
 			continue
 		}
 		t.Instances[inst.Name] = inst
+		mine := map[uint64]LoadedIntegration{}
+		loadIntegrations(filepath.Join(filepath.Dir(path), "integrations"), mine, &errs)
+		if len(mine) > 0 {
+			t.InstanceIntegrations[inst.Name] = mine
+		}
 	}
 	if err := errors.Join(errs...); err != nil {
 		return nil, err
 	}
 	return t, nil
+}
+
+// loadIntegrations reads <root>/<id>/integration.yaml for every directory below root into out,
+// keyed by the mod id and by each alias. A directory without an integration.yaml is skipped.
+func loadIntegrations(root string, out map[uint64]LoadedIntegration, errs *[]error) {
+	files, _ := filepath.Glob(filepath.Join(root, "*", "integration.yaml"))
+	sort.Strings(files)
+	for _, path := range files {
+		var in Integration
+		if _, err := readStrict(path, &in, false); err != nil {
+			*errs = append(*errs, err)
+			continue
+		}
+		if err := in.Validate(); err != nil {
+			*errs = append(*errs, fmt.Errorf("%s: %w", path, err))
+			continue
+		}
+		li := LoadedIntegration{Integration: in, Dir: filepath.Dir(path)}
+		for _, id := range append([]uint64{in.Mod}, in.Aliases...) {
+			out[id] = li
+		}
+	}
+}
+
+// IntegrationFor returns the integration an instance uses for a workshop mod: its own override,
+// else the shared one.
+func (t *Tree) IntegrationFor(instance string, mod uint64) (LoadedIntegration, bool) {
+	if li, ok := t.InstanceIntegrations[instance][mod]; ok {
+		return li, true
+	}
+	li, ok := t.Integrations[mod]
+	return li, ok
+}
+
+// OverlayDir finds an overlay folder for an instance: instances/<name>/overlays/<overlay>/, else
+// overlays/<overlay>/.
+func (t *Tree) OverlayDir(instance, overlay string) (string, bool) {
+	for _, d := range []string{filepath.Join(t.Dir, "instances", instance, "overlays", overlay), filepath.Join(t.Dir, "overlays", overlay)} {
+		if fi, err := os.Stat(d); err == nil && fi.IsDir() {
+			return d, true
+		}
+	}
+	return "", false
 }
 
 func readStrict(path string, v any, optional bool) (bool, error) {

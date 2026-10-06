@@ -144,3 +144,54 @@ func TestAddModErrors(t *testing.T) {
 		t.Error("broken YAML must fail")
 	}
 }
+
+func TestLoadTreeIntegrationsAndOverlays(t *testing.T) {
+	dir := t.TempDir()
+	put := func(rel, body string) {
+		t.Helper()
+		p := filepath.Join(dir, rel)
+		if err := os.MkdirAll(filepath.Dir(p), 0o750); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	put("instances/a/instance.yaml", "name: a\nproduct: dayz-stable\nmap: m\nmission_source: {git: g, ref: r, path: p}\nports: {game: 1, rcon: 2, query: 3}\nnetwork: host\n")
+	put("integrations/mods/10/integration.yaml", "mod: 10\nname: Shared\naliases: [11]\nfiles:\n  types.xml: {source: local, path: t.xml}\n")
+	put("instances/a/integrations/10/integration.yaml", "mod: 10\nname: Own\nfiles:\n  types.xml: {source: local, path: t.xml}\n")
+	put("overlays/shared/x.json", "{}")
+	put("instances/a/overlays/own/x.json", "{}")
+	put("overlays/own/x.json", "{}")
+	tr, err := LoadTree(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if li, ok := tr.IntegrationFor("a", 10); !ok || li.Name != "Own" || li.Dir != filepath.Join(dir, "instances", "a", "integrations", "10") {
+		t.Errorf("an instance's own integration wins: %+v", li)
+	}
+	if li, ok := tr.IntegrationFor("a", 11); !ok || li.Name != "Shared" {
+		t.Errorf("an alias finds the shared integration: %+v", li)
+	}
+	if _, ok := tr.IntegrationFor("a", 12); ok {
+		t.Error("a mod without integration has none")
+	}
+	if d, ok := tr.OverlayDir("a", "own"); !ok || d != filepath.Join(dir, "instances", "a", "overlays", "own") {
+		t.Errorf("an instance overlay shadows the shared one: %q", d)
+	}
+	if d, ok := tr.OverlayDir("a", "shared"); !ok || d != filepath.Join(dir, "overlays", "shared") {
+		t.Errorf("shared overlay: %q", d)
+	}
+	if _, ok := tr.OverlayDir("a", "nope"); ok {
+		t.Error("an unknown overlay is not found")
+	}
+
+	put("integrations/mods/20/integration.yaml", "mod: 20\nname: Bad\nfiles:\n  types.xml: {source: nowhere}\n")
+	if _, err := LoadTree(dir); err == nil {
+		t.Error("an invalid integration must fail the load")
+	}
+	put("integrations/mods/20/integration.yaml", "mod: 20\nname: Typo\nfilez: {}\n")
+	if _, err := LoadTree(dir); err == nil {
+		t.Error("an unknown key in an integration must fail the load")
+	}
+}

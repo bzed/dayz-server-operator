@@ -5,6 +5,7 @@ package ce
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 )
 
@@ -146,5 +147,25 @@ func TestMergeJSONTopLevelArray(t *testing.T) {
 	}
 	if len(result) != 2 || result[0] != float64(3) {
 		t.Errorf("result = %+v", result)
+	}
+}
+
+func TestMergeJSONAppendKeysDropDuplicates(t *testing.T) {
+	base := []byte(`{"WorldsData":{"objectSpawnersArr":["a.json","b.json"]}}`)
+	overlay := []byte(`{"WorldsData":{"objectSpawnersArr":["b.json","c.json","c.json"]}}`)
+	out, err := MergeJSON(base, overlay, []string{"objectSpawnersArr"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got struct {
+		WorldsData struct {
+			ObjectSpawnersArr []string `json:"objectSpawnersArr"`
+		} `json:"WorldsData"`
+	}
+	if err := json.Unmarshal(out, &got); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(got.WorldsData.ObjectSpawnersArr, ",") != "a.json,b.json,c.json" {
+		t.Errorf("list = %v, want each file once, base order first", got.WorldsData.ObjectSpawnersArr)
 	}
 }

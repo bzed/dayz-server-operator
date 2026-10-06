@@ -19,6 +19,7 @@ import (
 	"github.com/bzed/dayz-server-operator/internal/resolve"
 	"github.com/bzed/dayz-server-operator/internal/runfiles"
 	"github.com/bzed/dayz-server-operator/internal/serve"
+	"github.com/bzed/dayz-server-operator/internal/site"
 )
 
 func newTestCmd() *cobra.Command {
@@ -147,6 +148,13 @@ func prepareBoot(cmd *cobra.Command, bc *boottest.Config, cfg *config.Config, in
 	in := mission.RenderInput{PristineDir: pristine}
 	if inst.Mission.Fallback != "" {
 		in.FallbackDir = filepath.Join(serverDir, "mpmissions", inst.Mission.Fallback)
+	}
+	tree, err := site.LoadTree(cfg.Paths.Site)
+	if err != nil {
+		return err
+	}
+	if err := addIntegrations(cmd, &in, cfg, tree, inst); err != nil {
+		return err
 	}
 	staging, err := mission.BuildStaging(in)
 	if err != nil {
