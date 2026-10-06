@@ -127,7 +127,8 @@ runtime files the boot needs (keys, `serverDZ.cfg`, BattlEye config).
 
 ## M9: Hardening for real traffic
 
-- RCon client reconnect with backoff (see README).
+- RCon client reconnect with backoff (see README). Status: done, `battleye.Session`
+  (`internal/battleye/session.go`), checked against a real server restart.
 - Anything the M1-M8 review flags; update "Needs live verification".
 
 ## Live test checklist (human, after M1-M8)

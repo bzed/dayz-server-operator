@@ -41,9 +41,10 @@ documentation is a [Sphinx site](docs/) under `docs/`.
 > site-config instance, mission render, mod/product install, and the first
 > part of the web platform: the `dzo-admin` servermod, the JSON API and a web
 > interface for players, vehicles and a live map. Not built yet: web users
-> with passwords and TOTP, the player/ban database, restart timers and
-> scheduled broadcasts, and everything in M8-M9 of
-> [MILESTONES.md](MILESTONES.md). See
+> with passwords and TOTP, the player/ban database, one-off restart timers and
+> scheduled broadcasts, the legacy config converter (M8) and the golden-master
+> tests against the legacy renderer (spike S0), see
+> [MILESTONES.md](MILESTONES.md) and the [spikes page](docs/spikes.rst). See
 > [Needs live verification](#needs-live-verification) below for what
 > hasn't been checked against a real Steam account or DayZ server, and
 > the plan's [phased roadmap](IMPLEMENTATION_PLAN.md#part-e--phased-roadmap)
@@ -191,14 +192,13 @@ relying on them, roughly in the order they'd bite:
   being honoured by `workshop_download_item` are all from documentation and
   memory. Not implemented: the "size plausible vs. `file_size`" check. Real
   workshop PBOs are only checked for parsing, not for a prefix.
-- **BattlEye's `players` command output format** (`internal/instance`'s
-  graceful-restart kick sequence) and the event message patterns
-  (`internal/battleye`'s connect/GUID/chat/kick regexes, spike S4) are
-  not confirmed against a real server. Timeout/error/concurrency paths
-  in the RCon client itself are now covered by a race-detector-clean
-  test pass, but there is still no automatic reconnect-with-backoff:
-  once the read loop hits a connection error, that `Client` is done and
-  callers have to notice and re-`Dial`.
+- **BattlEye's event message patterns** (`internal/battleye`'s
+  connect/GUID/chat/kick regexes, spike S4) are not confirmed against a
+  real server, because no player was connected when it was checked. The
+  `players` output, an unknown command, `#lock`/`#unlock`/`#kick`/
+  `#shutdown`, the keep-alive answers and the behaviour on a server restart
+  are (see the [spikes page](docs/spikes.rst)); `battleye.Session` redials with
+  backoff.
 - **The resolved quadlet unit** (`internal/resolve`): the `DayZServer`
   command line, the nested mounts over the read-only build (`/dayz/keys`,
   `/dayz/mpmissions`, `@<id>` mods) and the single `Exec=` line with
@@ -290,10 +290,11 @@ relying on them, roughly in the order they'd bite:
   check) is an assumption from plan notes, not confirmed against a
   running server binary.
 - **Podman quadlet keys** (`HealthStartup*`, `HealthOnFailure=kill`,
-  `Notify=healthy`) need confirming on the actual target podman/systemd
-  versions (spike S6 in the plan).
+  `Notify=healthy`, `StopTimeout`, `Volume=…:O`) were confirmed on podman 5.4.2
+  (spike S6, [spikes page](docs/spikes.rst)).
 - **DayZ Experimental's app id/workshop app pairing** (1042420 consuming
-  workshop content via 221100) is assumed, not confirmed (spike S1).
+  workshop content via 221100) is assumed, not confirmed (spike S1): no workshop
+  mod was installed on the experimental instance.
 
 ## Licence
 

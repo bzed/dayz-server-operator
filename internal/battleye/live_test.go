@@ -43,3 +43,45 @@ func TestLiveServer(t *testing.T) {
 		t.Errorf("the server did not answer the keep-alives: no packet in 7 s")
 	}
 }
+
+// TestLiveSessionRestart watches a Session while the game server is restarted by hand (spike S4:
+// behaviour on a server restart). Set DZO_LIVE_BE_WATCH to the number of seconds to watch; restart
+// the server during that time. It logs when the connection is up, lost and back, and fails when
+// the session never comes back.
+func TestLiveSessionRestart(t *testing.T) {
+	addr, pw, watch := os.Getenv("DZO_LIVE_BE_ADDR"), os.Getenv("DZO_LIVE_BE_PASSWORD"), os.Getenv("DZO_LIVE_BE_WATCH")
+	if addr == "" || pw == "" || watch == "" {
+		t.Skip("set DZO_LIVE_BE_ADDR, DZO_LIVE_BE_PASSWORD and DZO_LIVE_BE_WATCH (seconds)")
+	}
+	secs, err := time.ParseDuration(watch + "s")
+	if err != nil {
+		t.Fatal(err)
+	}
+	start := time.Now()
+	s := &Session{Addr: addr, Password: pw, MinBackoff: time.Second, MaxBackoff: 5 * time.Second,
+		Log: func(f string, a ...any) {
+			t.Logf("%5.1fs session: "+f, append([]any{time.Since(start).Seconds()}, a...)...)
+		}}
+	defer func() { _ = s.Close() }()
+	var ups, downs int
+	was := true
+	for time.Since(start) < secs {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		_, err := s.Command(ctx, "players")
+		cancel()
+		if (err == nil) != was {
+			was = err == nil
+			t.Logf("%5.1fs commands %s (err=%v)", time.Since(start).Seconds(), map[bool]string{true: "work again", false: "fail"}[was], err)
+			if was {
+				ups++
+			} else {
+				downs++
+			}
+		}
+		time.Sleep(time.Second)
+	}
+	if downs > 0 && !was {
+		t.Errorf("the session did not come back after the restart")
+	}
+	t.Logf("connection lost %d time(s), came back %d time(s)", downs, ups)
+}
