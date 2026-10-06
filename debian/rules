@@ -25,7 +25,8 @@ override_dh_auto_build:
 	bin/dzo gen-man debian/man
 
 override_dh_auto_test:
-	$(MAKE) cover
+	# the coverage gate runs in the test job: this container has no btrfs, so tests that need it skip
+	$(MAKE) test
 
 override_dh_auto_clean:
 	rm -rf debian/man
