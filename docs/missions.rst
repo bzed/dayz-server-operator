@@ -8,7 +8,7 @@ The mission folder holds the Central Economy files and ``init.c``. dzo treats it
 with care: **the live mission is never wiped or recreated**.
 
 The game world (the persistence, ``storage_1``) is not in the mission folder.
-dzo starts the server with ``-storage=/storage``, and ``/storage`` is
+dzo starts the server with ``-storage=/dayz/storage``, and ``/dayz/storage`` is
 ``<instances>/<name>/storage/<map>`` on the host. The server then writes
 ``storage_<instanceId>`` there and nothing into the mission, so the mission folder
 only holds files dzo and the mods manage. Keeping the world per map means that

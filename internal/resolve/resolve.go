@@ -439,7 +439,8 @@ func buildQuadlet(inst *Instance) quadlet.ContainerSpec {
 		// Inside the server folder: vanilla 1.30's FindFile only finds files under $profile:
 		// when the profiles folder is below the server executable's folder (a bind mount is fine).
 		{Source: inst.Paths.Profiles, Destination: "/dayz/profiles"},
-		{Source: inst.Paths.Storage, Destination: "/storage"},
+		// Also inside the server folder, like profiles/ and mpmissions/: $storage: is resolved relative to it.
+		{Source: inst.Paths.Storage, Destination: "/dayz/storage"},
 		{Source: filepath.Join(rt, "serverDZ.cfg"), Destination: "/dayz/profiles/serverDZ.cfg", ReadOnly: true},
 	}
 	var clientMods, serverMods []string
@@ -463,7 +464,7 @@ func buildQuadlet(inst *Instance) quadlet.ContainerSpec {
 		"-config=/dayz/profiles/serverDZ.cfg",
 		"-port=" + strconv.Itoa(inst.Ports.Game),
 		"-profiles=/dayz/profiles",
-		"-storage=/storage",
+		"-storage=/dayz/storage",
 		"-BEpath=/dayz/profiles/battleye",
 	}
 	if len(clientMods) > 0 {

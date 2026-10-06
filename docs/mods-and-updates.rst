@@ -258,10 +258,14 @@ authors give two requirements:
   does not find its files when the profiles folder is somewhere else. A symlink or a bind mount
   into the server folder is fine.
 
-dzo already satisfies the second point for every instance: the container mounts the instance's
-``profiles/`` folder at ``/dayz/profiles``, the server folder is ``/dayz``, and the server starts with
-``-profiles=/dayz/profiles``, ``-config=/dayz/profiles/serverDZ.cfg`` and ``-BEpath=/dayz/profiles/battleye``. Nothing
-has to be configured. Check it on a running instance:
+dzo already satisfies the second point for every instance. Everything
+a mod resolves through a placeholder lies below the server folder (``/dayz`` in the container):
+the instance's ``profiles/`` is mounted at ``/dayz/profiles`` (``$profile:``), the live mission at
+``/dayz/mpmissions`` (``$mission:``) and the persistence at ``/dayz/storage`` (``$storage:``). The server
+starts with ``-profiles=/dayz/profiles``, ``-config=/dayz/profiles/serverDZ.cfg``,
+``-BEpath=/dayz/profiles/battleye`` and ``-storage=/dayz/storage``; the engine reduces an absolute
+``-profiles=`` to its last component and looks it up in the server folder, which is where the mount is.
+Nothing has to be configured. Check it on a running instance:
 
 .. code-block:: sh
 
