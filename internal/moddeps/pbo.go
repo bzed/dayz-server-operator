@@ -4,10 +4,12 @@
 package moddeps
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/binary"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 )
 
@@ -40,7 +42,22 @@ type PBO struct {
 // data must remain valid for the lifetime of the returned PBO (ReadEntry
 // reads from it lazily rather than eagerly decompressing every entry).
 func OpenPBO(data []byte) (*PBO, error) {
-	r := bytes.NewReader(data)
+	return openPBO(bytes.NewReader(data), int64(len(data)))
+}
+
+// OpenPBOFile is OpenPBO for a file: only the header and the entries asked for are read, so
+// the multi-hundred-megabyte PBOs of a game build cost next to nothing. The caller closes f
+// after the last ReadEntry.
+func OpenPBOFile(f *os.File) (*PBO, error) {
+	fi, err := f.Stat()
+	if err != nil {
+		return nil, err
+	}
+	return openPBO(f, fi.Size())
+}
+
+func openPBO(ra io.ReaderAt, size int64) (*PBO, error) {
+	r := bufio.NewReader(io.NewSectionReader(ra, 0, size))
 	var entries []Entry
 	var prefix string
 	offset := int64(0)
@@ -131,7 +148,7 @@ func OpenPBO(data []byte) (*PBO, error) {
 		dataStart += int64(entries[i].DataSize)
 	}
 
-	return &PBO{Entries: entries, Prefix: prefix, r: bytes.NewReader(data), size: int64(len(data))}, nil
+	return &PBO{Entries: entries, Prefix: prefix, r: ra, size: size}, nil
 }
 
 // Find returns the entry named name (case-insensitive; "/" and "\" are

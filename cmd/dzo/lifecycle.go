@@ -147,19 +147,18 @@ func newInstanceApplyCmd() *cobra.Command {
 	return c
 }
 
-// addonPatches reads the CfgPatches classes of every PBO below dir/addons (PBOs above maxPBO are
-// skipped: the configs of the game are in the small ones).
+// addonPatches reads the CfgPatches classes of every PBO below dir/addons and dir/dta (the
+// scripts of the game are there). PBOs without a config are skipped and counted.
 func addonPatches(dir string) ([]moddeps.Patch, int, error) {
-	const maxPBO = 128 << 20
-	files, _ := filepath.Glob(filepath.Join(dir, "addons", "*.pbo"))
+	var files []string
+	for _, sub := range []string{"addons", "dta"} {
+		f, _ := filepath.Glob(filepath.Join(dir, sub, "*.pbo"))
+		files = append(files, f...)
+	}
 	sort.Strings(files)
 	var out []moddeps.Patch
 	skipped := 0
 	for _, f := range files {
-		if fi, err := os.Stat(f); err != nil || fi.Size() > maxPBO {
-			skipped++
-			continue
-		}
 		p, err := loadPatches(f)
 		if err != nil {
 			skipped++
@@ -200,7 +199,7 @@ func checkBuildDependencies(cmd *cobra.Command, inst *resolve.Instance, buildDir
 		_, _ = fmt.Fprintf(out, "dependency: %s [%s]\n", m.String(), names[m.ModID])
 	}
 	if skipped > 0 {
-		_, _ = fmt.Fprintf(out, "note: %d addon PBO(s) of the build were too large or unreadable to check\n", skipped)
+		_, _ = fmt.Fprintf(out, "note: %d addon PBO(s) of the build had no readable config (data PBOs have none) and were skipped\n", skipped)
 	}
 	if res.OK() {
 		_, _ = fmt.Fprintln(out, "every requiredAddons entry of the mods is provided by the new build or another mod")

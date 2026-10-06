@@ -17,14 +17,19 @@ import (
 // or - if it ends in ".pbo" - opens it as a PBO archive and reads its
 // config.bin (falling back to config.cpp).
 func loadPatches(path string) ([]moddeps.Patch, error) {
-	data, err := os.ReadFile(path) //nolint:gosec // path is an operator-supplied CLI argument, not external input
+	if !strings.HasSuffix(path, ".pbo") {
+		data, err := os.ReadFile(path) //nolint:gosec // path is an operator-supplied CLI argument, not external input
+		if err != nil {
+			return nil, fmt.Errorf("read %s: %w", path, err)
+		}
+		return moddeps.ExtractPatchesFromConfig(data)
+	}
+	f, err := os.Open(path) //nolint:gosec // path is an operator-supplied CLI argument, not external input
 	if err != nil {
 		return nil, fmt.Errorf("read %s: %w", path, err)
 	}
-	if !strings.HasSuffix(path, ".pbo") {
-		return moddeps.ExtractPatchesFromConfig(data)
-	}
-	pbo, err := moddeps.OpenPBO(data)
+	defer func() { _ = f.Close() }()
+	pbo, err := moddeps.OpenPBOFile(f)
 	if err != nil {
 		return nil, fmt.Errorf("open %s: %w", path, err)
 	}
