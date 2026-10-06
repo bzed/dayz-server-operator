@@ -121,3 +121,34 @@ func TestBattlEyeCfgBindsRConWhenAsked(t *testing.T) {
 		t.Errorf("cfg = %q", got)
 	}
 }
+
+func TestCustomKeys(t *testing.T) {
+	site := t.TempDir()
+	put := func(rel string) {
+		p := filepath.Join(site, rel)
+		if err := os.MkdirAll(filepath.Dir(p), 0o750); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(rel), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	put("keys/site.bikey")
+	put("instances/x/keys/own.bikey")
+	put("instances/x/overlays/mine/o.bikey")
+	put("overlays/shared/s.bikey")
+	put("overlays/shared/Site.bikey") // same name as keys/site.bikey, ignored
+	put("overlays/shared/readme.txt")
+	put("instances/y/keys/other.bikey")
+	got, err := CustomKeys(site, "x", []string{"mine", "shared", "missing"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, g := range got {
+		names = append(names, filepath.Base(g))
+	}
+	if strings.Join(names, ",") != "site.bikey,own.bikey,o.bikey,s.bikey" {
+		t.Errorf("keys = %v", names)
+	}
+}

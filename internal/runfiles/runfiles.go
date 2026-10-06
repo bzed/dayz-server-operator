@@ -61,6 +61,36 @@ func ServerCfg(src []byte, template string, queryPort int) (*servercfg.File, err
 // StdinAnswer is what the server reads from its stdin: "Ignore" to an assertion prompt.
 const StdinAnswer = "i\n"
 
+// CustomKeys returns the extra .bikey files the site provides for an instance, which are not
+// part of the server build or a mod: keys/ of the site, instances/<name>/keys/, and every *.bikey
+// at the top of the instance's overlays (instances/<name>/overlays/<o>/ before overlays/<o>/).
+// A later directory cannot replace a key of an earlier one with the same file name.
+func CustomKeys(siteDir, instance string, overlays []string) ([]string, error) {
+	dirs := []string{filepath.Join(siteDir, "keys"), filepath.Join(siteDir, "instances", instance, "keys")}
+	for _, o := range overlays {
+		if fi, err := os.Stat(filepath.Join(siteDir, "instances", instance, "overlays", o)); err == nil && fi.IsDir() {
+			dirs = append(dirs, filepath.Join(siteDir, "instances", instance, "overlays", o))
+		} else {
+			dirs = append(dirs, filepath.Join(siteDir, "overlays", o))
+		}
+	}
+	var out []string
+	seen := map[string]bool{}
+	for _, d := range dirs {
+		files, err := filepath.Glob(filepath.Join(d, "*.bikey"))
+		if err != nil {
+			return nil, err
+		}
+		for _, f := range files {
+			if name := strings.ToLower(filepath.Base(f)); !seen[name] {
+				seen[name] = true
+				out = append(out, f)
+			}
+		}
+	}
+	return out, nil
+}
+
 // BattlEyeCfg is the seed for profiles/battleye/beserver_x64.cfg. The server
 // reads it once and keeps working in a beserver_x64_active_<hex>.cfg beside it.
 // ip is the address RCon listens on; "" leaves it to BattlEye (every interface).

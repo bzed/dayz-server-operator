@@ -84,7 +84,8 @@ the pristine mission). ``storage_*`` and everything matching
 
 The render also prepares what the server needs besides the mission: the signature
 keys (``runtime/keys``: the server build's and those of every client mod, copied
-because the container cannot follow links into the cache), ``runtime/serverDZ.cfg``
+because the container cannot follow links into the cache, plus your own: ``*.bikey`` files in ``keys/`` of the site
+repository, in ``instances/<name>/keys/`` and at the top of the instance's overlays), ``runtime/serverDZ.cfg``
 from the site repository's ``instances/<name>/serverDZ.cfg``, and the BattlEye
 config with the RCon port and a password that dzo generates once and keeps below
 ``paths.secrets``. In ``serverDZ.cfg`` dzo sets ``Missions/DayZ/template`` to the

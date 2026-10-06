@@ -228,6 +228,11 @@ func prepareRunfiles(cfg *config.Config, inst *resolve.Instance) (runfiles.Input
 	if err != nil {
 		return runfiles.Input{}, err
 	}
+	extra, err := runfiles.CustomKeys(cfg.Paths.Site, inst.Name, inst.Overlays)
+	if err != nil {
+		return runfiles.Input{}, err
+	}
+	keys = append(keys, extra...)
 	return runfiles.Input{
 		RuntimeDir: inst.Paths.Runtime, ProfilesDir: inst.Paths.Profiles, StorageDir: inst.Paths.Storage, ServerCfg: src, Template: inst.Map,
 		QueryPort: inst.Ports.Query, RConPort: inst.Ports.RCon, RConPass: pw, Keys: keys, RConIP: rconBind(inst),

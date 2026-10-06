@@ -200,6 +200,11 @@ func prepareBoot(cmd *cobra.Command, bc *boottest.Config, cfg *config.Config, in
 	if bc.Keys, err = runfiles.Keys(serverDir, clientDirs); err != nil {
 		return err
 	}
+	extra, err := runfiles.CustomKeys(cfg.Paths.Site, inst.Name, inst.Overlays)
+	if err != nil {
+		return err
+	}
+	bc.Keys = append(bc.Keys, extra...)
 	if inst.AdminEnabled() {
 		mc, err := serve.ModConfig(cfg, inst)
 		if err != nil {
