@@ -60,8 +60,13 @@ func ServerCfg(src []byte, template string, queryPort int) (*servercfg.File, err
 
 // BattlEyeCfg is the seed for profiles/battleye/beserver_x64.cfg. The server
 // reads it once and keeps working in a beserver_x64_active_<hex>.cfg beside it.
-func BattlEyeCfg(password string, port int) string {
-	return fmt.Sprintf("RConPassword %s\nRestrictRCon 0\nRConPort %d\n", password, port)
+// ip is the address RCon listens on; "" leaves it to BattlEye (every interface).
+func BattlEyeCfg(password string, port int, ip string) string {
+	s := fmt.Sprintf("RConPassword %s\nRestrictRCon 0\nRConPort %d\n", password, port)
+	if ip != "" {
+		s += "RConIP " + ip + "\n"
+	}
+	return s
 }
 
 // RandomPassword returns n random letters and digits.
@@ -107,6 +112,7 @@ type Input struct {
 	Template    string
 	QueryPort   int
 	RConPort    int
+	RConIP      string // address RCon listens on, "" for every interface
 	RConPass    string
 	Keys        []string
 }
@@ -157,7 +163,7 @@ func Write(in Input) error {
 	for _, s := range stale {
 		_ = os.Remove(s)
 	}
-	return os.WriteFile(filepath.Join(be, "beserver_x64.cfg"), []byte(BattlEyeCfg(in.RConPass, in.RConPort)), 0o600)
+	return os.WriteFile(filepath.Join(be, "beserver_x64.cfg"), []byte(BattlEyeCfg(in.RConPass, in.RConPort, in.RConIP)), 0o600)
 }
 
 // Hex is a short random identifier.

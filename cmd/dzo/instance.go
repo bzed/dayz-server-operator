@@ -230,7 +230,7 @@ func prepareRunfiles(cfg *config.Config, inst *resolve.Instance) (runfiles.Input
 	}
 	return runfiles.Input{
 		RuntimeDir: inst.Paths.Runtime, ProfilesDir: inst.Paths.Profiles, StorageDir: inst.Paths.Storage, ServerCfg: src, Template: inst.Map,
-		QueryPort: inst.Ports.Query, RConPort: inst.Ports.RCon, RConPass: pw, Keys: keys,
+		QueryPort: inst.Ports.Query, RConPort: inst.Ports.RCon, RConPass: pw, Keys: keys, RConIP: rconBind(inst),
 	}, nil
 }
 
@@ -375,4 +375,14 @@ func newInstanceAckFailureCmd() *cobra.Command {
 	lifecycleFlags(cmd, &lc)
 	cmd.Flags().StringVar(&gateFile, "gate-file", "", "path to the instance's persisted failed-render gate state (cleared if given)")
 	return cmd
+}
+
+// rconBind is the address RCon listens on. dzo reaches it on 127.0.0.1, so with host networking
+// nothing else on the network needs to: the game's own ports are the only ones that should be
+// open. In a container network of its own the server must listen on every address of it.
+func rconBind(inst *resolve.Instance) string {
+	if inst.Network == site.NetworkHost {
+		return "127.0.0.1"
+	}
+	return ""
 }

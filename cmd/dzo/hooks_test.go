@@ -180,3 +180,13 @@ func runGit(dir string, args ...string) ([]byte, error) {
 	c.Dir = dir
 	return c.CombinedOutput()
 }
+
+func TestRenderBindsRConToLocalhostWithHostNetwork(t *testing.T) {
+	cfg, root, _ := renderSetup(t)
+	if _, err := runCmd(t, "instance", "render", "x", "--config", cfg); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(filepath.Join(root, "profiles", "battleye", "beserver_x64.cfg")); !strings.Contains(string(b), "RConIP 127.0.0.1") { //nolint:gosec // test fixture
+		t.Errorf("with host networking RCon must listen on localhost only: %s", b)
+	}
+}

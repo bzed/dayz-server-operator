@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -26,6 +27,10 @@ var ErrLoginFailed = errors.New("battleye: login failed")
 // ErrClosed is returned by Command when the client has been closed.
 var ErrClosed = errors.New("battleye: client closed")
 
+// ErrConnectionLost is returned (wrapped) by a Command that was pending when the connection to the
+// server was lost, and by every later one on the same Client. A Session dials again.
+var ErrConnectionLost = errors.New("battleye: connection lost")
+
 type commandResult struct {
 	payload []byte
 	err     error
@@ -37,17 +42,14 @@ type multipartAssembly struct {
 	got    int
 }
 
-// Client is a single BattlEye RCon session: one Dial, one login handshake,
-// then Command calls until Close. It has no automatic reconnect: once the
-// read loop hits a connection error, every pending and future Command
-// fails and the Client is done (§C8 describes a higher-level "connection
-// manager" - one long-lived session shared by all callers, with automatic
-// reconnect and backoff - but that layer is not built yet; a caller
-// needing it currently has to Dial again itself and notice the old Client
-// is dead via a failed Command). Nothing here has been exercised against
-// a live BattlEye server; the timeout/error paths are tested against
-// fakes (§C15) and a race-detector-clean concurrency stress test, not
-// real network conditions.
+// Client is a single BattlEye RCon connection: one Dial, one login handshake,
+// then Command calls until Close. When the connection is lost (a socket error,
+// or silence for longer than WithLivenessTimeout) every pending and later
+// Command fails with ErrConnectionLost and Done is closed; the Client does not
+// dial again. Session is the long-lived layer that does, with backoff. The
+// protocol was checked against a real DayZServer 1.29 and 1.30 (TestLiveServer):
+// players, an unknown command, #lock/#unlock/#kick/#shutdown, and that the server
+// answers every keep-alive.
 type Client struct {
 	conn *net.UDPConn
 
@@ -62,9 +64,30 @@ type Client struct {
 	keepAliveInterval time.Duration
 	loginTimeout      time.Duration
 
+	// livenessTimeout, when positive, declares the connection lost when the server sends nothing
+	// for that long (it answers every keep-alive, so silence means it is gone or restarted).
+	livenessTimeout time.Duration
+	lastRX          atomic.Int64 // unix nanoseconds of the last packet from the server
+
+	lost     chan struct{} // closed when the connection is lost
+	lostOnce sync.Once
+
 	stop chan struct{}
 	wg   sync.WaitGroup
 }
+
+// Done is closed when the connection to the server is lost (a read error, or silence for longer
+// than WithLivenessTimeout). Close does not close it.
+func (c *Client) Done() <-chan struct{} { return c.lost }
+
+func (c *Client) markLost(err error) {
+	c.lostOnce.Do(func() {
+		c.failAllPending(fmt.Errorf("%w: %v", ErrConnectionLost, err))
+		close(c.lost)
+	})
+}
+
+func (c *Client) lastRXTime() time.Time { return time.Unix(0, c.lastRX.Load()) }
 
 // Option customises a Client created by Dial.
 type Option func(*Client)
@@ -72,6 +95,14 @@ type Option func(*Client)
 // WithKeepAliveInterval overrides KeepAliveInterval, mainly for tests.
 func WithKeepAliveInterval(d time.Duration) Option {
 	return func(c *Client) { c.keepAliveInterval = d }
+}
+
+// WithLivenessTimeout makes the client declare the connection lost (Done is closed, pending
+// commands fail with ErrConnectionLost) when the server sends nothing for d. The server answers
+// the keep-alives, so this notices a server that restarted or went away without any socket error.
+// It needs d to be well above the keep-alive interval.
+func WithLivenessTimeout(d time.Duration) Option {
+	return func(c *Client) { c.livenessTimeout = d }
 }
 
 // WithLoginTimeout overrides the 5s default login handshake timeout, mainly
@@ -101,7 +132,9 @@ func Dial(addr, password string, opts ...Option) (*Client, error) {
 		keepAliveInterval: KeepAliveInterval,
 		loginTimeout:      5 * time.Second,
 		stop:              make(chan struct{}),
+		lost:              make(chan struct{}),
 	}
+	c.lastRX.Store(time.Now().UnixNano())
 	for _, opt := range opts {
 		opt(c)
 	}
@@ -182,6 +215,8 @@ func (c *Client) Command(ctx context.Context, command string) (string, error) {
 		return string(res.payload), nil
 	case <-ctx.Done():
 		return "", ctx.Err()
+	case <-c.lost:
+		return "", ErrConnectionLost
 	case <-c.stop:
 		return "", ErrClosed
 	}
@@ -215,9 +250,10 @@ func (c *Client) readLoop() {
 				return
 			default:
 			}
-			c.failAllPending(fmt.Errorf("battleye: connection lost: %w", err))
+			c.markLost(err)
 			return
 		}
+		c.lastRX.Store(time.Now().UnixNano())
 		c.handlePacket(buf[:n])
 	}
 }
@@ -326,8 +362,19 @@ func (c *Client) keepAliveLoop() {
 			seq := c.nextSeq
 			c.nextSeq++
 			c.mu.Unlock()
-			_, _ = c.conn.Write(EncodeCommand(seq, ""))
+			if _, err := c.conn.Write(EncodeCommand(seq, "")); err != nil {
+				c.markLost(err)
+				return
+			}
+			if c.livenessTimeout > 0 {
+				if quiet := time.Since(c.lastRXTime()); quiet > c.livenessTimeout {
+					c.markLost(fmt.Errorf("no packet from the server for %s", quiet.Round(time.Second)))
+					return
+				}
+			}
 		case <-c.stop:
+			return
+		case <-c.lost:
 			return
 		}
 	}

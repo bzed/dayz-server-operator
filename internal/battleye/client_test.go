@@ -5,6 +5,7 @@ package battleye
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"testing"
@@ -518,5 +519,19 @@ func TestCloseIsIdempotentAndRejectsCommands(t *testing.T) {
 
 	if _, open := <-c.Events(); open {
 		t.Error("Events() channel should be closed after Close()")
+	}
+}
+
+func TestLivenessTimeoutMarksTheConnectionLost(t *testing.T) {
+	s := newFakeServer(t)
+	go acceptLogin(t, s)
+	c := dialFake(t, s, "pw", WithKeepAliveInterval(10*time.Millisecond), WithLivenessTimeout(40*time.Millisecond))
+	select {
+	case <-c.Done():
+	case <-time.After(2 * time.Second):
+		t.Fatal("a server that answers nothing must be declared lost")
+	}
+	if _, err := c.Command(context.Background(), "players"); !errors.Is(err, ErrConnectionLost) {
+		t.Errorf("a command on a lost connection: %v", err)
 	}
 }

@@ -83,11 +83,22 @@ func rconRestarter(cmd *cobra.Command, cfg *config.Config, inst *resolve.Instanc
 			if err != nil {
 				return nil, err
 			}
-			c, err := battleye.Dial("127.0.0.1:"+fmt.Sprint(inst.Ports.RCon), pw, battleye.WithLoginTimeout(5*time.Second))
-			if err != nil {
-				return nil, err
+			// A session, not a single connection: a countdown lasts minutes, and a hiccup of RCon
+			// (or the server) in between must not end the restart. Unreachable at the start still
+			// fails fast, so the restart goes ahead without announcing.
+			s := &battleye.Session{
+				Addr: "127.0.0.1:" + fmt.Sprint(inst.Ports.RCon), Password: pw,
+				Options:    []battleye.Option{battleye.WithLoginTimeout(5 * time.Second)},
+				MinBackoff: time.Second, MaxBackoff: 10 * time.Second,
+				Log: func(f string, a ...any) { _, _ = fmt.Fprintf(cmd.ErrOrStderr(), f+"\n", a...) },
 			}
-			return c, nil
+			first, cancel := context.WithTimeout(ctx, 8*time.Second)
+			defer cancel()
+			if err := s.WaitConnected(first); err != nil {
+				_ = s.Close()
+				return nil, fmt.Errorf("RCon is not reachable: %w", err)
+			}
+			return s, nil
 		},
 		Log: func(f string, a ...any) { _, _ = fmt.Fprintf(cmd.ErrOrStderr(), f+"\n", a...) },
 		Cancelled: func() bool {

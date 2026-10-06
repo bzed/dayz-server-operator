@@ -112,3 +112,12 @@ func TestWriteRendersTheRuntimeFiles(t *testing.T) {
 		t.Error("serverDZ.cfg holds passwords: 0600")
 	}
 }
+
+func TestBattlEyeCfgBindsRConWhenAsked(t *testing.T) {
+	if got := BattlEyeCfg("pw", 2306, ""); strings.Contains(got, "RConIP") {
+		t.Errorf("no address, no RConIP line: %q", got)
+	}
+	if got := BattlEyeCfg("pw", 2306, "127.0.0.1"); !strings.HasSuffix(got, "RConPort 2306\nRConIP 127.0.0.1\n") {
+		t.Errorf("cfg = %q", got)
+	}
+}

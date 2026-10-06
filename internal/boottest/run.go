@@ -424,7 +424,7 @@ func BuildTree(c Config, p Ports) error {
 	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(filepath.Join(tree, "profiles", "battleye", "beserver_x64.cfg"), []byte(runfiles.BattlEyeCfg(pw, p.RCon)), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(tree, "profiles", "battleye", "beserver_x64.cfg"), []byte(runfiles.BattlEyeCfg(pw, p.RCon, "127.0.0.1")), 0o600); err != nil {
 		return err
 	}
 
