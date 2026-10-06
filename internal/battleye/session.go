@@ -23,6 +23,8 @@ type Session struct {
 	MinBackoff, MaxBackoff time.Duration
 	// Dial is Dial; tests replace it.
 	Dial func(addr, password string, opts ...Option) (*Client, error)
+	// CommandTimeout bounds the wait for one answer of one try, see Command (default 15s).
+	CommandTimeout time.Duration
 	// Log reports connects, losses and failed attempts.
 	Log func(format string, args ...any)
 
@@ -198,25 +200,39 @@ func (s *Session) WaitConnected(ctx context.Context) error {
 	return err
 }
 
-// Command sends a command over the current connection, waiting for one if there is none. When the
-// connection is lost with the command pending it waits for the next connection and sends the
-// command again once: for the commands dzo sends (players, lock, kick, say) a second delivery is
-// harmless, and a restart of the server must not turn into an error for the caller.
+// Command sends a command over the current connection, waiting for one if there is none. It never
+// waits for an answer longer than CommandTimeout (15s by default) per try: the server answers over
+// UDP and an answer that does not come would otherwise hang the caller (a restart) for good. When
+// the connection was lost with the command pending, or no answer came in time, the command is sent
+// again, up to three times in all: for the commands dzo sends (players, lock, kick, say) a second
+// delivery is harmless, and a restart of the server must not turn into an error for the caller.
 func (s *Session) Command(ctx context.Context, command string) (string, error) {
 	s.Start()
-	for attempt := 0; ; attempt++ {
+	timeout := s.CommandTimeout
+	if timeout <= 0 {
+		timeout = 15 * time.Second
+	}
+	for attempt := 1; ; attempt++ {
 		c, err := s.connection(ctx)
 		if err != nil {
 			return "", err
 		}
-		out, err := c.Command(ctx, command)
-		if err == nil || !errors.Is(err, ErrConnectionLost) || attempt > 0 {
+		actx, cancel := context.WithTimeout(ctx, timeout)
+		out, err := c.Command(actx, command)
+		cancel()
+		if err == nil || ctx.Err() != nil || attempt >= 3 {
 			return out, err
 		}
-		select {
-		case <-c.Done():
-		case <-ctx.Done():
-			return "", ctx.Err()
+		switch {
+		case errors.Is(err, ErrConnectionLost):
+			select {
+			case <-c.Done():
+			case <-ctx.Done():
+				return "", ctx.Err()
+			}
+		case errors.Is(err, context.DeadlineExceeded): // no answer in time: ask again
+		default:
+			return out, err
 		}
 	}
 }

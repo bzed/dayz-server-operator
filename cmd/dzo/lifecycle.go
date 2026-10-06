@@ -682,7 +682,10 @@ func newShellCmd() *cobra.Command {
 				return fmt.Errorf("instance %s is not installed completely: %s", inst.Name, strings.Join(inst.Missing, "; "))
 			}
 			q := inst.Quadlet
-			a := []string{"run", "--rm", "-it", "--network", network, "--workdir", q.WorkingDir}
+			a := []string{"run", "--rm", "-i", "--network", network, "--workdir", q.WorkingDir}
+			if isTerminal(os.Stdin) {
+				a[2] = "-it"
+			}
 			for _, v := range q.Volumes {
 				a = append(a, "-v", podmanVolume(v))
 			}

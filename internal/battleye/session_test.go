@@ -198,3 +198,32 @@ func TestSessionWaitConnected(t *testing.T) {
 		t.Errorf("an unreachable server: %v", err)
 	}
 }
+
+func TestSessionCommandTimesOutInsteadOfHanging(t *testing.T) {
+	var asked atomic.Int32
+	// A server that logs in and then never answers a command.
+	silent := newFakeServer(t)
+	go func() {
+		silent.recv() // login
+		silent.send(PacketLogin, 0x01)
+		for {
+			if _, err := silent.tryRecv(); err != nil {
+				return
+			}
+			asked.Add(1) // never answers
+		}
+	}()
+	s := &Session{Addr: silent.addr(), Password: "pw", CommandTimeout: 50 * time.Millisecond, Options: []Option{WithLoginTimeout(time.Second), WithKeepAliveInterval(time.Hour)}}
+	defer func() { _ = s.Close() }()
+	start := time.Now()
+	_, err := s.Command(context.Background(), "silent")
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("err = %v, want the deadline", err)
+	}
+	if took := time.Since(start); took > 2*time.Second {
+		t.Errorf("took %s: the command must give up after its tries", took)
+	}
+	if n := asked.Load(); n != 3 {
+		t.Errorf("the command was sent %d times, want 3 tries", n)
+	}
+}

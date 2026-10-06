@@ -137,6 +137,14 @@ which run when ``DZO_LIVE_BE_ADDR`` and ``DZO_LIVE_BE_PASSWORD`` are set):
   mission was still loading), and commands are answered about 20 seconds later, when the mission has
   loaded. ``Session`` redials with backoff and the commands in that window time out; they are not
   errors of the session.
+* A real server ignores some logins when connections follow each other: with a new connection per command,
+  13 % of the logins got no answer with no pause between them, 10 % after 0.3 seconds, 3 % after 1 second and
+  none after 2 seconds (30 each). Sending the login again within the same five seconds did not help. A
+  session that keeps one connection is not affected, and ``Session`` dials again with backoff.
+* A command whose answer never comes would hang its caller, because the answer travels over UDP:
+  ``Session.Command`` waits at most 15 seconds per try and tries three times. (A ``dzo restart --now`` of the
+  experimental instance once showed no sign of life for four minutes, with the RCon connection up; it was
+  not reproduced in the runs that followed, and the cause is not known.)
 * RCon listened on every interface: the server was controllable from the whole network with the
   password. dzo now writes ``RConIP 127.0.0.1`` into the BattlEye config with host networking.
 

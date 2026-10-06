@@ -275,7 +275,7 @@ func TestShellAndExecRunPodman(t *testing.T) {
 	}
 	b, _ := os.ReadFile(args) //nolint:gosec // test fixture
 	got := string(b)
-	for _, want := range []string{"run --rm -it --network none --workdir /dayz", "/dayz:O", "/dayz/keys:ro", "localhost/dzo-runtime:latest /bin/bash"} {
+	for _, want := range []string{"run --rm -i --network none --workdir /dayz", "/dayz:O", "/dayz/keys:ro", "localhost/dzo-runtime:latest /bin/bash"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("podman args %q miss %q", got, want)
 		}
