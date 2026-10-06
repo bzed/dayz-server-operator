@@ -19,10 +19,14 @@ LDFLAGS     := -s -w \
 COVERAGE_MIN := 85
 GO           ?= go
 
-.PHONY: all docs build build-static test test-race cover coverage-check cover-html lint vet fmt fmt-check \
+.PHONY: all cheatsheet docs build build-static test test-race cover coverage-check cover-html lint vet fmt fmt-check \
         licenses reuse deb clean tidy generate servermods
 
 all: lint reuse test build
+
+## cheatsheet: rebuild docs/cheatsheet/dzo-cheatsheet.pdf (needs Chrome and the IBM Plex fonts).
+cheatsheet:
+	docs/cheatsheet/build.py
 
 ## docs: build the Sphinx documentation into docs/_build/html (warnings are errors).
 docs:

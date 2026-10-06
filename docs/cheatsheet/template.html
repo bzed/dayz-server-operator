@@ -1,0 +1,295 @@
+<!doctype html>
+<!--
+SPDX-FileCopyrightText: 2026 Bernd Zeimetz <bernd@bzed.de>
+SPDX-License-Identifier: AGPL-3.0-or-later
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>dzo cheat sheet</title>
+<style>
+  @page { size: A4; margin: 0; }
+  :root {
+    --paper: #eef1e8;
+    --paper-deep: #e1e6d6;
+    --ink: #17231f;
+    --ink-soft: #4a5a52;
+    --forest: #2d5b45;
+    --contour: #b5832a;
+    --red: #a8372d;
+    --red-tint: #f3ddd8;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body { margin: 0; background: #8d968c; color: var(--ink); font: 8.3pt/1.38 "IBM Plex Sans", sans-serif; }
+  .page { width: 210mm; height: 297mm; padding: 12mm 13mm 10mm; background: var(--paper); position: relative; overflow: hidden; page-break-after: always; margin: 0 auto; }
+  .page:last-child { page-break-after: auto; }
+  @media screen { .page { margin: 8mm auto; } }
+
+  h1, h2, h3 { font-family: "IBM Plex Sans Condensed", sans-serif; margin: 0; letter-spacing: 0; }
+  code, .cmd { font-family: "IBM Plex Mono", monospace; }
+
+  /* masthead */
+  .mast { position: relative; height: 34mm; margin: -12mm -13mm 4mm; padding: 9mm 13mm 0; background: var(--forest); color: #f2f4ec; overflow: hidden; }
+  .mast .topo { position: absolute; right: 0; top: 0; height: 100%; width: 70%; color: var(--contour); opacity: .85; }
+  .mast h1 { font-size: 38pt; line-height: .9; font-weight: 700; position: relative; }
+  .mast p { margin: 2mm 0 0; font-size: 10pt; font-family: "IBM Plex Sans Condensed", sans-serif; font-weight: 500; position: relative; max-width: 95mm; line-height: 1.25; }
+  .legend { position: absolute; right: 13mm; bottom: 3mm; display: flex; gap: 4mm; font-size: 7.6pt; color: #f2f4ec; background: rgba(23,35,31,.78); padding: 1.6mm 3mm; }
+  .legend span { display: inline-flex; align-items: center; gap: 1.6mm; }
+  .legend i { width: 3px; height: 9px; display: inline-block; }
+  .legend .r { background: #8fc4a6; } .legend .c { background: #e0b04e; } .legend .d { background: #ee7b6c; }
+
+  /* command rows: the left edge says what the command does to your server */
+  .rows { margin: 0; padding: 0; list-style: none; }
+  .rows li { display: grid; grid-template-columns: 63% 1fr; gap: 0 2mm; padding: .6mm 0 .6mm 2.2mm; border-left: 3px solid var(--forest); margin: 0 0 .6mm; background: linear-gradient(90deg, rgba(45,91,69,.06), transparent 70%); break-inside: avoid; }
+  .rows li.c { border-left-color: var(--contour); background: linear-gradient(90deg, rgba(181,131,42,.10), transparent 70%); }
+  .rows li.d { border-left-color: var(--red); background: linear-gradient(90deg, rgba(168,55,45,.12), transparent 70%); }
+  .rows .cmd { font-size: 7.5pt; font-weight: 500; line-height: 1.3; overflow-wrap: anywhere; }
+  .rows .what { color: var(--ink-soft); font-size: 7.7pt; line-height: 1.3; }
+  .cmd b { font-weight: 600; color: var(--forest); }
+  .cmd em { font-style: normal; color: #6b7b72; }
+
+  /* page 1: setup as a sequence */
+  .cols1 { display: grid; grid-template-columns: 1fr 47mm; gap: 6mm; }
+  .step { display: grid; grid-template-columns: 7mm 1fr; gap: 0 2mm; margin-bottom: 3.8mm; }
+  .step .n { font-family: "IBM Plex Sans Condensed", sans-serif; font-weight: 700; font-size: 17pt; line-height: 1; color: var(--contour); text-align: right; padding-top: .3mm; }
+  .step h2 { font-size: 12pt; font-weight: 600; line-height: 1.1; margin-bottom: 1mm; }
+  .step p { margin: 0 0 1mm; color: var(--ink-soft); font-size: 8pt; line-height: 1.32; }
+  .yaml { margin: .6mm 0 1.2mm; padding: 1.5mm 2.4mm; background: var(--ink); color: #dfe8df; font-size: 7.1pt; line-height: 1.34; white-space: pre; border-radius: 1mm; }
+  .yaml .k { color: #9bd1b2; } .yaml .m { color: #e0b04e; } .yaml .c { color: #8aa094; }
+  .side h3 { font-size: 11pt; font-weight: 600; border-bottom: 1.5px solid var(--ink); padding-bottom: 1mm; margin: 0 0 1.6mm; }
+  .side section { margin-bottom: 4mm; }
+  .side code, .note code { font-size: 7pt; overflow-wrap: anywhere; }
+  .paths { width: 100%; border-collapse: collapse; font-size: 7.4pt; }
+  .paths td { padding: .7mm 0; vertical-align: top; border-bottom: 1px solid var(--paper-deep); }
+  .paths td:first-child { font-family: "IBM Plex Mono", monospace; font-size: 7pt; padding-right: 2mm; white-space: nowrap; color: var(--forest); font-weight: 500; }
+  .note { background: var(--paper-deep); padding: 2.2mm 2.6mm; margin: 0; font-size: 7.7pt; border-left: 3px solid var(--contour); }
+  .note + .note { margin-top: 2mm; }
+  .note b { font-weight: 600; }
+
+  /* page 2: tasks */
+  .head2 { display: flex; align-items: baseline; justify-content: space-between; border-bottom: 3px solid var(--forest); padding-bottom: 1.2mm; margin-bottom: 3mm; }
+  .head2 h1 { font-size: 24pt; font-weight: 700; line-height: 1; color: var(--forest); }
+  .head2 p { margin: 0; font-size: 8.2pt; color: var(--ink-soft); }
+  .grid { column-count: 2; column-gap: 7mm; }
+  .task { break-inside: avoid; margin: 0 0 4.2mm; }
+  .task h2 { font-size: 12pt; font-weight: 600; margin-bottom: 1.4mm; line-height: 1.1; }
+  .task > p { margin: -.4mm 0 1.4mm; color: var(--ink-soft); font-size: 7.7pt; }
+  .rows.one li { grid-template-columns: 1fr; padding: .5mm 0 .5mm 2.2mm; }
+  .rows.one .what { margin-top: .2mm; }
+  .danger { background: var(--red-tint); border-top: 3px solid var(--red); padding: 2.6mm 3.2mm 1.6mm; margin-top: 1mm; break-inside: avoid; }
+  .danger h2 { color: var(--red); }
+  .danger .rows li { background: none; }
+  .foot { position: absolute; left: 13mm; right: 13mm; bottom: 7mm; display: flex; justify-content: space-between; font-size: 7.3pt; color: var(--ink-soft); border-top: 1px solid var(--paper-deep); padding-top: 1.6mm; }
+</style>
+</head>
+<body>
+
+<!-- ============ page 1: set up ============ -->
+<section class="page">
+  <header class="mast">
+    %TOPO%
+    <h1>dzo</h1>
+    <p>Install, update and restart DayZ servers on one host, with rootless podman and btrfs snapshots.</p>
+    <div class="legend"><span><i class="r"></i>reads</span><span><i class="c"></i>changes something</span><span><i class="d"></i>destroys data</span></div>
+  </header>
+
+  <div class="cols1">
+    <div>
+      <div class="step"><div class="n">1</div><div>
+        <h2>Install the package</h2>
+        <p>Creates the <code>dayz</code> user and <code>/var/lib/dzo</code>. Put that directory on btrfs if you want snapshots. Everything else runs as <code>dayz</code>.</p>
+        <ul class="rows">
+          <li class="c"><span class="cmd">sudo apt install ./dzo_<em>&lt;version&gt;</em>_amd64.deb</span><span class="what">install, or upgrade</span></li>
+          <li><span class="cmd">sudo -iu dayz</span><span class="what">work as the service user</span></li>
+        </ul>
+      </div></div>
+
+      <div class="step"><div class="n">2</div><div>
+        <h2>Point dzo at your site repository</h2>
+        <p>The site repository holds every instance's settings. Create an empty git repository, then set it in <code>/etc/dzo/config.yaml</code>:</p>
+        <pre class="yaml"><span class="k">site:</span>
+  <span class="k">remote:</span> git@<span class="m">host</span>:you/dayz-site.git
+  <span class="k">branch:</span> main</pre>
+        <ul class="rows">
+          <li class="c"><span class="cmd">dzo setup</span><span class="what">directories, container images, site checkout</span></li>
+          <li><span class="cmd">dzo site validate</span><span class="what">load the site, resolve every instance</span></li>
+        </ul>
+      </div></div>
+
+      <div class="step"><div class="n">3</div><div>
+        <h2>Log in to Steam, download the server</h2>
+        <ul class="rows">
+          <li class="c"><span class="cmd">dzo steam login --user <em>&lt;account&gt;</em></span><span class="what">password and Steam Guard, asked once</span></li>
+          <li class="c"><span class="cmd">dzo product install dayz-stable</span><span class="what">about 3 GB (<code>dayz-experimental</code> works the same)</span></li>
+        </ul>
+      </div></div>
+
+      <div class="step"><div class="n">4</div><div>
+        <h2>Describe the instance, then push it</h2>
+        <p>Add <code>instances/chernarus/instance.yaml</code> and a <code>serverDZ.cfg</code> next to it. Set a join <code>password</code> in the config.</p>
+        <pre class="yaml"><span class="k">name:</span> chernarus
+<span class="k">product:</span> dayz-stable
+<span class="k">map:</span> dayzOffline.chernarusplus   <span class="c"># Bohemia's mission</span>
+<span class="k">ports:</span> {game: <span class="m">2302</span>, rcon: <span class="m">2303</span>, query: <span class="m">27016</span>}
+<span class="k">network:</span> host
+<span class="k">mods:</span> []
+<span class="k">restarts:</span> {schedule: ["*-*-* 00/4:00"]}   <span class="c"># every 4 h</span></pre>
+        <ul class="rows">
+          <li class="c"><span class="cmd">dzo site pull</span><span class="what">fetch what you pushed</span></li>
+        </ul>
+      </div></div>
+
+      <div class="step"><div class="n">5</div><div>
+        <h2>Create it and start it</h2>
+        <ul class="rows">
+          <li class="c"><span class="cmd">dzo instance render chernarus --dry-run</span><span class="what">preview what will be written</span></li>
+          <li class="c"><span class="cmd">dzo instance create chernarus</span><span class="what">data directory, mission, first render</span></li>
+          <li class="c"><span class="cmd">dzo instance apply chernarus</span><span class="what">write the units and timers</span></li>
+          <li class="c"><span class="cmd">dzo start chernarus</span><span class="what">returns when the server answers Steam queries</span></li>
+          <li><span class="cmd">dzo status</span><span class="what">state, players, health, restarts</span></li>
+        </ul>
+      </div></div>
+
+      <div class="step"><div class="n">6</div><div>
+        <h2>Add mods</h2>
+        <ul class="rows">
+          <li class="c"><span class="cmd">dzo mod add 1559212036 --instance chernarus</span><span class="what">install a workshop mod, add it to the list</span></li>
+          <li class="c"><span class="cmd">dzo mod add <em>&lt;id&gt;</em> --instance chernarus <b>--server</b></span><span class="what">loaded with -servermod (clients don't get it)</span></li>
+          <li class="c"><span class="cmd">dzo site commit -m "add mods" --push</span><span class="what"><code>mod add</code> edits your checkout, keep it in git</span></li>
+          <li class="c"><span class="cmd">dzo restart chernarus --minutes 5</span><span class="what">announce, lock, kick, restart with the mods</span></li>
+        </ul>
+      </div></div>
+    </div>
+
+    <aside class="side">
+      <section>
+        <h3>Where things live</h3>
+        <table class="paths">
+          <tr><td>/etc/dzo/config.yaml</td><td>host settings</td></tr>
+          <tr><td>/var/lib/dzo/site</td><td>your site checkout</td></tr>
+          <tr><td>…/instances/&lt;n&gt;</td><td>one server: <code>mpmissions</code>, <code>profiles</code>, <code>storage</code></td></tr>
+          <tr><td>…/cache</td><td>server builds and mods, kept as generations</td></tr>
+          <tr><td>…/snapshots</td><td>btrfs backups</td></tr>
+          <tr><td>…/logs</td><td>archived profile logs</td></tr>
+          <tr><td>…/secrets</td><td>Steam session, RCon passwords</td></tr>
+        </table>
+      </section>
+      <section>
+        <h3>Units and logs</h3>
+        <p class="note" style="border-left-color:var(--forest)">Each server is the user unit <code>dzo-&lt;n&gt;.service</code>. Use <code>systemctl --user</code> and <code>journalctl --user</code> on it as on any unit.</p>
+      </section>
+      <section>
+        <h3>Ports</h3>
+        <p class="note">Give every instance its own <b>game</b>, <b>rcon</b> and <b>query</b> port. RCon listens on localhost only. Open the game and query ports in the firewall.</p>
+        <p class="note">A new mod or build never reaches a running server on its own. It switches at the next restart.</p>
+      </section>
+    </aside>
+  </div>
+  <div class="foot"><span>More: <code>dzo --help</code>, <code>man dzo</code>, <code>/usr/share/doc/dzo/html</code></span><span>dzo cheat sheet, page 1 of 2</span></div>
+</section>
+
+<!-- ============ page 2: run ============ -->
+<section class="page">
+  <div class="head2"><h1>Run it</h1><p>Find the job, copy the command. <code>&lt;n&gt;</code> is the instance name.</p></div>
+
+  <div class="grid">
+    <div class="task">
+      <h2>Start, stop, look</h2>
+      <ul class="rows one">
+        <li><span class="cmd">dzo status <em>[&lt;n&gt;]</em></span><span class="what">state, players, health, pending updates</span></li>
+        <li class="c"><span class="cmd">dzo start &lt;n&gt;</span><span class="what">waits until the server answers</span></li>
+        <li class="c"><span class="cmd">dzo stop &lt;n&gt;</span><span class="what">asks over RCon, then stays stopped</span></li>
+        <li><span class="cmd">dzo logs &lt;n&gt; -f</span><span class="what">follow the server console</span></li>
+        <li class="c"><span class="cmd">dzo instance ack-failure &lt;n&gt;</span><span class="what">allow starts again after a failed render or a crash loop</span></li>
+      </ul>
+    </div>
+
+    <div class="task">
+      <h2>Restart without annoying players</h2>
+      <ul class="rows one">
+        <li class="c"><span class="cmd">dzo restart &lt;n&gt; --minutes 30 --lock 3</span><span class="what">announce every minute, lock 3 minutes before, kick, restart</span></li>
+        <li class="c"><span class="cmd">dzo restart &lt;n&gt; --now</span><span class="what">no countdown</span></li>
+        <li class="c"><span class="cmd">dzo restart &lt;n&gt; --cancel</span><span class="what">stop the countdown, unlock</span></li>
+        <li class="c"><span class="cmd">dzo instance apply &lt;n&gt;</span><span class="what">after changing <code>restarts.schedule</code>: rewrite the timers</span></li>
+      </ul>
+    </div>
+
+    <div class="task">
+      <h2>Mods and updates</h2>
+      <ul class="rows one">
+        <li><span class="cmd">dzo instance mods list &lt;n&gt;</span><span class="what">the list; its order decides which mod wins a merge</span></li>
+        <li class="c"><span class="cmd">dzo instance mods move &lt;id&gt; --before &lt;other&gt;</span><span class="what">change that order</span></li>
+        <li class="c"><span class="cmd">dzo mod remove &lt;id&gt; --instance &lt;n&gt;</span><span class="what">drop a mod from the list</span></li>
+        <li class="c"><span class="cmd">dzo update check <em>[--apply]</em></span><span class="what">hourly by timer; <code>policy: auto</code> restarts for you</span></li>
+        <li class="c"><span class="cmd">dzo mod refresh &lt;id&gt; --force</span><span class="what">download again after a broken download</span></li>
+      </ul>
+    </div>
+
+    <div class="task">
+      <h2>New server build</h2>
+      <p>A new build is only reported. You switch each instance yourself.</p>
+      <ul class="rows one">
+        <li class="c"><span class="cmd">dzo product update dayz-stable</span><span class="what">download the new build</span></li>
+        <li><span class="cmd">dzo instance upgrade &lt;n&gt; --build &lt;id&gt; --dry-run</span><span class="what">plan and mod dependency check for that build</span></li>
+        <li class="c"><span class="cmd">dzo instance upgrade &lt;n&gt; --build &lt;id&gt;</span><span class="what">announce, stop, snapshot, switch, start. A failed switch reverts</span></li>
+      </ul>
+    </div>
+
+    <div class="task">
+      <h2>Mission and config</h2>
+      <ul class="rows one">
+        <li><span class="cmd">dzo mission status &lt;n&gt;</span><span class="what">source, age, what the next render changes</span></li>
+        <li class="c"><span class="cmd">dzo mission update &lt;n&gt;</span><span class="what">fetch a newer mission, show the plan</span></li>
+        <li class="c"><span class="cmd">dzo instance render &lt;n&gt;</span><span class="what">apply in place, only files dzo manages</span></li>
+        <li><span class="cmd">dzo mission rollback &lt;n&gt; --list</span><span class="what">managed files from file history</span></li>
+      </ul>
+    </div>
+
+    <div class="task">
+      <h2>Backups</h2>
+      <p>Snapshots are taken before upgrades, mod updates and wipes.</p>
+      <ul class="rows one">
+        <li class="c"><span class="cmd">dzo backup create &lt;n&gt;</span><span class="what">snapshot now</span></li>
+        <li><span class="cmd">dzo backup list &lt;n&gt;</span><span class="what">what exists, and why</span></li>
+        <li><span class="cmd">dzo backup diff &lt;n&gt; &lt;id&gt;</span><span class="what">files that changed since then</span></li>
+        <li class="c"><span class="cmd">dzo backup pin &lt;n&gt; &lt;id&gt;</span><span class="what">keep it, whatever the retention says</span></li>
+      </ul>
+    </div>
+
+    <div class="task">
+      <h2>RCon and logs</h2>
+      <ul class="rows one">
+        <li class="c"><span class="cmd">dzo rcon console &lt;n&gt;</span><span class="what">interactive, with connects and chat</span></li>
+        <li><span class="cmd">dzo rcon exec --instance &lt;n&gt; players</span><span class="what">one command</span></li>
+        <li class="c"><span class="cmd">dzo rcon rotate &lt;n&gt; --restart</span><span class="what">new RCon password, read at the next start</span></li>
+        <li><span class="cmd">dzo logs rotate &lt;n&gt; --dry-run</span><span class="what">which profile logs would be archived</span></li>
+        <li><span class="cmd">dzo logs archive &lt;n&gt; --since 7d</span><span class="what">list the archive</span></li>
+      </ul>
+    </div>
+
+    <div class="task">
+      <h2>Look inside</h2>
+      <ul class="rows one">
+        <li class="c"><span class="cmd">dzo shell &lt;n&gt;</span><span class="what">debug container with the instance's mounts, server not started</span></li>
+        <li><span class="cmd">dzo exec &lt;n&gt; ls /profiles</span><span class="what">a command in the running container</span></li>
+      </ul>
+    </div>
+
+    <div class="danger">
+      <h2>These delete data</h2>
+      <p style="margin:0 0 1.4mm;color:var(--ink-soft);font-size:7.7pt">They ask you to confirm (<code>--yes</code> skips it). <code>wipe</code>, <code>reinit</code> and <code>restore</code> take a snapshot first.</p>
+      <ul class="rows one">
+        <li class="d"><span class="cmd">dzo wipe &lt;n&gt;</span><span class="what">the world (persistence), not the mission</span></li>
+        <li class="d"><span class="cmd">dzo mission reinit &lt;n&gt;</span><span class="what">recreate the live mission from the original</span></li>
+        <li class="d"><span class="cmd">dzo instance upgrade &lt;n&gt; --build &lt;id&gt; --wipe</span><span class="what">switch builds and wipe the world</span></li>
+        <li class="d"><span class="cmd">dzo restore &lt;n&gt; &lt;id&gt; <em>[--path …]</em></span><span class="what">go back to a snapshot, all or one path</span></li>
+        <li class="d"><span class="cmd">dzo instance remove &lt;n&gt;</span><span class="what">data directory and, unless <code>--keep-snapshots</code>, its snapshots</span></li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="foot"><span>Upgrading dzo itself: <code>apt install ./dzo_&lt;version&gt;_amd64.deb</code>. Running servers keep going until their next restart.</span><span>dzo cheat sheet, page 2 of 2</span></div>
+</section>
+</body>
+</html>
