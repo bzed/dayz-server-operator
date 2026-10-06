@@ -114,7 +114,13 @@ func deployFunc(cmd *cobra.Command, cfg *config.Config, configPath, name string,
 		if err != nil {
 			return err
 		}
-		if p := units.Pending(inst); len(p) > 0 {
+		pending := units.Pending(inst)
+		if p := pending; len(p) > 0 {
+			// pre_update: the instance is down and nothing has been changed yet; a failing hook
+			// aborts, and the restart starts the server again as it was.
+			if err := instanceHooks(ctx, cmd.OutOrStdout(), cfg, inst, hookPreUpdate, nil, map[string]any{"pending": p}); err != nil {
+				return fmt.Errorf("%w, nothing was changed", err)
+			}
 			reason := backup.ModUpdate
 			if slices.Contains(p, updates.BuildKey) {
 				reason = backup.Update
@@ -136,6 +142,9 @@ func deployFunc(cmd *cobra.Command, cfg *config.Config, configPath, name string,
 		o.Deploy = []string{name}
 		res, err := units.Sync(ctx, o, tree, lc, false)
 		printWarnings(cmd.ErrOrStderr(), res.Warnings)
+		if err == nil && len(pending) > 0 {
+			err = instanceHooks(ctx, cmd.OutOrStdout(), cfg, inst, hookPostUpdate, nil, map[string]any{"applied": pending})
+		}
 		return err
 	}
 }

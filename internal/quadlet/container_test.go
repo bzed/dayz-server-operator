@@ -234,3 +234,15 @@ func TestRenderContainerExecServiceAndNotify(t *testing.T) {
 		t.Errorf("want exactly one Exec= line, got %d", n)
 	}
 }
+
+func TestRenderContainerPostStop(t *testing.T) {
+	spec := ContainerSpec{Name: "dzo-x", Image: "localhost/dzo-runtime:latest", Network: NetworkHost}
+	spec.PostStop = []string{"/usr/bin/dzo instance hook x post_stop"}
+	out, err := RenderContainer(spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "ExecStopPost=-/usr/bin/dzo instance hook x post_stop\n") {
+		t.Errorf("a post_stop hook must not fail the stop:\n%s", out)
+	}
+}

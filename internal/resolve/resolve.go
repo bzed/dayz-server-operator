@@ -462,6 +462,12 @@ func buildQuadlet(inst *Instance) quadlet.ContainerSpec {
 		spec.Volumes = append(spec.Volumes, quadlet.Volume{Source: filepath.Join(rt, "stdin"), Destination: "/stdin", ReadOnly: true})
 		spec.Exec = []string{"/bin/sh", "-c", "exec " + shellJoin(exec) + " </stdin"}
 	}
+	if len(inst.Hooks.PreStart) > 0 {
+		spec.PreStart = append(spec.PreStart, dzoBinary+" instance hook "+inst.Name+" pre_start")
+	}
+	if len(inst.Hooks.PostStop) > 0 {
+		spec.PostStop = []string{dzoBinary + " instance hook " + inst.Name + " post_stop"}
+	}
 	switch inst.Stop.Method {
 	case site.StopKill:
 		// No shutdown request: podman stops the container with a one-second grace.

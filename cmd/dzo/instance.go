@@ -38,7 +38,7 @@ func newInstanceCmd() *cobra.Command {
 		Use:   "instance",
 		Short: "Instance lifecycle: start/stop/restart, the F3 failure gate (§C5/§C8)",
 	}
-	cmd.AddCommand(newInstanceShowCmd(), newInstanceRenderCmd(), newInstanceStartCmd(), newInstanceStopCmd(), newInstanceRestartCmd(), newInstanceShutdownCmd(), newInstanceAckFailureCmd())
+	cmd.AddCommand(newInstanceShowCmd(), newInstanceRenderCmd(), newInstanceStartCmd(), newInstanceStopCmd(), newInstanceRestartCmd(), newInstanceShutdownCmd(), newInstanceHookCmd(), newInstanceAckFailureCmd())
 	return cmd
 }
 
@@ -136,6 +136,11 @@ func newInstanceRenderCmd() *cobra.Command {
 					}
 					_, _ = fmt.Fprintln(cmd.OutOrStdout(), "dzo-admin config written")
 				}
+			}
+			// post_render: the live mission is up to date; a failing hook fails the render, so the
+			// unit does not start on a mission the hook rejected.
+			if err := instanceHooks(cmd.Context(), cmd.OutOrStdout(), cfg, inst, hookPostRender, nil, nil); err != nil {
+				return err
 			}
 			return nil
 		},

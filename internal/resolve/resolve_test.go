@@ -306,3 +306,27 @@ func TestAdminEnabled(t *testing.T) {
 		t.Error("without the mod there is no integration")
 	}
 }
+
+func TestHooksBecomeUnitLines(t *testing.T) {
+	cfg, tree, _ := fixture(t, true)
+	raw := tree.Instances["alpha"]
+	raw.Hooks = site.HooksConfig{PreStart: []string{"hooks/a.sh"}, PostStop: []string{"hooks/b.sh"}}
+	tree.Instances["alpha"] = raw
+	inst, err := Resolve(cfg, tree, "alpha")
+	if err != nil {
+		t.Fatal(err)
+	}
+	q := inst.Quadlet
+	if len(q.PreStart) != 2 || q.PreStart[1] != "/usr/bin/dzo instance hook alpha pre_start" {
+		t.Errorf("pre_start must follow the render: %v", q.PreStart)
+	}
+	if len(q.PostStop) != 1 || q.PostStop[0] != "/usr/bin/dzo instance hook alpha post_stop" {
+		t.Errorf("post_stop: %v", q.PostStop)
+	}
+	raw.Hooks = site.HooksConfig{}
+	tree.Instances["alpha"] = raw
+	inst, _ = Resolve(cfg, tree, "alpha")
+	if len(inst.Quadlet.PreStart) != 1 || len(inst.Quadlet.PostStop) != 0 {
+		t.Errorf("no hooks, no extra lines: %v %v", inst.Quadlet.PreStart, inst.Quadlet.PostStop)
+	}
+}

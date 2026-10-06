@@ -109,6 +109,7 @@ func installMods(cmd *cobra.Command, f *installFlags, cfg *config.Config, t *sit
 			_, _ = fmt.Fprintf(out, "%-14s FAILED: %v\n", key, r.Err)
 		case r.Changed:
 			_, _ = fmt.Fprintf(out, "%-14s installed %s\n", key, r.Generation)
+			postDownloadHooks(cmd, cfg, t, key, r.Generation)
 		default:
 			_, _ = fmt.Fprintf(out, "%-14s up to date (%s)\n", key, r.Generation)
 		}

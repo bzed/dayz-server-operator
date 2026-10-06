@@ -78,6 +78,9 @@ type ContainerSpec struct {
 	// PreStart commands become [Service] ExecStartPre= lines (the in-place
 	// mission render, §C5).
 	PreStart []string
+	// PostStop commands become [Service] ExecStopPost= lines, run after the container is gone
+	// and before quadlet's own cleanup; a failing command does not fail the stop ("-" prefix).
+	PostStop []string
 	// ExecStop commands become [Service] ExecStop= lines. They run before the
 	// ExecStop quadlet itself adds (podman rm -f), so they can shut the server
 	// down gracefully first.
@@ -243,6 +246,9 @@ func RenderContainer(spec ContainerSpec) (string, error) {
 		kv.set("SuccessExitStatus", "255")
 		if spec.RestartSec > 0 {
 			kv.set("RestartSec", formatDuration(spec.RestartSec))
+		}
+		for _, c := range spec.PostStop {
+			kv.set("ExecStopPost", "-"+c)
 		}
 		for _, c := range spec.ExecStop {
 			kv.set("ExecStop", c)
