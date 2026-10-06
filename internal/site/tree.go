@@ -267,3 +267,88 @@ func AddMod(path string, ref ModRef) error {
 	}
 	return os.WriteFile(path, out.Bytes(), 0o600)
 }
+
+// editMods runs fn on the mods list of the instance file at path and writes the file back,
+// keeping the rest of it (comments included). It is an error if the file has no mods list.
+func editMods(path string, fn func(list *yaml.Node) error) error {
+	data, err := os.ReadFile(path) //nolint:gosec // path is inside the operator's site checkout
+	if err != nil {
+		return fmt.Errorf("site: read %s: %w", path, err)
+	}
+	var doc yaml.Node
+	if err := yaml.Unmarshal(data, &doc); err != nil {
+		return fmt.Errorf("site: parse %s: %w", path, err)
+	}
+	if len(doc.Content) != 1 || doc.Content[0].Kind != yaml.MappingNode {
+		return fmt.Errorf("site: %s: not a YAML mapping", path)
+	}
+	var list *yaml.Node
+	m := doc.Content[0]
+	for i := 0; i+1 < len(m.Content); i += 2 {
+		if m.Content[i].Value == "mods" {
+			list = m.Content[i+1]
+		}
+	}
+	if list == nil || list.Kind != yaml.SequenceNode {
+		return fmt.Errorf("site: %s has no mods list", path)
+	}
+	if err := fn(list); err != nil {
+		return err
+	}
+	var out bytes.Buffer
+	enc := yaml.NewEncoder(&out)
+	enc.SetIndent(2)
+	if err := enc.Encode(&doc); err != nil {
+		return err
+	}
+	return os.WriteFile(path, out.Bytes(), 0o600)
+}
+
+func modIndex(list *yaml.Node, key string) int {
+	for i, n := range list.Content {
+		var ref ModRef
+		if err := n.Decode(&ref); err == nil && ref.Key() == key {
+			return i
+		}
+	}
+	return -1
+}
+
+// RemoveMod deletes the mod with the given key (a workshop id or a local name) from the mods list
+// of the instance file at path.
+func RemoveMod(path, key string) error {
+	return editMods(path, func(list *yaml.Node) error {
+		i := modIndex(list, key)
+		if i < 0 {
+			return fmt.Errorf("site: %s does not list mod %s", path, key)
+		}
+		list.Content = append(list.Content[:i], list.Content[i+1:]...)
+		return nil
+	})
+}
+
+// MoveMod moves the mod key right before (or, with after, right behind) the mod other in the mods
+// list of the instance file at path. The list order is the merge precedence and the order of the
+// -mod= and -servermod= arguments.
+func MoveMod(path, key, other string, after bool) error {
+	if key == other {
+		return fmt.Errorf("site: cannot move mod %s relative to itself", key)
+	}
+	return editMods(path, func(list *yaml.Node) error {
+		i := modIndex(list, key)
+		if i < 0 {
+			return fmt.Errorf("site: %s does not list mod %s", path, key)
+		}
+		if modIndex(list, other) < 0 {
+			return fmt.Errorf("site: %s does not list mod %s", path, other)
+		}
+		node := list.Content[i]
+		list.Content = append(list.Content[:i], list.Content[i+1:]...)
+		j := modIndex(list, other)
+		if after {
+			j++
+		}
+		list.Content = append(list.Content[:j], append([]*yaml.Node{node}, list.Content[j:]...)...)
+		return nil
+	})
+}

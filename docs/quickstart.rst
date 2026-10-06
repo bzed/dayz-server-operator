@@ -6,17 +6,7 @@ Quick start: the first server
 
 This walk-through creates one vanilla Chernarus server. All commands run as the
 service user (``sudo -iu dayz``). It follows what has been run end to end on a
-development host; :doc:`cli` lists every command, including some that are
-described but not built yet.
-
-.. note::
-
-   ``dzo instance create``, ``dzo instance apply``, ``dzo instance upgrade``,
-   ``dzo instance mods``, ``dzo mod remove`` and the ``dzo mission``
-   subcommands other than ``diff`` and ``apply`` are design, not code yet. What
-   they would do is done by the steps below: ``dzo instance render`` creates
-   the instance on its first run, ``dzo units sync`` writes the units, and the
-   mod list is a plain edit of ``instance.yaml``.
+development host; :doc:`cli` lists every command and says which ones are not built yet.
 
 1. Point dzo at your site repository
 ------------------------------------
@@ -78,8 +68,8 @@ push, then:
 .. code-block:: sh
 
    dzo instance render chernarus --dry-run   # what would be written
-   dzo instance render chernarus             # creates the instance on the first run
-   dzo units sync                            # writes the container units and timers
+   dzo instance create chernarus             # subvolume, pristine mission, first live mission
+   dzo instance apply chernarus              # writes the container units and timers
    dzo start chernarus
    dzo status chernarus
 
@@ -89,16 +79,17 @@ answers Steam queries. Follow the console with ``dzo logs chernarus -f``.
 5. Add a mod
 ------------
 
-Add it to the instance in the site repository (``{id: 1559212036}`` is
-Community Framework, ``{id: 1828439124, server: true}`` loads a mod with
-``-servermod``; a local servermod such as dzo-admin is ``{local: dzo-admin,
-server: true}``), commit, push and:
-
 .. code-block:: sh
 
-   dzo site pull
-   dzo mod update chernarus        # downloads what is new
+   dzo mod add 1559212036 --instance chernarus            # Community Framework
+   dzo mod add 1828439124 --instance chernarus --server   # loaded with -servermod
+   dzo mod add dzo-admin --instance chernarus             # a local servermod
+   dzo instance mods list chernarus                       # the order is the load order
    dzo restart chernarus --minutes 5
+
+``dzo mod add`` installs the mod and then adds it to ``instance.yaml`` of the site
+checkout; commit and push that file. ``dzo instance mods move`` and ``dzo mod remove``
+edit the list the same way.
 
 The restart announces itself in game, locks the server, kicks the remaining
 players and restarts with the new mod generations. See :doc:`operations`.

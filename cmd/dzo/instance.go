@@ -39,7 +39,7 @@ func newInstanceCmd() *cobra.Command {
 		Use:   "instance",
 		Short: "Instance lifecycle: start/stop/restart, the F3 failure gate (§C5/§C8)",
 	}
-	cmd.AddCommand(newInstanceShowCmd(), newInstanceRenderCmd(), newInstanceStartCmd(), newInstanceStopCmd(), newInstanceRestartCmd(), newInstanceShutdownCmd(), newInstanceHookCmd(), newInstanceAckFailureCmd())
+	cmd.AddCommand(newInstanceCreateCmd(), newInstanceApplyCmd(), newInstanceUpgradeCmd(), newInstanceModsCmd(), newInstanceShowCmd(), newInstanceRenderCmd(), newInstanceStartCmd(), newInstanceStopCmd(), newInstanceRestartCmd(), newInstanceShutdownCmd(), newInstanceHookCmd(), newInstanceAckFailureCmd())
 	return cmd
 }
 
@@ -88,75 +88,81 @@ func newInstanceRenderCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			// Everything that can be wrong with the rest of the start is found
-			// before the live mission is touched (§C5 F3), dry run included.
-			rf, err := prepareRunfiles(cfg, inst)
-			if err != nil {
-				return err
-			}
-			if !dryRun {
-				if err := prepareInstanceDir(cmd, cfg, inst, updatePristine); err != nil {
-					return err
-				}
-			}
-			src := inst.Mission.Source
-			if _, err := os.Stat(inst.Paths.Pristine); updatePristine || os.IsNotExist(err) {
-				if err := mission.FetchPristine(cmd.Context(), src.Git, src.Ref, src.Path, inst.Paths.Pristine); err != nil {
-					return err
-				}
-			}
-			tree, err := site.LoadTree(cfg.Paths.Site)
-			if err != nil {
-				return err
-			}
-			in := mission.RenderInput{
-				PristineDir: inst.Paths.Pristine, LiveDir: inst.Paths.Live, ManifestPath: inst.Paths.Manifest,
-				FileHistoryDir: inst.Paths.FileHistory, Unmanaged: inst.Mission.Unmanaged, DryRun: dryRun,
-			}
-			if err := addIntegrations(cmd, &in, cfg, tree, inst); err != nil {
-				return err
-			}
-			if inst.Mission.Fallback != "" && inst.Product.Dir != "" {
-				in.FallbackDir = filepath.Join(inst.Product.Dir, "mpmissions", inst.Mission.Fallback)
-			}
-			plan, report, err := mission.Render(in)
-			if err != nil {
-				return err
-			}
-			printPlan(cmd, plan)
-			if dryRun {
-				return nil
-			}
-			printReport(cmd, report)
-			if err := runfiles.Write(rf); err != nil {
-				return err
-			}
-			if inst.AdminEnabled() {
-				// Every render rotates the mod's token (§C13). The mod reads its config once, at
-				// start: rotating it under a running server cuts the server off (HTTP 401 until the
-				// next restart), and a changed config would not apply anyway. The render that starts
-				// the unit (ExecStartPre) runs while the unit is "activating", not "active".
-				if active, _ := (instance.Lifecycle{UserMode: true}).IsActive(cmd.Context(), inst.Name); active {
-					_, _ = fmt.Fprintln(cmd.OutOrStdout(), "dzo-admin config kept (the server is running; it is written at the next start)")
-				} else {
-					if err := serve.WriteModConfig(cfg, inst); err != nil {
-						return fmt.Errorf("writing the dzo-admin config: %w", err)
-					}
-					_, _ = fmt.Fprintln(cmd.OutOrStdout(), "dzo-admin config written")
-				}
-			}
-			// post_render: the live mission is up to date; a failing hook fails the render, so the
-			// unit does not start on a mission the hook rejected.
-			if err := instanceHooks(cmd.Context(), cmd.OutOrStdout(), cfg, inst, hookPostRender, nil, nil); err != nil {
-				return err
-			}
-			return nil
+			return renderInstance(cmd, cfg, inst, dryRun, updatePristine)
 		},
 	}
 	configFlag(cmd, &configPath)
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "print the apply plan and write nothing to the live mission")
 	cmd.Flags().BoolVar(&updatePristine, "update-pristine", false, "fetch the pristine mission again from git before rendering")
 	return cmd
+}
+
+// renderInstance is what `dzo instance render` does: everything the start needs besides the
+// container, with the live mission updated in place. dryRun prints the plan and writes nothing.
+func renderInstance(cmd *cobra.Command, cfg *config.Config, inst *resolve.Instance, dryRun, updatePristine bool) error {
+	// Everything that can be wrong with the rest of the start is found
+	// before the live mission is touched (§C5 F3), dry run included.
+	rf, err := prepareRunfiles(cfg, inst)
+	if err != nil {
+		return err
+	}
+	if !dryRun {
+		if err := prepareInstanceDir(cmd, cfg, inst, updatePristine); err != nil {
+			return err
+		}
+	}
+	src := inst.Mission.Source
+	if _, err := os.Stat(inst.Paths.Pristine); updatePristine || os.IsNotExist(err) {
+		if err := mission.FetchPristine(cmd.Context(), src.Git, src.Ref, src.Path, inst.Paths.Pristine); err != nil {
+			return err
+		}
+	}
+	tree, err := site.LoadTree(cfg.Paths.Site)
+	if err != nil {
+		return err
+	}
+	in := mission.RenderInput{
+		PristineDir: inst.Paths.Pristine, LiveDir: inst.Paths.Live, ManifestPath: inst.Paths.Manifest,
+		FileHistoryDir: inst.Paths.FileHistory, Unmanaged: inst.Mission.Unmanaged, DryRun: dryRun,
+	}
+	if err := addIntegrations(cmd, &in, cfg, tree, inst); err != nil {
+		return err
+	}
+	if inst.Mission.Fallback != "" && inst.Product.Dir != "" {
+		in.FallbackDir = filepath.Join(inst.Product.Dir, "mpmissions", inst.Mission.Fallback)
+	}
+	plan, report, err := mission.Render(in)
+	if err != nil {
+		return err
+	}
+	printPlan(cmd, plan)
+	if dryRun {
+		return nil
+	}
+	printReport(cmd, report)
+	if err := runfiles.Write(rf); err != nil {
+		return err
+	}
+	if inst.AdminEnabled() {
+		// Every render rotates the mod's token (§C13). The mod reads its config once, at
+		// start: rotating it under a running server cuts the server off (HTTP 401 until the
+		// next restart), and a changed config would not apply anyway. The render that starts
+		// the unit (ExecStartPre) runs while the unit is "activating", not "active".
+		if active, _ := (instance.Lifecycle{UserMode: true}).IsActive(cmd.Context(), inst.Name); active {
+			_, _ = fmt.Fprintln(cmd.OutOrStdout(), "dzo-admin config kept (the server is running; it is written at the next start)")
+		} else {
+			if err := serve.WriteModConfig(cfg, inst); err != nil {
+				return fmt.Errorf("writing the dzo-admin config: %w", err)
+			}
+			_, _ = fmt.Fprintln(cmd.OutOrStdout(), "dzo-admin config written")
+		}
+	}
+	// post_render: the live mission is up to date; a failing hook fails the render, so the
+	// unit does not start on a mission the hook rejected.
+	if err := instanceHooks(cmd.Context(), cmd.OutOrStdout(), cfg, inst, hookPostRender, nil, nil); err != nil {
+		return err
+	}
+	return nil
 }
 
 // prepareInstanceDir creates the instance as a btrfs subvolume on its first

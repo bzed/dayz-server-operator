@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"gopkg.in/yaml.v3"
 )
 
 func write(t *testing.T, root, rel, content string) {
@@ -193,5 +195,58 @@ func TestLoadTreeIntegrationsAndOverlays(t *testing.T) {
 	put("integrations/mods/20/integration.yaml", "mod: 20\nname: Typo\nfilez: {}\n")
 	if _, err := LoadTree(dir); err == nil {
 		t.Error("an unknown key in an integration must fail the load")
+	}
+}
+
+func TestRemoveAndMoveMod(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "instance.yaml")
+	src := "name: a  # keep this comment\nmods:\n  - {id: 1}\n  - {id: 2, server: true}\n  - {local: tools, server: true}\n"
+	if err := os.WriteFile(path, []byte(src), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	order := func() string {
+		t.Helper()
+		b, _ := os.ReadFile(path) //nolint:gosec // test fixture
+		var in struct {
+			Mods []ModRef `yaml:"mods"`
+		}
+		if err := yaml.Unmarshal(b, &in); err != nil {
+			t.Fatal(err)
+		}
+		var keys []string
+		for _, m := range in.Mods {
+			keys = append(keys, m.Key())
+		}
+		return strings.Join(keys, ",")
+	}
+	if err := MoveMod(path, "tools", "1", false); err != nil || order() != "tools,1,2" {
+		t.Fatalf("before: %v %s", err, order())
+	}
+	if err := MoveMod(path, "tools", "2", true); err != nil || order() != "1,2,tools" {
+		t.Fatalf("after: %v %s", err, order())
+	}
+	if err := RemoveMod(path, "2"); err != nil || order() != "1,tools" {
+		t.Fatalf("remove: %v %s", err, order())
+	}
+	if b, _ := os.ReadFile(path); !strings.Contains(string(b), "# keep this comment") { //nolint:gosec // test fixture
+		t.Error("the comments of the file must survive")
+	}
+	for name, err := range map[string]error{
+		"unknown mod":  RemoveMod(path, "99"),
+		"move unknown": MoveMod(path, "99", "1", false),
+		"move to none": MoveMod(path, "1", "99", false),
+		"itself":       MoveMod(path, "1", "1", false),
+		"no file":      RemoveMod(filepath.Join(dir, "none.yaml"), "1"),
+	} {
+		if err == nil {
+			t.Errorf("%s must fail", name)
+		}
+	}
+	if err := os.WriteFile(path, []byte("name: a\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := RemoveMod(path, "1"); err == nil {
+		t.Error("a file without a mods list must fail")
 	}
 }

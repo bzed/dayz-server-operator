@@ -56,14 +56,18 @@ Instances
 
    * - ``dzo instance show <name> [--quadlet]``
      - print the resolved configuration (see :doc:`resolved-instance`)
-   * - ``dzo instance create | apply | remove <name>``
-     - create, (re)generate units and timers, remove
-   * - ``dzo instance clone <old> <new>``
-     - copy an instance's data into a new instance
+   * - ``dzo instance create <name>``
+     - first render: subvolume, pristine mission, first live mission (fails if the instance exists)
+   * - ``dzo instance apply <name> [--dry-run]``
+     - (re)generate the units and timers (``remove`` and ``clone`` are not built yet)
    * - ``dzo instance upgrade <name> --build <id> [--wipe] [--dry-run]``
-     - switch to another server build
-   * - ``dzo instance mods <name> list | add | remove | move``
-     - edit the mod list
+     - switch to another installed server build (see :doc:`mods-and-updates`)
+   * - ``dzo instance mods <name> list | move <id> --before | --after <other>``
+     - the mod list and its order (add and remove: ``dzo mod add | remove``)
+   * - ``dzo instance hook <name> <point>``
+     - run the hook scripts of one hook point (the units use it, see :doc:`missions`)
+   * - ``dzo instance shutdown <name>``
+     - ask the server to shut down over RCon and wait (the unit's ``ExecStop``)
    * - ``dzo instance ack-failure <name>``
      - allow starts again after a failed render or crash loop
    * - ``dzo start | stop <name>``
@@ -74,15 +78,17 @@ Instances
      - state, players, health, restarts, last render (what the exporter reports)
    * - ``dzo exporter``
      - serve ``/metrics`` and ``/status`` (the exporter unit runs this)
-   * - ``dzo logs <name> [-f]``
-     - server console
-   * - ``dzo shell <name>`` / ``dzo exec <name> …``
-     - debug container with the same mounts
+   * - ``dzo logs <name> [-f] [-n N]``
+     - server console (the unit's journal)
+   * - ``dzo shell <name> [command…]``
+     - a debug container with the instance's mounts and no network (``--network host`` to reach its ports)
+   * - ``dzo exec <name> <command…>``
+     - a command in the running container
    * - ``dzo rcon exec --instance <name> <command>``
      - one RCon command with the instance's port and password (an interactive
        console and ``dzo rcon rotate`` are not built yet)
-   * - ``dzo wipe <name>``
-     - wipe the world (confirmation and snapshot)
+   * - ``dzo wipe <name> [--restart] [--yes]``
+     - wipe the world (confirmation, destructive snapshot first)
 
 Mods
 ----
@@ -94,8 +100,8 @@ Mods
      - install a mod and add it to an instance
    * - ``dzo mod list [<instance>]``
      - the mods of an instance and their installed generation
-   * - ``dzo mod remove <id> [--instance <name>]``
-     - remove a mod
+   * - ``dzo mod remove <id | local name> --instance <name>``
+     - remove a mod from an instance's list
    * - ``dzo mod update [<instance>]``
      - check and download updates now
    * - ``dzo mod refresh <id>… | --all [--instance <name>] --force``
@@ -113,11 +119,11 @@ Missions and config
 
    * - ``dzo instance render <name> [--dry-run] [--update-pristine]``
      - build the mission and apply it in place, or show what would change
-   * - ``dzo mission init | update | status <name>``
-     - first live mission, fetch new pristine version, state
-   * - ``dzo mission rollback <name> [<time>]``
+   * - ``dzo mission init | update <name>``
+     - first live mission; fetch a new pristine version and show the plan (``status`` is not built yet)
+   * - ``dzo mission rollback <name> [<time>] [--list]``
      - restore managed files from file history
-   * - ``dzo mission reinit <name>``
+   * - ``dzo mission reinit <name> [--yes]``
      - recreate the live mission (confirmation and snapshot)
    * - ``dzo config diff | apply <name>``
      - serverDZ.cfg changes

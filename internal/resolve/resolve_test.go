@@ -330,3 +330,42 @@ func TestHooksBecomeUnitLines(t *testing.T) {
 		t.Errorf("no hooks, no extra lines: %v %v", inst.Quadlet.PreStart, inst.Quadlet.PostStop)
 	}
 }
+
+func TestInstanceIsPinnedToItsBuild(t *testing.T) {
+	cfg, tree, _ := fixture(t, true)
+	if err := os.MkdirAll(filepath.Join(cfg.Paths.Cache, "products", "dayz-stable", "99"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	runtime := filepath.Join(cfg.Paths.Instances, "alpha", "runtime")
+	build := func() (string, string) {
+		inst, err := Resolve(cfg, tree, "alpha")
+		if err != nil {
+			t.Fatal(err)
+		}
+		return inst.Product.Build, inst.Product.Latest
+	}
+	if b, l := build(); b != "100" || l != "100" {
+		t.Errorf("without a pin the newest build runs: %s %s", b, l)
+	}
+	if err := PinBuild(runtime, "99"); err != nil {
+		t.Fatal(err)
+	}
+	if b, l := build(); b != "99" || l != "100" {
+		t.Errorf("pinned: build %s latest %s", b, l)
+	}
+	if err := PinBuild(runtime, "gone"); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := build(); b != "100" {
+		t.Errorf("a pin to a build that is not installed any more falls back to the newest: %s", b)
+	}
+	if err := os.Remove(BuildPinFile(runtime)); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(runtime, "generations.json"), []byte(`{"build":"99","mods":{}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := build(); b != "99" {
+		t.Errorf("an instance deployed before the pin existed stays on its applied build: %s", b)
+	}
+}

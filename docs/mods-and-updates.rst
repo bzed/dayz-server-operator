@@ -161,7 +161,9 @@ you decide when and how each server moves.
 When a new build is available you get a Discord message, a warning from
 ``dzo check remote --updates``, and a note in ``dzo status``. Then:
 
-#. Download the build. Running servers are not affected:
+#. Download the build. Running servers are not affected, and neither is any
+   restart: an instance stays on the build it was deployed with (it is pinned in
+   ``runtime/build``) until you upgrade it:
 
    .. code-block:: sh
 
@@ -184,9 +186,13 @@ When a new build is available you get a Discord message, a warning from
 
       dzo instance upgrade deerisle --build <buildid> [--wipe]
 
-   The instance is announced, stopped, snapshotted, optionally wiped, switched
-   to the new build, rendered and started. Upgrade each instance when it is
-   ready; nothing forces all servers of a product to move at once.
+   The instance is announced (``--now`` skips the countdown), stopped,
+   snapshotted, optionally wiped (after a ``destructive`` snapshot and a
+   confirmation, ``--yes`` answers it), pinned to the new build, rendered and
+   started. The mods' ``requiredAddons`` are checked against the new build first;
+   a missing dependency stops the upgrade. If the unit cannot be switched, the
+   instance stays on its old build. Upgrade each instance when it is ready;
+   nothing forces all servers of a product to move at once.
 
 ``dzo product update <product> --force`` validates and re-copies the current
 build, the server-side equivalent of ``dzo mod refresh``.

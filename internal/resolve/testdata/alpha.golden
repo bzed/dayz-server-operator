@@ -5,6 +5,7 @@ product:
     app_id: 223350
     workshop_app_id: 221100
     build: "100"
+    latest: "100"
     dir: /DATA/cache/products/dayz-stable/100
 mission:
     source:

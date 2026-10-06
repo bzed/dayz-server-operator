@@ -16,6 +16,7 @@
 package resolve
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -53,9 +54,42 @@ const (
 type Product struct {
 	Name           string `yaml:"name"`
 	config.Product `yaml:",inline"`
-	Build          string `yaml:"build,omitempty"` // current generation id, "" if not installed
-	Dir            string `yaml:"dir,omitempty"`
+	// Build is the build the instance runs: the one it is pinned to (runtime/build, written when
+	// the unit is first deployed and by `dzo instance upgrade`), else the newest installed. ""
+	// if none is installed. Latest is the newest installed build; when it differs from Build, a
+	// new build is waiting for an explicit upgrade (§C7: a server build is never applied by itself).
+	Build  string `yaml:"build,omitempty"`
+	Latest string `yaml:"latest,omitempty"`
+	Dir    string `yaml:"dir,omitempty"`
 }
+
+// pinnedBuild reads the build an instance is pinned to: runtime/build, else (an instance deployed
+// before the pin existed) the build in runtime/generations.json.
+func pinnedBuild(runtimeDir string) string {
+	if b, err := os.ReadFile(BuildPinFile(runtimeDir)); err == nil { //nolint:gosec // dzo's own runtime dir
+		return strings.TrimSpace(string(b))
+	}
+	if b, err := os.ReadFile(filepath.Join(runtimeDir, "generations.json")); err == nil { //nolint:gosec // dzo's own runtime dir
+		var g struct {
+			Build string `json:"build"`
+		}
+		if json.Unmarshal(b, &g) == nil {
+			return g.Build
+		}
+	}
+	return ""
+}
+
+// PinBuild pins an instance to a server build (`dzo instance upgrade` does this).
+func PinBuild(runtimeDir, build string) error {
+	if err := os.MkdirAll(runtimeDir, 0o750); err != nil {
+		return err
+	}
+	return os.WriteFile(BuildPinFile(runtimeDir), []byte(build+"\n"), 0o600)
+}
+
+// BuildPinFile is where an instance's pinned server build is recorded, below its runtime dir.
+func BuildPinFile(runtimeDir string) string { return filepath.Join(runtimeDir, "build") }
 
 // Mod is one mod-list entry, in list (= merge precedence) order.
 type Mod struct {
@@ -189,9 +223,14 @@ func Resolve(cfg *config.Config, t *site.Tree, name string) (*Instance, error) {
 		}
 	}
 
-	build, dir, err := current(product.ProductStore(cfg.Paths.Cache, raw.Product))
+	store := product.ProductStore(cfg.Paths.Cache, raw.Product)
+	build, dir, err := current(store)
 	if err != nil {
 		return nil, err
+	}
+	inst.Product.Latest = build
+	if pin := pinnedBuild(inst.Paths.Runtime); pin != "" && isDir(filepath.Join(store.Root, pin)) {
+		build, dir = pin, filepath.Join(store.Root, pin)
 	}
 	inst.Product.Build, inst.Product.Dir = build, dir
 	if build == "" {

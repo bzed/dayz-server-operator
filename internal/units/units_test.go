@@ -263,8 +263,24 @@ func TestPendingIsWhatChangedSinceTheUnitWasWritten(t *testing.T) {
 	}
 	e.opts.Deploy = []string{"x"}
 	e.sync(false)
+	if p := Pending(inst()); strings.Join(p, ",") != "build" {
+		t.Errorf("deploying brings the mods up to date, the build waits for an upgrade: %v", p)
+	}
+	if g, _ := Applied(inst()); g.Build != "1" {
+		t.Errorf("the unit still runs build 1: %+v", g)
+	}
+	if i := inst(); i.Product.Build != "1" || i.Product.Latest != "2" {
+		t.Errorf("pinned %s, latest %s", i.Product.Build, i.Product.Latest)
+	}
+	if err := resolve.PinBuild(inst().Paths.Runtime, "2"); err != nil {
+		t.Fatal(err)
+	}
+	e.sync(false)
 	if p := Pending(inst()); len(p) != 0 {
-		t.Errorf("deploying brings the unit to what is current: %v", p)
+		t.Errorf("after the upgrade nothing is pending: %v", p)
+	}
+	if g, _ := Applied(inst()); g.Build != "2" {
+		t.Errorf("the unit runs build 2 now: %+v", g)
 	}
 }
 

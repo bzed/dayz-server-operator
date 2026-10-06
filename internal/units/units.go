@@ -151,7 +151,8 @@ func Pending(inst *resolve.Instance) []string {
 	}
 	now := GensOf(inst)
 	var out []string
-	if applied.Build != "" && now.Build != applied.Build {
+	// A server build is pinned per instance: a newer installed build waits for `dzo instance upgrade`.
+	if inst.Product.Latest != "" && inst.Product.Latest != inst.Product.Build {
 		out = append(out, "build")
 	}
 	for name, gen := range now.Mods {
@@ -172,7 +173,14 @@ func Record(inst *resolve.Instance) error {
 	if err := os.MkdirAll(inst.Paths.Runtime, 0o750); err != nil {
 		return err
 	}
-	return writeAtomic(gensFile(inst.Paths.Runtime), append(b, '\n'), 0o640)
+	if err := writeAtomic(gensFile(inst.Paths.Runtime), append(b, '\n'), 0o640); err != nil {
+		return err
+	}
+	// Pin the build the unit runs, so that a later `dzo product update` does not move the instance.
+	if inst.Product.Build != "" {
+		return writeAtomic(resolve.BuildPinFile(inst.Paths.Runtime), []byte(inst.Product.Build+"\n"), 0o640)
+	}
+	return nil
 }
 
 func generated(content string) string { return Header + content }

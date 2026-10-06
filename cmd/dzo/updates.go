@@ -114,7 +114,9 @@ func deployFunc(cmd *cobra.Command, cfg *config.Config, configPath, name string,
 		if err != nil {
 			return err
 		}
-		pending := units.Pending(inst)
+		// A newer server build is not deployed by a restart: the instance is pinned to its build
+		// until `dzo instance upgrade`, so it is not an update this restart applies.
+		pending := slices.DeleteFunc(units.Pending(inst), func(k string) bool { return k == updates.BuildKey })
 		if p := pending; len(p) > 0 {
 			// pre_update: the instance is down and nothing has been changed yet; a failing hook
 			// aborts, and the restart starts the server again as it was.
@@ -122,9 +124,6 @@ func deployFunc(cmd *cobra.Command, cfg *config.Config, configPath, name string,
 				return fmt.Errorf("%w, nothing was changed", err)
 			}
 			reason := backup.ModUpdate
-			if slices.Contains(p, updates.BuildKey) {
-				reason = backup.Update
-			}
 			if err := backup.Check(cfg, inst); err != nil {
 				_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "warning: no snapshot before the update: %v\n", err)
 			} else {
@@ -464,33 +463,7 @@ func newUnitsCmd() *cobra.Command {
 			"until it is restarted (dzo restart); --deploy <name> (or *) writes the new generations now.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.Load(configPath)
-			if err != nil {
-				return err
-			}
-			tree, err := site.LoadTree(cfg.Paths.Site)
-			if err != nil {
-				return err
-			}
-			o := unitOptions(cfg, configPath, quadletDir, unitDir)
-			o.Deploy = deploy
-			res, err := units.Sync(cmd.Context(), o, tree, instance.Lifecycle{UserMode: true}, dry)
-			out := cmd.OutOrStdout()
-			verb := "wrote"
-			if dry {
-				verb = "would write"
-			}
-			for _, w := range res.Written {
-				_, _ = fmt.Fprintf(out, "%s %s\n", verb, w)
-			}
-			for _, r := range res.Removed {
-				_, _ = fmt.Fprintf(out, "removed %s\n", r)
-			}
-			printWarnings(cmd.ErrOrStderr(), res.Warnings)
-			if err == nil && len(res.Written) == 0 && len(res.Removed) == 0 {
-				_, _ = fmt.Fprintln(out, "units are up to date")
-			}
-			return err
+			return syncUnits(cmd, configPath, quadletDir, unitDir, deploy, dry)
 		},
 	}
 	configFlag(sync, &configPath)

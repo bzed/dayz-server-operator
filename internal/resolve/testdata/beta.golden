@@ -5,6 +5,7 @@ product:
     app_id: 1042420
     workshop_app_id: 221100
     build: "200"
+    latest: "200"
     dir: /DATA/cache/products/dayz-experimental/200
 mission:
     source:

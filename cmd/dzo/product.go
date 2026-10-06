@@ -23,6 +23,6 @@ func newModCmd() *cobra.Command {
 		Short: "Workshop mod downloads and dependency checks (§C7)",
 	}
 	cmd.AddCommand(newModCfgPatchesCmd(), newModDepsCmd(),
-		newModListCmd(), newModAddCmd(), newModUpdateCmd(), newModRefreshCmd())
+		newModListCmd(), newModAddCmd(), newModUpdateCmd(), newModRefreshCmd(), newModRemoveCmd())
 	return cmd
 }
