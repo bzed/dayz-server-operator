@@ -236,3 +236,10 @@ automatically. While Steam wants a login nothing is downloaded or restarted.
 ``dzo restart <name>`` does the same cycle by hand; ``--cancel`` ends a running
 countdown and unlocks the server. ``dzo update gc`` removes generations nobody
 uses any more.
+
+Mods and the experimental server
+--------------------------------
+
+There are no experimental workshop mods. Both products use the stable workshop
+(``workshop_app_id: 221100``), so an experimental instance installs its mods from
+the same workshop items as a stable one and shares their cache generations.

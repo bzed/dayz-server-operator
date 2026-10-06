@@ -266,3 +266,12 @@ func TestExporterConfig(t *testing.T) {
 		}
 	}
 }
+
+// There are no experimental workshop mods: every product takes its mods from
+// the stable workshop (app 221100), so the mod cache is shared.
+func TestProductsShareStableWorkshop(t *testing.T) {
+	c := Default()
+	if c.Products["dayz-experimental"].WorkshopAppID != 221100 || c.Products["dayz-stable"].WorkshopAppID != 221100 {
+		t.Fatalf("workshop app ids: %+v", c.Products)
+	}
+}
