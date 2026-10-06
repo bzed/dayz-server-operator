@@ -97,15 +97,15 @@ Volume=/usr/bin/dzo:/usr/local/bin/dzo:ro
 Volume=/DATA/cache/products/dayz-stable/100:/dayz:O
 Volume=/DATA/instances/alpha/runtime/keys:/dayz/keys:ro
 Volume=/DATA/instances/alpha/mpmissions:/dayz/mpmissions
-Volume=/DATA/instances/alpha/profiles:/profiles
+Volume=/DATA/instances/alpha/profiles:/dayz/profiles
 Volume=/DATA/instances/alpha/storage/dayzOffline.chernarusplus:/storage
-Volume=/DATA/instances/alpha/runtime/serverDZ.cfg:/profiles/serverDZ.cfg:ro
+Volume=/DATA/instances/alpha/runtime/serverDZ.cfg:/dayz/profiles/serverDZ.cfg:ro
 Volume=/DATA/cache/workshop/221100/1559212036/111:/dayz/@1559212036:O
 Volume=/DATA/cache/workshop/221100/1828439124/222:/dayz/@1828439124:O
 Volume=/DATA/instances/alpha/runtime/stdin:/stdin:ro
 Environment=LANG=C
 WorkingDir=/dayz
-Exec=/bin/sh -c "exec './DayZServer' '-config=/profiles/serverDZ.cfg' '-port=2302' '-profiles=/profiles' '-storage=/storage' '-BEpath=/profiles/battleye' '-mod=@1559212036' '-servermod=@1828439124' '-cpuCount=4' '-limitFPS=60' '-netlog' </stdin"
+Exec=/bin/sh -c "exec './DayZServer' '-config=/dayz/profiles/serverDZ.cfg' '-port=2302' '-profiles=/dayz/profiles' '-storage=/storage' '-BEpath=/dayz/profiles/battleye' '-mod=@1559212036' '-servermod=@1828439124' '-cpuCount=4' '-limitFPS=60' '-netlog' </stdin"
 HealthCmd=/usr/local/bin/dzo health live --query 127.0.0.1:27016
 HealthInterval=1m
 HealthRetries=5

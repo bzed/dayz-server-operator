@@ -243,3 +243,28 @@ Mods and the experimental server
 There are no experimental workshop mods. Both products use the stable workshop
 (``workshop_app_id: 221100``), so an experimental instance installs its mods from
 the same workshop items as a stable one and shares their cache generations.
+
+Running DayZ Expansion on 1.30
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+DayZ Expansion Experimental 1.9.74 is the release to test under DayZ Experimental 1.30. Its
+authors give two requirements:
+
+* Use **CF-Test** instead of CF, and **COT-Test** instead of COT if you use COT. These are
+  separate workshop items: put their ids in the ``mods`` list of the experimental instance in
+  place of the stable ones. A stable instance keeps the normal CF and COT.
+* The **profiles folder has to be inside the server executable's folder.** Vanilla 1.30 has a
+  ``FindFile`` bug: it ignores ``$profile:`` and searches the server folder instead, so a mod
+  does not find its files when the profiles folder is somewhere else. A symlink or a bind mount
+  into the server folder is fine.
+
+dzo already satisfies the second point for every instance: the container mounts the instance's
+``profiles/`` folder at ``/dayz/profiles``, the server folder is ``/dayz``, and the server starts with
+``-profiles=/dayz/profiles``, ``-config=/dayz/profiles/serverDZ.cfg`` and ``-BEpath=/dayz/profiles/battleye``. Nothing
+has to be configured. Check it on a running instance:
+
+.. code-block:: sh
+
+   dzo exec <name> ls -d /dayz/profiles
+   dzo exec <name> sh -c 'tr "\0" " " < /proc/1/cmdline'
+

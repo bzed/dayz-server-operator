@@ -122,7 +122,7 @@ change it. Findings, on stable and experimental:
   Giving the mod a writable mount fixes it, so the cause is the read-only flag.
 * A podman overlay (``:O``) is writable for the server and leaves the generation untouched. dzo uses it
   for the build and for every mod.
-* Persistence is not written below ``/dayz``: with ``-storage=/storage`` and ``-profiles=/profiles`` the
+* Persistence is not written below ``/dayz``: with ``-storage=/storage`` and ``-profiles=/dayz/profiles`` the
   server writes only there.
 * Time to ready on the host: about 30 seconds from start to "healthy" on stable, 45 seconds on
   experimental (``dzo instance restart`` returns after about 45 seconds). Startup timeouts of a few

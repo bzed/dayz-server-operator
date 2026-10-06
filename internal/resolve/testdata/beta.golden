@@ -90,15 +90,15 @@ Volume=/usr/bin/dzo:/usr/local/bin/dzo:ro
 Volume=/DATA/cache/products/dayz-experimental/200:/dayz:O
 Volume=/DATA/instances/beta/runtime/keys:/dayz/keys:ro
 Volume=/DATA/instances/beta/mpmissions:/dayz/mpmissions
-Volume=/DATA/instances/beta/profiles:/profiles
+Volume=/DATA/instances/beta/profiles:/dayz/profiles
 Volume=/DATA/instances/beta/storage/empty.beta:/storage
-Volume=/DATA/instances/beta/runtime/serverDZ.cfg:/profiles/serverDZ.cfg:ro
+Volume=/DATA/instances/beta/runtime/serverDZ.cfg:/dayz/profiles/serverDZ.cfg:ro
 Volume=/DATA/cache/local/dzo-admin/abcd:/dayz/@dzo-admin:O
 Volume=/var/lib/GeoIP:/var/lib/GeoIP:ro
 Volume=/DATA/instances/beta/runtime/stdin:/stdin:ro
 Environment=LANG=C
 WorkingDir=/dayz
-Exec=/bin/sh -c "exec './DayZServer' '-config=/profiles/serverDZ.cfg' '-port=2402' '-profiles=/profiles' '-storage=/storage' '-BEpath=/profiles/battleye' '-servermod=@dzo-admin' </stdin"
+Exec=/bin/sh -c "exec './DayZServer' '-config=/dayz/profiles/serverDZ.cfg' '-port=2402' '-profiles=/dayz/profiles' '-storage=/storage' '-BEpath=/dayz/profiles/battleye' '-servermod=@dzo-admin' </stdin"
 HealthCmd=/usr/local/bin/dzo health live --query 127.0.0.1:27116
 HealthInterval=1m
 HealthRetries=5

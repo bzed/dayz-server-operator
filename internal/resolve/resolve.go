@@ -436,9 +436,11 @@ func buildQuadlet(inst *Instance) quadlet.ContainerSpec {
 		{Source: inst.Product.Dir, Destination: "/dayz", Overlay: true},
 		{Source: filepath.Join(rt, "keys"), Destination: "/dayz/keys", ReadOnly: true},
 		{Source: filepath.Dir(inst.Paths.Manifest), Destination: "/dayz/mpmissions"},
-		{Source: inst.Paths.Profiles, Destination: "/profiles"},
+		// Inside the server folder: vanilla 1.30's FindFile only finds files under $profile:
+		// when the profiles folder is below the server executable's folder (a bind mount is fine).
+		{Source: inst.Paths.Profiles, Destination: "/dayz/profiles"},
 		{Source: inst.Paths.Storage, Destination: "/storage"},
-		{Source: filepath.Join(rt, "serverDZ.cfg"), Destination: "/profiles/serverDZ.cfg", ReadOnly: true},
+		{Source: filepath.Join(rt, "serverDZ.cfg"), Destination: "/dayz/profiles/serverDZ.cfg", ReadOnly: true},
 	}
 	var clientMods, serverMods []string
 	for _, m := range inst.Mods {
@@ -458,11 +460,11 @@ func buildQuadlet(inst *Instance) quadlet.ContainerSpec {
 
 	exec := []string{
 		"./DayZServer",
-		"-config=/profiles/serverDZ.cfg",
+		"-config=/dayz/profiles/serverDZ.cfg",
 		"-port=" + strconv.Itoa(inst.Ports.Game),
-		"-profiles=/profiles",
+		"-profiles=/dayz/profiles",
 		"-storage=/storage",
-		"-BEpath=/profiles/battleye",
+		"-BEpath=/dayz/profiles/battleye",
 	}
 	if len(clientMods) > 0 {
 		exec = append(exec, "-mod="+strings.Join(clientMods, ";"))
