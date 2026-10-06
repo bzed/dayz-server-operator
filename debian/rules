@@ -11,6 +11,8 @@
 # proxy.
 
 export CGO_ENABLED = 0
+# The build tree is not a git checkout the builder owns (a CI container, a source package).
+export GOFLAGS = -buildvcs=false
 
 # Force the plain "makefile" buildsystem: without this, dh's auto-detection
 # picks "golang" on the presence of go.mod and pulls in dh-golang's
