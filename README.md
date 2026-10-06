@@ -32,7 +32,9 @@ This replaces a fleet of ad-hoc bash scripts (`dzpodman`, `bercon-cli`,
 servers, with one tool, one config model, and a test suite. The full
 design — decisions, legacy analysis, architecture and the phased roadmap —
 lives in [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md); user-facing
-documentation is a [Sphinx site](docs/) under `docs/`.
+documentation is a [Sphinx site](docs/) under `docs/`. For a quick start there is a
+[two-page cheat sheet (PDF)](docs/cheatsheet/dzo-cheatsheet.pdf) with the setup steps
+and the everyday commands.
 
 > **Status:** Phase 1 (core + CLI) is substantially built: every package
 > below is implemented and tested, up to and including instance lifecycle
@@ -109,6 +111,9 @@ $ sudo apt install ../dzo_*.deb
 ```
 
 ## Usage
+
+The [cheat sheet](docs/cheatsheet/dzo-cheatsheet.pdf) covers the setup and the everyday
+commands on two A4 pages; the examples below are the basics.
 
 ```console
 $ dzo version

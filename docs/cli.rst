@@ -5,7 +5,8 @@ Command reference
 =================
 
 All commands run as the service user (``sudo -iu dayz``). ``dzo <command>
---help`` shows every option, and the man pages have the full reference.
+--help`` shows every option, and the man pages have the full reference. The most used
+commands are on the :download:`cheat sheet <cheatsheet/dzo-cheatsheet.pdf>` (two A4 pages).
 
 Setup and Steam
 ---------------

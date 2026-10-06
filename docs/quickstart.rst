@@ -97,8 +97,8 @@ players and restarts with the new mod generations. See :doc:`operations`.
 What next
 ---------
 
-* A two-page cheat sheet of the commands: ``/usr/share/doc/dzo/dzo-cheatsheet.pdf``
-  (``docs/cheatsheet/`` in the source)
+* The :download:`cheat sheet (PDF) <cheatsheet/dzo-cheatsheet.pdf>`: these steps and the everyday
+  commands on two A4 pages. The package installs it as ``/usr/share/doc/dzo/dzo-cheatsheet.pdf``.
 * Mod integrations and mission overlays: :doc:`missions`
 * How the server is stopped and restarted: :ref:`stopping-the-server`
 * Automatic mod updates and server upgrades: :doc:`mods-and-updates`

@@ -22,6 +22,8 @@ Where to start
 
 * New to dzo: read :doc:`overview`, then follow :doc:`installation` and
   :doc:`quickstart`.
+* In a hurry: the :download:`two-page cheat sheet (PDF) <cheatsheet/dzo-cheatsheet.pdf>` has
+  the setup steps and the everyday commands.
 * Coming from ``dayzdockerserver``: see :doc:`migration`.
 * Something is broken: see :doc:`troubleshooting`.
 
