@@ -31,7 +31,7 @@ func TestGetFileDetailsSuccess(t *testing.T) {
 				"result": 1,
 				"resultcount": 1,
 				"publishedfiledetails": [
-					{"publishedfileid": "111111", "result": 1, "title": "Some Mod", "file_size": 12345, "time_updated": 1700000000}
+					{"publishedfileid": "111111", "result": 1, "title": "Some Mod", "file_size": "12345", "time_updated": 1700000000}
 				]
 			}
 		}`))

@@ -78,11 +78,11 @@ func (c *FileDetailsClient) GetFileDetails(ctx context.Context, ids []uint64) (m
 			Result               int `json:"result"`
 			ResultCount          int `json:"resultcount"`
 			PublishedFileDetails []struct {
-				PublishedFileID string `json:"publishedfileid"`
-				Result          int    `json:"result"`
-				Title           string `json:"title"`
-				FileSize        int64  `json:"file_size"`
-				TimeUpdated     int64  `json:"time_updated"`
+				PublishedFileID string      `json:"publishedfileid"`
+				Result          int         `json:"result"`
+				Title           string      `json:"title"`
+				FileSize        json.Number `json:"file_size"` // the API sends a string for some items and a number for others
+				TimeUpdated     int64       `json:"time_updated"`
 			} `json:"publishedfiledetails"`
 		} `json:"response"`
 	}
@@ -96,11 +96,12 @@ func (c *FileDetailsClient) GetFileDetails(ctx context.Context, ids []uint64) (m
 		if err != nil {
 			return nil, fmt.Errorf("product: response publishedfileid %q: %w", d.PublishedFileID, err)
 		}
+		size, _ := d.FileSize.Int64() // a missing or odd size is not an error: it only serves as a sanity check
 		out[id] = FileDetails{
 			PublishedFileID: id,
 			Result:          d.Result,
 			Title:           d.Title,
-			FileSize:        d.FileSize,
+			FileSize:        size,
 			TimeUpdated:     d.TimeUpdated,
 		}
 	}
