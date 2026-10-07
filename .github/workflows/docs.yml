@@ -62,7 +62,9 @@ jobs:
         run: apt-get install -y --no-install-recommends build-essential debhelper python3-sphinx dh-sequence-sphinxdoc reprepro gnupg
       - name: Snapshot version
         # <upcoming release>~git<commits>.<sha>: older than the release, newer than earlier snapshots
-        run: scripts/debian-snapshot.sh
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          scripts/debian-snapshot.sh
       - name: dpkg-buildpackage
         run: dpkg-buildpackage -us -uc -b
       - name: Build and sign the repository
