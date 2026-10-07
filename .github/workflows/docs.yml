@@ -28,13 +28,17 @@ jobs:
     name: Build docs
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # In a trixie container like the apt job: apt on the hosted Ubuntu runner hangs
+    container:
+      image: debian:trixie
     steps:
+      - name: Install git and make
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends git ca-certificates make
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Install Sphinx
-        env:
-          DEBIAN_FRONTEND: noninteractive
-          NEEDRESTART_MODE: a
-        run: sudo -E apt-get update && sudo -E apt-get install -y --no-install-recommends python3-sphinx
+        run: apt-get install -y --no-install-recommends python3-sphinx
       - name: Build
         run: make docs
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
