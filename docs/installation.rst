@@ -47,13 +47,14 @@ key for this one source.
    apt install dzo
 
 ``apt upgrade`` then keeps dzo current. The repository holds the latest build of
-``main`` only. Its version is a snapshot of the upcoming release:
+``main`` only. Its version is a snapshot on top of the latest release:
 ``scripts/debian-snapshot.sh`` adds a changelog entry
-``<version at the top of debian/changelog>~git<commits since the last tag>.<sha>-1``
-before the build. ``~`` sorts before the release, so a snapshot is always older
-than the release it leads to and newer than the earlier snapshots. Bump
-``debian/changelog`` to the next version right after cutting a release, so the
-snapshots stay in front of the last one.
+``<version at the top of debian/changelog>+git<commits since the last tag>.<sha>``
+before the build. The top entry of ``debian/changelog`` is always the latest
+release; the upcoming one is added when it is cut. ``+`` sorts after that release
+and before the next one (``0.1.0-1+git5.abc`` is older than ``0.1.0-2`` and
+``0.2.0-1``), and the commit count only grows, so snapshots stay in order. The
+commit of a release itself is built as it is.
 
 Maintaining the repository
 ~~~~~~~~~~~~~~~~~~~~~~~~~~

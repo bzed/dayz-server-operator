@@ -69,7 +69,7 @@ jobs:
       - name: Install packaging tools
         run: apt-get install -y --no-install-recommends build-essential debhelper python3-sphinx dh-sequence-sphinxdoc reprepro gnupg
       - name: Snapshot version
-        # <upcoming release>~git<commits>.<sha>: older than the release, newer than earlier snapshots
+        # <latest release>+git<commits>.<sha>: newer than the release, older than the next one
         run: |
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
           scripts/debian-snapshot.sh
