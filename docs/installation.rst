@@ -21,10 +21,64 @@ Recommended, not required:
 * Mount the btrfs filesystem with ``user_subvol_rm_allowed``. dzo can then delete
   old snapshots instantly. Without it, deletion still works but takes longer.
 
+Add the apt repository
+----------------------
+
+The package is published in a signed apt repository on GitHub Pages. It is
+built from ``main`` for Debian 13 (trixie), amd64. The repository is signed with
+a key of its own (``dzo apt repository <bernd@bzed.de>``, fingerprint
+``184C DDC4 96A9 C739 D10F  67B0 FE4E E034 4431 4050``); apt only trusts that
+key for this one source.
+
+.. code-block:: sh
+
+   install -d -m 0755 /etc/apt/keyrings
+   curl -fsSLo /etc/apt/keyrings/dzo-archive-keyring.asc \
+       https://bzed.github.io/dayz-server-operator/apt/dzo-archive-keyring.asc
+   gpg --show-keys --with-fingerprint /etc/apt/keyrings/dzo-archive-keyring.asc  # compare the fingerprint
+   cat >/etc/apt/sources.list.d/dzo.sources <<'EOF'
+   Types: deb
+   URIs: https://bzed.github.io/dayz-server-operator/apt
+   Suites: trixie
+   Components: main
+   Signed-By: /etc/apt/keyrings/dzo-archive-keyring.asc
+   EOF
+   apt update
+   apt install dzo
+
+``apt upgrade`` then keeps dzo current. The repository holds the version of the
+current ``debian/changelog`` only, so a new version appears when the changelog is
+bumped.
+
+Maintaining the repository
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The ``Docs`` workflow (``.github/workflows/docs.yml``) builds the package in a
+trixie container, runs ``scripts/build-apt-repo.sh`` (reprepro, configured in
+``apt/conf/distributions``) and publishes the result under ``/apt/`` next to the
+documentation. The signing key is the repository secret ``APT_GPG_PRIVATE_KEY``
+(an ASCII-armored secret key without a passphrase). The public half is
+``apt/dzo-archive-keyring.asc``; the workflow fails if the two do not match.
+
+To replace the key, create one in a throwaway GnuPG home, never in your own
+keyring:
+
+.. code-block:: sh
+
+   export GNUPGHOME=$(mktemp -d)
+   gpg --batch --passphrase '' --quick-gen-key "dzo apt repository <bernd@bzed.de>" ed25519 sign never
+   gpg --armor --export > apt/dzo-archive-keyring.asc
+   gpg --armor --export-secret-keys | gh secret set APT_GPG_PRIVATE_KEY
+   rm -rf "$GNUPGHOME"
+
+Then commit the new public key and update the fingerprint here and in the
+README. Users have to fetch the new key.
+
 Install the package
 -------------------
 
-dzo is shipped as a Debian package, ``dzo``. It pulls in ``podman``, ``passt``,
+dzo is shipped as a Debian package, ``dzo``, from the repository above or as a
+``.deb`` file from the CI artifacts. It pulls in ``podman``, ``passt``,
 ``git``, ``uidmap`` and the web libraries from Debian. steamcmd is not installed
 on the host. ``dzo setup`` builds a steamcmd container image, but the commands
 that download servers and mods still run the ``steamcmd`` they find in the

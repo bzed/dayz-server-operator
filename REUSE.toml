@@ -48,3 +48,9 @@ SPDX-License-Identifier = "AGPL-3.0-or-later AND OFL-1.1"
 path = "testmods/**/$PBOPREFIX$"
 SPDX-FileCopyrightText = "2026 Bernd Zeimetz <bernd@bzed.de>"
 SPDX-License-Identifier = "AGPL-3.0-or-later"
+
+# The apt repository: reprepro configuration and the public signing key.
+[[annotations]]
+path = ["apt/conf/distributions", "apt/dzo-archive-keyring.asc"]
+SPDX-FileCopyrightText = "2026 Bernd Zeimetz <bernd@bzed.de>"
+SPDX-License-Identifier = "AGPL-3.0-or-later"

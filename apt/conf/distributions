@@ -1,0 +1,8 @@
+Origin: dzo
+Label: dzo
+Codename: trixie
+Suite: stable
+Architectures: amd64
+Components: main
+Description: dzo, the DayZ server operator
+SignWith: yes

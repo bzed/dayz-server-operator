@@ -89,6 +89,23 @@ and the everyday commands.
 
 ## Installing
 
+**From the apt repository** (Debian trixie, amd64; signed, rebuilt from `main`):
+
+```console
+$ sudo install -d -m 0755 /etc/apt/keyrings
+$ sudo curl -fsSLo /etc/apt/keyrings/dzo-archive-keyring.asc https://bzed.github.io/dayz-server-operator/apt/dzo-archive-keyring.asc
+$ sudo tee /etc/apt/sources.list.d/dzo.sources <<'EOF'
+Types: deb
+URIs: https://bzed.github.io/dayz-server-operator/apt
+Suites: trixie
+Components: main
+Signed-By: /etc/apt/keyrings/dzo-archive-keyring.asc
+EOF
+$ sudo apt update && sudo apt install dzo
+```
+
+The key's fingerprint is `184C DDC4 96A9 C739 D10F  67B0 FE4E E034 4431 4050`.
+
 **From a release build:** grab the `.deb` or a static binary from the
 [latest CI run's artifacts](https://github.com/bzed/dayz-server-operator/actions/workflows/ci.yml)
 (tagged releases will publish these automatically once cut).
