@@ -37,6 +37,43 @@ Modules are vendored, so builds work offline.
    make docs       # this documentation (needs python3-sphinx)
    make deb        # Debian package
 
+.. _apt-repository:
+
+The apt repository
+~~~~~~~~~~~~~~~~~~
+
+The ``Docs`` workflow (``.github/workflows/docs.yml``) builds the package in a
+trixie container, runs ``scripts/build-apt-repo.sh`` (reprepro, configured in
+``apt/conf/distributions``) and publishes the result under ``/apt/`` next to the
+documentation. The repository holds the latest build of ``main`` only.
+
+Versions: the top entry of ``debian/changelog`` is always the latest release; the
+upcoming one is added when it is cut. For a build of ``main``,
+``scripts/debian-snapshot.sh`` adds a changelog entry
+``<version at the top of debian/changelog>+git<commits since the last tag>.<sha>``
+before the build. ``+`` sorts after that release
+and before the next one (``0.1.0-1+git5.abc`` is older than ``0.1.0-2`` and
+``0.2.0-1``), and the commit count only grows, so snapshots stay in order. The
+commit of a release itself is built as it is.
+
+Signing: the key is the repository secret ``APT_GPG_PRIVATE_KEY`` (an
+ASCII-armored secret key without a passphrase). The public half is
+``apt/dzo-archive-keyring.asc``; the workflow fails if the two do not match.
+
+To replace the key, create one in a throwaway GnuPG home, never in your own
+keyring:
+
+.. code-block:: sh
+
+   export GNUPGHOME=$(mktemp -d)
+   gpg --batch --passphrase '' --quick-gen-key "dzo apt repository <bernd@bzed.de>" ed25519 sign never
+   gpg --armor --export > apt/dzo-archive-keyring.asc
+   gpg --armor --export-secret-keys | gh secret set APT_GPG_PRIVATE_KEY
+   rm -rf "$GNUPGHOME"
+
+Then commit the new public key and update the fingerprint here and in the
+README. Users have to fetch the new key.
+
 Building and testing the servermod
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
