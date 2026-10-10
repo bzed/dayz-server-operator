@@ -40,7 +40,7 @@ What it converts:
    * - ``parameters=`` of ``server/bin/dz``
      - ``params`` (``cpuCount``, ``limitFPS``, the other flags as ``extra``)
    * - ``template=`` and ``map.env``
-     - ``map``; ``mission_source`` and ``fallback_mission`` for a map that is not one of the
+     - ``map``; ``mission_source`` for a map that is not one of the
        ``dayzOffline.<map>`` folders of Bohemia's repository
    * - ``files/mods/@<Name>`` links
      - a **candidate** ``mods`` list, every entry marked ``# review: active?``

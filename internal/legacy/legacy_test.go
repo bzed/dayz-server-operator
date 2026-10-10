@@ -120,11 +120,11 @@ func TestConvertBuildsAValidSite(t *testing.T) {
 	if len(inst.Overlays) != 1 || inst.Overlays[0] != "login-times" {
 		t.Errorf("overlays: %v", inst.Overlays)
 	}
-	if inst.MissionSource.Git != "" || inst.FallbackMission != "" {
+	if inst.MissionSource.Git != "" {
 		t.Errorf("a dayzOffline map uses the default source: %+v", inst.MissionSource)
 	}
 	b := tree.Instances["b"]
-	if b.MissionSource.Git != "https://example.invalid/Deer.git" || b.MissionSource.Path != "empty.deerisle" || b.FallbackMission == "" {
+	if b.MissionSource.Git != "https://example.invalid/Deer.git" || b.MissionSource.Path != "empty.deerisle" || b.FallbackMission != "" {
 		t.Errorf("b mission: %+v", b)
 	}
 	if len(b.Hooks.PreStart) != 1 {

@@ -85,7 +85,6 @@ func convertInstance(out map[string][]byte, rep *report, b *branch, o Options) {
 			fmt.Fprintf(&y, "mission_source: {git: %s, ref: HEAD, path: %s}  # review: the legacy map.env followed the default branch\n", yamlQuote(git), yamlQuote(p))
 			rep.add(n, "the mission %s comes from %s (the legacy map.env); ref is HEAD, pin a tag or commit if you want updates to be explicit", template, git)
 		}
-		fmt.Fprintf(&y, "fallback_mission: dayzOffline.chernarusplus  # review: files the map lacks come from Chernarus, as in the legacy start\n")
 	} else {
 		rep.add(n, "the mission comes from the default source: the %s folder of Bohemia's Central Economy repository", template)
 	}
