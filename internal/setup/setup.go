@@ -17,6 +17,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 
@@ -51,7 +52,10 @@ type Options struct {
 	ImagesDir string // default DefaultImagesDir
 	UnitDir   string // systemd user unit directory, default ~/.config/systemd/user
 	DzoBinary string // what the refresh timer runs, default config.yaml binary
-	DryRun    bool
+	// ConfigPath is the config.yaml given with --config when it is not the default; the refresh
+	// timer then runs with it, as it does with a non-default ImagesDir.
+	ConfigPath string
+	DryRun     bool
 	// ImagesOnly rebuilds the images (pulling the base image again), prunes
 	// the old ones, and does nothing else. The weekly timer runs it.
 	ImagesOnly bool
@@ -262,6 +266,27 @@ func (r *runner) site(ctx context.Context) {
 	}
 }
 
+// refreshCommand is the timer's command line: the unit has no way to guess a non-default config or
+// images directory, so they are written into it.
+func (r *runner) refreshCommand(bin string) string {
+	cmd := bin + " setup --images-only"
+	if r.ConfigPath != "" {
+		cmd += " --config " + unitArg(r.ConfigPath)
+	}
+	if r.ImagesDir != DefaultImagesDir {
+		cmd += " --images-dir " + unitArg(r.ImagesDir)
+	}
+	return cmd
+}
+
+// unitArg quotes an argument for a systemd ExecStart line when it needs it.
+func unitArg(s string) string {
+	if strings.ContainsAny(s, " \t\"'\\;$%") {
+		return strconv.Quote(strings.ReplaceAll(s, "%", "%%"))
+	}
+	return s
+}
+
 func (r *runner) refreshTimer(ctx context.Context) {
 	dir := r.UnitDir
 	if dir == "" {
@@ -281,7 +306,7 @@ func (r *runner) refreshTimer(ctx context.Context) {
 	}
 	t := instance.TimerUnit{
 		Name: refreshTimer, Description: "Rebuild the dzo container images (security updates)",
-		ExecStart: bin + " setup --images-only", OnCalendar: []string{"weekly"}, Persistent: true,
+		ExecStart: r.refreshCommand(bin), OnCalendar: []string{"weekly"}, Persistent: true,
 	}
 	if r.DryRun {
 		r.say("todo", "install %s.timer in %s and enable it", refreshTimer, dir)

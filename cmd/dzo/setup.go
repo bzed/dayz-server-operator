@@ -26,9 +26,13 @@ func newSetupCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return setup.Run(ctxOf(cmd), setup.Options{
+			opts := setup.Options{
 				Cfg: cfg, ImagesDir: imagesDir, UnitDir: unitDir, DryRun: dryRun, ImagesOnly: imagesOnly, Out: cmd.OutOrStdout(),
-			})
+			}
+			if configPath != defaultConfigPath {
+				opts.ConfigPath = configPath
+			}
+			return setup.Run(ctxOf(cmd), opts)
 		},
 	}
 	configFlag(cmd, &configPath)

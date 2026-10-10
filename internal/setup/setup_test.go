@@ -277,3 +277,23 @@ func TestPathsProblems(t *testing.T) {
 		}
 	}
 }
+
+// The refresh timer runs without the options of the setup run that wrote it, so a non-default
+// config or images directory has to be in its command line.
+func TestRefreshCommand(t *testing.T) {
+	cases := []struct {
+		name string
+		r    runner
+		want string
+	}{
+		{"defaults", runner{Options: Options{ImagesDir: DefaultImagesDir}}, "/usr/bin/dzo setup --images-only"},
+		{"own images dir", runner{Options: Options{ImagesDir: "/var/lib/dzo/share/dzo/images"}}, "/usr/bin/dzo setup --images-only --images-dir /var/lib/dzo/share/dzo/images"},
+		{"config and quoting", runner{Options: Options{ImagesDir: DefaultImagesDir, ConfigPath: "/home/a b/config.yaml"}}, `/usr/bin/dzo setup --images-only --config "/home/a b/config.yaml"`},
+		{"percent", runner{Options: Options{ImagesDir: DefaultImagesDir, ConfigPath: "/x/100%.yaml"}}, `/usr/bin/dzo setup --images-only --config "/x/100%%.yaml"`},
+	}
+	for _, c := range cases {
+		if got := c.r.refreshCommand("/usr/bin/dzo"); got != c.want {
+			t.Errorf("%s: %q, want %q", c.name, got, c.want)
+		}
+	}
+}

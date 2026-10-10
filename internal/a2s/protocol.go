@@ -73,10 +73,9 @@ type InfoResponse struct {
 	Folder   string
 	Game     string
 	// AppID is the wire "ID" field, a signed 16-bit value per the Valve
-	// spec. DayZ's real app ids (221100/223350) don't fit in it; expect
-	// this field to be truncated/wrapped on a real server and verify
-	// against a live one before relying on it (rather than dzo's own
-	// configured product app id) for anything.
+	// spec. DayZ's real app ids (221100/223350) don't fit in it, and real
+	// 1.29 and 1.30 servers send 0 (checked against both): do not use it to
+	// tell servers apart.
 	AppID       int16
 	Players     byte
 	MaxPlayers  byte
