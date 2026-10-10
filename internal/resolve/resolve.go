@@ -93,12 +93,14 @@ func BuildPinFile(runtimeDir string) string { return filepath.Join(runtimeDir, "
 
 // Mod is one mod-list entry, in list (= merge precedence) order.
 type Mod struct {
-	ID         uint64 `yaml:"id,omitempty"`
-	Local      string `yaml:"local,omitempty"`
-	Server     bool   `yaml:"server,omitempty"`
-	Name       string `yaml:"name"` // directory name in the container: @<id> or @<local>
-	Generation string `yaml:"generation,omitempty"`
-	Dir        string `yaml:"dir,omitempty"`
+	ID     uint64 `yaml:"id,omitempty"`
+	Local  string `yaml:"local,omitempty"`
+	Server bool   `yaml:"server,omitempty"`
+	// DebugClient marks a local client mod (debugging only, see site.ModRef).
+	DebugClient bool   `yaml:"debug_client,omitempty"`
+	Name        string `yaml:"name"` // directory name in the container: @<id> or @<local>
+	Generation  string `yaml:"generation,omitempty"`
+	Dir         string `yaml:"dir,omitempty"`
 }
 
 // Paths are the instance's host locations (§C2).
@@ -386,7 +388,7 @@ func current(s *cache.Store) (id, dir string, err error) {
 }
 
 func resolveMod(cfg *config.Config, t *site.Tree, prod config.Product, ref site.ModRef) (Mod, error) {
-	m := Mod{ID: ref.ID, Local: ref.Local, Server: ref.Server}
+	m := Mod{ID: ref.ID, Local: ref.Local, Server: ref.Server, DebugClient: ref.DebugClient}
 	var store *cache.Store
 	if ref.Local != "" {
 		if _, err := LocalSource(t, ref.Local); err != nil {

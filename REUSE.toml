@@ -49,6 +49,12 @@ path = "testmods/**/$PBOPREFIX$"
 SPDX-FileCopyrightText = "2026 Bernd Zeimetz <bernd@bzed.de>"
 SPDX-License-Identifier = "AGPL-3.0-or-later"
 
+# The signed client test mod: its dayz-mod-pack.sh project files, public key and (git-ignored) build output.
+[[annotations]]
+path = ["testmods/dzo-be-test/.dayzmod", "testmods/dzo-be-test/.gitignore", "testmods/dzo-be-test/.workshopignore", "testmods/dzo-be-test/keys/**", "testmods/dzo-be-test/build/**", "testmods/dzo-be-test/secrets/**", "testmods/**/$PREFIX$"]
+SPDX-FileCopyrightText = "2026 Bernd Zeimetz <bernd@bzed.de>"
+SPDX-License-Identifier = "AGPL-3.0-or-later"
+
 # The apt repository: reprepro configuration and the public signing key.
 [[annotations]]
 path = ["apt/conf/distributions", "apt/dzo-archive-keyring.asc"]

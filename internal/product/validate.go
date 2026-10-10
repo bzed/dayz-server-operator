@@ -75,3 +75,44 @@ func pboPrefix(path string) (string, error) {
 	}
 	return pbo.Prefix, nil
 }
+
+// ValidateSigned checks a debug client mod (site.ModRef.DebugClient): it ships at least one .bikey
+// under keys/, and every PBO under addons/ has a <pbo>.<authority>.bisign next to it whose authority
+// is one of those keys. It looks at the files only; the server verifies the signatures themselves
+// and kicks a client whose PBOs do not match.
+func ValidateSigned(dir string) error {
+	authorities := map[string]bool{}
+	for _, sub := range []string{"keys", "Keys", "key", "Key"} {
+		keys, err := filepath.Glob(filepath.Join(dir, sub, "*.bikey"))
+		if err != nil {
+			return err
+		}
+		for _, k := range keys {
+			authorities[strings.ToLower(strings.TrimSuffix(filepath.Base(k), filepath.Ext(k)))] = true
+		}
+	}
+	if len(authorities) == 0 {
+		return fmt.Errorf("product: %s: a signed client mod needs its public key as keys/<authority>.bikey", dir)
+	}
+	entries, err := os.ReadDir(filepath.Join(dir, "addons"))
+	if err != nil {
+		return err
+	}
+	for _, e := range entries {
+		if !strings.EqualFold(filepath.Ext(e.Name()), ".pbo") {
+			continue
+		}
+		prefix := strings.ToLower(e.Name()) + "."
+		ok := false
+		for _, o := range entries {
+			n := strings.ToLower(o.Name())
+			if strings.HasPrefix(n, prefix) && strings.HasSuffix(n, ".bisign") && authorities[strings.TrimSuffix(strings.TrimPrefix(n, prefix), ".bisign")] {
+				ok = true
+			}
+		}
+		if !ok {
+			return fmt.Errorf("product: %s: no %s.<authority>.bisign made with a key in keys/ (sign it, for example with armake2 or the dayz-dev skill's dayz-mod-pack.sh)", filepath.Join(dir, "addons", e.Name()), e.Name())
+		}
+	}
+	return nil
+}

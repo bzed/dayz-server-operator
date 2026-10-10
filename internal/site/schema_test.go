@@ -334,6 +334,9 @@ func TestModRefValidate(t *testing.T) {
 		{"local servermod", ModRef{Local: "dzo-admin", Server: true}, ""},
 		{"both", ModRef{ID: 5, Local: "x", Server: true}, "exactly one"},
 		{"local client mod", ModRef{Local: "x"}, "server: true"},
+		{"local debug client mod", ModRef{Local: "x", DebugClient: true}, ""},
+		{"debug client and server", ModRef{Local: "x", Server: true, DebugClient: true}, "both"},
+		{"debug client needs a local mod", ModRef{ID: 5, DebugClient: true}, "only for local mods"},
 		{"local bad name", ModRef{Local: "-x", Server: true}, "must match"},
 		{"local numeric", ModRef{Local: "123", Server: true}, "purely numeric"},
 	}

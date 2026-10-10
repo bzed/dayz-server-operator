@@ -321,6 +321,10 @@ type ModRef struct {
 	ID     uint64 `yaml:"id,omitempty"`
 	Local  string `yaml:"local,omitempty"`
 	Server bool   `yaml:"server,omitempty"`
+	// DebugClient makes a local mod a client mod (-mod=): for debugging only. Clients cannot
+	// download it, so every player has to install the same signed build by hand; its keys/
+	// directory is kept and its .bikey goes into the server's keys.
+	DebugClient bool `yaml:"debug_client,omitempty"`
 }
 
 // localModName is the name rule for local mods (§C7): it is not purely
@@ -336,13 +340,19 @@ func (m ModRef) Key() string {
 }
 
 // Validate checks that exactly one of ID/Local is set and that a local mod
-// is a servermod with a legal name.
+// is a servermod (or, explicitly, a debug client mod) with a legal name.
 func (m ModRef) Validate() error {
 	if (m.ID == 0) == (m.Local == "") {
 		return fmt.Errorf("mods: exactly one of id or local must be set")
 	}
 	if m.Local == "" {
+		if m.DebugClient {
+			return fmt.Errorf("mods: debug_client is only for local mods; a workshop mod is a client mod already")
+		}
 		return nil
+	}
+	if m.DebugClient && m.Server {
+		return fmt.Errorf("mods: local mod %q cannot be both server: true and debug_client: true", m.Local)
 	}
 	if !localModName.MatchString(m.Local) {
 		return fmt.Errorf("mods: local name %q must match %s", m.Local, localModName)
@@ -350,8 +360,8 @@ func (m ModRef) Validate() error {
 	if _, err := strconv.ParseUint(m.Local, 10, 64); err == nil {
 		return fmt.Errorf("mods: local name %q must not be purely numeric", m.Local)
 	}
-	if !m.Server {
-		return fmt.Errorf("mods: local mod %q must set server: true (clients cannot fetch local mods)", m.Local)
+	if !m.Server && !m.DebugClient {
+		return fmt.Errorf("mods: local mod %q must set server: true (clients cannot download local mods; for debugging, debug_client: true loads a signed local mod that every player installed by hand)", m.Local)
 	}
 	return nil
 }

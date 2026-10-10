@@ -111,6 +111,9 @@ func newSiteValidateCmd() *cobra.Command {
 					continue
 				}
 				_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%-20s ok\n", name)
+				for _, w := range debugClientWarnings(name, tree.Instances[name].Mods) {
+					_, _ = fmt.Fprintln(cmd.ErrOrStderr(), w)
+				}
 			}
 			if failed > 0 {
 				return fmt.Errorf("%d instance(s) do not resolve", failed)

@@ -282,3 +282,62 @@ func TestModUpdateRefusesAShippedServermodThatDiffersFromCompat(t *testing.T) {
 		t.Fatalf("--ignore-compat must allow it: %v\n%s", err, out)
 	}
 }
+
+func TestModAddDebugClient(t *testing.T) {
+	e := newInstallEnv(t)
+	inst := filepath.Join(e.data, "site", "instances", "x", "instance.yaml")
+	mod := filepath.Join(e.data, "site", "localmods", "dbg")
+	writeFile(t, filepath.Join(mod, "addons", "d.pbo"), string(buildPBO("p/d")))
+	writeFile(t, filepath.Join(mod, "keys", "Dbg.bikey"), "public key")
+
+	// --client alone is refused, with the reason; so are the combinations that make no sense
+	if _, err := e.run(t, "mod", "add", "dbg", "--instance", "x", "--client"); err == nil || !strings.Contains(err.Error(), "--force") {
+		t.Fatalf("--client without --force: %v", err)
+	}
+	if _, err := e.run(t, "mod", "add", "dbg", "--instance", "x", "--force"); err == nil || !strings.Contains(err.Error(), "only confirms --client") {
+		t.Fatalf("--force alone: %v", err)
+	}
+	if _, err := e.run(t, "mod", "add", "111", "--instance", "x", "--client", "--force"); err == nil || !strings.Contains(err.Error(), "local mods") {
+		t.Fatalf("--client with a workshop id: %v", err)
+	}
+	if _, err := e.run(t, "mod", "add", "dbg", "--instance", "x", "--client", "--force", "--server"); err == nil {
+		t.Fatal("--client and --server exclude each other")
+	}
+	// the mod is not signed: nothing is added
+	if out, err := e.run(t, "mod", "add", "dbg", "--instance", "x", "--client", "--force"); err == nil || !strings.Contains(out, "bisign") {
+		t.Fatalf("an unsigned mod: %v\n%s", err, out)
+	}
+	if strings.Contains(readFile(t, inst), "dbg") {
+		t.Fatal("a failed import must leave instance.yaml alone")
+	}
+
+	writeFile(t, filepath.Join(mod, "addons", "d.pbo.Dbg.bisign"), "signature")
+	out, err := e.run(t, "mod", "add", "dbg", "--instance", "x", "--client", "--force")
+	if err != nil || !strings.Contains(out, "installed") || !strings.Contains(out, "warning: x loads the local client mod dbg") {
+		t.Fatalf("add = %v\n%s", err, out)
+	}
+	if got := readFile(t, inst); !strings.Contains(got, "- {local: dbg, debug_client: true}") {
+		t.Errorf("instance.yaml = %s", got)
+	}
+	if out, err := e.run(t, "mod", "list", "x"); err != nil || !strings.Contains(out, "@dbg\tclient (debug, local)\t") {
+		t.Errorf("list = %v\n%s", err, out)
+	}
+	if out, err := runCmd(t, "site", "validate", "--config", e.cfg); err != nil || !strings.Contains(out, "warning: x loads the local client mod dbg") {
+		t.Errorf("validate = %v\n%s", err, out)
+	}
+	// a later update keeps importing it as a signed client mod, with its keys
+	if out, err := e.run(t, "mod", "update", "x"); err != nil || strings.Contains(out, "FAILED") {
+		t.Errorf("update = %v\n%s", err, out)
+	}
+}
+
+func TestModAddLocalIsAServermodByDefault(t *testing.T) {
+	e := newInstallEnv(t)
+	writeFile(t, filepath.Join(e.data, "site", "localmods", "more", "addons", "m.pbo"), string(buildPBO("p/m")))
+	if out, err := e.run(t, "mod", "add", "more", "--instance", "x"); err != nil {
+		t.Fatalf("add = %v\n%s", err, out)
+	}
+	if got := readFile(t, filepath.Join(e.data, "site", "instances", "x", "instance.yaml")); !strings.Contains(got, "- {local: more, server: true}") {
+		t.Errorf("instance.yaml = %s", got)
+	}
+}

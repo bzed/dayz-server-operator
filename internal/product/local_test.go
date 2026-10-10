@@ -289,3 +289,77 @@ func TestImportLocalRunsTheCheckBeforeImporting(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// signedModFiles is a mod that ships its public key and a signature per PBO.
+func signedModFiles() map[string][]byte {
+	f := modFiles(true)
+	f["keys/Dbg.bikey"] = []byte("public key")
+	f["addons/a.pbo.Dbg.bisign"] = []byte("signature")
+	return f
+}
+
+func TestImportLocalSignedKeepsKeys(t *testing.T) {
+	in := localInstaller(t)
+	src := t.TempDir()
+	writeTree(t, src, signedModFiles())
+	r, err := in.ImportLocal(context.Background(), "dbg", LocalSource{Dir: src, Signed: true})
+	if err != nil {
+		t.Fatalf("import = %v", err)
+	}
+	store := LocalModStore(in.CacheRoot, "dbg")
+	if _, err := os.Stat(filepath.Join(store.Root, r.Generation, "keys", "Dbg.bikey")); err != nil {
+		t.Errorf("a debug client mod keeps keys/: %v", err)
+	}
+	// the same files as a servermod: keys/ is dropped, a different generation
+	r2, err := in.ImportLocal(context.Background(), "dbg2", LocalSource{Dir: src})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(LocalModStore(in.CacheRoot, "dbg2").Root, r2.Generation, "keys")); !os.IsNotExist(err) {
+		t.Error("a servermod must not keep keys/")
+	}
+}
+
+func TestValidateSigned(t *testing.T) {
+	cases := []struct {
+		name    string
+		mutate  func(map[string][]byte)
+		wantErr string
+	}{
+		{"signed", func(map[string][]byte) {}, ""},
+		{"authority in other case", func(f map[string][]byte) {
+			delete(f, "addons/a.pbo.Dbg.bisign")
+			f["addons/A.PBO.DBG.BISIGN"] = []byte("s")
+			f["addons/a.pbo"], f["addons/A.PBO"] = nil, f["addons/a.pbo"]
+			delete(f, "addons/a.pbo")
+		}, ""},
+		{"no key", func(f map[string][]byte) { delete(f, "keys/Dbg.bikey") }, "needs its public key"},
+		{"no signature", func(f map[string][]byte) { delete(f, "addons/a.pbo.Dbg.bisign") }, "bisign"},
+		{"signature of another key", func(f map[string][]byte) {
+			delete(f, "addons/a.pbo.Dbg.bisign")
+			f["addons/a.pbo.Other.bisign"] = []byte("s")
+		}, "bisign"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			dir := t.TempDir()
+			files := signedModFiles()
+			c.mutate(files)
+			writeTree(t, dir, files)
+			err := ValidateSigned(dir)
+			if c.wantErr == "" && err != nil || c.wantErr != "" && (err == nil || !strings.Contains(err.Error(), c.wantErr)) {
+				t.Fatalf("ValidateSigned = %v, want %q", err, c.wantErr)
+			}
+		})
+	}
+}
+
+func TestImportLocalSignedRejectsAnUnsignedMod(t *testing.T) {
+	src := t.TempDir()
+	files := modFiles(true)
+	files["keys/Dbg.bikey"] = []byte("k")
+	writeTree(t, src, files)
+	if _, err := localInstaller(t).ImportLocal(context.Background(), "dbg", LocalSource{Dir: src, Signed: true}); err == nil || !strings.Contains(err.Error(), "bisign") {
+		t.Errorf("err = %v", err)
+	}
+}

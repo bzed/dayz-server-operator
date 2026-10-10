@@ -22,6 +22,37 @@ Adding and removing mods
 change is left uncommitted for you to commit). It takes effect at the next
 restart.
 
+.. _debug-client-mods:
+
+Debugging a client mod you build yourself
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Players download client mods from the Steam Workshop, so dzo only allows local mods as
+servermods. To test a client mod that is not on the Workshop yet (a mod of your own, or one
+that needs a test client), you can load a **signed local mod on the clients as well**. This is
+for debugging on a test server only, and dzo makes you say so:
+
+.. code-block:: sh
+
+   dzo mod add mytest --instance debug --client --force
+
+``--client`` alone is refused with the reasons; ``--force`` confirms that you know them:
+
+* clients cannot download the mod. Every player has to install the same signed build by
+  hand, as ``@<name>`` in the game's folder, and start the game with it (``-mod=@<name>``);
+* the mod directory must carry ``keys/<authority>.bikey`` and, for every PBO,
+  ``<pbo>.<authority>.bisign`` made with that key (see the ``dayz-mod-pack.sh`` of the dayz-dev
+  tools, or armake2). dzo checks that the files are there and belong together, not the
+  signature itself; a server with ``verifySignatures`` kicks a client whose PBOs do not match;
+* the key goes into the server's ``keys/``, so it accepts every player who has that mod.
+  Anyone holding the private key can then join; never do this on a public server.
+
+The entry in ``instance.yaml`` is ``{local: mytest, debug_client: true}``; the mod is read like
+any local mod (``localmods/<name>/`` or ``local_mods`` in ``site.yaml``), passed to the server as
+``-mod=@mytest``, and listed by ``dzo mod list`` as ``client (debug, local)``. ``dzo site
+validate``, ``dzo mod add`` and ``dzo instance apply`` print a warning for every such mod, so it
+is not forgotten. To go back, ``dzo mod remove`` it.
+
 **Load order is the order of the ``mods`` list.** dzo passes the mods to the
 server in exactly that order (``-mod=`` for client mods, ``-servermod=`` for
 server mods) and does not reorder them or check dependencies. Mods often

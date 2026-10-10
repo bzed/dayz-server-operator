@@ -47,6 +47,19 @@ func (f *installFlags) installer(cfg *config.Config) (*product.Installer, error)
 type modSet struct {
 	workshop map[uint32][]uint64
 	local    []string
+	// signed names the local mods that are debug client mods: imported with their keys, signatures checked.
+	signed map[string]bool
+}
+
+// debugClientWarnings says, per debug client mod an instance loads, what the admin signed up for.
+func debugClientWarnings(name string, mods []site.ModRef) []string {
+	var out []string
+	for _, m := range mods {
+		if m.DebugClient {
+			out = append(out, fmt.Sprintf("warning: %s loads the local client mod %s (debug_client): players cannot download it, every player needs the same signed build installed by hand; for debugging only", name, m.Local))
+		}
+	}
+	return out
 }
 
 // collectMods gathers the distinct mods of one instance (or of every
@@ -65,7 +78,7 @@ func collectMods(cfg *config.Config, t *site.Tree, name string, refs []string) (
 		want[r] = false
 	}
 	seen := map[string]bool{}
-	set := modSet{workshop: map[uint32][]uint64{}}
+	set := modSet{workshop: map[uint32][]uint64{}, signed: map[string]bool{}}
 	for _, n := range names {
 		inst := t.Instances[n]
 		app := cfg.Products[inst.Product].WorkshopAppID
@@ -79,6 +92,9 @@ func collectMods(cfg *config.Config, t *site.Tree, name string, refs []string) (
 				seen[id] = true
 				if m.Local != "" {
 					set.local = append(set.local, m.Local)
+					if m.DebugClient {
+						set.signed[m.Local] = true
+					}
 				} else {
 					set.workshop[app] = append(set.workshop[app], m.ID)
 				}
@@ -129,6 +145,7 @@ func installMods(cmd *cobra.Command, f *installFlags, cfg *config.Config, t *sit
 		if err != nil {
 			return err
 		}
+		src.Signed = set.signed[name]
 		if !f.ignoreCompat {
 			src.Check = servermods.CheckShipped
 		}
@@ -171,8 +188,11 @@ func newModListCmd() *cobra.Command {
 						gen = "not installed"
 					}
 					side := "client"
-					if m.Server {
+					switch {
+					case m.Server:
 						side = "server"
+					case m.DebugClient:
+						side = "client (debug, local)"
 					}
 					_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\t%s\t%s\n", n, m.Name, side, gen)
 				}
@@ -187,11 +207,15 @@ func newModListCmd() *cobra.Command {
 func newModAddCmd() *cobra.Command {
 	var f installFlags
 	var instName string
-	var server bool
+	var server, client, force bool
 	cmd := &cobra.Command{
 		Use:   "add <workshop id | local name> --instance <name>",
 		Short: "Install a mod and add it to an instance's mod list in the site repo",
-		Args:  cobra.ExactArgs(1),
+		Long: "A workshop id is a client mod unless --server says it loads with -servermod; a local name is always a " +
+			"servermod. For debugging, a local mod that clients load too can be added with --client --force: " +
+			"clients cannot download it, every player has to install the same signed build by hand (a keys/<authority>.bikey " +
+			"and a .bisign for every PBO are required), and the key is installed on the server. Never use that on a public server.",
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, tree, err := loadSite(f.config)
 			if err != nil {
@@ -205,27 +229,52 @@ func newModAddCmd() *cobra.Command {
 				ref.ID = id
 			} else {
 				ref.Local = args[0]
+				ref.Server = !client // a local mod is a servermod, unless it is a debug client mod
+			}
+			if client {
+				switch {
+				case ref.Local == "":
+					return errors.New("--client is for local mods; a workshop mod is a client mod already")
+				case server:
+					return errors.New("--client and --server exclude each other")
+				case !force:
+					return fmt.Errorf("--client loads the local mod %s on every player's game: clients cannot download it, each player must install "+
+						"the same signed build by hand, and its key goes into the server's keys. That is for debugging only, never for a public "+
+						"server. Add --force to confirm", ref.Local)
+				}
+				ref.DebugClient = true
+			} else if force {
+				return errors.New("--force only confirms --client")
 			}
 			if err := ref.Validate(); err != nil {
 				return err
 			}
 			// Install first, so a failed download never leaves the config pointing at a missing mod.
 			app := cfg.Products[tree.Instances[instName].Product].WorkshopAppID
-			set := modSet{workshop: map[uint32][]uint64{}}
+			set := modSet{workshop: map[uint32][]uint64{}, signed: map[string]bool{}}
 			if ref.Local != "" {
 				set.local = []string{ref.Local}
+				set.signed[ref.Local] = ref.DebugClient
 			} else {
 				set.workshop[app] = []uint64{ref.ID}
 			}
 			if err := installMods(cmd, &f, cfg, tree, set, false); err != nil {
 				return err
 			}
-			return site.AddMod(filepath.Join(tree.Dir, "instances", instName, "instance.yaml"), ref)
+			if err := site.AddMod(filepath.Join(tree.Dir, "instances", instName, "instance.yaml"), ref); err != nil {
+				return err
+			}
+			for _, w := range debugClientWarnings(instName, []site.ModRef{ref}) {
+				_, _ = fmt.Fprintln(cmd.ErrOrStderr(), w)
+			}
+			return nil
 		},
 	}
 	f.add(cmd)
 	cmd.Flags().StringVar(&instName, "instance", "", "instance to add the mod to (required)")
 	cmd.Flags().BoolVar(&server, "server", false, "load it with -servermod (always on for local mods)")
+	cmd.Flags().BoolVar(&client, "client", false, "debugging only: load a local mod on the clients too (needs --force)")
+	cmd.Flags().BoolVar(&force, "force", false, "confirm --client: players must install the signed build by hand")
 	_ = cmd.MarkFlagRequired("instance")
 	return cmd
 }

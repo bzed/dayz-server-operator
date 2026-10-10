@@ -172,8 +172,11 @@ func unitOptions(cfg *config.Config, configPath, quadletDir, unitDir string) uni
 
 // mergeSets is the union of two mod sets.
 func mergeSets(a, b modSet) modSet {
-	out := modSet{workshop: map[uint32][]uint64{}}
+	out := modSet{workshop: map[uint32][]uint64{}, signed: map[string]bool{}}
 	for _, s := range []modSet{a, b} {
+		for l := range s.signed {
+			out.signed[l] = out.signed[l] || s.signed[l]
+		}
 		for app, ids := range s.workshop {
 			for _, id := range ids {
 				if !slices.Contains(out.workshop[app], id) {

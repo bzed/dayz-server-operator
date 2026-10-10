@@ -113,7 +113,9 @@ Mods
    :widths: 45 55
 
    * - ``dzo mod add <id | local name> --instance <name> [--server]``
-     - install a mod and add it to an instance
+     - install a mod and add it to an instance (a local mod is always a servermod)
+   * - ``dzo mod add <local name> --instance <name> --client --force``
+     - debugging only: a signed local mod that clients load too (:ref:`debug-client-mods`)
    * - ``dzo mod list [<instance>]``
      - the mods of an instance and their installed generation
    * - ``dzo mod remove <id | local name> --instance <name>``

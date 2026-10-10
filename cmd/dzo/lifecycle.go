@@ -136,8 +136,12 @@ func newInstanceApplyCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if _, err := tree.Instance(args[0]); err != nil {
+			inst, err := tree.Instance(args[0])
+			if err != nil {
 				return err
+			}
+			for _, w := range debugClientWarnings(args[0], inst.Mods) {
+				_, _ = fmt.Fprintln(cmd.ErrOrStderr(), w)
 			}
 			return syncUnits(cmd, configPath, "", "", []string{args[0]}, dry)
 		},

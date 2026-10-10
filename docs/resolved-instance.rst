@@ -44,7 +44,8 @@ An entry in ``mods`` is either a workshop id or a local servermod:
      - {id: 1559212036}
      - {local: dzo-admin, server: true}
 
-A local mod must set ``server: true`` and have a name of letters, digits,
+A local mod must set ``server: true`` (or, for debugging only,
+``debug_client: true``, see :ref:`debug-client-mods`) and have a name of letters, digits,
 ``_``, ``.`` and ``-`` that is not purely numeric. It is read from
 ``localmods/<name>/`` in the site repository, or from a ``local_mods`` entry in
 ``site.yaml``:

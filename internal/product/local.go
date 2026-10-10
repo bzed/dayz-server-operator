@@ -35,6 +35,9 @@ type LocalSource struct {
 	// imported; an error stops the import (the compat.yaml gate of shipped
 	// servermods).
 	Check func(dir string) error
+	// Signed imports a debug client mod (site.ModRef.DebugClient): its keys/ directory is kept,
+	// and every PBO has to carry a signature made with one of the keys in it.
+	Signed bool
 }
 
 // ImportLocal validates a local servermod and stores it as a content-hashed
@@ -59,17 +62,22 @@ func (in *Installer) ImportLocal(ctx context.Context, name string, src LocalSour
 	if root, err = modRoot(root); err != nil {
 		return InstallResult{}, err
 	}
-	if src.Check != nil && src.URL == "" {
+	if src.Check != nil && src.URL == "" && !src.Signed {
 		if err := src.Check(root); err != nil {
 			return InstallResult{}, err
 		}
 	}
 	tree := filepath.Join(scratch, "tree")
-	if err := copyRegular(root, tree); err != nil {
+	if err := copyRegular(root, tree, src.Signed); err != nil {
 		return InstallResult{}, err
 	}
 	if err := ValidateMod(tree, true); err != nil {
 		return InstallResult{}, err
+	}
+	if src.Signed {
+		if err := ValidateSigned(tree); err != nil {
+			return InstallResult{}, err
+		}
 	}
 	hash, err := hashTree(tree)
 	if err != nil {
@@ -105,7 +113,7 @@ func isDir(p string) bool {
 
 // copyRegular copies the regular files of src into dst, refusing anything
 // else, so a host path cannot pull in files from outside the mod.
-func copyRegular(src, dst string) error {
+func copyRegular(src, dst string, keepKeys bool) error {
 	return filepath.WalkDir(src, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -114,7 +122,7 @@ func copyRegular(src, dst string) error {
 		if rel == "." {
 			return os.MkdirAll(dst, 0o750)
 		}
-		if rel == "keys" {
+		if rel == "keys" && !keepKeys {
 			return fs.SkipDir
 		}
 		switch {
