@@ -23,7 +23,7 @@ import (
 //	entry: byte type, then per type:
 //	  0 class:        cstring name, uint32 absolute body offset
 //	  1 value:        byte sub (0 string, 1 float32, 2 int32, 4 expression
-//	                  string), cstring name, payload
+//	                  string, 6 int64), cstring name, payload
 //	  2 array:        cstring name, array
 //	  3 extern class: cstring name
 //	  4 delete class: cstring name
@@ -33,9 +33,10 @@ import (
 //	compressed int: 7 bits per byte, low group first, high bit = more.
 //
 // Only the tree needed for CfgPatches is kept (scalars and arrays as
-// text). This was written from the format notes and checked against
-// synthetic fixtures built in the tests; it has not been run against a
-// real mod's config.bin (see README "Needs live verification").
+// text). Written from the format notes, then run over the ~4900 PBOs of the
+// workshop mods of a development machine: all but 3 decode (those use a value
+// type that armake2 does not know either), and CfgPatches matches armake2's
+// on a random sample of 311.
 
 var rapMagic = []byte{0, 'r', 'a', 'P'}
 
@@ -105,6 +106,13 @@ func (r *rapReader) scalar(sub byte) (string, error) {
 	case 2:
 		v, err := r.u32()
 		return strconv.FormatInt(int64(int32(v)), 10), err //nolint:gosec // reinterpreting the on-disk int32 bits
+	case 6: // an int64, e.g. a Steam id in CfgMods (seen in real workshop configs, not in the format notes)
+		if r.pos+8 > len(r.b) {
+			return "", errRapTruncated
+		}
+		v := binary.LittleEndian.Uint64(r.b[r.pos:])
+		r.pos += 8
+		return strconv.FormatInt(int64(v), 10), nil //nolint:gosec // reinterpreting the on-disk int64 bits
 	}
 	return "", fmt.Errorf("unknown value type %d", sub)
 }

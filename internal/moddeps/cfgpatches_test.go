@@ -88,3 +88,29 @@ func TestExtractPatchesFromPBOMissingEntry(t *testing.T) {
 		t.Fatal("expected an error for a missing config.cpp entry")
 	}
 }
+
+// Real config.cpp files hold enum blocks, macros and odd tokens after CfgPatches; only that block is needed.
+func TestExtractPatchesFallsBackToCfgPatches(t *testing.T) {
+	src := `// class CfgPatches { not this one };
+#define _ARMA_
+enum { destructno = 0, destructtree = 3 };
+/* class CfgPatches { nor this } */
+class CfgPatches
+{
+	class Mod_A { text = "}{ in a string"; requiredAddons[] = {"DZ_Data", "ModB"}; };
+};
+class CfgVehicles { class X: Y { v = -1 * (2 + .5); }; };
+`
+	patches, err := ExtractPatchesFromConfig([]byte(src))
+	if err != nil {
+		t.Fatalf("ExtractPatchesFromConfig: %v", err)
+	}
+	if len(patches) != 1 || patches[0].Name != "Mod_A" || !equalStrings(patches[0].RequiredAddons, []string{"DZ_Data", "ModB"}) {
+		t.Errorf("patches = %+v", patches)
+	}
+	for _, bad := range []string{`enum { a = 1 }; class Other { };`, `enum { a = 1 }; /* open`, `enum { a = 1 }; class CfgPatches { class M {`} {
+		if _, err := ExtractPatchesFromConfig([]byte(bad)); err == nil {
+			t.Errorf("no error for %q", bad)
+		}
+	}
+}

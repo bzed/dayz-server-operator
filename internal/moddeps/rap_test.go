@@ -225,9 +225,12 @@ func TestDecompressLZSS(t *testing.T) {
 		size int
 		want string
 	}{
-		{"literals and overlapping copy", []byte{7, 'a', 'b', 'c', 0, 3}, 9, "abcabcabc"},
-		{"ring bytes before start are spaces", []byte{0, 0xFA, 0xF0}, 3, "   "},
-		{"output capped at size", []byte{7, 'a', 'b', 'c', 0, 3}, 5, "abcab"},
+		{"literals and overlapping copy", []byte{7, 'a', 'b', 'c', 3, 3}, 9, "abcabcabc"},
+		{"a distance of one repeats the last byte", []byte{1, 'x', 1, 0}, 4, "xxxx"},
+		{"bytes before the start are spaces", []byte{0, 0xFA, 0xF0}, 3, "   "},
+		{"output capped at size", []byte{7, 'a', 'b', 'c', 3, 3}, 5, "abcab"},
+		// The start of a real config.bin: the zero padding is back references of distance 1 and 5.
+		{"rapified header from a real mod", []byte{0x5f, 0, 'r', 'a', 'P', 0, 1, 0, 8, 5, 0}, 12, "\x00raP\x00\x00\x00\x00\x08\x00\x00\x00"},
 		{"ignores trailing checksum", []byte{3, 'h', 'i', 1, 2, 3, 4}, 2, "hi"},
 	}
 	for _, c := range cases {
@@ -235,6 +238,9 @@ func TestDecompressLZSS(t *testing.T) {
 		if err != nil || string(got) != c.want {
 			t.Errorf("%s: got %q, %v; want %q", c.name, got, err, c.want)
 		}
+	}
+	if _, err := decompressLZSS([]byte{0, 0, 0}, 3); err == nil {
+		t.Error("no error for a back reference of distance 0")
 	}
 	for _, in := range [][]byte{{}, {1}, {0, 1}} {
 		if _, err := decompressLZSS(in, 4); err == nil {
@@ -301,5 +307,69 @@ func TestFindNormalizesNames(t *testing.T) {
 	}
 	if _, ok := pbo.Find("scripts/3_game/x.c"); !ok {
 		t.Error("Find should ignore case and separator style")
+	}
+}
+
+// Subtype 6 is an int64 (a Steam id in CfgMods of real workshop mods).
+func TestRapInt64Value(t *testing.T) {
+	id := bytes.Join([][]byte{{1, 6}, rcs("authorID"), binary.LittleEndian.AppendUint64(nil, 0x0110000148d61cbb)}, nil)
+	root, err := ParseRapified(buildRap(rapNode{entries: [][]byte{id}}))
+	if err != nil {
+		t.Fatalf("ParseRapified: %v", err)
+	}
+	if got := root.Properties["authorID"].Scalar; got != "76561199182257339" {
+		t.Errorf("authorID = %q", got)
+	}
+	short := append(buildRap(rapNode{entries: [][]byte{id}}), 0)
+	if _, err := ParseRapified(short[:len(short)-5]); err == nil {
+		t.Error("no error for a truncated int64")
+	}
+}
+
+// Terrain and object packs keep a config per subfolder; all of them count, config.cpp only where a
+// folder has no config.bin.
+func TestExtractPatchesFromPBOSubfolders(t *testing.T) {
+	one := func(name string) []byte {
+		return buildRap(rapNode{children: []rapNode{{name: "CfgPatches", children: []rapNode{{name: name, entries: [][]byte{rArray("requiredAddons", "DZ_Data")}}}}}})
+	}
+	data := buildPBO(t, false, []pboEntry{
+		{name: `bushes\config.bin`, data: one("Bushes")},
+		{name: `Plants/CONFIG.BIN`, data: one("Plants")},
+		{name: `plants/config.cpp`, data: []byte(`class CfgPatches { class Ignored { }; };`)},
+		{name: `trees\config.cpp`, data: []byte(`class CfgPatches { class Trees { requiredAddons[] = {"DZ_Data"}; }; };`)},
+		{name: `data\readme.txt`, data: []byte("x")},
+	})
+	pbo, err := OpenPBO(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	patches, err := ExtractPatchesFromPBO(pbo)
+	if err != nil {
+		t.Fatalf("ExtractPatchesFromPBO: %v", err)
+	}
+	names := map[string]bool{}
+	for _, p := range patches {
+		names[p.Name] = true
+	}
+	if len(patches) != 3 || !names["Bushes"] || !names["Plants"] || !names["Trees"] {
+		t.Errorf("patches = %+v", patches)
+	}
+}
+
+// Some tools store LZSS data in an entry whose packing method says "stored".
+func TestExtractPatchesFromUnflaggedLZSS(t *testing.T) {
+	bin := buildRap(patchesRoot("DZ_Data"))
+	data := buildPBO(t, false, []pboEntry{{name: `VanillaItems\config.bin`, data: lzssLiterals(bin)}})
+	pbo, err := OpenPBO(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	patches, err := ExtractPatchesFromPBO(pbo)
+	if err != nil || len(patches) != 2 {
+		t.Errorf("patches = %v, %v", patches, err)
+	}
+	got, err := decompressLZSS(lzssLiterals([]byte("hello")), -1)
+	if err != nil || string(got) != "hello" {
+		t.Errorf("unsized decode = %q, %v", got, err)
 	}
 }

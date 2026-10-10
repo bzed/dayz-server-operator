@@ -180,3 +180,14 @@ func equalStrings(a, b []string) bool {
 	}
 	return true
 }
+
+func TestParseConfigClassNameStartingWithDigits(t *testing.T) {
+	root, err := ParseConfig([]byte(`class CfgPatches { class 416M4_Sounds { requiredAddons[] = {"DZ_Data"}; v = 0.1; }; };`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := root.Classes["CfgPatches"].Classes["416M4_Sounds"]
+	if c == nil || c.Properties["v"].Scalar != "0.1" {
+		t.Errorf("class = %+v", c)
+	}
+}

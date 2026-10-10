@@ -107,6 +107,13 @@ func tokenize(src string) ([]token, error) {
 			for i < n && (isDigit(src[i]) || src[i] == '.') {
 				i++
 			}
+			if i < n && isIdentStart(src[i]) && src[start] != '-' { // a class name may start with digits: 416M4_Sounds
+				for i < n && isIdentPart(src[i]) {
+					i++
+				}
+				toks = append(toks, token{tokIdent, src[start:i]})
+				break
+			}
 			toks = append(toks, token{tokNumber, src[start:i]})
 		case c == '+' && i+1 < n && src[i+1] == '=':
 			toks = append(toks, token{tokPunct, "+="})
