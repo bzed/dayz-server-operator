@@ -35,17 +35,21 @@ type Event struct {
 	Message    string // chat text or kick reason, when present
 }
 
-// Patterns follow the documented BattlEye RCon message formats used by
-// existing Arma/DayZ RCon clients. They are not yet verified against a real
-// server (that capture is spike S4, §E); kept in one place so fixing them
-// against real fixtures later only needs one edit.
+// Patterns for the BattlEye RCon messages of a real DayZ 1.29 server, captured with a client that
+// runs BattlEye (spike S4): connect, GUID, chat, kick and disconnect are real lines, kept in the
+// tests. The "Verified GUID" line is not: the BattlEye master did not answer ("Ban check timed
+// out, no response from BE Master"), so that one still follows the documented format of other games.
+// Other server messages ("Connected to BE Master", "RCon admin #0 (ip:port) logged in", ...) are
+// EventUnknown.
 var (
 	reConnect       = regexp.MustCompile(`^Player #(\d+) (.+) \(([0-9.]+:\d+)\) connected$`)
-	reGUIDComputing = regexp.MustCompile(`^Player #(\d+) (.+) - GUID: ([0-9a-f]+)$`)
+	reGUIDComputing = regexp.MustCompile(`^Player #(\d+) (.+) - (?:BE )?GUID: ([0-9a-f]+)$`)
 	reGUIDVerified  = regexp.MustCompile(`^Verified GUID \(([0-9a-f]+)\) for player #(\d+) (.+)$`)
 	reDisconnect    = regexp.MustCompile(`^Player #(\d+) (.+) disconnected$`)
 	reChat          = regexp.MustCompile(`^\((\w+)\) (.+?): (.*)$`)
-	reKick          = regexp.MustCompile(`^Player #(\d+) (.+) has been kicked by BattlEye: (.*)$`)
+	// The kick line carries the GUID in parentheses: "Player #0 name (guid) has been kicked by
+	// BattlEye: Admin Kick (reason)". A name may itself end in parentheses, so the GUID is 32 hex digits.
+	reKick = regexp.MustCompile(`^Player #(\d+) (.+?)(?: \(([0-9a-f]{32})\))? has been kicked by BattlEye: (.*)$`)
 )
 
 // ParseEvent classifies a Server Message payload into a structured Event.
@@ -67,7 +71,7 @@ func ParseEvent(payload string) Event {
 	}
 	if m := reKick.FindStringSubmatch(payload); m != nil {
 		id, _ := strconv.Atoi(m[1])
-		return Event{Kind: EventKick, Raw: payload, PlayerID: id, PlayerName: m[2], Message: m[3]}
+		return Event{Kind: EventKick, Raw: payload, PlayerID: id, PlayerName: m[2], GUID: m[3], Message: m[4]}
 	}
 	if m := reDisconnect.FindStringSubmatch(payload); m != nil {
 		id, _ := strconv.Atoi(m[1])

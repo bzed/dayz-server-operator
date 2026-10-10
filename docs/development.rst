@@ -115,6 +115,18 @@ marker file, seats the player in a new car; it is a test aid and never part of a
 the Steam DayZ Server tool and the client of the same build, a logged-in Steam and one game at a
 time; on a machine that runs dzo instances, run it elsewhere.
 
+The BattlEye event patterns of ``internal/battleye`` come from a real capture (spike S4 on the
+:doc:`spikes` page). To repeat it you need a client that runs BattlEye: the headless client of the
+``dayz-dev`` skill starts ``DayZ_x64.exe`` without it, so set
+``PROTON_BATTLEYE_RUNTIME="$STEAM_ROOT/steamapps/common/Proton BattlEye Runtime"`` in its launch
+script, as Steam does. Build and sign ``testmods/dzo-be-test`` (``dayz-mod-pack.sh -C testmods/dzo-be-test
+keygen`` once, then ``build``), link ``build/@DZOBETest`` into the client's DayZ directory, put its
+``keys/DZOBETest.bikey`` into the server's keys (or add the mod with ``dzo mod add dzo-be-test
+--instance <name> --client --force``, see :ref:`debug-client-mods`) and join with ``-mod=@DZOBETest``.
+A client with the mod sends two chat lines a minute after the mission started; ``dzo rcon console
+<instance>`` prints the events, and ``kick <id> <reason>`` over RCon gives the kick line. A local server needs an
+absolute ``-BEpath`` and an ``RConIP`` in ``profiles/battleye/beserver_x64.cfg``.
+
 A quick check without a configured instance: symlink ``dist/servermods/dzo-admin``
 into a tree of each server as ``@dzo-admin``, start it with
 ``-servermod=@dzo-admin`` (a relative path), and compare the script module file

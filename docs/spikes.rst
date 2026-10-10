@@ -185,9 +185,29 @@ which run when ``DZO_LIVE_BE_ADDR`` and ``DZO_LIVE_BE_PASSWORD`` are set):
 * RCon listened on every interface: the server was controllable from the whole network with the
   password. dzo now writes ``RConIP 127.0.0.1`` into the BattlEye config with host networking.
 
-Not verified because no player was connected: the event messages (connect, GUID, chat, kick) and their
-acknowledgement timing, a multi-packet ``players`` answer with 60 players, and the format of the native
-``ban.txt``.
+Player events, captured with a client that runs BattlEye (a headless DayZ client with
+``PROTON_BATTLEYE_RUNTIME`` set, and the signed test mod ``testmods/dzo-be-test``, which sends two chat
+lines; 2026-10-10, 1.29, on a local server and on a development host):
+
+.. code-block:: text
+
+   Player #0 dzotester (10.125.0.3:41939) connected
+   Player #0 dzotester - BE GUID: 907725ff524e1026154b5ac3cccb0258
+   Connected to BE Master
+   Ban check timed out, no response from BE Master
+   (Global) dzotester: dzo-be-test second: with a colon
+   Player #0 dzotester (907725ff524e1026154b5ac3cccb0258) has been kicked by BattlEye: Admin Kick (dzo test kick)
+   Player #0 dzotester disconnected
+
+Two patterns were wrong and are fixed: the GUID line says ``BE GUID:``, and the kick line carries the GUID in
+parentheses and the reason as ``Admin Kick (<reason>)``. A kick needs BattlEye's own ``kick <id> <reason>``
+(what the graceful restart sends); ``#kick 0`` kicks nobody, ``#kick -1`` kicks everyone. The other lines of
+the server (``Connected to BE Master``, ``RCon admin #0 (ip:port) logged in``) are not player events.
+
+Still not verified: the ``Verified GUID`` line. The BattlEye master never answered (``Ban check timed
+out``) on either server, so the GUID stayed unverified (``(?)`` in ``players``); the pattern for it still
+follows the format of other games. Also not verified: the acknowledgement timing of the events, a
+multi-packet ``players`` answer with 60 players, and the format of the native ``ban.txt``.
 
 S5: host networking and several instances
 -----------------------------------------

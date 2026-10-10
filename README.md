@@ -146,6 +146,8 @@ with a real Steam account, and on a workstation with the DayZ client:
   `@<workshop id>` directories work as mod folders, the Steam login and the
   workshop path layout match what the code expects, and the process name the
   health check looks for is `enfMain`.
+- **BattlEye player events** from a real client with BattlEye (a signed test mod
+  sends chat lines): connect, GUID, chat, kick and disconnect, on 1.29.
 - **dzo-admin with a real client**, on both 1.29 and 1.30
   (`scripts/test-client.sh`, a headless DayZ client against a local server and
   `dzo serve`): the player list, messages in all three styles, teleport (and its
@@ -202,11 +204,11 @@ with a real Steam account, and on a workstation with the DayZ client:
 
 Things that could not be checked yet, roughly in the order they would bite:
 
-- **BattlEye's player events** (`internal/battleye`'s connect, GUID, chat, kick
-  and disconnect patterns, spike S4). They need a client with BattlEye, which the
-  headless test client is not. The `players` output, unknown commands, `#lock`,
-  `#unlock`, `#kick`, `#shutdown`, the keep-alive answers and the behaviour on a
-  server restart are confirmed (see the [spikes page](docs/spikes.rst)).
+- **BattlEye's `Verified GUID` line.** The other player events (connect, GUID, chat,
+  kick, disconnect) were captured from a real client with BattlEye and the patterns
+  fixed; the verified-GUID line needs a BattlEye master that answers, which it did not
+  from the development host or the workstation (`Ban check timed out`). See the
+  [spikes page](docs/spikes.rst) (S4).
 - **steamcmd's failure paths.** A real login, server install, workshop
   download and forced refresh have worked. The wording of the other prompts
   (wrong password, Steam Guard by mail or by mobile confirmation, rate
