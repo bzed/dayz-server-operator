@@ -20,7 +20,7 @@ COVERAGE_MIN := 85
 GO           ?= go
 
 .PHONY: all cheatsheet docs build build-static test test-race cover coverage-check cover-html lint vet fmt fmt-check \
-        licenses reuse deb clean tidy generate servermods test-findfile
+        licenses reuse deb clean tidy generate servermods test-findfile test-client
 
 all: lint reuse test build
 
@@ -112,6 +112,10 @@ licenses:
 ## test-findfile: boot an experimental server with CF-Test and the FindFile probe servermod (needs the Steam server and CF-Test)
 test-findfile:
 	scripts/test-findfile.sh
+
+## test-client: the dzo-admin actions with a real DayZ client, headless (needs the Steam server and client; --exp for 1.30: make test-client ARGS=--exp)
+test-client:
+	scripts/test-client.sh $(ARGS)
 
 ## servermods: pack servermods/*/src/* into dist/servermods/<mod>/addons/*.pbo
 ## (reproducible; needs the submodules: git submodule update --init).

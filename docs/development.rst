@@ -103,6 +103,18 @@ lines show what the engine's own ``FindFile`` finds for the same patterns (nothi
 1.30, which is the bug). Like every boot test it needs a machine that does not run dzo instances, and
 network access for the vanilla mission.
 
+The player actions of dzo-admin need a connected player, so they have their own test:
+``make test-client`` (``scripts/test-client.sh``, ``--exp`` for 1.30). It builds the servermod and
+the probe servermod ``testmods/dzo-client-probe``, starts a local server with both (BattlEye off,
+no password, free ports), a real ``dzo serve`` and the DayZ client headless (sway, through the
+``dayz-dev`` skill's scripts, ``DAYZ_DEV_SCRIPTS``), and drives them with ``dzo player`` and
+``dzo vehicle``: the players state, messages in the three styles, teleport (and its refusal in a
+vehicle), ``spawn_item`` into the inventory, the hands and the ground, an unknown class, a class
+watch rule on an item, and the crew of a car. The probe mod logs what the player has and, on a
+marker file, seats the player in a new car; it is a test aid and never part of a release. It needs
+the Steam DayZ Server tool and the client of the same build, a logged-in Steam and one game at a
+time; on a machine that runs dzo instances, run it elsewhere.
+
 A quick check without a configured instance: symlink ``dist/servermods/dzo-admin``
 into a tree of each server as ``@dzo-admin``, start it with
 ``-servermod=@dzo-admin`` (a relative path), and compare the script module file
