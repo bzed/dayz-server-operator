@@ -5,7 +5,7 @@ defaults:
   updates: {policy: notify, check_interval: 1h}
   restarts:
     schedule: ["*-*-* 00/4:00"]
-    announce: {minutes: 30, lock: 3, delay: 3}
+    announce: {minutes: 30, lock: 3, kick: 3}
   health: {startup_timeout: 30m}
   container:
     env: {LANG: C}

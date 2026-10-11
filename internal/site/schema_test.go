@@ -153,7 +153,7 @@ overlays: [login-times, stamina]
 updates:
   policy: auto
   check_interval: 1h
-  restart_announce: {minutes: 12, lock: 5, delay: 2, text: "MOD UPDATE!"}
+  restart_announce: {minutes: 12, lock: 5, kick: 2, text: "MOD UPDATE!"}
 restarts:
   schedule: ["*-*-* 00/4:00"]
 health: {startup_timeout: 45m, interval: 60s, retries: 5}

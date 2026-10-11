@@ -206,7 +206,7 @@ func mods(pending []string) []string {
 
 func announcement(inst *resolve.Instance) instance.Announcement {
 	a := inst.Updates.RestartAnnounce
-	return instance.Announcement{Minutes: a.Minutes, Lock: a.Lock, Delay: a.Delay, Text: a.Text}
+	return instance.Announcement{Minutes: a.Minutes, Lock: a.Lock, Kick: a.Kick, Text: a.Text}
 }
 
 // Check runs one update check. Without apply it only refreshes, records and

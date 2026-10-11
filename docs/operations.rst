@@ -55,16 +55,26 @@ Graceful restarts
 
 .. code-block:: sh
 
-   dzo restart deerisle --minutes 30 --lock 3 --delay 3 --text "Restart"
+   dzo restart deerisle --minutes 30 --lock 7 --kick 3 --text "Restart"
    dzo restart deerisle --now
    dzo restart deerisle --cancel
 
-A graceful restart
+A graceful restart runs on a timeline. Every number is minutes before the restart:
 
-#. announces the restart in game on a countdown,
-#. locks the server a few minutes before the end,
-#. kicks the remaining players (several passes, then everyone),
-#. waits the delay and restarts the service.
+``minutes``
+   the countdown starts (30 in the example)
+``lock``
+   the server is locked against new logins (7)
+``kick``
+   the players are kicked (3). The countdown ends here; the service is stopped
+   when the restart time is reached.
+
+The countdown follows the rhythm of the old ``dayz_restart``: the first message
+when it starts, then at 20, 15, 10, 5, 4, 3, 2 and 1 minutes left, and in the
+last minute at 30, 15, 10, 5, 4, 3, 2 and 1 seconds, all counted down to the
+kick. With 30/7/3 the first message reads "in 27 minutes". Each message is
+``<text> in <time>``; the lock is announced as well. The kick tries up to three
+passes, then kicks everyone.
 
 dzo talks to the server over its own BattlEye RCon client. The restart itself
 goes through the unit's stop (see :ref:`stopping-the-server`). If RCon does not
@@ -83,7 +93,7 @@ Scheduled restarts
 
    restarts:
      schedule: ["*-*-* 02,06,10,14,18,22:00"]
-     announce: {minutes: 30, lock: 3, delay: 3}
+     announce: {minutes: 30, lock: 7, kick: 3}
 
 ``dzo instance apply <name>`` turns them into ``dzo-restart-<name>.timer``.
 One-off restarts ("today at 18:30") can be scheduled in the web interface; they

@@ -44,7 +44,7 @@ restarts:
     announce:
         minutes: 30
         lock: 3
-        delay: 3
+        kick: 3
 health:
     startup_timeout: 30m0s
     interval: 1m0s

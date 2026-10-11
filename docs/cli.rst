@@ -79,7 +79,7 @@ Instances
      - allow starts again after a failed render or crash loop
    * - ``dzo start | stop <name>``
      - start, stop (stays stopped)
-   * - ``dzo restart <name> [--minutes N --lock N --delay N --text T] [--now] [--cancel]``
+   * - ``dzo restart <name> [--minutes N --lock N --kick N --text T] [--now] [--cancel]``
      - graceful restart
    * - ``dzo status [<name>] [--json] [--write <dir>]``
      - state, players, health, restarts, last render (what the exporter reports)

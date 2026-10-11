@@ -107,11 +107,12 @@ type MissionConfig struct {
 	Drift     DriftPolicy `yaml:"drift,omitempty"`
 }
 
-// Announce is a restart/update announcement schedule (A4/legacy dayz_restart).
+// Announce is the timeline of a restart or update restart; every number is minutes
+// before the restart (see instance.Announcement).
 type Announce struct {
 	Minutes int    `yaml:"minutes"`
 	Lock    int    `yaml:"lock"`
-	Delay   int    `yaml:"delay"`
+	Kick    int    `yaml:"kick"`
 	Text    string `yaml:"text,omitempty"`
 }
 

@@ -57,19 +57,23 @@ func TestRestartAnnouncesLocksKicksStopsAndStarts(t *testing.T) {
 	var slept []time.Duration
 	r := Restarter{Lifecycle: lc, Dial: func(context.Context) (Commander, error) { return cmd, nil }, Sleep: func(d time.Duration) { slept = append(slept, d) }}
 	var order []string
-	err := r.Restart(context.Background(), "x", Announcement{Minutes: 3, Lock: 2, Delay: 4, Text: "MOD UPDATE"}, func(context.Context) error {
+	err := r.Restart(context.Background(), "x", Announcement{Minutes: 3, Lock: 2, Kick: 1, Text: "MOD UPDATE"}, func(context.Context) error {
 		order = append(order, "between")
 		return nil
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"say -1 MOD UPDATE in 3 minutes", "#lock", "say -1 MOD UPDATE in 2 minutes", "say -1 MOD UPDATE in 1 minute", "players", "kick 0 MOD UPDATE", "players", "#kick -1"}
+	want := []string{"say -1 MOD UPDATE in 2 minutes", "say -1 MOD UPDATE in 1 minute", "#lock", "say -1 The server is locked for the restart: no new logins", "say -1 MOD UPDATE in 30 seconds", "say -1 MOD UPDATE in 15 seconds", "say -1 MOD UPDATE in 10 seconds", "say -1 MOD UPDATE in 5 seconds", "say -1 MOD UPDATE in 4 seconds", "say -1 MOD UPDATE in 3 seconds", "say -1 MOD UPDATE in 2 seconds", "say -1 MOD UPDATE in 1 second", "players", "kick 0 MOD UPDATE", "players", "#kick -1"}
 	if strings.Join(cmd.cmds, "|") != strings.Join(want, "|") {
 		t.Errorf("RCon commands:\n got %q\nwant %q", cmd.cmds, want)
 	}
-	if len(slept) != 4 || slept[0] != time.Minute || slept[3] != 4*time.Second {
-		t.Errorf("sleeps = %v (three minutes of countdown, then the delay)", slept)
+	var total time.Duration
+	for _, d := range slept {
+		total += d
+	}
+	if total != 3*time.Minute {
+		t.Errorf("sleeps add up to %v, want the three minutes from the start of the countdown to the restart", total)
 	}
 	got := calls()
 	if len(got) < 3 || !strings.Contains(got[len(got)-2], "stop") || !strings.HasSuffix(got[len(got)-1], "start dzo-x.service") {
@@ -143,5 +147,25 @@ func TestACancelMarkerEndsTheCountdown(t *testing.T) {
 	}
 	if cmd.cmds[len(cmd.cmds)-1] != "#unlock" || strings.Contains(strings.Join(calls(), "\n"), " stop ") {
 		t.Errorf("a cancelled restart unlocks and does not stop: %v %v", cmd.cmds, calls())
+	}
+}
+
+func TestTimelineLocksSevenAndKicksThreeMinutesBeforeTheRestart(t *testing.T) {
+	var got []string
+	for _, st := range (Announcement{Minutes: 30, Lock: 7, Kick: 3}).timeline() {
+		what := "say"
+		switch {
+		case st.kick:
+			what = "kick"
+		case st.lock:
+			what = "lock"
+		}
+		got = append(got, what+"@"+st.left.String())
+	}
+	// The announcements count down to the kick: 27 minutes left at the start, 3 minutes before the restart.
+	want := "say@30m0s say@23m0s say@18m0s say@13m0s say@8m0s say@7m0s lock@7m0s say@6m0s say@5m0s say@4m0s " +
+		"say@3m30s say@3m15s say@3m10s say@3m5s say@3m4s say@3m3s say@3m2s say@3m1s kick@3m0s"
+	if strings.Join(got, " ") != want {
+		t.Errorf("timeline:\n got %s\nwant %s", strings.Join(got, " "), want)
 	}
 }

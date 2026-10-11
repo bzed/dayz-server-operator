@@ -391,13 +391,13 @@ func newUpdateGCCmd() *cobra.Command {
 
 func newRestartCmd() *cobra.Command {
 	var configPath, text string
-	var minutes, lock, delay int
+	var minutes, lock, kick int
 	var now, cancel bool
 	cmd := &cobra.Command{
-		Use:   "restart <instance> [--minutes N --lock N --delay N --text T] [--now] [--cancel]",
+		Use:   "restart <instance> [--minutes N --lock N --kick N --text T] [--now] [--cancel]",
 		Short: "Restart an instance gracefully: announce, lock, kick, stop, deploy pending updates, start",
-		Long: "Announces the restart every minute, locks the server --lock minutes before the end, kicks the remaining " +
-			"players, stops it, takes the snapshot the backup policy asks for if updates are pending, rewrites the unit " +
+		Long: "Counts down in game (every ten minutes, then five, then every minute, then in the last seconds before the kick), locks the server --lock minutes before the restart, kicks the " +
+			"players --kick minutes before it, stops it at the restart time, takes the snapshot the backup policy asks for if updates are pending, rewrites the unit " +
 			"with the current generations and starts it again. The defaults come from the instance's restarts.announce. " +
 			"--now skips the countdown. --cancel ends a countdown that is running and unlocks the server.",
 		Args: cobra.ExactArgs(1),
@@ -424,21 +424,21 @@ func newRestartCmd() *cobra.Command {
 				_, _ = fmt.Fprintln(cmd.OutOrStdout(), "cancelled")
 				return nil
 			}
-			a := instance.Announcement{Minutes: inst.Restarts.Announce.Minutes, Lock: inst.Restarts.Announce.Lock, Delay: inst.Restarts.Announce.Delay, Text: inst.Restarts.Announce.Text}
+			a := instance.Announcement{Minutes: inst.Restarts.Announce.Minutes, Lock: inst.Restarts.Announce.Lock, Kick: inst.Restarts.Announce.Kick, Text: inst.Restarts.Announce.Text}
 			if cmd.Flags().Changed("minutes") {
 				a.Minutes = minutes
 			}
 			if cmd.Flags().Changed("lock") {
 				a.Lock = lock
 			}
-			if cmd.Flags().Changed("delay") {
-				a.Delay = delay
+			if cmd.Flags().Changed("kick") {
+				a.Kick = kick
 			}
 			if text != "" {
 				a.Text = text
 			}
 			if now {
-				a.Minutes, a.Lock = 0, 0
+				a.Minutes, a.Lock, a.Kick = 0, 0, 0
 			}
 			err = r.Restart(cmd.Context(), args[0], a, deployFunc(cmd, cfg, configPath, args[0], lc))
 			if errors.Is(err, instance.ErrCancelled) {
@@ -449,9 +449,9 @@ func newRestartCmd() *cobra.Command {
 		},
 	}
 	configFlag(cmd, &configPath)
-	cmd.Flags().IntVar(&minutes, "minutes", 0, "announce for this many minutes (default: restarts.announce.minutes)")
-	cmd.Flags().IntVar(&lock, "lock", 0, "lock the server this many minutes before the end")
-	cmd.Flags().IntVar(&delay, "delay", 0, "seconds between the last kick and the stop")
+	cmd.Flags().IntVar(&minutes, "minutes", 0, "start the countdown this many minutes before the restart (default: restarts.announce.minutes)")
+	cmd.Flags().IntVar(&lock, "lock", 0, "lock the server this many minutes before the restart")
+	cmd.Flags().IntVar(&kick, "kick", 0, "kick the players this many minutes before the restart")
 	cmd.Flags().StringVar(&text, "text", "", "announcement text")
 	cmd.Flags().BoolVar(&now, "now", false, "no countdown: lock, kick and restart at once")
 	cmd.Flags().BoolVar(&cancel, "cancel", false, "cancel a restart that is counting down, and unlock the server")

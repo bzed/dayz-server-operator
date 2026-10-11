@@ -184,7 +184,7 @@ func TestUpToDateAndTheCheckInterval(t *testing.T) {
 }
 
 func TestAutoAppliesInOneAnnouncedCycle(t *testing.T) {
-	ev := newEnv(t, "updates: {policy: auto, restart_announce: {minutes: 5, lock: 2, delay: 3, text: MOD UPDATE}}\n")
+	ev := newEnv(t, "updates: {policy: auto, restart_announce: {minutes: 5, lock: 2, kick: 3, text: MOD UPDATE}}\n")
 	ev.mod("g2") // Refresh finds a new generation
 	if o := ev.outcome(ev.check(false)); o.Action != "ready" || len(ev.applied) != 0 {
 		t.Fatalf("without --apply nothing is restarted: %+v", o)

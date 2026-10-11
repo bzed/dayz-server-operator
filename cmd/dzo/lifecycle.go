@@ -214,7 +214,7 @@ func checkBuildDependencies(cmd *cobra.Command, inst *resolve.Instance, buildDir
 func newInstanceUpgradeCmd() *cobra.Command {
 	var configPath, build, text string
 	var dry, wipe, yes, now bool
-	var minutes, lock, delay int
+	var minutes, lock, kick int
 	c := &cobra.Command{
 		Use:   "upgrade <name> --build <buildid> [--wipe] [--dry-run]",
 		Short: "Switch an instance to another installed server build: announce, stop, snapshot, wipe, switch, render, start",
@@ -263,21 +263,21 @@ func newInstanceUpgradeCmd() *cobra.Command {
 			}
 			lc := instance.Lifecycle{UserMode: true}
 			r := rconRestarter(cmd, cfg, inst, lc)
-			a := instance.Announcement{Minutes: inst.Restarts.Announce.Minutes, Lock: inst.Restarts.Announce.Lock, Delay: inst.Restarts.Announce.Delay, Text: inst.Restarts.Announce.Text}
+			a := instance.Announcement{Minutes: inst.Restarts.Announce.Minutes, Lock: inst.Restarts.Announce.Lock, Kick: inst.Restarts.Announce.Kick, Text: inst.Restarts.Announce.Text}
 			if cmd.Flags().Changed("minutes") {
 				a.Minutes = minutes
 			}
 			if cmd.Flags().Changed("lock") {
 				a.Lock = lock
 			}
-			if cmd.Flags().Changed("delay") {
-				a.Delay = delay
+			if cmd.Flags().Changed("kick") {
+				a.Kick = kick
 			}
 			if text != "" {
 				a.Text = text
 			}
 			if now {
-				a.Minutes, a.Lock = 0, 0
+				a.Minutes, a.Lock, a.Kick = 0, 0, 0
 			}
 			return r.Restart(cmd.Context(), inst.Name, a, upgradeFunc(cmd, cfg, configPath, inst, build, wipe, lc))
 		},
@@ -288,9 +288,9 @@ func newInstanceUpgradeCmd() *cobra.Command {
 	c.Flags().BoolVar(&wipe, "wipe", false, "also delete the world (persistence) after a destructive snapshot")
 	c.Flags().BoolVar(&yes, "yes", false, "do not ask for confirmation (with --wipe)")
 	c.Flags().BoolVar(&now, "now", false, "no countdown: lock, kick and switch at once")
-	c.Flags().IntVar(&minutes, "minutes", 0, "announce for this many minutes (default: restarts.announce.minutes)")
-	c.Flags().IntVar(&lock, "lock", 0, "lock the server this many minutes before the end")
-	c.Flags().IntVar(&delay, "delay", 0, "seconds between the last kick and the stop")
+	c.Flags().IntVar(&minutes, "minutes", 0, "start the countdown this many minutes before the restart (default: restarts.announce.minutes)")
+	c.Flags().IntVar(&lock, "lock", 0, "lock the server this many minutes before the restart")
+	c.Flags().IntVar(&kick, "kick", 0, "kick the players this many minutes before the restart")
 	c.Flags().StringVar(&text, "text", "", "announcement text")
 	_ = c.MarkFlagRequired("build")
 	return c

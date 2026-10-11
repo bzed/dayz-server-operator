@@ -125,10 +125,10 @@ instance.yaml
    updates:
      policy: auto                  # auto | notify | manual (mods only)
      check_interval: 1h
-     restart_announce: {minutes: 12, lock: 5, delay: 2, text: "MOD UPDATE!"}
+     restart_announce: {minutes: 12, lock: 5, kick: 2, text: "MOD UPDATE!"}
    restarts:
      schedule: ["*-*-* 00/4:00"]   # systemd OnCalendar expressions
-     announce: {minutes: 30, lock: 3, delay: 3}
+     announce: {minutes: 30, lock: 7, kick: 3}
    health: {startup_timeout: 45m, interval: 60s, retries: 5}
    restart_limit: {burst: 5, interval: 30min}
    backup:
