@@ -17,10 +17,10 @@ path = "LICENSE"
 SPDX-FileCopyrightText = "Free Software Foundation, Inc."
 SPDX-License-Identifier = "AGPL-3.0-or-later"
 
-# The DeepWiki badge, rendered once by shields.io and kept here so the README does not need the
+# The DeepWiki and "built with" badges, rendered once by shields.io and kept here so the README does not need the
 # long badge URL. The generated SVG cannot carry a header.
 [[annotations]]
-path = "assets/deepwiki.svg"
+path = ["assets/deepwiki.svg", "assets/built-with-*.svg"]
 SPDX-FileCopyrightText = "2026 Bernd Zeimetz <bernd@bzed.de>"
 SPDX-License-Identifier = "AGPL-3.0-or-later"
 

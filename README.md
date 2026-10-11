@@ -25,6 +25,12 @@ shell-script fleet, no external RCon tool. Every server runs in a rootless
 podman container, started by systemd, and everything about your servers lives
 in a git repository you own.
 
+**Built with**
+[![Debian](assets/built-with-debian.svg)](https://www.debian.org/)
+[![Go](assets/built-with-go.svg)](https://go.dev/)
+[![Podman](assets/built-with-podman.svg)](https://podman.io/)
+[![Claude](assets/built-with-claude.svg)](https://claude.com/claude-code)
+
 ## What you get
 
 - **Servers as configuration.** One `instance.yaml` per server (map, ports, mods,
