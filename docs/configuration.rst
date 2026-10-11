@@ -74,6 +74,9 @@ Operator configuration
      driver: sqlite                # or: postgres
      dsn: null
 
+Defaults for all instances (the ``defaults:`` block) are not set here: they are
+in ``site.yaml`` in the site repository, see :ref:`site-yaml`.
+
 Site repository layout
 ----------------------
 
@@ -98,6 +101,39 @@ Site repository layout
 ``dzo site pull`` updates the checkout. Uncommitted local edits block the pull
 and are reported instead of being overwritten. ``dzo site validate`` checks all
 files against their schemas.
+
+.. _site-yaml:
+
+site.yaml
+---------
+
+``site.yaml`` in the root of the site repository is optional. Its ``defaults:``
+block pre-fills settings for every instance: any setting an instance leaves
+unset in its ``instance.yaml`` is taken from here, and a setting the instance
+does set replaces it (a nested block is filled key by key). Keys set in neither
+place get dzo's built-in values.
+
+.. code-block:: yaml
+
+   image: localhost/dzo-runtime:latest   # the runtime container image
+   defaults:
+     restarts:
+       schedule: ["04:00", "16:00"]
+     updates:
+       policy: auto
+     health: {startup_timeout: 45m}
+     backup:
+       keep: 20
+       max_age: 30d
+     notify: {discord: [default]}
+   local_mods:                           # where servermods that are not in the site repo come from
+     mymod: {url: https://example.org/mymod-1.0.zip, sha256: <sha256>}
+
+The blocks that can be defaulted are ``params``, ``updates``, ``restarts``,
+``health``, ``restart_limit``, ``stop``, ``notify``, ``container``, ``backup``
+and ``logs``, with the same keys as in ``instance.yaml`` below. Use
+``dzo instance show <name>`` to see the result for an instance (see
+:doc:`resolved-instance`). Commit the change and run ``dzo site pull`` on the host.
 
 instance.yaml
 -------------
