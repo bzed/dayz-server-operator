@@ -88,6 +88,9 @@ while [ $# -gt 0 ]; do
       app="$2"; id="$3"; shift 2
       if [ -d "$FAKE/mod/$id" ]; then
         mkdir -p "$dir/steamapps/workshop/content/$app/$id"; cp -R "$FAKE/mod/$id/." "$dir/steamapps/workshop/content/$app/$id/"
+        if [ -f "$FAKE/timeupdated/$id" ]; then
+          printf '"AppWorkshop"\n{\n\t"WorkshopItemsInstalled"\n\t{\n\t\t"%s"\n\t\t{\n\t\t\t"size"\t"1"\n\t\t\t"timeupdated"\t"%s"\n\t\t}\n\t}\n}\n' "$id" "$(cat "$FAKE/timeupdated/$id")" > "$dir/steamapps/workshop/appworkshop_$app.acf"
+        fi
         echo "Success. Downloaded item $id to \"$dir\" (1 bytes)"
       else
         echo "ERROR! Download item $id failed (Failure)."

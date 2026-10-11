@@ -201,10 +201,19 @@ func (in *Installer) InstallMods(ctx context.Context, workshopApp uint32, ids []
 
 	results := make([]InstallResult, len(ids))
 	var todo []uint64
+	// unlisted: items the public Web API does not return (unlisted or restricted ones: result 9).
+	// The account may still be allowed to download them, so steamcmd gets to try, and the
+	// version is read from steamcmd's own manifest afterwards.
+	unlisted := map[uint64]FileDetails{}
 	for i, id := range ids {
 		results[i].ID = id
 		fd, ok := details[id]
-		if !ok || fd.Result != 1 {
+		if !ok || fd.Result == fileNotFound {
+			unlisted[id] = FileDetails{PublishedFileID: id, Result: fd.Result}
+			todo = append(todo, id)
+			continue
+		}
+		if fd.Result != 1 {
 			results[i].Err = fmt.Errorf("workshop item %d: Steam has no such item (result %d)", id, fd.Result)
 			continue
 		}
@@ -257,7 +266,11 @@ func (in *Installer) InstallMods(ctx context.Context, workshopApp uint32, ids []
 		if !wanted[id] {
 			continue
 		}
+		_, hidden := unlisted[id]
 		if msg, failed := job.FailedItems[id]; failed {
+			if hidden {
+				msg += " (the public Steam Web API does not list this item either: check the id, and that the Steam account may download it)"
+			}
 			results[i].Err = fmt.Errorf("workshop item %d: download failed: %s", id, msg)
 			continue
 		}
@@ -266,11 +279,40 @@ func (in *Installer) InstallMods(ctx context.Context, workshopApp uint32, ids []
 			results[i].Err = err
 			continue
 		}
-		r, err := in.publish(ModStore(in.CacheRoot, workshopApp, id), ModGenerationID(details[id].TimeUpdated, 0), force, src)
+		updated := details[id].TimeUpdated
+		if hidden {
+			t, err := installedTimeUpdated(work, workshopApp, id)
+			if err != nil {
+				results[i].Err = fmt.Errorf("workshop item %d: %w", id, err)
+				continue
+			}
+			updated = t
+		}
+		r, err := in.publish(ModStore(in.CacheRoot, workshopApp, id), ModGenerationID(updated, 0), force, src)
 		r.ID, r.Err = id, err
 		results[i] = r
 	}
 	return results, nil
+}
+
+// fileNotFound is Steam's result code (k_EResultFileNotFound) for an item the public Web API
+// does not show.
+const fileNotFound = 9
+
+// installedTimeUpdated reads the time an item was last updated from the manifest steamcmd keeps
+// of what it downloaded.
+func installedTimeUpdated(work string, app uint32, id uint64) (int64, error) {
+	a := strconv.FormatUint(uint64(app), 10)
+	data, err := os.ReadFile(filepath.Join(work, "steamapps", "workshop", "appworkshop_"+a+".acf")) //nolint:gosec // path built from a configured app id
+	if err != nil {
+		return 0, fmt.Errorf("steamcmd's manifest is unreadable, so the version of this unlisted item is unknown: %w", err)
+	}
+	re := regexp.MustCompile(`"` + strconv.FormatUint(id, 10) + `"\s*\{[^}]*"timeupdated"\s*"(\d+)"`)
+	m := re.FindStringSubmatch(string(data))
+	if m == nil {
+		return 0, errors.New("steamcmd's manifest has no timeupdated for this unlisted item")
+	}
+	return strconv.ParseInt(m[1], 10, 64)
 }
 
 // wipeWorkshopItem removes steamcmd's downloaded copy, download leftovers and

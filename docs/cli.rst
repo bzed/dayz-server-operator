@@ -120,8 +120,8 @@ Mods
      - the mods of an instance and their installed generation
    * - ``dzo mod remove <id | local name> --instance <name>``
      - remove a mod from an instance's list
-   * - ``dzo mod update [<instance>]``
-     - check and download updates now
+   * - ``dzo mod update [<instance>]`` (also ``dzo mod download``)
+     - download the mods listed in ``instance.yaml`` that are missing, and new versions of the installed ones (to add a new mod to the list use ``dzo mod add``)
    * - ``dzo mod refresh <id>… | --all [--instance <name>] --force``
      - force a fresh download
    * - ``dzo mod deps <pbo | config.bin | config.cpp>``

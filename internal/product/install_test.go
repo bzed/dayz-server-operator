@@ -133,7 +133,7 @@ func TestInstallMods(t *testing.T) {
 	if res[2].Err == nil || !strings.Contains(res[2].Err.Error(), "download failed") {
 		t.Errorf("mod 3 = %+v, want a download error", res[2])
 	}
-	if res[3].Err == nil || !strings.Contains(res[3].Err.Error(), "no such item") {
+	if res[3].Err == nil || !strings.Contains(res[3].Err.Error(), "does not list this item") {
 		t.Errorf("mod 4 = %+v, want an unknown-item error", res[3])
 	}
 	if cur, _ := ModStore(in.CacheRoot, 221100, 2).Current(); cur != "" {
@@ -168,6 +168,31 @@ func TestInstallMods(t *testing.T) {
 	before = downloads(t, fake)
 	if res, _ = in.InstallMods(ctx, 221100, []uint64{1}, false); res[0].Changed || downloads(t, fake) != before {
 		t.Errorf("after a refresh the mod is still up to date: %+v", res[0])
+	}
+}
+
+// An item the public Web API does not show (result 9, unlisted or restricted) is downloaded with
+// the account anyway, and its version comes from steamcmd's manifest.
+func TestInstallModsUnlistedItem(t *testing.T) {
+	in, fake := newInstaller(t, stubDetails{7: {PublishedFileID: 7, Result: 9}})
+	writeTree(t, filepath.Join(fake, "mod", "7"), modFiles(false))
+	writeTree(t, filepath.Join(fake, "timeupdated"), map[string][]byte{"7": []byte("777")})
+	ctx := context.Background()
+
+	res, err := in.InstallMods(ctx, 221100, []uint64{7}, false)
+	if err != nil || res[0].Err != nil || !res[0].Changed || res[0].Generation != "777" {
+		t.Fatalf("install = %+v, %v", res, err)
+	}
+	// the version of an unlisted item is only known after a download: a re-run downloads again
+	// and finds the generation it has
+	res, err = in.InstallMods(ctx, 221100, []uint64{7}, false)
+	if err != nil || res[0].Err != nil || res[0].Changed || res[0].Generation != "777" {
+		t.Fatalf("re-run = %+v, %v", res, err)
+	}
+	// and a version bump on Steam's side becomes a new generation
+	writeTree(t, filepath.Join(fake, "timeupdated"), map[string][]byte{"7": []byte("800")})
+	if res, err = in.InstallMods(ctx, 221100, []uint64{7}, false); err != nil || res[0].Generation != "800" {
+		t.Fatalf("update = %+v, %v", res, err)
 	}
 }
 

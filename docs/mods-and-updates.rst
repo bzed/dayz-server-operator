@@ -131,7 +131,8 @@ touches an existing generation.
 .. code-block:: sh
 
    dzo product install dayz-stable      # first download of the server build
-   dzo mod update [deerisle]            # new mod versions, for one instance or all
+   dzo mod add 1559212036 --instance deerisle   # install a mod and add it to the instance
+   dzo mod update [deerisle]            # download the listed mods and new versions (alias: mod download)
    dzo mod list [deerisle]              # what is installed
 
 Workshop mods are named by Steam's ``time_updated`` (``<time_updated>`` or, after
@@ -139,6 +140,13 @@ a forced refresh, ``<time_updated>-r<n>``) and the server build by its Steam
 build id. Steam downloads run one at a time: dzo holds a lock, and the Steam
 session from ``dzo steam login`` must be valid (``steam.account`` in
 ``config.yaml`` names the account).
+
+Steam's public Web API, which dzo asks for a mod's version, does not show every
+Workshop item: unlisted or restricted ones are missing from it. dzo downloads such a mod with the
+Steam account anyway and takes its version from steamcmd's own manifest. Because the version is
+only known after the download, ``dzo mod update`` downloads these mods again on each run; steamcmd
+only fetches what changed, and an unchanged mod stays at its generation. If the account may not
+download the mod either, the error says so.
 
 A downloaded mod is checked before it becomes a generation: ``meta.cpp`` must be
 there and every PBO under ``addons/`` must parse. If a mod fails the check, the

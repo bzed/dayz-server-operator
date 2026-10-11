@@ -282,9 +282,13 @@ func newModAddCmd() *cobra.Command {
 func newModUpdateCmd() *cobra.Command {
 	var f installFlags
 	cmd := &cobra.Command{
-		Use:   "update [instance]",
-		Short: "Download new mod versions as new generations (running servers are not touched)",
-		Args:  cobra.MaximumNArgs(1),
+		Use:     "update [instance]",
+		Aliases: []string{"download", "install"},
+		Short:   "Download the mods listed in instance.yaml (missing ones, and new versions of installed ones); running servers are not touched",
+		Long: "Downloads every mod in the mod lists of the instance (or of all instances) that is not installed yet, " +
+			"and new versions of the installed ones. Also available as `dzo mod download` and `dzo mod install`. " +
+			"To put a new mod into an instance's list, use `dzo mod add`.",
+		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, tree, err := loadSite(f.config)
 			if err != nil {
