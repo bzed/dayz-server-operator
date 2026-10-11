@@ -77,12 +77,32 @@ and run ``dzo site pull`` on the host; ``dzo site validate`` checks the file.
    # instances/<name>/instance.yaml
    backup:
      before: [update, mod_update, mission_update, config_change]
-     schedule: null            # e.g. "*-*-* 00/6:00"
+     schedule: []              # times of day, like restarts.schedule
      keep: 20
      keep_by_reason: {mod_update: 8, update: 10, scheduled: 12}
      max_age: 30d
      min_keep: 3               # never fewer, regardless of age
      min_free_bytes: 50GiB     # prune the oldest first to keep this free
+
+``schedule`` takes the same entries as ``restarts.schedule``: ``HH:MM``, or
+``Mon,Thu HH:MM`` for some weekdays only, and ``*:MM`` for every hour at that
+minute (``hourly`` is short for ``*:00``). Each entry becomes a time of the
+``dzo-backup-<name>.timer`` that ``dzo instance apply`` writes. For example, a
+snapshot every six hours and an extra one on Saturday evening:
+
+.. code-block:: yaml
+
+   backup:
+     schedule: ["00:00", "06:00", "12:00", "18:00", "Sat 22:30"]
+     keep_by_reason: {scheduled: 12}   # keep the last 12 of these
+
+or one every hour, with the last 24 kept:
+
+.. code-block:: yaml
+
+   backup:
+     schedule: [hourly]                # the same as ["*:00"]
+     keep_by_reason: {scheduled: 24}
 
 The same block as a default for all instances:
 
@@ -146,8 +166,7 @@ A restore takes a ``pre_restore`` snapshot first, so restoring the wrong snapsho
 can be undone, and the data it replaces is kept as a snapshot of reason
 ``replaced``. If the restore fails, the instance is left as it was.
 
-What is not there yet: the periodic snapshots (``backup.schedule``) and the daily
-prune as systemd timers, the snapshot before a server or mod update (those
+What is not there yet: the snapshot before a server or mod update (those
 changes are not automated yet), and the backup of the database, which does not
 exist yet.
 

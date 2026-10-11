@@ -214,8 +214,9 @@ type BackupConfig struct {
 	// mission_update, config_change, render. Unset means the first four; an
 	// empty list means none.
 	Before []string `yaml:"before,omitempty"`
-	// Schedule is a systemd OnCalendar expression for periodic snapshots.
-	Schedule     string         `yaml:"schedule,omitempty"`
+	// Schedule lists the times of day of the periodic snapshots, written like restarts.schedule:
+	// "04:00" or "Mon,Thu 04:00".
+	Schedule     []string       `yaml:"schedule,omitempty"`
 	Keep         int            `yaml:"keep,omitempty"`
 	KeepByReason map[string]int `yaml:"keep_by_reason,omitempty"`
 	MaxAge       Age            `yaml:"max_age,omitempty"`
@@ -450,6 +451,9 @@ func (i Instance) Validate() error {
 		}
 	} else if err := i.MissionSource.Validate(); err != nil {
 		errs = append(errs, err.Error())
+	}
+	if err := i.Backup.Validate(); err != nil {
+		return err
 	}
 	if err := i.Restarts.Validate(); err != nil {
 		errs = append(errs, err.Error())

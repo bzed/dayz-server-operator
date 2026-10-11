@@ -169,6 +169,7 @@ instance.yaml
    restart_limit: {burst: 5, interval: 30min}
    backup:
      keep: 20
+     schedule: ["00:00", "12:00"]  # periodic snapshots, same format as restarts.schedule
    notify: {discord: [default, admins]}
    container:
      env: {}

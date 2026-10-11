@@ -71,7 +71,7 @@ network: host
 mods:
   - {local: tools, server: true}
 restarts: {schedule: ["04:00"], announce: {minutes: 30, lock: 7, kick: 3}}
-backup: {schedule: "*-*-* 00/6:00"}
+backup: {schedule: ["00:00", "Sat 12:30"]}
 updates: {check_interval: 30m, restart_minute: 0, restart_announce: {minutes: 30, lock: 7, kick: 3}}
 `)
 	write(t, filepath.Join(data, "site", "instances", "y", "instance.yaml"), `name: y
@@ -152,6 +152,9 @@ func TestSyncWritesTheUnitsAnInstallationNeeds(t *testing.T) {
 	read := func(f string) string { b, _ := os.ReadFile(filepath.Join(e.data, f)); return string(b) }
 	if !strings.Contains(read("u/dzo-restart-x.service"), "ExecStart=/usr/bin/dzo restart x\n") || !strings.Contains(read("u/dzo-restart-x.timer"), "OnCalendar=*-*-* 03:30:00") {
 		t.Errorf("restart units:\n%s\n%s", read("u/dzo-restart-x.service"), read("u/dzo-restart-x.timer"))
+	}
+	if bt := read("u/dzo-backup-x.timer"); !strings.Contains(bt, "OnCalendar=*-*-* 00:00:00\n") || !strings.Contains(bt, "OnCalendar=Sat *-*-* 12:30:00\n") {
+		t.Errorf("backup timer:\n%s", bt)
 	}
 	if !strings.Contains(read("u/dzo-backup-x.service"), "backup create x --reason scheduled") || !strings.Contains(read("u/dzo-backup-x.timer"), "Persistent=true") {
 		t.Errorf("backup units:\n%s", read("u/dzo-backup-x.service"))

@@ -4,6 +4,7 @@
 package site
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -20,6 +21,10 @@ func TestRestartTimeOnCalendar(t *testing.T) {
 		{"Mon,Thu 00:10", 30 * time.Minute, "Sun,Wed *-*-* 23:40:00"},
 		{"Mon 12:00", 30 * time.Minute, "Mon *-*-* 11:30:00"},
 		{"Sun 00:00", 30 * time.Minute, "Sat *-*-* 23:30:00"},
+		{"hourly", 0, "*-*-* *:00:00"},
+		{"*:30", 0, "*-*-* *:30:00"},
+		{"*:00", 30 * time.Minute, "*-*-* *:30:00"},
+		{"Sat,Sun *:15", 0, "Sat,Sun *-*-* *:15:00"},
 	} {
 		rt, err := ParseRestartTime(c.entry)
 		if err != nil {
@@ -32,7 +37,7 @@ func TestRestartTimeOnCalendar(t *testing.T) {
 }
 
 func TestParseRestartTimeRejectsSystemdSyntax(t *testing.T) {
-	for _, s := range []string{"", "*-*-* 00/4:00", "4:00", "24:00", "04:60", "Fri..Sun 04:00", "Mon 04:00 extra", "Foo 04:00", "04:00:00"} {
+	for _, s := range []string{"", "*-*-* 00/4:00", "4:00", "24:00", "04:60", "Fri..Sun 04:00", "Mon 04:00 extra", "Foo 04:00", "04:00:00", "*:5", "*:60", "**:00", "Mon hourly"} {
 		if _, err := ParseRestartTime(s); err == nil {
 			t.Errorf("%q should be rejected", s)
 		}
@@ -48,5 +53,15 @@ func TestRestartsConfigValidatesTheAnnouncement(t *testing.T) {
 	}
 	if err := (RestartsConfig{Announce: Announce{Minutes: 5, Lock: 7, Kick: 3}}).Validate(); err == nil {
 		t.Error("the lock cannot come before the countdown")
+	}
+}
+
+func TestBackupConfigValidatesTheSchedule(t *testing.T) {
+	if err := (BackupConfig{Schedule: []string{"00:00", "Sat 22:30"}}).Validate(); err != nil {
+		t.Errorf("valid schedule: %v", err)
+	}
+	err := (BackupConfig{Schedule: []string{"*-*-* 00/6:00"}}).Validate()
+	if err == nil || !strings.Contains(err.Error(), "backup.schedule") {
+		t.Errorf("a systemd expression must be rejected, naming backup.schedule: %v", err)
 	}
 }

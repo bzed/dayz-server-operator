@@ -248,8 +248,16 @@ func Desired(o Options, tree *site.Tree) (files []File, warnings []string, err e
 			}
 			files = append(files, timer(o, "dzo-restart-"+name, "Scheduled restart of "+name, o.cmd("restart", name), cal, false)...)
 		}
-		if s := inst.Backup.Schedule; s != "" {
-			files = append(files, timer(o, "dzo-backup-"+name, "Scheduled snapshot of "+name, o.cmd("backup", "create", name, "--reason", "scheduled"), []string{s}, true)...)
+		if len(inst.Backup.Schedule) > 0 {
+			var cal []string
+			for _, s := range inst.Backup.Schedule {
+				bt, err := site.ParseBackupTime(s)
+				if err != nil {
+					return nil, nil, fmt.Errorf("instance %s: %w", name, err)
+				}
+				cal = append(cal, bt.OnCalendar(0))
+			}
+			files = append(files, timer(o, "dzo-backup-"+name, "Scheduled snapshot of "+name, o.cmd("backup", "create", name, "--reason", "scheduled"), cal, true)...)
 		}
 		if m := inst.Updates.RestartMinute; m != nil {
 			start := ((*m-inst.Updates.RestartAnnounce.Minutes)%60 + 60) % 60

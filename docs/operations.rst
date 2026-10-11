@@ -88,7 +88,8 @@ Scheduled restarts
 ------------------
 
 ``restarts.schedule`` in ``instance.yaml`` lists the times of day the server restarts, as ``HH:MM``, or
-``Mon,Thu HH:MM`` for some weekdays only (Mon, Tue, Wed, Thu, Fri, Sat, Sun):
+``Mon,Thu HH:MM`` for some weekdays only (Mon, Tue, Wed, Thu, Fri, Sat, Sun). ``*:MM`` restarts every
+hour at that minute, and ``hourly`` is short for ``*:00``:
 
 .. code-block:: yaml
 
