@@ -41,7 +41,7 @@ Managed files
 
 Generated files
    Folders dzo creates itself: ``mod_<id>/`` for mod CE data, ``custom_<name>/``
-   for overlays, and EditorFiles.
+   for overlays, and ``EditorFiles/``.
 
 Foreign files
    Everything else: ``storage_*``, files mods write at runtime, files you
@@ -167,6 +167,14 @@ Overlays
 An overlay is a folder of mission files: your own tweaks, loadouts, object
 spawners. Shared overlays live in ``site/overlays/``, instance overlays in
 ``instances/<name>/overlays/``. They use the same merge strategies as mods.
+
+EditorFiles
+-----------
+
+Files in ``instances/<name>/EditorFiles/`` (``*.dze`` for the DayZ Editor Loader
+servermod) are copied to ``EditorFiles/`` in the live mission on every render.
+They are generated files: dzo owns them, and a file you remove from the site is
+removed from the mission at the next render.
 
 An ``overlay.yaml`` can declare files that ``cfggameplay.json`` must reference.
 dzo then adds the references with the right path:

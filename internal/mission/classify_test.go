@@ -64,6 +64,7 @@ func TestClassifyGeneratedOrigin(t *testing.T) {
 	writeTree(t, staging, map[string]string{
 		"mod_123/types.xml":        "x",
 		"custom_loadout/gear.json": "y",
+		"EditorFiles/a.dze":        "z",
 	})
 	plan, err := Classify(staging, live, NewManifest(), nil)
 	if err != nil {
@@ -74,6 +75,9 @@ func TestClassifyGeneratedOrigin(t *testing.T) {
 	}
 	if findEntry(t, plan, "custom_loadout/gear.json").Origin != OriginGenerated {
 		t.Error("custom_loadout/gear.json should be Origin=generated")
+	}
+	if findEntry(t, plan, "EditorFiles/a.dze").Origin != OriginGenerated {
+		t.Error("EditorFiles/a.dze should be Origin=generated")
 	}
 }
 

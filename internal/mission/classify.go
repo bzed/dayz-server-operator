@@ -94,11 +94,12 @@ func (p Plan) Empty() bool {
 	return len(p.Changed()) == 0 && len(p.Obsolete()) == 0
 }
 
-// generatedDirPrefixes are the two generated-content directory conventions
-// (§C6): everything else in staging is pristine-managed.
+// isGenerated reports whether relPath is below a generated-content directory
+// (§C6: mod_*, custom_* and EditorFiles); everything else in staging is
+// pristine-managed.
 func isGenerated(relPath string) bool {
 	first, _, _ := strings.Cut(relPath, "/")
-	return strings.HasPrefix(first, "mod_") || strings.HasPrefix(first, "custom_")
+	return strings.HasPrefix(first, "mod_") || strings.HasPrefix(first, "custom_") || first == "EditorFiles"
 }
 
 // isHardExcluded reports whether relPath must never be written or

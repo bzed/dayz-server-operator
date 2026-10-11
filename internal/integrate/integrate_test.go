@@ -234,3 +234,22 @@ func TestPostMergeHooksReceiveTheStaging(t *testing.T) {
 		t.Error("a failing hook must fail the merge")
 	}
 }
+
+func TestInstanceEditorFilesGoToTheEditorFilesFolder(t *testing.T) {
+	dir := t.TempDir()
+	tr := tree(t, dir)
+	inst := &resolve.Instance{Name: "x", Map: "empty.m"}
+	cs, err := Collect(context.Background(), tr, inst, Options{CacheDir: t.TempDir()})
+	if err != nil || len(cs) != 0 {
+		t.Fatalf("no EditorFiles folder adds nothing: %v %v", cs, err)
+	}
+	put(t, filepath.Join(dir, "instances", "x", "EditorFiles", "a.dze"), "A")
+	put(t, filepath.Join(dir, "instances", "x", "EditorFiles", "sub", "b.dze"), "B")
+	cs, err = Collect(context.Background(), tr, inst, Options{CacheDir: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cs) != 1 || cs[0].Folder != "EditorFiles" || len(cs[0].Files) != 2 || cs[0].Files[0].Name != "a.dze" || cs[0].Files[1].Name != "sub/b.dze" {
+		t.Fatalf("contributions = %+v", cs)
+	}
+}

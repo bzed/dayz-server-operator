@@ -48,7 +48,7 @@ type Options struct {
 	Env map[string]string
 }
 
-// Collect gathers the contributions of an instance in merge order: its messages.xml, then every
+// Collect gathers the contributions of an instance in merge order: its messages.xml and EditorFiles, then every
 // mod that has an integration (in the order of the mods list, so later wins), then its overlays
 // (in the order of the overlays list), then the instance's own post_merge hooks.
 func Collect(ctx context.Context, t *site.Tree, inst *resolve.Instance, o Options) ([]mission.Contribution, error) {
@@ -56,6 +56,15 @@ func Collect(ctx context.Context, t *site.Tree, inst *resolve.Instance, o Option
 	instDir := filepath.Join(t.Dir, "instances", inst.Name)
 	if data, err := os.ReadFile(filepath.Join(instDir, "messages.xml")); err == nil { //nolint:gosec // the site checkout
 		out = append(out, mission.Contribution{Name: "instance messages.xml", Folder: "custom_instance", Files: []mission.ContribFile{{Name: "messages.xml", Data: data}}})
+	} else if !os.IsNotExist(err) {
+		return nil, err
+	}
+
+	// EditorFiles (.dze) for the DayZEditorLoader servermod go to <mission>/EditorFiles.
+	if files, err := readFiles("EditorFiles", filepath.Join(instDir, "EditorFiles"), ""); err == nil {
+		if len(files) > 0 {
+			out = append(out, mission.Contribution{Name: "instance EditorFiles", Folder: "EditorFiles", Files: files})
+		}
 	} else if !os.IsNotExist(err) {
 		return nil, err
 	}
@@ -227,25 +236,34 @@ func overlay(name, dir string) (mission.Contribution, error) {
 			return c, fmt.Errorf("overlay %s: %s: %w", name, OverlayFile, err)
 		}
 	}
+	files, err := readFiles("overlay "+name, dir, OverlayFile)
+	c.Files = files
+	return c, err
+}
+
+// readFiles reads every regular file below dir (except the top-level file named skip) as a
+// contribution file; anything else is an error.
+func readFiles(what, dir, skip string) ([]mission.ContribFile, error) {
+	var files []mission.ContribFile
 	err := filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
 		rel, _ := filepath.Rel(dir, p)
-		if d.IsDir() || rel == OverlayFile {
+		if d.IsDir() || rel == skip {
 			return nil
 		}
 		if !d.Type().IsRegular() {
-			return fmt.Errorf("overlay %s: %s is not a regular file", name, rel)
+			return fmt.Errorf("%s: %s is not a regular file", what, rel)
 		}
-		data, err := os.ReadFile(p) //nolint:gosec // inside the overlay folder
+		data, err := os.ReadFile(p) //nolint:gosec // inside the site checkout
 		if err != nil {
 			return err
 		}
-		c.Files = append(c.Files, mission.ContribFile{Name: filepath.ToSlash(rel), Data: data})
+		files = append(files, mission.ContribFile{Name: filepath.ToSlash(rel), Data: data})
 		return nil
 	})
-	return c, err
+	return files, err
 }
 
 // hookRunner returns the AfterMerge callback that runs scripts (relative to dir) in the staging
