@@ -18,6 +18,7 @@ import (
 
 	"github.com/bzed/dayz-server-operator/internal/backup"
 	"github.com/bzed/dayz-server-operator/internal/battleye"
+	"github.com/bzed/dayz-server-operator/internal/btrfs"
 	"github.com/bzed/dayz-server-operator/internal/config"
 	"github.com/bzed/dayz-server-operator/internal/instance"
 	"github.com/bzed/dayz-server-operator/internal/mission"
@@ -112,8 +113,19 @@ func renderInstance(cmd *cobra.Command, cfg *config.Config, inst *resolve.Instan
 		}
 	}
 	src := inst.Mission.Source
-	if _, err := os.Stat(inst.Paths.Pristine); updatePristine || os.IsNotExist(err) {
-		if err := mission.FetchPristine(cmd.Context(), src.Git, src.Ref, src.Path, inst.Paths.Pristine); err != nil {
+	pristine := inst.Paths.Pristine
+	if _, err := os.Stat(pristine); updatePristine || os.IsNotExist(err) {
+		if dryRun {
+			// A dry run writes nothing in the instance: the fetch would create the instance
+			// directory as a plain directory, not the subvolume the first render makes.
+			scratch, err := os.MkdirTemp("", "dzo-pristine-")
+			if err != nil {
+				return err
+			}
+			defer os.RemoveAll(scratch) //nolint:errcheck // scratch dir
+			pristine = filepath.Join(scratch, "pristine")
+		}
+		if err := mission.FetchPristine(cmd.Context(), src.Git, src.Ref, src.Path, pristine); err != nil {
 			return err
 		}
 	}
@@ -122,7 +134,7 @@ func renderInstance(cmd *cobra.Command, cfg *config.Config, inst *resolve.Instan
 		return err
 	}
 	in := mission.RenderInput{
-		PristineDir: inst.Paths.Pristine, LiveDir: inst.Paths.Live, ManifestPath: inst.Paths.Manifest,
+		PristineDir: pristine, LiveDir: inst.Paths.Live, ManifestPath: inst.Paths.Manifest,
 		FileHistoryDir: inst.Paths.FileHistory, Unmanaged: inst.Mission.Unmanaged, DryRun: dryRun,
 	}
 	if err := addIntegrations(cmd, &in, cfg, tree, inst); err != nil {
@@ -176,7 +188,11 @@ func prepareInstanceDir(cmd *cobra.Command, cfg *config.Config, inst *resolve.In
 		return err
 	}
 	if !subvol {
-		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "warning: %s is not a btrfs subvolume, so this instance cannot be backed up\n", inst.Paths.Root)
+		why := "it is not on a btrfs filesystem"
+		if onBtrfs, _ := btrfs.IsBtrfs(inst.Paths.Root); onBtrfs {
+			why = "the directory existed before and is a plain directory (move its contents aside, remove it and render again to get a subvolume)"
+		}
+		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "warning: %s is not a btrfs subvolume, so this instance cannot be backed up: %s\n", inst.Paths.Root, why)
 		return nil
 	}
 	if err := os.MkdirAll(cfg.Paths.Snapshots, 0o750); err != nil {

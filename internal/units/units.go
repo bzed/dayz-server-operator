@@ -21,6 +21,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/bzed/dayz-server-operator/internal/backup"
 	"github.com/bzed/dayz-server-operator/internal/config"
 	"github.com/bzed/dayz-server-operator/internal/instance"
 	"github.com/bzed/dayz-server-operator/internal/quadlet"
@@ -169,6 +170,11 @@ func Pending(inst *resolve.Instance) []string {
 func Record(inst *resolve.Instance) error {
 	b, err := json.MarshalIndent(GensOf(inst), "", "  ")
 	if err != nil {
+		return err
+	}
+	// The instance directory may not exist yet (units are written before the first render): create
+	// it as the subvolume a backup needs, not as the plain directory MkdirAll would leave.
+	if _, err := backup.EnsureInstanceDir(inst.Paths.Root); err != nil {
 		return err
 	}
 	if err := os.MkdirAll(inst.Paths.Runtime, 0o750); err != nil {
