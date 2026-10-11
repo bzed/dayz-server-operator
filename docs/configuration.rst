@@ -70,7 +70,7 @@ Operator configuration
      listen: ":9464"
      tls: {cert_file: null, key_file: null}
 
-   database:
+   database:                       # planned: not read yet, the player database is not built
      driver: sqlite                # or: postgres
      dsn: null
 
