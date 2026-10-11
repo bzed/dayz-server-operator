@@ -184,6 +184,11 @@ jobs:
           path: deb/
       - name: Install the package
         run: |
+          # steamcmd is non-free and i386 only: enable both before apt resolves the dependencies
+          dpkg --add-architecture i386
+          sed -i /etc/apt/sources.list.d/debian.sources -e 's/^Components: main$/Components: main contrib non-free/'
+          echo steamcmd steam/question select "I AGREE" | debconf-set-selections
+          echo steamcmd steam/license note '' | debconf-set-selections
           apt-get update
           apt-get install -y --no-install-recommends ./deb/dzo_*.deb
       - name: dzo version

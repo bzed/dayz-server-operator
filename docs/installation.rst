@@ -16,10 +16,35 @@ Requirements
   anonymously.
 * Enough disk space: about 3 GB per server build, plus mods, plus snapshots.
 
+* The ``contrib`` and ``non-free`` components of the Debian archive and the
+  ``i386`` architecture: the ``steamcmd`` package is non-free and exists for
+  i386 only, and ``dzo`` depends on it (see `Prepare apt`_).
+
 Recommended, not required:
 
 * Mount the btrfs filesystem with ``user_subvol_rm_allowed``. dzo can then delete
   old snapshots instantly. Without it, deletion still works but takes longer.
+
+Prepare apt
+-----------
+
+``dzo`` depends on Debian's ``steamcmd:i386``. That package is non-free and only
+built for i386, so apt must know both before it can install ``dzo``. As root:
+
+.. code-block:: sh
+
+   dpkg --add-architecture i386
+   sed -i /etc/apt/sources.list.d/debian.sources \
+       -e 's/^Components: main$/Components: main contrib non-free/'   # or edit your sources by hand
+   apt update
+
+The steamcmd package asks you to accept Valve's license when it is installed.
+For an unattended install, answer it beforehand:
+
+.. code-block:: sh
+
+   echo steamcmd steam/question select "I AGREE" | debconf-set-selections
+   echo steamcmd steam/license note '' | debconf-set-selections
 
 Add the apt repository
 ----------------------
@@ -41,6 +66,7 @@ key for this one source.
    URIs: https://bzed.github.io/dayz-server-operator/apt
    Suites: trixie
    Components: main
+   Architectures: amd64
    Signed-By: /etc/apt/keyrings/dzo-archive-keyring.asc
    EOF
    apt update
@@ -55,11 +81,11 @@ Install the package
 
 dzo is shipped as a Debian package, ``dzo``, from the repository above or as a
 ``.deb`` file from the CI artifacts. It pulls in ``podman``, ``passt``,
-``git``, ``uidmap`` and the web libraries from Debian. steamcmd is not installed
-on the host. ``dzo setup`` builds a steamcmd container image, but the commands
-that download servers and mods still run the ``steamcmd`` they find in the
-``PATH`` (``--steamcmd`` picks another program, for example a wrapper that runs
-the image).
+``git``, ``uidmap``, ``steamcmd:i386`` and the web libraries from Debian (prepare
+apt as described above first). The commands that download servers and mods run the
+``steamcmd`` they find in the ``PATH`` (``--steamcmd`` picks another program, for
+example a wrapper that runs the ``localhost/dzo-steamcmd`` image that ``dzo setup``
+builds).
 
 .. code-block:: sh
 

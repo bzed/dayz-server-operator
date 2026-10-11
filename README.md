@@ -68,7 +68,12 @@ also a [two-page cheat sheet (PDF)](docs/cheatsheet/dzo-cheatsheet.pdf).
 
 **From the apt repository** (Debian 13 "trixie", amd64; signed, rebuilt from `main`):
 
+`dzo` depends on `steamcmd:i386`, which is non-free and i386 only, so enable both first
+(see the [installation guide](docs/installation.rst) for the details and the license prompt):
+
 ```console
+$ sudo dpkg --add-architecture i386
+$ sudo sed -i /etc/apt/sources.list.d/debian.sources -e 's/^Components: main$/Components: main contrib non-free/'
 $ sudo install -d -m 0755 /etc/apt/keyrings
 $ sudo curl -fsSLo /etc/apt/keyrings/dzo-archive-keyring.asc https://bzed.github.io/dayz-server-operator/apt/dzo-archive-keyring.asc
 $ sudo tee /etc/apt/sources.list.d/dzo.sources <<'EOF'
@@ -76,6 +81,7 @@ Types: deb
 URIs: https://bzed.github.io/dayz-server-operator/apt
 Suites: trixie
 Components: main
+Architectures: amd64
 Signed-By: /etc/apt/keyrings/dzo-archive-keyring.asc
 EOF
 $ sudo apt update && sudo apt install dzo
