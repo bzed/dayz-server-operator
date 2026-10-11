@@ -184,6 +184,16 @@ Main keys:
    gracefully within the update windows, ``notify`` only reports, ``manual``
    only records it.
 
+``updates.restart_minute``
+   With ``policy: auto``, the minute of the hour at which update restarts happen: ``0`` is the
+   full hour, ``30`` is XX:30. The update check then starts the announcement
+   ``restart_announce.minutes`` earlier (with 30 minutes, ``0`` is started at XX:30 and ``30`` at
+   XX:00), so the server restarts exactly at the slot; ``dzo instance apply`` adds those minutes to
+   ``dzo-update-check.timer``. A check that runs more than 10 minutes after the start of the slot
+   waits for the next hour. Without it an update restart starts at the first check that finds the
+   update. Together with ``min_restart_interval: 1h`` a server is restarted for updates at most once
+   an hour.
+
 ``stop``
    How the server is brought down, for ``dzo instance stop``, every restart (maintenance,
    updates, ``dzo restart``) and a reboot of the host. ``method: rcon`` (the default)
@@ -198,7 +208,7 @@ Main keys:
    server unchanged. See :doc:`operations`.
 
 ``restarts.schedule``
-   Maintenance restarts, as systemd calendar expressions.
+   Maintenance restarts: the times of day as ``HH:MM`` or ``Mon,Thu HH:MM``, see :doc:`operations`.
 
 ``health``
    ``startup_timeout`` is how long a start may take (large mod lists load

@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -207,6 +208,7 @@ func exporterUnit(o Options) File {
 // about instances that cannot be deployed yet.
 func Desired(o Options, tree *site.Tree) (files []File, warnings []string, err error) {
 	minCheck := time.Duration(0)
+	var slots []string // the minutes at which update restarts must be started
 	for _, name := range tree.InstanceNames() {
 		inst, err := resolve.Resolve(o.Cfg, tree, name)
 		if err != nil {
@@ -243,6 +245,12 @@ func Desired(o Options, tree *site.Tree) (files []File, warnings []string, err e
 		if s := inst.Backup.Schedule; s != "" {
 			files = append(files, timer(o, "dzo-backup-"+name, "Scheduled snapshot of "+name, o.cmd("backup", "create", name, "--reason", "scheduled"), []string{s}, true)...)
 		}
+		if m := inst.Updates.RestartMinute; m != nil {
+			start := ((*m-inst.Updates.RestartAnnounce.Minutes)%60 + 60) % 60
+			if c := fmt.Sprintf("*:%02d:00", start); !slices.Contains(slots, c) {
+				slots = append(slots, c)
+			}
+		}
 		if iv := inst.Updates.CheckInterval.Std(); iv > 0 && (minCheck == 0 || iv < minCheck) {
 			minCheck = iv
 		}
@@ -250,7 +258,7 @@ func Desired(o Options, tree *site.Tree) (files []File, warnings []string, err e
 	if minCheck == 0 {
 		minCheck = time.Hour
 	}
-	files = append(files, timer(o, "dzo-update-check", "Check for mod updates and apply them as the policies allow", o.cmd("update", "check", "--apply"), []string{Calendar(minCheck)}, true)...)
+	files = append(files, timer(o, "dzo-update-check", "Check for mod updates and apply them as the policies allow", o.cmd("update", "check", "--apply"), append([]string{Calendar(minCheck)}, slots...), true)...)
 	files = append(files, timer(o, "dzo-backup-prune", "Prune old snapshots", o.cmd("backup", "prune"), []string{"daily"}, true)...)
 	files = append(files, timer(o, "dzo-logs", "Rotate the profile logs of all instances", o.cmd("logs", "rotate", "--all"), []string{"hourly"}, true)...)
 	status := o.StatusDir

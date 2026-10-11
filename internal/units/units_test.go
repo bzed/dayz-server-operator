@@ -72,7 +72,7 @@ mods:
   - {local: tools, server: true}
 restarts: {schedule: ["04:00"], announce: {minutes: 30, lock: 7, kick: 3}}
 backup: {schedule: "*-*-* 00/6:00"}
-updates: {check_interval: 30m}
+updates: {check_interval: 30m, restart_minute: 0, restart_announce: {minutes: 30, lock: 7, kick: 3}}
 `)
 	write(t, filepath.Join(data, "site", "instances", "y", "instance.yaml"), `name: y
 product: dayz-experimental
@@ -156,7 +156,7 @@ func TestSyncWritesTheUnitsAnInstallationNeeds(t *testing.T) {
 	if !strings.Contains(read("u/dzo-backup-x.service"), "backup create x --reason scheduled") || !strings.Contains(read("u/dzo-backup-x.timer"), "Persistent=true") {
 		t.Errorf("backup units:\n%s", read("u/dzo-backup-x.service"))
 	}
-	if !strings.Contains(read("u/dzo-update-check.timer"), "OnCalendar=*:0/30") || !strings.Contains(read("u/dzo-update-check.service"), "update check --apply") {
+	if !strings.Contains(read("u/dzo-update-check.timer"), "OnCalendar=*:0/30") || !strings.Contains(read("u/dzo-update-check.timer"), "OnCalendar=*:30:00") || !strings.Contains(read("u/dzo-update-check.service"), "update check --apply") {
 		t.Errorf("update check follows the smallest check_interval:\n%s", read("u/dzo-update-check.timer"))
 	}
 	if !strings.Contains(read("u/dzo-exporter.service"), "ExecReload=/bin/kill -HUP $MAINPID") || !strings.Contains(read("u/dzo-exporter.service"), "ExecStart=/usr/bin/dzo exporter") {

@@ -126,7 +126,10 @@ type UpdatesConfig struct {
 	BatchDelay                Duration     `yaml:"batch_delay,omitempty"`
 	ApplyWithScheduledRestart bool         `yaml:"apply_with_scheduled_restart,omitempty"`
 	MaxDelay                  Duration     `yaml:"max_delay,omitempty"`
-	RestartAnnounce           Announce     `yaml:"restart_announce,omitempty"`
+	// RestartMinute, when set, makes update restarts happen at that minute of an hour (0 is the
+	// full hour, 30 is XX:30): the update check starts the announcement restart_announce.minutes before.
+	RestartMinute   *int     `yaml:"restart_minute,omitempty"`
+	RestartAnnounce Announce `yaml:"restart_announce,omitempty"`
 }
 
 // RestartsConfig controls scheduled maintenance restarts (FR-16).
@@ -486,6 +489,9 @@ func (i Instance) Validate() error {
 		if err := w.Validate(); err != nil {
 			errs = append(errs, "admin_map: "+err.Error())
 		}
+	}
+	if m := i.Updates.RestartMinute; m != nil && (*m < 0 || *m > 59) {
+		errs = append(errs, fmt.Sprintf("updates.restart_minute: %d is not a minute (0-59)", *m))
 	}
 	switch i.Updates.Policy {
 	case "", PolicyAuto, PolicyNotify, PolicyManual:

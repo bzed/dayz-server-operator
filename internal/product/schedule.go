@@ -94,8 +94,21 @@ func EvaluateSchedule(cfg site.UpdatesConfig, in ScheduleInput) (Decision, error
 		return Decision{Apply: false, Reason: "batch_delay not elapsed yet, waiting for more updates"}, nil
 	}
 
+	if m := cfg.RestartMinute; m != nil {
+		// The restart is at minute *m; its announcement starts restart_announce.minutes earlier,
+		// so that is when the update check has to apply it (the timer fires then).
+		start := ((*m-cfg.RestartAnnounce.Minutes)%60 + 60) % 60
+		if (now.Minute()-start+60)%60 >= slotTolerance {
+			return Decision{Apply: false, Reason: fmt.Sprintf(
+				"waiting for the update slot (restart at XX:%02d, announced from XX:%02d)", *m, start)}, nil
+		}
+	}
+
 	return Decision{Apply: true, Reason: "within window, past batch_delay and min_restart_interval"}, nil
 }
+
+// slotTolerance is how many minutes after the start of its slot an update restart is still begun.
+const slotTolerance = 10
 
 // inAnyRange reports whether now's local time-of-day falls inside any of
 // ranges, each formatted "HH:MM-HH:MM". A range whose end is not after its

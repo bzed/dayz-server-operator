@@ -242,3 +242,30 @@ func TestEvaluateScheduleDefaultsNowWhenZero(t *testing.T) {
 		t.Errorf("Apply = false, want true: %s", d.Reason)
 	}
 }
+
+func TestEvaluateScheduleUpdateSlot(t *testing.T) {
+	zero, half := 0, 30
+	ann := site.Announce{Minutes: 30, Lock: 7, Kick: 3}
+	for _, c := range []struct {
+		minute *int
+		now    string
+		apply  bool
+	}{
+		{&zero, "2026-01-01T12:30:00", true},  // announced from :30, restart at 13:00
+		{&zero, "2026-01-01T12:35:00", true},  // a late timer still starts the slot
+		{&zero, "2026-01-01T12:45:00", false}, // too late for this hour's slot
+		{&zero, "2026-01-01T12:00:00", false},
+		{&half, "2026-01-01T12:00:00", true}, // announced from :00, restart at 12:30
+		{&half, "2026-01-01T12:30:00", false},
+		{nil, "2026-01-01T12:17:00", true}, // no slot: immediately
+	} {
+		now := mustParse(t, c.now)
+		d, err := EvaluateSchedule(site.UpdatesConfig{RestartMinute: c.minute, RestartAnnounce: ann}, ScheduleInput{PendingSince: now.Add(-time.Hour), Now: now})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if d.Apply != c.apply {
+			t.Errorf("minute %v at %s: Apply = %v (%s), want %v", c.minute, c.now, d.Apply, d.Reason, c.apply)
+		}
+	}
+}
