@@ -196,7 +196,7 @@ func convertInstance(out map[string][]byte, rep *report, b *branch, o Options) {
 
 	// settings that were cron or compose in the legacy system
 	y.WriteString("updates: {policy: notify}  # review\n")
-	y.WriteString("restarts:\n  schedule: [\"*-*-* 00/4:00\"]  # review: the legacy restart times were cron entries on the host\n")
+	y.WriteString("# review: the legacy restart times were cron entries on the host; set them with restarts: {schedule: [\"04:00\", \"Sat 16:00\"]}\n")
 	rep.add(n, "restart times, update checks and RCon passwords are not in the repository: the defaults in instance.yaml are placeholders")
 
 	// container

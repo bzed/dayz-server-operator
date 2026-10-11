@@ -70,7 +70,7 @@ ports: {game: 2302, rcon: 2306, query: 27016}
 network: host
 mods:
   - {local: tools, server: true}
-restarts: {schedule: ["*-*-* 00/4:00"]}
+restarts: {schedule: ["04:00"], announce: {minutes: 30, lock: 7, kick: 3}}
 backup: {schedule: "*-*-* 00/6:00"}
 updates: {check_interval: 30m}
 `)
@@ -150,7 +150,7 @@ func TestSyncWritesTheUnitsAnInstallationNeeds(t *testing.T) {
 		t.Errorf("warnings = %v", res.Warnings)
 	}
 	read := func(f string) string { b, _ := os.ReadFile(filepath.Join(e.data, f)); return string(b) }
-	if !strings.Contains(read("u/dzo-restart-x.service"), "ExecStart=/usr/bin/dzo restart x\n") || !strings.Contains(read("u/dzo-restart-x.timer"), "OnCalendar=*-*-* 00/4:00") {
+	if !strings.Contains(read("u/dzo-restart-x.service"), "ExecStart=/usr/bin/dzo restart x\n") || !strings.Contains(read("u/dzo-restart-x.timer"), "OnCalendar=*-*-* 03:30:00") {
 		t.Errorf("restart units:\n%s\n%s", read("u/dzo-restart-x.service"), read("u/dzo-restart-x.timer"))
 	}
 	if !strings.Contains(read("u/dzo-backup-x.service"), "backup create x --reason scheduled") || !strings.Contains(read("u/dzo-backup-x.timer"), "Persistent=true") {

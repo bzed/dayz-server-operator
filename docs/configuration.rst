@@ -127,7 +127,7 @@ instance.yaml
      check_interval: 1h
      restart_announce: {minutes: 12, lock: 5, kick: 2, text: "MOD UPDATE!"}
    restarts:
-     schedule: ["*-*-* 00/4:00"]   # systemd OnCalendar expressions
+     schedule: ["04:00", "Sat 16:00"]   # restart times; Mon,Thu 04:00 for some weekdays
      announce: {minutes: 30, lock: 7, kick: 3}
    health: {startup_timeout: 45m, interval: 60s, retries: 5}
    restart_limit: {burst: 5, interval: 30min}

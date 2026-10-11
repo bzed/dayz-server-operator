@@ -49,7 +49,7 @@ Create ``instances/chernarus/instance.yaml`` in the site repository:
    network: host
    mods: []
    restarts:
-     schedule: ["*-*-* 00/4:00"]    # every 4 hours
+     schedule: ["00:00", "04:00", "08:00", "12:00", "16:00", "20:00"]    # every 4 hours
 
 Without ``mission_source`` the mission comes from the ``dayzOffline.chernarusplus``
 folder of the Central Economy repository (see :doc:`missions`). Add a

@@ -4,7 +4,7 @@ image: localhost/dzo-runtime:test
 defaults:
   updates: {policy: notify, check_interval: 1h}
   restarts:
-    schedule: ["*-*-* 00/4:00"]
+    schedule: ["04:00", "Sat 16:00"]
     announce: {minutes: 30, lock: 3, kick: 3}
   health: {startup_timeout: 30m}
   container:

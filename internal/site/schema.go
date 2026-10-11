@@ -448,6 +448,9 @@ func (i Instance) Validate() error {
 	} else if err := i.MissionSource.Validate(); err != nil {
 		errs = append(errs, err.Error())
 	}
+	if err := i.Restarts.Validate(); err != nil {
+		errs = append(errs, err.Error())
+	}
 	if m := i.Stop.Method; m != "" && m != StopRCon && m != StopKill {
 		errs = append(errs, fmt.Sprintf("stop.method must be %q or %q, got %q", StopRCon, StopKill, m))
 	}

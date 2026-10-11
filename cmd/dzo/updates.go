@@ -289,7 +289,12 @@ func newUpdateCheckCmd() *cobra.Command {
 // asking systemd to evaluate its calendar expressions.
 func nextScheduledRestart(inst *resolve.Instance) time.Time {
 	var next time.Time
-	for _, expr := range inst.Restarts.Schedule {
+	for _, entry := range inst.Restarts.Schedule {
+		rt, err := site.ParseRestartTime(entry)
+		if err != nil {
+			continue
+		}
+		expr := rt.OnCalendar(0)
 		out, err := exec.Command("systemd-analyze", "calendar", "--iterations=1", expr).Output() //nolint:gosec // an expression from the site config, as one argument
 		if err != nil {
 			continue

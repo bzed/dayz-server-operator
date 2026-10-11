@@ -228,8 +228,17 @@ func Desired(o Options, tree *site.Tree) (files []File, warnings []string, err e
 		} else {
 			warnings = append(warnings, fmt.Sprintf("instance %s is not deployed: %s", name, strings.Join(inst.Missing, "; ")))
 		}
-		if s := inst.Restarts.Schedule; len(s) > 0 {
-			files = append(files, timer(o, "dzo-restart-"+name, "Scheduled restart of "+name, o.cmd("restart", name), s, false)...)
+		if len(inst.Restarts.Schedule) > 0 {
+			// The schedule holds the restart times; the countdown starts announce.minutes earlier.
+			var cal []string
+			for _, s := range inst.Restarts.Schedule {
+				rt, err := site.ParseRestartTime(s)
+				if err != nil {
+					return nil, nil, fmt.Errorf("instance %s: %w", name, err)
+				}
+				cal = append(cal, rt.OnCalendar(time.Duration(inst.Restarts.Announce.Minutes)*time.Minute))
+			}
+			files = append(files, timer(o, "dzo-restart-"+name, "Scheduled restart of "+name, o.cmd("restart", name), cal, false)...)
 		}
 		if s := inst.Backup.Schedule; s != "" {
 			files = append(files, timer(o, "dzo-backup-"+name, "Scheduled snapshot of "+name, o.cmd("backup", "create", name, "--reason", "scheduled"), []string{s}, true)...)

@@ -87,15 +87,18 @@ merged into one.
 Scheduled restarts
 ------------------
 
-``restarts.schedule`` in ``instance.yaml`` takes systemd calendar expressions:
+``restarts.schedule`` in ``instance.yaml`` lists the times of day the server restarts, as ``HH:MM``, or
+``Mon,Thu HH:MM`` for some weekdays only (Mon, Tue, Wed, Thu, Fri, Sat, Sun):
 
 .. code-block:: yaml
 
    restarts:
-     schedule: ["*-*-* 02,06,10,14,18,22:00"]
+     schedule: ["02:00", "06:00", "10:00", "14:00", "18:00", "22:00"]
      announce: {minutes: 30, lock: 7, kick: 3}
 
-``dzo instance apply <name>`` turns them into ``dzo-restart-<name>.timer``.
+``dzo instance apply <name>`` turns them into ``dzo-restart-<name>.timer``. The times are the
+restart itself: the timer fires ``announce.minutes`` earlier, when the countdown starts (04:00 with
+``minutes: 30`` fires at 03:30). Give every server its own times, so they do not go down together.
 One-off restarts ("today at 18:30") can be scheduled in the web interface; they
 also become systemd timers.
 
