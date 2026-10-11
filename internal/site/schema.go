@@ -173,7 +173,7 @@ func (a Age) Std() time.Duration { return time.Duration(a) }
 // Bytes is a size in bytes that takes units: "500MiB", "50GiB", "2TB", "1024".
 type Bytes int64
 
-var bytesRe = regexp.MustCompile(`^\s*(\d+)\s*([KMGT]?)(i?)B?\s*$`)
+var bytesRe = regexp.MustCompile(`^\s*(\d+)\s*(?:([KMGT])(I?))?B?\s*$`)
 
 // UnmarshalYAML implements yaml.Unmarshaler.
 func (b *Bytes) UnmarshalYAML(unmarshal func(any) error) error {
