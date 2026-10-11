@@ -75,6 +75,17 @@ func runSteamLogin(cmd *cobra.Command, p steamLoginParams) error {
 
 	prompter := &stdinPrompter{in: cmd.InOrStdin(), out: cmd.OutOrStdout()}
 	result, runErr := steam.Run(ctx, steam.Options{Command: p.command, Account: p.user, Prompter: prompter})
+	if runErr == nil && !result.Success && result.Reason == steam.FailureUnknown {
+		// steamcmd ended with output the marker table does not know, which says nothing about the
+		// login itself: it may well have worked (seen with a Steam Guard code). Ask the session it
+		// cached, without prompting; only that answer counts.
+		recheck, recheckErr := steam.Run(ctx, steam.Options{Command: p.command, Account: p.user, Prompter: steam.NonInteractivePrompter{}})
+		if recheckErr == nil && recheck.Success {
+			result = recheck
+		} else {
+			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "unrecognised steamcmd output:\n%s\n", result.Log)
+		}
+	}
 
 	status, loadErr := steam.LoadStatus(path)
 	if loadErr != nil {

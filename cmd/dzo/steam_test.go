@@ -130,6 +130,33 @@ echo "Waiting for user info...OK"
 	}
 }
 
+// A login whose final output the marker table does not recognise is confirmed against the cached
+// session before it is reported as failed.
+func TestSteamLoginUnrecognisedOutputRechecksCachedSession(t *testing.T) {
+	marker := filepath.Join(t.TempDir(), "logged-in")
+	script := writeFakeSteamcmdCmd(t, `
+if [ -e `+marker+` ]; then
+	echo "Waiting for user info...OK"
+	exit 0
+fi
+printf 'password: '
+read pass
+echo ""
+touch `+marker+`
+echo "something steamcmd never said before"
+`)
+	statusFile := filepath.Join(t.TempDir(), "status.json")
+
+	out, err := runCmdWithStdin(t, "s3cr3t\n", "steam", "login",
+		"--user", "bob", "--command", script, "--status-file", statusFile)
+	if err != nil {
+		t.Fatalf("steam login: %v\n%s", err, out)
+	}
+	if !strings.Contains(out, "login OK") || strings.Contains(out, "login failed") {
+		t.Errorf("output = %q", out)
+	}
+}
+
 func TestSteamLoginAppConfirmWaiting(t *testing.T) {
 	script := writeFakeSteamcmdCmd(t, `
 printf 'password: '
