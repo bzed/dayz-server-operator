@@ -204,8 +204,15 @@ func mods(pending []string) []string {
 	return out
 }
 
+// DefaultAnnounceText is the countdown text of a mod update restart; the
+// countdown appends " in N minutes".
+const DefaultAnnounceText = "MOD UPDATE! Restart"
+
 func announcement(inst *resolve.Instance) instance.Announcement {
 	a := inst.Updates.RestartAnnounce
+	if strings.TrimSpace(a.Text) == "" {
+		a.Text = DefaultAnnounceText
+	}
 	return instance.Announcement{Minutes: a.Minutes, Lock: a.Lock, Kick: a.Kick, Text: a.Text}
 }
 

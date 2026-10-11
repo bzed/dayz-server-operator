@@ -125,7 +125,7 @@ instance.yaml
    updates:
      policy: auto                  # auto | notify | manual (mods only)
      check_interval: 1h
-     restart_announce: {minutes: 12, lock: 5, kick: 2, text: "MOD UPDATE!"}
+     restart_announce: {minutes: 12, lock: 5, kick: 2, text: "MOD UPDATE! Restart"}
    restarts:
      schedule: ["04:00", "Sat 16:00"]   # restart times; Mon,Thu 04:00 for some weekdays
      announce: {minutes: 30, lock: 7, kick: 3}

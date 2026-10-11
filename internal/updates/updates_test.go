@@ -419,3 +419,14 @@ func TestGCKeepsWhatIsInUse(t *testing.T) {
 		t.Errorf("nothing left to remove: %v", removed)
 	}
 }
+
+func TestAnnouncementDefaultsText(t *testing.T) {
+	inst := &resolve.Instance{}
+	if got := announcement(inst).Text; got != "MOD UPDATE! Restart" {
+		t.Errorf("default text = %q", got)
+	}
+	inst.Updates.RestartAnnounce.Text = "Patching"
+	if got := announcement(inst).Text; got != "Patching" {
+		t.Errorf("configured text = %q", got)
+	}
+}
