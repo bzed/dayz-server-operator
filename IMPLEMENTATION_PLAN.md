@@ -2052,7 +2052,7 @@ contrib/backup-hooks/       example post_backup hooks: restic, borg
 .github/workflows/, .gitlab-ci.yml   CI (§C15)
 testdata/golden/…           legacy renderer outputs (see E)
 docs/                       Sphinx documentation website (reST, `make docs`), served under /docs/ (D36)
-LICENSE                     symlink to LICENSES/AGPL-3.0-or-later.txt
+LICENSE                     copy of LICENSES/AGPL-3.0-or-later.txt (pkg.go.dev cannot read a symlink)
 LICENSES/                   licence texts (REUSE); every file has SPDX headers
 ```
 

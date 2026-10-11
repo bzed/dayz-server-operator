@@ -40,5 +40,5 @@ License: AGPL-3.0-or-later
  "/usr/share/common-licenses/AGPL-3".
  .
  The full licence text also ships in this source package at
- LICENSES/AGPL-3.0-or-later.txt (LICENSE is a symlink to it, per the
- REUSE specification).
+ LICENSES/AGPL-3.0-or-later.txt (LICENSE is a copy of it, which
+ pkg.go.dev needs).

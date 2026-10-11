@@ -11,9 +11,9 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
   [![CI](https://github.com/bzed/dayz-server-operator/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/bzed/dayz-server-operator/actions/workflows/ci.yml)
   [![Codecov](https://codecov.io/gh/bzed/dayz-server-operator/branch/main/graph/badge.svg)](https://codecov.io/gh/bzed/dayz-server-operator)
-  [![Go Report Card](https://goreportcard.com/badge/github.com/bzed/dayz-server-operator)](https://goreportcard.com/report/github.com/bzed/dayz-server-operator)
   [![Go Reference](https://pkg.go.dev/badge/github.com/bzed/dayz-server-operator.svg)](https://pkg.go.dev/github.com/bzed/dayz-server-operator)
   [![REUSE status](https://api.reuse.software/badge/github.com/bzed/dayz-server-operator)](https://api.reuse.software/info/github.com/bzed/dayz-server-operator)
+  [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/bzed/dayz-server-operator)
   [![License: AGPL v3+](https://img.shields.io/badge/license-AGPL--3.0--or--later-blue.svg)](LICENSE)
 </div>
 

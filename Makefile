@@ -83,6 +83,7 @@ lint:
 ## Debian `reuse` package at runtime/CI time), D15/NFR-09.
 reuse:
 	reuse lint
+	cmp LICENSE LICENSES/AGPL-3.0-or-later.txt
 
 ## vet: run go vet.
 vet:
