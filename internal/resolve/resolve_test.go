@@ -13,6 +13,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/bzed/dayz-server-operator/internal/admin"
 	"github.com/bzed/dayz-server-operator/internal/config"
 	"github.com/bzed/dayz-server-operator/internal/quadlet"
 	"github.com/bzed/dayz-server-operator/internal/site"
@@ -434,5 +435,24 @@ func TestRConBind(t *testing.T) {
 	alpha, _ = Resolve(cfg, tree, "alpha")
 	if alpha.RConAddr() != "[::1]:"+strconv.Itoa(alpha.Ports.RCon) {
 		t.Errorf("instance rcon_bind: %s", alpha.RConAddr())
+	}
+}
+
+func TestAdminMapWatchRulesMergeWithTheSiteDefaults(t *testing.T) {
+	cfg, tree, _ := fixture(t, false)
+	tree.Site.Defaults.AdminMap.Watch = []admin.WatchRule{{Layer: "fires", Classes: []string{"FireplaceBase"}, Icon: "fire"}}
+	raw := tree.Instances["alpha"]
+	raw.AdminMap.Watch = []admin.WatchRule{{Layer: "ufo", Classes: []string{"UFO*"}, Icon: "rocket"}}
+	tree.Instances["alpha"] = raw
+	alpha, err := Resolve(cfg, tree, "alpha")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if w := alpha.AdminMap.Watch; len(w) != 2 || w[0].Layer != "fires" || w[1].Layer != "ufo" {
+		t.Errorf("alpha watch = %+v: the default rule and the instance's own", w)
+	}
+	beta, _ := Resolve(cfg, tree, "beta")
+	if w := beta.AdminMap.Watch; len(w) != 1 || w[0].Layer != "fires" {
+		t.Errorf("beta watch = %+v: only the default", w)
 	}
 }

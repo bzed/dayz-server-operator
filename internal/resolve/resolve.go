@@ -224,6 +224,8 @@ func Resolve(cfg *config.Config, t *site.Tree, name string) (*Instance, error) {
 		fillZero(reflect.ValueOf(&raw).Elem().FieldByName(f), def.FieldByName(f))
 	}
 
+	raw.AdminMap.Watch = site.MergeWatch(t.Site.Defaults.AdminMap.Watch, raw.AdminMap.Watch)
+
 	if len(ownRules) > 0 {
 		raw.Logs.Rotate = append(append([]site.LogRule{}, t.Site.Defaults.Logs.Rotate...), ownRules...)
 	}

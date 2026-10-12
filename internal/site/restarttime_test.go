@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/bzed/dayz-server-operator/internal/admin"
 )
 
 func TestRestartTimeOnCalendar(t *testing.T) {
@@ -76,5 +78,36 @@ func TestValidateRConBind(t *testing.T) {
 		if err := ValidateRConBind(s); err == nil {
 			t.Errorf("%q should be rejected", s)
 		}
+	}
+}
+
+func TestMergeWatchByLayerInstanceWins(t *testing.T) {
+	def := []admin.WatchRule{
+		{Layer: "fires", Classes: []string{"FireplaceBase"}, Icon: "fire", Color: "red"},
+		{Layer: "ufo", Classes: []string{"UFO*"}, Icon: "rocket"},
+	}
+	own := []admin.WatchRule{
+		{Layer: "fires", Classes: []string{"Campfire"}, Icon: "tree"}, // replaces the default rule as a whole
+		{Layer: "convoy", Classes: []string{"eAIBase"}},
+	}
+	got := MergeWatch(def, own)
+	var layers []string
+	for _, w := range got {
+		layers = append(layers, w.Layer)
+	}
+	if strings.Join(layers, ",") != "fires,ufo,convoy" {
+		t.Fatalf("layers = %v: defaults in their order, the instance's new layers after", layers)
+	}
+	if got[0].Icon != "tree" || got[0].Color != "" || got[0].Classes[0] != "Campfire" {
+		t.Errorf("fires = %+v: the instance rule wins as a whole", got[0])
+	}
+	if got[1].Icon != "rocket" {
+		t.Errorf("ufo = %+v: a default without an instance rule stays", got[1])
+	}
+	if out := MergeWatch(nil, own); len(out) != 2 {
+		t.Errorf("no defaults = %v", out)
+	}
+	if out := MergeWatch(def, nil); len(out) != 2 {
+		t.Errorf("no own rules = %v", out)
 	}
 }

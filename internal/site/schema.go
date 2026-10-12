@@ -397,6 +397,37 @@ type AdminConfig struct {
 	DenyClasses  []string `yaml:"deny_classes,omitempty"`
 }
 
+// MergeWatch combines the watch rules of the site defaults with an instance's, by layer name:
+// the instance's rule replaces the default rule of the same layer as a whole (no key-by-key
+// merge), the other default rules stay, in their order, and the instance's own new layers follow.
+func MergeWatch(defaults, own []admin.WatchRule) []admin.WatchRule {
+	if len(defaults) == 0 {
+		return own
+	}
+	byLayer := map[string]admin.WatchRule{}
+	for _, w := range own {
+		byLayer[w.Layer] = w
+	}
+	var out []admin.WatchRule
+	used := map[string]bool{}
+	for _, d := range defaults {
+		if w, ok := byLayer[d.Layer]; ok {
+			d = w
+		}
+		if !used[d.Layer] {
+			used[d.Layer] = true
+			out = append(out, d)
+		}
+	}
+	for _, w := range own {
+		if !used[w.Layer] {
+			used[w.Layer] = true
+			out = append(out, w)
+		}
+	}
+	return out
+}
+
 // AdminMap is the zero-code marker integration (§C16 path 1).
 type AdminMap struct {
 	Watch []admin.WatchRule `yaml:"watch,omitempty"`

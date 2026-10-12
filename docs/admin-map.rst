@@ -149,6 +149,15 @@ Configure per instance which object classes appear on the map:
        - {layer: ai_convoy, classes: ["eAIBase"], icon: android, color: red, cluster: 50}
 
 ``icon`` and ``color`` give the markers of the layer their look, see :ref:`map-icons`.
+Watch rules can also be set once for all instances, under ``defaults:`` in ``site.yaml``
+(``defaults: admin_map: watch: [...]``). They are merged with the rules of an instance **by layer
+name, and the instance wins**: a rule of the instance replaces the default rule of the same layer
+as a whole (its ``classes``, ``icon``, ``color`` and the rest are not mixed with the default's),
+default rules for other layers stay, and the instance's own layers are added after them. There is
+no way to remove a default rule for one instance; give the layer an instance rule that matches
+nothing you care about (for example ``classes: ["NoSuchClass"]``) if you have to.
+``dzo instance show <name>`` prints the merged list.
+
 Rules apply to items (including fireplaces) and cars; buildings, animals and
 players cannot be watched this way yet. Subclasses match too, and a ``*`` at the end of a class name matches a prefix.
 ``max`` limits the markers of a layer. ``cluster`` is a hint for the map

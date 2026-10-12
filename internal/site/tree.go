@@ -19,6 +19,8 @@ import (
 // Defaults are the instance settings site.yaml can pre-fill (§C3): any
 // field an instance leaves unset is taken from here.
 type Defaults struct {
+	// AdminMap.Watch rules are merged with the instance's by layer name, see MergeWatch.
+	AdminMap     AdminMap        `yaml:"admin_map,omitempty"`
 	RConBind     string          `yaml:"rcon_bind,omitempty"`
 	Params       Params          `yaml:"params,omitempty"`
 	Updates      UpdatesConfig   `yaml:"updates,omitempty"`
@@ -93,6 +95,11 @@ func LoadTree(dir string) (*Tree, error) {
 	var errs []error
 	if _, err := readStrict(filepath.Join(dir, "site.yaml"), &t.Site, true); err != nil {
 		errs = append(errs, err)
+	}
+	for _, w := range t.Site.Defaults.AdminMap.Watch {
+		if err := w.Validate(); err != nil {
+			errs = append(errs, fmt.Errorf("site.yaml defaults.admin_map: %w", err))
+		}
 	}
 	for name, l := range t.Site.LocalMods {
 		if err := l.Validate(name); err != nil {

@@ -131,7 +131,8 @@ place get dzo's built-in values.
    local_mods:                           # where servermods that are not in the site repo come from
      mymod: {url: https://example.org/mymod-1.0.zip, sha256: <sha256>}
 
-The settings that can be defaulted are ``rcon_bind`` and the blocks ``params``, ``updates``, ``restarts``,
+The settings that can be defaulted are ``rcon_bind``, ``admin_map.watch`` (the watch rules are merged
+with the instance's by layer name, the instance wins, see :doc:`admin-map`) and the blocks ``params``, ``updates``, ``restarts``,
 ``health``, ``restart_limit``, ``stop``, ``notify``, ``container``, ``backup``
 and ``logs``, with the same keys as in ``instance.yaml`` below. Use
 ``dzo instance show <name>`` to see the result for an instance (see

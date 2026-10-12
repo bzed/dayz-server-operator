@@ -166,7 +166,8 @@ func newSiteValidateCmd() *cobra.Command {
 			failed := 0
 			icons := admin.IconNames(cfg.Web.Assets)
 			for _, name := range tree.InstanceNames() {
-				if _, err := resolve.Resolve(cfg, tree, name); err != nil {
+				inst, err := resolve.Resolve(cfg, tree, name)
+				if err != nil {
 					failed++
 					_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%-20s FAILED: %v\n", name, err)
 					continue
@@ -175,7 +176,7 @@ func newSiteValidateCmd() *cobra.Command {
 				for _, w := range debugClientWarnings(name, tree.Instances[name].Mods) {
 					_, _ = fmt.Fprintln(cmd.ErrOrStderr(), w)
 				}
-				for _, ic := range admin.UnknownIcons(tree.Instances[name].AdminMap.Watch, icons) {
+				for _, ic := range admin.UnknownIcons(inst.AdminMap.Watch, icons) {
 					_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "warning: %s: admin_map icon %q is not in the Fork Awesome font installed here; the map shows a dot instead\n", name, ic)
 				}
 			}
