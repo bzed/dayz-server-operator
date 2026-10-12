@@ -16,6 +16,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"os/user"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -62,6 +63,8 @@ type Options struct {
 	Out        io.Writer
 	Exec       Exec
 	Geteuid    func() int // default os.Geteuid
+	// Groups returns the names of the groups of the current user; default: the process's groups.
+	Groups func() []string
 }
 
 type runner struct {
@@ -93,6 +96,9 @@ func Run(ctx context.Context, o Options) error {
 	if o.Geteuid == nil {
 		o.Geteuid = os.Geteuid
 	}
+	if o.Groups == nil {
+		o.Groups = processGroups
+	}
 	r := &runner{Options: o}
 	if r.Geteuid() == 0 {
 		r.say("error", "run dzo setup as the service user, not as root (sudo -iu dayz dzo setup): rootless podman and the user's systemd need it")
@@ -101,6 +107,7 @@ func Run(ctx context.Context, o Options) error {
 	if o.ImagesOnly {
 		r.images(ctx, true)
 	} else {
+		r.journal()
 		r.paths()
 		r.images(ctx, false)
 		r.steam()
@@ -111,6 +118,40 @@ func Run(ctx context.Context, o Options) error {
 		return fmt.Errorf("setup: %d problem(s), see above", r.problems)
 	}
 	return nil
+}
+
+// firstRegularUID is where systemd's regular users start (login.defs UID_MIN). Below it a user is
+// a system user, for which journald keeps no journal of its own.
+const firstRegularUID = 1000
+
+func processGroups() []string {
+	gids, _ := os.Getgroups()
+	var names []string
+	for _, g := range gids {
+		if grp, err := user.LookupGroupId(strconv.Itoa(g)); err == nil {
+			names = append(names, grp.Name)
+		}
+	}
+	return names
+}
+
+// journal checks that `dzo logs` (journalctl --user) will show this user's services: journald only
+// keeps a journal for a user of its own for a regular user (UID 1000 or higher); a system user's
+// service logs go to the system journal, which it may only read as a member of one of the journal
+// groups.
+func (r *runner) journal() {
+	uid := r.Geteuid()
+	if uid >= firstRegularUID {
+		r.say("ok", "UID %d is a regular user: its services have a journal of their own, dzo logs works", uid)
+		return
+	}
+	for _, g := range r.Groups() {
+		if g == "systemd-journal" || g == "adm" {
+			r.say("ok", "UID %d is a system user, but a member of %s: it can read the system journal", uid, g)
+			return
+		}
+	}
+	r.say("warn", "UID %d is a system user: systemd keeps no journal for it, so dzo logs shows nothing. Either add the user to the systemd-journal group (usermod -aG systemd-journal <user>, then start a new session; it then reads the whole system journal), or use an account with a UID of %d or higher (docs: Installation)", uid, firstRegularUID)
 }
 
 func (r *runner) paths() {

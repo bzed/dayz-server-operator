@@ -52,12 +52,14 @@ The service user and group
 
 .. code-block:: sh
 
-   groupadd --system dayz
-   useradd --system --gid dayz --home-dir /var/lib/dzo --no-create-home \
+   groupadd dayz
+   useradd --gid dayz --home-dir /var/lib/dzo --no-create-home \
        --shell /bin/bash --comment "DayZ server operator" dayz
 
-(The package uses systemd-sysusers with ``u dayz - "DayZ server operator"
-/var/lib/dzo -``; the shell is ``nologin`` there. On a development host a real
+(Not ``--system``: a system user, UID below 1000, has no journal of its own and
+``dzo logs`` could not read its services' logs. The package uses systemd-sysusers with
+``r - 1000-59999`` and ``u dayz - "DayZ server operator" /var/lib/dzo -``, which picks a free
+UID from that range; the shell is ``nologin`` there. On a development host a real
 shell makes ``sudo -iu dayz`` and ``machinectl shell`` easier.) The home
 directory is not created here: it is the mount point of the btrfs filesystem
 below, so it is created once, empty, together with the mount.

@@ -1,3 +1,9 @@
 # SPDX-FileCopyrightText: 2026 Bernd Zeimetz <bernd@bzed.de>
 # SPDX-License-Identifier: AGPL-3.0-or-later
+# dayz must be a regular user (UID 1000 or higher), not a system user: journald keeps a journal of
+# its own only for regular users, and `dzo logs` (journalctl --user) reads that one. A system user's
+# service logs end up in the system journal, which it may not read. sysusers picks a free UID from
+# the top of the range, away from the accounts adduser creates from 1000 upwards. An existing
+# dayz user is left as it is.
+r - 1000-59999
 u dayz - "DayZ server operator" /var/lib/dzo -

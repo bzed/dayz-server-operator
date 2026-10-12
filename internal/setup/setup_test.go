@@ -297,3 +297,28 @@ func TestRefreshCommand(t *testing.T) {
 		}
 	}
 }
+
+func TestSetupChecksTheUserCanReadItsJournal(t *testing.T) {
+	for _, c := range []struct {
+		name   string
+		uid    int
+		groups []string
+		want   string
+	}{
+		{"regular user", 1000, nil, "regular user"},
+		{"system user in no journal group", 998, []string{"dayz"}, "keeps no journal for it"},
+		{"system user in systemd-journal", 998, []string{"dayz", "systemd-journal"}, "member of systemd-journal"},
+		{"system user in adm", 998, []string{"adm"}, "member of adm"},
+	} {
+		e := newEnv(t)
+		if err := e.run(t, func(o *Options) {
+			o.Geteuid = func() int { return c.uid }
+			o.Groups = func() []string { return c.groups }
+		}); err != nil {
+			t.Fatalf("%s: %v\n%s", c.name, err, e.out.String())
+		}
+		if !strings.Contains(e.out.String(), c.want) {
+			t.Errorf("%s: output lacks %q:\n%s", c.name, c.want, e.out.String())
+		}
+	}
+}
