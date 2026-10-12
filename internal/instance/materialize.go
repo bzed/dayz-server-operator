@@ -54,6 +54,10 @@ func (t TimerUnit) Validate() error {
 	return nil
 }
 
+// ServicePathEnv is the PATH of generated services: user units get a minimal one, and Debian
+// installs steamcmd in /usr/games.
+const ServicePathEnv = "PATH=/usr/local/bin:/usr/bin:/bin:/usr/local/games:/usr/games"
+
 // RenderService renders t's paired oneshot .service unit.
 func (t TimerUnit) RenderService() (string, error) {
 	if err := t.Validate(); err != nil {
@@ -63,7 +67,7 @@ func (t TimerUnit) RenderService() (string, error) {
 	if t.Description != "" {
 		fmt.Fprintf(&b, "[Unit]\nDescription=%s\n\n", t.Description)
 	}
-	fmt.Fprintf(&b, "[Service]\nType=oneshot\nExecStart=%s\n", t.ExecStart)
+	fmt.Fprintf(&b, "[Service]\nType=oneshot\nEnvironment=%s\nExecStart=%s\n", ServicePathEnv, t.ExecStart)
 	return b.String(), nil
 }
 

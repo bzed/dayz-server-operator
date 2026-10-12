@@ -206,7 +206,7 @@ func timer(o Options, name, desc, exec string, calendar []string, persistent boo
 func exporterUnit(o Options) File {
 	return File{Dir: Systemd, Name: "dzo-exporter.service", Enable: "dzo-exporter.service", Content: generated(
 		"[Unit]\nDescription=dzo exporter (/metrics and /status)\nAfter=network.target\n\n" +
-			"[Service]\nExecStart=" + o.cmd("exporter") + "\nExecReload=/bin/kill -HUP $MAINPID\nRestart=on-failure\nRestartSec=5\n\n" +
+			"[Service]\nEnvironment=" + instance.ServicePathEnv + "\nExecStart=" + o.cmd("exporter") + "\nExecReload=/bin/kill -HUP $MAINPID\nRestart=on-failure\nRestartSec=5\n\n" +
 			"[Install]\nWantedBy=default.target\n")}
 }
 
@@ -223,14 +223,14 @@ func webConfigured(cfg *config.Config) bool {
 func serveUnit(o Options) File {
 	return File{Dir: Systemd, Name: "dzo-serve.service", Enable: "dzo-serve.service", Content: generated(
 		"[Unit]\nDescription=dzo serve (the API and the endpoint of the dzo-admin mods)\nAfter=network.target\n\n" +
-			"[Service]\nExecStart=" + o.cmd("serve") + "\nExecReload=/bin/kill -HUP $MAINPID\nRestart=on-failure\nRestartSec=5\n\n" +
+			"[Service]\nEnvironment=" + instance.ServicePathEnv + "\nExecStart=" + o.cmd("serve") + "\nExecReload=/bin/kill -HUP $MAINPID\nRestart=on-failure\nRestartSec=5\n\n" +
 			"[Install]\nWantedBy=default.target\n")}
 }
 
 func webUnit(o Options) File {
 	return File{Dir: Systemd, Name: "dzo-web.service", Enable: "dzo-web.service", Content: generated(
 		"[Unit]\nDescription=dzo web interface\nAfter=network.target\n\n" +
-			"[Service]\nExecStart=" + o.cmd("web") + "\nRestart=on-failure\nRestartSec=5\n\n" +
+			"[Service]\nEnvironment=" + instance.ServicePathEnv + "\nExecStart=" + o.cmd("web") + "\nRestart=on-failure\nRestartSec=5\n\n" +
 			"[Install]\nWantedBy=default.target\n")}
 }
 
