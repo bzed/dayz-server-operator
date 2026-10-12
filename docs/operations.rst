@@ -146,8 +146,10 @@ The console reconnects when the server restarts. A new RCon password takes effec
 ``rotate`` refuses a running instance unless ``--restart`` is given. The password lives in
 ``<paths.secrets>/rcon/<instance>``.
 
-The RCon password is generated per instance and bound to localhost where the
-network mode allows it.
+The RCon password is generated per instance. RCon is reachable on the host only (127.0.0.1)
+unless ``rcon_bind`` in ``instance.yaml`` or in the site defaults says otherwise, see
+:doc:`configuration`. To let external RCon tools connect, set ``rcon_bind: 0.0.0.0`` (or one
+address of the host) and allow the RCon port in your firewall for those tools only.
 
 Logs
 ----

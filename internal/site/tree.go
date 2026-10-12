@@ -19,6 +19,7 @@ import (
 // Defaults are the instance settings site.yaml can pre-fill (§C3): any
 // field an instance leaves unset is taken from here.
 type Defaults struct {
+	RConBind     string          `yaml:"rcon_bind,omitempty"`
 	Params       Params          `yaml:"params,omitempty"`
 	Updates      UpdatesConfig   `yaml:"updates,omitempty"`
 	Restarts     RestartsConfig  `yaml:"restarts,omitempty"`

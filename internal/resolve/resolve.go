@@ -18,6 +18,7 @@ package resolve
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -131,6 +132,7 @@ type Instance struct {
 	Mission      Mission              `yaml:"mission"`
 	Paths        Paths                `yaml:"paths"`
 	Ports        site.Ports           `yaml:"ports"`
+	RConBind     string               `yaml:"rcon_bind,omitempty"`
 	Network      site.Network         `yaml:"network"`
 	Image        string               `yaml:"image"`
 	Params       site.Params          `yaml:"params"`
@@ -155,6 +157,39 @@ type Instance struct {
 	// when it is empty.
 	Missing []string              `yaml:"missing,omitempty"`
 	Quadlet quadlet.ContainerSpec `yaml:"-"`
+}
+
+// rconBind is the address RCon is reachable on: rcon_bind, 127.0.0.1 unless set.
+func (i *Instance) rconBind() string {
+	if i.RConBind == "" {
+		return "127.0.0.1"
+	}
+	return i.RConBind
+}
+
+func isWildcard(ip string) bool {
+	p := net.ParseIP(ip)
+	return p != nil && p.IsUnspecified()
+}
+
+// RConAddr is where dzo itself reaches the instance's RCon: the address it is bound to, or the
+// loopback address when it is bound to every interface.
+func (i *Instance) RConAddr() string {
+	host := i.rconBind()
+	if isWildcard(host) {
+		host = "127.0.0.1"
+	}
+	return net.JoinHostPort(host, strconv.Itoa(i.Ports.RCon))
+}
+
+// RConListen is the RConIP for BattlEye's config: "" (every interface) for a wildcard bind. With
+// network: publish the server listens on every address of its container, and the bind is the host
+// address of the published port (see the Quadlet), so it is empty there.
+func (i *Instance) RConListen() string {
+	if i.Network != site.NetworkHost || isWildcard(i.rconBind()) {
+		return ""
+	}
+	return i.rconBind()
 }
 
 // AdminName is the local servermod that enables the admin integration.
@@ -185,7 +220,7 @@ func Resolve(cfg *config.Config, t *site.Tree, name string) (*Instance, error) {
 	// Site defaults fill every field the instance leaves unset.
 	def := reflect.ValueOf(t.Site.Defaults)
 	ownRules := raw.Logs.Rotate
-	for _, f := range []string{"Params", "Updates", "Restarts", "Health", "RestartLimit", "Stop", "Notify", "Container", "Backup", "Logs"} {
+	for _, f := range []string{"RConBind", "Params", "Updates", "Restarts", "Health", "RestartLimit", "Stop", "Notify", "Container", "Backup", "Logs"} {
 		fillZero(reflect.ValueOf(&raw).Elem().FieldByName(f), def.FieldByName(f))
 	}
 
@@ -205,7 +240,7 @@ func Resolve(cfg *config.Config, t *site.Tree, name string) (*Instance, error) {
 	root := filepath.Join(cfg.Paths.Instances, name)
 	inst := &Instance{
 		Binary: cfg.Binary,
-		Name:   name, Map: raw.Map, Ports: raw.Ports, Network: raw.Network, Image: t.Site.Image,
+		Name:   name, Map: raw.Map, Ports: raw.Ports, RConBind: raw.RConBind, Network: raw.Network, Image: t.Site.Image,
 		Params: raw.Params, Overlays: raw.Overlays, Updates: raw.Updates, Restarts: raw.Restarts,
 		Health: raw.Health, RestartLimit: raw.RestartLimit, Stop: raw.Stop, Notify: raw.Notify, Container: raw.Container, Hooks: raw.Hooks, Backup: raw.Backup, Logs: raw.Logs, Admin: raw.Admin, AdminMap: raw.AdminMap,
 		Mission: Mission{Source: src, Fallback: raw.FallbackMission, Unmanaged: raw.Mission.Unmanaged, Drift: raw.Mission.Drift},
@@ -546,7 +581,11 @@ func buildQuadlet(inst *Instance) quadlet.ContainerSpec {
 	if inst.Network == site.NetworkPublish {
 		for _, p := range []int{inst.Ports.Game, inst.Ports.RCon, inst.Ports.Query} {
 			if p != 0 {
-				spec.Ports = append(spec.Ports, quadlet.Port{HostPort: p, ContainerPort: p, Protocol: "udp"})
+				port := quadlet.Port{HostPort: p, ContainerPort: p, Protocol: "udp"}
+				if p == inst.Ports.RCon && !isWildcard(inst.rconBind()) {
+					port.HostIP = inst.rconBind()
+				}
+				spec.Ports = append(spec.Ports, port)
 			}
 		}
 	}

@@ -7,6 +7,7 @@ import (
 	"flag"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -380,5 +381,58 @@ func TestUnitsUseTheConfiguredBinary(t *testing.T) {
 	q := inst.Quadlet
 	if q.PreStart[len(q.PreStart)-1] != "/opt/dzo/bin/dzo instance render alpha" || q.Volumes[0].Source != "/opt/dzo/bin/dzo" {
 		t.Errorf("prestart %v, first volume %+v", q.PreStart, q.Volumes[0])
+	}
+}
+
+func TestRConBind(t *testing.T) {
+	cfg, tree, _ := fixture(t, true)
+	alpha, _ := Resolve(cfg, tree, "alpha") // network: host
+	beta, _ := Resolve(cfg, tree, "beta")   // network: publish
+	rconPort := func(i *Instance) quadlet.Port {
+		for _, p := range i.Quadlet.Ports {
+			if p.ContainerPort == i.Ports.RCon {
+				return p
+			}
+		}
+		return quadlet.Port{}
+	}
+
+	// the default is the loopback address, for both network modes
+	if alpha.RConAddr() != "127.0.0.1:"+strconv.Itoa(alpha.Ports.RCon) || alpha.RConListen() != "127.0.0.1" {
+		t.Errorf("host default: %s, listen %q", alpha.RConAddr(), alpha.RConListen())
+	}
+	if beta.RConListen() != "" || rconPort(beta).HostIP != "127.0.0.1" {
+		t.Errorf("publish default: listen %q, port %+v", beta.RConListen(), rconPort(beta))
+	}
+
+	// every interface: BattlEye gets no RConIP, the port is published everywhere, dzo uses loopback
+	tree.Site.Defaults.RConBind = "0.0.0.0"
+	alpha, _ = Resolve(cfg, tree, "alpha")
+	beta, _ = Resolve(cfg, tree, "beta")
+	if alpha.RConListen() != "" || alpha.RConAddr() != "127.0.0.1:"+strconv.Itoa(alpha.Ports.RCon) {
+		t.Errorf("host, all interfaces: %s, listen %q", alpha.RConAddr(), alpha.RConListen())
+	}
+	if rconPort(beta).HostIP != "" {
+		t.Errorf("publish, all interfaces: %+v", rconPort(beta))
+	}
+
+	// one address: BattlEye listens there, and dzo has to connect there
+	tree.Site.Defaults.RConBind = "192.0.2.7"
+	alpha, _ = Resolve(cfg, tree, "alpha")
+	beta, _ = Resolve(cfg, tree, "beta")
+	if alpha.RConListen() != "192.0.2.7" || alpha.RConAddr() != "192.0.2.7:"+strconv.Itoa(alpha.Ports.RCon) {
+		t.Errorf("host, one address: %s, listen %q", alpha.RConAddr(), alpha.RConListen())
+	}
+	if beta.RConListen() != "" || rconPort(beta).HostIP != "192.0.2.7" || beta.RConAddr() != "192.0.2.7:"+strconv.Itoa(beta.Ports.RCon) {
+		t.Errorf("publish, one address: listen %q, port %+v, addr %s", beta.RConListen(), rconPort(beta), beta.RConAddr())
+	}
+
+	// the instance wins over the site default
+	raw := tree.Instances["alpha"]
+	raw.RConBind = "::1"
+	tree.Instances["alpha"] = raw
+	alpha, _ = Resolve(cfg, tree, "alpha")
+	if alpha.RConAddr() != "[::1]:"+strconv.Itoa(alpha.Ports.RCon) {
+		t.Errorf("instance rcon_bind: %s", alpha.RConAddr())
 	}
 }

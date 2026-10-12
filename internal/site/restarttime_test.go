@@ -65,3 +65,16 @@ func TestBackupConfigValidatesTheSchedule(t *testing.T) {
 		t.Errorf("a systemd expression must be rejected, naming backup.schedule: %v", err)
 	}
 }
+
+func TestValidateRConBind(t *testing.T) {
+	for _, s := range []string{"", "127.0.0.1", "0.0.0.0", "::", "::1", "192.0.2.7"} {
+		if err := ValidateRConBind(s); err != nil {
+			t.Errorf("%q: %v", s, err)
+		}
+	}
+	for _, s := range []string{"localhost", "all", "192.0.2", "127.0.0.1:2303"} {
+		if err := ValidateRConBind(s); err == nil {
+			t.Errorf("%q should be rejected", s)
+		}
+	}
+}

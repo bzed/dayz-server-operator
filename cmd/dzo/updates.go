@@ -87,7 +87,7 @@ func rconRestarter(cmd *cobra.Command, cfg *config.Config, inst *resolve.Instanc
 			// (or the server) in between must not end the restart. Unreachable at the start still
 			// fails fast, so the restart goes ahead without announcing.
 			s := &battleye.Session{
-				Addr: "127.0.0.1:" + fmt.Sprint(inst.Ports.RCon), Password: pw,
+				Addr: inst.RConAddr(), Password: pw,
 				Options:    []battleye.Option{battleye.WithLoginTimeout(5 * time.Second)},
 				MinBackoff: time.Second, MaxBackoff: 10 * time.Second,
 				Log: func(f string, a ...any) { _, _ = fmt.Fprintf(cmd.ErrOrStderr(), f+"\n", a...) },

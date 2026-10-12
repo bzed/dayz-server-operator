@@ -10,6 +10,7 @@ package site
 
 import (
 	"fmt"
+	"net"
 	"regexp"
 	"slices"
 	"strconv"
@@ -44,6 +45,15 @@ type DriftPolicy string
 const (
 	DriftWarnBackupOverwrite DriftPolicy = "warn-backup-overwrite"
 )
+
+// ValidateRConBind checks rcon_bind: empty (the default, 127.0.0.1) or an IP address; 0.0.0.0 and ::
+// mean every interface.
+func ValidateRConBind(s string) error {
+	if s != "" && net.ParseIP(s) == nil {
+		return fmt.Errorf("rcon_bind must be an IP address (127.0.0.1 is the default, 0.0.0.0 is every interface), got %q", s)
+	}
+	return nil
+}
 
 // Ports is an instance's game/RCon/query port set.
 type Ports struct {
@@ -411,6 +421,7 @@ type Instance struct {
 	FallbackMission string          `yaml:"fallback_mission,omitempty"`
 	Mission         MissionConfig   `yaml:"mission,omitempty"`
 	Ports           Ports           `yaml:"ports"`
+	RConBind        string          `yaml:"rcon_bind,omitempty"`
 	Network         Network         `yaml:"network"`
 	Params          Params          `yaml:"params,omitempty"`
 	Mods            []ModRef        `yaml:"mods,omitempty"`
@@ -474,6 +485,9 @@ func (i Instance) Validate() error {
 	}
 	if i.Ports.Game == 0 {
 		errs = append(errs, "ports.game is required")
+	}
+	if err := ValidateRConBind(i.RConBind); err != nil {
+		errs = append(errs, err.Error())
 	}
 	seen := map[string]bool{}
 	for _, m := range i.Mods {

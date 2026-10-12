@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
@@ -359,7 +358,7 @@ func newInstanceShutdownCmd() *cobra.Command {
 				}
 				return strings.TrimSpace(string(b)) == "true", nil
 			}
-			client, err := battleye.Dial("127.0.0.1:"+strconv.Itoa(inst.Ports.RCon), pw, battleye.WithLoginTimeout(5*time.Second))
+			client, err := battleye.Dial(inst.RConAddr(), pw, battleye.WithLoginTimeout(5*time.Second))
 			if err != nil {
 				logf("RCon unreachable (%v), leaving it to the hard stop", err)
 				return nil
@@ -398,12 +397,6 @@ func newInstanceAckFailureCmd() *cobra.Command {
 	return cmd
 }
 
-// rconBind is the address RCon listens on. dzo reaches it on 127.0.0.1, so with host networking
-// nothing else on the network needs to: the game's own ports are the only ones that should be
-// open. In a container network of its own the server must listen on every address of it.
-func rconBind(inst *resolve.Instance) string {
-	if inst.Network == site.NetworkHost {
-		return "127.0.0.1"
-	}
-	return ""
-}
+// rconBind is the RConIP of the BattlEye config (see Instance.RConListen): rcon_bind, which is
+// 127.0.0.1 unless the operator opens RCon to the network.
+func rconBind(inst *resolve.Instance) string { return inst.RConListen() }

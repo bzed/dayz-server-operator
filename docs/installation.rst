@@ -93,7 +93,11 @@ builds).
 
 The package
 
-* creates the system user ``dayz`` with the home directory ``/var/lib/dzo``,
+* creates the user ``dayz`` with the home directory ``/var/lib/dzo``. It gets a free
+  UID of 1000 or higher on purpose: journald keeps a journal of its own only for
+  regular users, and ``dzo logs`` reads that one. (A system user, UID below 1000,
+  may not read the system journal, so ``dzo logs`` would show nothing. An existing
+  ``dayz`` user is left as it is; see below.)
 * assigns subordinate uid/gid ranges to it (needed for rootless podman),
 * enables lingering, so the user's services run without a login,
 * installs the Containerfiles of the two images in ``/usr/share/dzo/images/``,
@@ -149,6 +153,19 @@ Every step reports ``ok``, ``todo`` (what a dry run would do), ``warn`` or
 ``error``. Running it again changes nothing that is already in place, so run it
 after an upgrade too. ``dzo setup --images-only`` rebuilds the images right now
 (that is what the timer runs).
+
+Journal access of an existing ``dayz`` user
+-------------------------------------------
+
+If ``dayz`` already exists as a system user (UID below 1000), ``dzo logs`` and
+``journalctl --user`` show nothing, and ``dzo setup`` warns about it. There are two ways out:
+
+* add the user to the ``systemd-journal`` group, as root:
+  ``usermod -aG systemd-journal dayz``, and start a new session (``loginctl terminate-user dayz``
+  and log in again). This is the small change, but ``dayz`` can then read the whole system journal;
+* or recreate the account with a UID of 1000 or higher. Stop the instances first, give
+  ``dayz`` the new UID (``usermod -u <new uid> dayz``), and change the owner of ``/var/lib/dzo``
+  to it (``chown -R``). On a new host, the package already creates it that way.
 
 Upgrading
 ---------

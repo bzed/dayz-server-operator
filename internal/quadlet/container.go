@@ -10,6 +10,7 @@ package quadlet
 
 import (
 	"fmt"
+	"net"
 	"sort"
 	"strconv"
 	"strings"
@@ -26,6 +27,7 @@ const (
 
 // Port is one published port mapping, used only when Network is "publish".
 type Port struct {
+	HostIP        string // the host address to publish on; empty means every address
 	HostPort      int
 	ContainerPort int
 	Protocol      string // "tcp" or "udp"; empty defaults to tcp
@@ -160,7 +162,11 @@ func RenderContainer(spec ContainerSpec) (string, error) {
 				if proto == "" {
 					proto = "tcp"
 				}
-				kv.set("PublishPort", fmt.Sprintf("%d:%d/%s", p.HostPort, p.ContainerPort, proto))
+				host := ""
+				if p.HostIP != "" {
+					host = net.JoinHostPort(p.HostIP, "") // "127.0.0.1:" or "[::1]:"
+				}
+				kv.set("PublishPort", fmt.Sprintf("%s%d:%d/%s", host, p.HostPort, p.ContainerPort, proto))
 			}
 		}
 

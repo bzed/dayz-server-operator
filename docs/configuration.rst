@@ -129,7 +129,7 @@ place get dzo's built-in values.
    local_mods:                           # where servermods that are not in the site repo come from
      mymod: {url: https://example.org/mymod-1.0.zip, sha256: <sha256>}
 
-The blocks that can be defaulted are ``params``, ``updates``, ``restarts``,
+The settings that can be defaulted are ``rcon_bind`` and the blocks ``params``, ``updates``, ``restarts``,
 ``health``, ``restart_limit``, ``stop``, ``notify``, ``container``, ``backup``
 and ``logs``, with the same keys as in ``instance.yaml`` below. Use
 ``dzo instance show <name>`` to see the result for an instance (see
@@ -152,6 +152,7 @@ instance.yaml
      unmanaged: ["expansion/**"]   # never managed, even if the mission repo ships it
      drift: warn-backup-overwrite
    ports: {game: 8302, rcon: 8303, query: 8716}
+   rcon_bind: 127.0.0.1            # default; 0.0.0.0 opens RCon to the network, see below
    network: host                   # or: publish
    params: {cpuCount: auto, extra: ["-netlog", "-adminlog"]}
    mods:                           # order = merge precedence for mission files (later wins)
@@ -197,6 +198,19 @@ Main keys:
 ``ports``
    Game, RCon and Steam query port. dzo refuses overlapping ports between
    instances.
+
+``rcon_bind``
+   The address BattlEye's RCon (UDP, the ``ports.rcon`` port) is reachable on. The default is
+   ``127.0.0.1``: only the host itself, which is all dzo needs (its own RCon client, the health
+   checks and ``dzo rcon`` connect there), so the password never has to protect a port on the
+   internet. Many hosts want external RCon tools (BERCon, web panels) to connect. Then set an
+   address of the host to bind to it only, or ``0.0.0.0`` (``::`` for IPv6) for every interface;
+   it can be set once under ``defaults:`` in ``site.yaml`` for all instances. It applies with
+   both ``network`` modes (with ``publish`` it is the host address the RCon port is published on),
+   and takes effect at the next start. dzo connects to the address you bound, or to ``127.0.0.1``
+   for ``0.0.0.0``. The RCon password is generated per instance and protects the port, but
+   BattlEye RCon has no encryption and no rate limit beyond its own: allow the port only from the
+   addresses that need it in your firewall.
 
 ``network``
    ``host`` (default) uses the host's network directly. ``publish`` gives the

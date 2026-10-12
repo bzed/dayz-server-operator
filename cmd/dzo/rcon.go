@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
@@ -47,7 +46,7 @@ func newRconExecCmd() *cobra.Command {
 				if password, err = runfiles.RConPassword(cfg.Paths.Secrets, inst.Name); err != nil {
 					return err
 				}
-				addr = "127.0.0.1:" + strconv.Itoa(inst.Ports.RCon)
+				addr = inst.RConAddr()
 			} else if addr == "" || password == "" {
 				return fmt.Errorf("give --instance <name>, or --addr and --password")
 			}
@@ -99,7 +98,7 @@ func newRconConsoleCmd() *cobra.Command {
 				return err
 			}
 			out := cmd.OutOrStdout()
-			s := &battleye.Session{Addr: "127.0.0.1:" + strconv.Itoa(inst.Ports.RCon), Password: pw}
+			s := &battleye.Session{Addr: inst.RConAddr(), Password: pw}
 			s.Start()
 			defer func() { _ = s.Close() }()
 			go func() {

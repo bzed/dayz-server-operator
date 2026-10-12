@@ -246,3 +246,21 @@ func TestRenderContainerPostStop(t *testing.T) {
 		t.Errorf("a post_stop hook must not fail the stop:\n%s", out)
 	}
 }
+
+func TestRenderContainerPublishHostAddress(t *testing.T) {
+	out, err := RenderContainer(ContainerSpec{
+		Name: "dzo-x", Image: "localhost/dzo-runtime:latest", Network: NetworkPublish,
+		Ports: []Port{
+			{HostIP: "127.0.0.1", HostPort: 3303, ContainerPort: 3303, Protocol: "udp"},
+			{HostIP: "::1", HostPort: 3304, ContainerPort: 3304, Protocol: "udp"},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"PublishPort=127.0.0.1:3303:3303/udp\n", "PublishPort=[::1]:3304:3304/udp\n"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing %q:\n%s", want, out)
+		}
+	}
+}
