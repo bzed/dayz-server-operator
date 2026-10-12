@@ -84,6 +84,15 @@ The map shows the map's own satellite imagery, built by dzo from the game's
 data. Without it the map draws a plain 1 km grid; everything else works the
 same.
 
+Which imagery a map uses is decided by the world name: the dzo-admin mod reports the
+world of the running server (``chernarusplus``, ``enoch``, ``sakhal``, ``deerisle``, ...), and
+the web interface uses the tile set of that name, lower-cased, if one has been built
+(``dzo map tiles status`` lists them). Nothing is chosen per instance and nothing is built
+by itself: ``map_tiles.maps.<name>.source`` below only tells ``dzo map tiles build <name>``
+where the source file is. Until it has been run, the map shows the plain grid and the title
+says "no map imagery". The map needs the instance to be running with dzo-admin, because the world
+name comes from it.
+
 The imagery comes from the data PBO of the map, which holds the satellite tiles
 and, for each, the world rectangle it covers. dzo reads the position, the
 orientation and the overlap of every tile from that, so it does not matter which

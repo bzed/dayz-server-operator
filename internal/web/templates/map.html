@@ -6,7 +6,7 @@
 <link rel="stylesheet" href="/vendor/leaflet/leaflet.css">
 <link rel="stylesheet" href="/vendor/fork-awesome/css/fork-awesome.css">
 <div id="map" data-stream="/b/{{.Backend}}/i/{{.Instance}}/stream" data-base="/b/{{.Backend}}/i/{{.Instance}}" data-size="{{.Size}}" data-role="{{.Role}}"{{if .TileMap}} data-tiles="/b/{{.Backend}}/tiles/{{.TileMap}}" data-meta="{{.Meta}}"{{end}}></div>
-<div class="maptitle"><strong>{{.Instance}}</strong>{{if .World}}<span class="mute">{{.World}}</span>{{end}}<a href="/b/{{.Backend}}/i/{{.Instance}}">players and vehicles</a><span class="conn">connection lost, retrying</span></div>
+<div class="maptitle"><strong>{{.Instance}}</strong>{{if .World}}<span class="mute">{{.World}}</span>{{end}}{{if .NoTiles}}<span class="mute" title="the imagery of this world is not built on the host of the API: dzo map tiles build {{.NoTiles}}">no map imagery</span>{{end}}<a href="/b/{{.Backend}}/i/{{.Instance}}">players and vehicles</a><span class="conn">connection lost, retrying</span></div>
 <div id="flash"></div>
 <script src="/vendor/leaflet/leaflet.js"></script>
 <script src="/static/map.js" defer></script>

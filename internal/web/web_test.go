@@ -335,6 +335,9 @@ func TestMapTiles(t *testing.T) {
 	if _, body, _ := e.get("/b/main/i/alpha/map"); strings.Contains(body, "data-tiles") {
 		t.Fatalf("a map without tiles must not announce any: %s", body)
 	}
+	if _, body, _ := e.get("/b/main/i/alpha/map"); !strings.Contains(body, "no map imagery") || !strings.Contains(body, "dzo map tiles build enoch") {
+		t.Fatalf("a map without tiles says how to get them: %s", body)
+	}
 	root := t.TempDir()
 	set := filepath.Join(root, "enoch", "abcdef0123456789")
 	if err := os.MkdirAll(filepath.Join(set, "0", "0"), 0o750); err != nil {
@@ -348,6 +351,9 @@ func TestMapTiles(t *testing.T) {
 	e.api.TilesDir = root
 
 	_, body, _ := e.get("/b/main/i/alpha/map")
+	if strings.Contains(body, "no map imagery") {
+		t.Fatalf("a map with tiles needs no hint: %s", body)
+	}
 	if !strings.Contains(body, `data-tiles="/b/main/tiles/enoch"`) || !strings.Contains(body, `data-meta="{&#34;map&#34;:&#34;enoch&#34;`) {
 		t.Fatalf("map page: %s", body)
 	}

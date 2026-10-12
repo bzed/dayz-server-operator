@@ -165,6 +165,7 @@ type mapView struct {
 	World             string
 	Role              api.Role
 	TileMap           string // the map's name in the tile route, when it has tiles
+	NoTiles           string // the tile set the map would use if it were built (the lower-case world name)
 	Meta              string // the tile set's metadata.json
 	Err               string
 }
@@ -219,6 +220,8 @@ func (s *Server) mapPage(w http.ResponseWriter, r *http.Request) {
 		if name := strings.ToLower(st.Hello.World); api.ValidTilePath(name, "metadata.json") {
 			if v.Meta = s.tileMeta(r, c, name); v.Meta != "" {
 				v.TileMap = name
+			} else {
+				v.NoTiles = name
 			}
 		}
 	}
