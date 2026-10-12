@@ -4,6 +4,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os/exec"
 	"strconv"
@@ -11,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/bzed/dayz-server-operator/internal/config"
+	"github.com/bzed/dayz-server-operator/internal/instance"
 	"github.com/bzed/dayz-server-operator/internal/resolve"
 	"github.com/bzed/dayz-server-operator/internal/site"
 )
@@ -22,9 +24,66 @@ func newStartCmd() *cobra.Command {
 	return c
 }
 
+// newStopCmd stops an instance and keeps it stopped. Without options it is dzo instance stop; with
+// any of the countdown options it announces to the players first, like dzo restart.
 func newStopCmd() *cobra.Command {
+	var configPath, text string
+	var minutes, lock, kick int
+	var graceful, cancel bool
 	c := newInstanceStopCmd()
-	c.Short = "Stop an instance and keep it stopped (same as dzo instance stop)"
+	plain := c.RunE
+	c.Use = "stop <name> [--graceful | --minutes N --lock N --kick N --text T] [--cancel]"
+	c.Short = "Stop an instance and keep it stopped; with a countdown option, announce, lock and kick the players first"
+	c.Long = "Without options the server is stopped at once (dzo instance stop). --graceful, or any of --minutes, " +
+		"--lock, --kick and --text, counts down in game like dzo restart: announcements, the lock against new " +
+		"logins --lock minutes before the stop, the kick --kick minutes before it, then the stop. The values " +
+		"that are not given come from the instance's restarts.announce. --cancel ends a countdown that is " +
+		"running and unlocks the server."
+	c.RunE = func(cmd *cobra.Command, args []string) error {
+		f := cmd.Flags()
+		counting := graceful || f.Changed("minutes") || f.Changed("lock") || f.Changed("kick") || text != ""
+		if !counting && !cancel {
+			return plain(cmd, args)
+		}
+		cfg, inst, err := loadInstance(configPath, args[0])
+		if err != nil {
+			return err
+		}
+		lc := instance.Lifecycle{UserMode: true}
+		if u, err := f.GetBool("user"); err == nil {
+			lc.UserMode = u
+		}
+		if s, err := f.GetString("command"); err == nil {
+			lc.Command = s
+		}
+		r := rconRestarter(cmd, cfg, inst, lc)
+		if cancel {
+			return cancelCountdown(cmd, inst, r)
+		}
+		a := instance.Announcement{Minutes: inst.Restarts.Announce.Minutes, Lock: inst.Restarts.Announce.Lock, Kick: inst.Restarts.Announce.Kick, Text: text}
+		if f.Changed("minutes") {
+			a.Minutes = minutes
+		}
+		if f.Changed("lock") {
+			a.Lock = lock
+		}
+		if f.Changed("kick") {
+			a.Kick = kick
+		}
+		err = r.Stop(cmd.Context(), args[0], a)
+		if errors.Is(err, instance.ErrCancelled) {
+			_, _ = fmt.Fprintln(cmd.OutOrStdout(), "the stop was cancelled")
+			return nil
+		}
+		return err
+	}
+	configFlag(c, &configPath)
+	c.Flags().BoolVar(&graceful, "graceful", false, "count down with restarts.announce before stopping")
+	c.Flags().IntVar(&minutes, "minutes", 0, "start the countdown this many minutes before the stop (default: restarts.announce.minutes)")
+	c.Flags().IntVar(&lock, "lock", 0, "lock the server this many minutes before the stop")
+	c.Flags().IntVar(&kick, "kick", 0, "kick the players this many minutes before the stop")
+	c.Flags().StringVar(&text, "text", "", "announcement text (default: Server shutdown)")
+	c.Flags().BoolVar(&cancel, "cancel", false, "cancel a stop (or restart) that is counting down, and unlock the server")
 	return c
 }
 

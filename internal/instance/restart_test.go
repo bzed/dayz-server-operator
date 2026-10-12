@@ -169,3 +169,49 @@ func TestTimelineLocksSevenAndKicksThreeMinutesBeforeTheRestart(t *testing.T) {
 		t.Errorf("timeline:\n got %s\nwant %s", strings.Join(got, " "), want)
 	}
 }
+
+func TestStopCountsDownThenStopsAndStaysStopped(t *testing.T) {
+	lc, calls := fakeSystemctl(t, true)
+	cmd := &recCommander{}
+	r := Restarter{Lifecycle: lc, Dial: func(context.Context) (Commander, error) { return cmd, nil }, Sleep: func(time.Duration) {}}
+	if err := r.Stop(context.Background(), "x", Announcement{Minutes: 2, Lock: 1, Kick: 1}); err != nil {
+		t.Fatal(err)
+	}
+	said := strings.Join(cmd.cmds, "|")
+	for _, want := range []string{"say -1 Server shutdown in 1 minute", "#lock", "kick", "#kick -1"} {
+		if !strings.Contains(said, want) {
+			t.Errorf("RCon commands lack %q: %q", want, cmd.cmds)
+		}
+	}
+	if strings.Contains(said, "restart") {
+		t.Errorf("a stop must not talk about a restart: %q", cmd.cmds)
+	}
+	got := calls()
+	if !strings.Contains(got[len(got)-1], "stop dzo-x.service") || strings.Contains(strings.Join(got, "\n"), "start dzo-x.service") {
+		t.Errorf("systemctl calls = %q: stop, and no start", got)
+	}
+}
+
+func TestStopOfAStoppedInstanceDoesNotAnnounce(t *testing.T) {
+	lc, calls := fakeSystemctl(t, false)
+	r := Restarter{Lifecycle: lc, Dial: func(context.Context) (Commander, error) { t.Error("a stopped server has no RCon"); return nil, nil }}
+	if err := r.Stop(context.Background(), "x", Announcement{Minutes: 5}); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(strings.Join(calls(), "\n"), "stop dzo-x.service") {
+		t.Errorf("calls %v", calls())
+	}
+}
+
+func TestACancelledStopSaysSoAndKeepsTheServerRunning(t *testing.T) {
+	lc, calls := fakeSystemctl(t, true)
+	cmd := &recCommander{}
+	r := Restarter{Lifecycle: lc, Dial: func(context.Context) (Commander, error) { return cmd, nil }, Sleep: func(time.Duration) {}, Cancelled: func() bool { return true }}
+	err := r.Stop(context.Background(), "x", Announcement{Minutes: 5, Kick: 1})
+	if !errors.Is(err, ErrCancelled) {
+		t.Fatalf("err = %v", err)
+	}
+	if !strings.Contains(strings.Join(cmd.cmds, "|"), "The shutdown was cancelled") || strings.Contains(strings.Join(calls(), "\n"), "stop dzo-x.service") {
+		t.Errorf("RCon %q, systemctl %v", cmd.cmds, calls())
+	}
+}

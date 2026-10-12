@@ -23,6 +23,16 @@ type Announcement struct {
 	Lock    int
 	Kick    int
 	Text    string
+	// Event names what is coming in the messages to the players: "restart" (the default) or
+	// "shutdown".
+	Event string
+}
+
+func (a Announcement) event() string {
+	if a.Event == "" {
+		return "restart"
+	}
+	return a.Event
 }
 
 // Announcements are made at these times left until the kick, plus one at the start of the
@@ -49,7 +59,7 @@ func (a Announcement) timeline() []step {
 	total := time.Duration(a.Minutes) * time.Minute
 	text := strings.TrimSpace(a.Text)
 	if text == "" {
-		text = "Server restart"
+		text = "Server " + a.event()
 	}
 	if lock < kick {
 		lock = kick // the server is locked at the latest when the players are kicked
@@ -64,7 +74,7 @@ func (a Announcement) timeline() []step {
 		}
 	}
 	if lock > kick {
-		steps = append(steps, step{left: lock, lock: true, say: "The server is locked for the restart: no new logins"})
+		steps = append(steps, step{left: lock, lock: true, say: "The server is locked for the " + a.event() + ": no new logins"})
 	}
 	steps = append(steps, step{left: kick, kick: true})
 	sort.SliceStable(steps, func(i, j int) bool { return steps[i].left > steps[j].left })
@@ -102,7 +112,7 @@ type Restarter struct {
 	Cancelled func() bool
 }
 
-// ErrCancelled is returned by a restart that was cancelled during its countdown.
+// ErrCancelled is returned by a restart or stop that was cancelled during its countdown.
 var ErrCancelled = errors.New("instance: the restart was cancelled")
 
 func (r Restarter) sleep(d time.Duration) {
@@ -126,18 +136,7 @@ func (r Restarter) log(format string, a ...any) {
 func (r Restarter) Restart(ctx context.Context, name string, a Announcement, between func(ctx context.Context) error) error {
 	active, _ := r.Lifecycle.IsActive(ctx, name)
 	if active {
-		if c, err := r.Dial(ctx); err != nil {
-			r.log("RCon unreachable (%v), stopping without announcement", err)
-		} else {
-			err := r.countdown(ctx, c, a)
-			if cl, ok := c.(io.Closer); ok {
-				_ = cl.Close()
-			}
-			if err != nil {
-				return err
-			}
-		}
-		if err := r.Lifecycle.Stop(ctx, name); err != nil {
+		if err := r.announceAndStop(ctx, name, a); err != nil {
 			return err
 		}
 	}
@@ -154,15 +153,41 @@ func (r Restarter) Restart(ctx context.Context, name string, a Announcement, bet
 	return r.Lifecycle.Start(ctx, name)
 }
 
+// Stop stops the instance and leaves it stopped, after the same countdown a restart makes: the
+// announcements, the lock and the kick. An instance that is not running is not announced to.
+func (r Restarter) Stop(ctx context.Context, name string, a Announcement) error {
+	a.Event = "shutdown"
+	if active, _ := r.Lifecycle.IsActive(ctx, name); !active {
+		return r.Lifecycle.Stop(ctx, name)
+	}
+	return r.announceAndStop(ctx, name, a)
+}
+
+// announceAndStop counts down to the players when RCon is reachable, then stops the unit.
+func (r Restarter) announceAndStop(ctx context.Context, name string, a Announcement) error {
+	if c, err := r.Dial(ctx); err != nil {
+		r.log("RCon unreachable (%v), stopping without announcement", err)
+	} else {
+		err := r.countdown(ctx, c, a)
+		if cl, ok := c.(io.Closer); ok {
+			_ = cl.Close()
+		}
+		if err != nil {
+			return err
+		}
+	}
+	return r.Lifecycle.Stop(ctx, name)
+}
+
 func (r Restarter) countdown(ctx context.Context, c Commander, a Announcement) error {
 	text := strings.TrimSpace(a.Text)
 	if text == "" {
-		text = "Server restart"
+		text = "Server " + a.event()
 	}
 	locked := false
 	left := time.Duration(a.Minutes) * time.Minute
 	for _, st := range a.timeline() {
-		if err := r.wait(ctx, c, left-st.left, &locked); err != nil {
+		if err := r.wait(ctx, c, left-st.left, &locked, a.event()); err != nil {
 			return err
 		}
 		left = st.left
@@ -188,12 +213,12 @@ func (r Restarter) countdown(ctx context.Context, c Commander, a Announcement) e
 			}
 		}
 	}
-	return r.wait(ctx, c, left, &locked)
+	return r.wait(ctx, c, left, &locked, a.event())
 }
 
 // wait sleeps for d in steps of at most a minute, so that a cancelled restart ends quickly. A
 // cancelled restart unlocks the server again.
-func (r Restarter) wait(ctx context.Context, c Commander, d time.Duration, locked *bool) error {
+func (r Restarter) wait(ctx context.Context, c Commander, d time.Duration, locked *bool, event string) error {
 	for d > 0 {
 		step := d
 		if step > time.Minute {
@@ -206,7 +231,7 @@ func (r Restarter) wait(ctx context.Context, c Commander, d time.Duration, locke
 			return err
 		}
 		if r.Cancelled != nil && r.Cancelled() {
-			_ = Announce(ctx, c, "The restart was cancelled")
+			_ = Announce(ctx, c, "The "+event+" was cancelled")
 			_ = Unlock(ctx, c)
 			return ErrCancelled
 		}

@@ -84,6 +84,31 @@ The restart runs as its own systemd unit, so it continues if your SSH session
 ends. When a maintenance restart and an update restart fall together, they are
 merged into one.
 
+.. _graceful-stop:
+
+Stopping with a countdown
+-------------------------
+
+``dzo stop`` stops at once. To be nice to the players, give it the countdown of a restart:
+
+.. code-block:: sh
+
+   dzo stop deerisle --graceful                   # the restarts.announce numbers
+   dzo stop deerisle --minutes 10 --lock 3 --kick 1 --text "Server maintenance"
+   dzo stop deerisle --cancel                     # end a countdown, unlock the server
+
+Any of ``--graceful``, ``--minutes``, ``--lock``, ``--kick`` and ``--text`` turns the countdown on;
+the numbers you leave out come from the instance's ``restarts.announce``. The timeline, the
+messages and the RCon handling are those of the restart above, with the messages saying
+"Server shutdown" (or your ``--text``) instead of "restart". When the time is up the service is
+stopped and stays stopped. An instance that is not running is not announced to, and without RCon
+the stop goes ahead at once. ``dzo stop <name> --cancel`` (and ``dzo restart <name> --cancel``)
+ends either countdown.
+
+The countdown runs in the command itself (only scheduled restarts run as a unit of their own), so
+it ends with your session. For a long one, run it inside ``tmux``, or as
+``systemd-run --user dzo stop deerisle --graceful``.
+
 Scheduled restarts
 ------------------
 

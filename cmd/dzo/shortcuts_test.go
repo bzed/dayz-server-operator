@@ -80,3 +80,20 @@ func TestSiteValidateAndPull(t *testing.T) {
 		t.Errorf("the second commit was not pulled: %v", err)
 	}
 }
+
+func TestStopWithCountdownOptions(t *testing.T) {
+	cfg := exporterSite(t, "")
+	script := writeFakeSystemctlCmd(t, 0) // not active: there is nobody to announce to
+	for _, args := range [][]string{
+		{"stop", "x", "--graceful", "--config", cfg, "--command", script},
+		{"stop", "x", "--minutes", "5", "--lock", "2", "--kick", "1", "--text", "Maintenance", "--config", cfg, "--command", script},
+	} {
+		if out, err := runCmd(t, args...); err != nil {
+			t.Errorf("dzo %v: %v\n%s", args, err, out)
+		}
+	}
+	// the countdown options need the site; an unknown instance fails instead of stopping plainly
+	if _, err := runCmd(t, "stop", "nope", "--graceful", "--config", cfg, "--command", script); err == nil {
+		t.Error("an unknown instance must fail")
+	}
+}

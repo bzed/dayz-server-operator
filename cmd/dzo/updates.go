@@ -394,6 +394,24 @@ func newUpdateGCCmd() *cobra.Command {
 	return cmd
 }
 
+// cancelCountdown ends a restart or stop that is counting down, and unlocks the server.
+func cancelCountdown(cmd *cobra.Command, inst *resolve.Instance, r instance.Restarter) error {
+	if err := os.MkdirAll(inst.Paths.Runtime, 0o750); err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(inst.Paths.Runtime, "restart-cancel"), nil, 0o600); err != nil {
+		return err
+	}
+	if c, err := r.Dial(cmd.Context()); err == nil {
+		_ = instance.Unlock(cmd.Context(), c)
+		if cl, ok := c.(interface{ Close() error }); ok {
+			_ = cl.Close()
+		}
+	}
+	_, _ = fmt.Fprintln(cmd.OutOrStdout(), "cancelled")
+	return nil
+}
+
 func newRestartCmd() *cobra.Command {
 	var configPath, text string
 	var minutes, lock, kick int
@@ -414,20 +432,7 @@ func newRestartCmd() *cobra.Command {
 			lc := instance.Lifecycle{UserMode: true}
 			r := rconRestarter(cmd, cfg, inst, lc)
 			if cancel {
-				if err := os.MkdirAll(inst.Paths.Runtime, 0o750); err != nil {
-					return err
-				}
-				if err := os.WriteFile(filepath.Join(inst.Paths.Runtime, "restart-cancel"), nil, 0o600); err != nil {
-					return err
-				}
-				if c, err := r.Dial(cmd.Context()); err == nil {
-					_ = instance.Unlock(cmd.Context(), c)
-					if cl, ok := c.(interface{ Close() error }); ok {
-						_ = cl.Close()
-					}
-				}
-				_, _ = fmt.Fprintln(cmd.OutOrStdout(), "cancelled")
-				return nil
+				return cancelCountdown(cmd, inst, r)
 			}
 			a := instance.Announcement{Minutes: inst.Restarts.Announce.Minutes, Lock: inst.Restarts.Announce.Lock, Kick: inst.Restarts.Announce.Kick, Text: inst.Restarts.Announce.Text}
 			if cmd.Flags().Changed("minutes") {
