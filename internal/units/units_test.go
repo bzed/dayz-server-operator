@@ -366,3 +366,57 @@ func TestPendingUpdatesAreHeldBackUntilTheInstanceIsDeployed(t *testing.T) {
 		t.Error("* deploys every instance")
 	}
 }
+
+func unitNames(t *testing.T, e *env) map[string]string {
+	t.Helper()
+	files, _, err := Desired(e.opts, e.tree())
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := map[string]string{}
+	for _, f := range files {
+		out[f.Name] = f.Content
+	}
+	return out
+}
+
+func TestServeAndWebUnits(t *testing.T) {
+	e := newEnv(t)
+	got := unitNames(t, e)
+	if _, ok := got["dzo-serve.service"]; ok {
+		t.Error("without an instance that runs dzo-admin, dzo serve is not needed")
+	}
+	if _, ok := got["dzo-web.service"]; ok {
+		t.Error("the web interface is optional: off unless enabled")
+	}
+
+	yes, no := true, false
+	e.opts.Cfg.Serve.Enabled, e.opts.Cfg.Web.Enabled = &yes, true
+	got = unitNames(t, e)
+	if s := got["dzo-serve.service"]; !strings.Contains(s, "ExecStart=/usr/bin/dzo serve\n") || !strings.Contains(s, "ExecReload=/bin/kill -HUP $MAINPID") {
+		t.Errorf("serve unit:\n%s", s)
+	}
+	if s := got["dzo-web.service"]; !strings.Contains(s, "ExecStart=/usr/bin/dzo web\n") || !strings.Contains(s, "WantedBy=default.target") {
+		t.Errorf("web unit:\n%s", s)
+	}
+
+	// an instance with the dzo-admin mod needs serve, unless it is switched off
+	write(t, filepath.Join(e.data, "site", "site.yaml"), "image: localhost/dzo-runtime:test\nlocal_mods:\n  tools: {path: "+filepath.Join(e.data, "toolsrc")+"}\n  dzo-admin: {path: "+filepath.Join(e.data, "toolsrc")+"}\n")
+	write(t, filepath.Join(e.data, "site", "instances", "y", "instance.yaml"), `name: y
+product: dayz-experimental
+map: m
+mission_source: {git: g, ref: r, path: p}
+ports: {game: 2402, rcon: 2406, query: 27026}
+network: host
+mods:
+  - {local: dzo-admin, server: true}
+`)
+	e.opts.Cfg.Serve.Enabled = nil
+	if _, ok := unitNames(t, e)["dzo-serve.service"]; !ok {
+		t.Error("an instance that runs dzo-admin needs dzo serve")
+	}
+	e.opts.Cfg.Serve.Enabled = &no
+	if _, ok := unitNames(t, e)["dzo-serve.service"]; ok {
+		t.Error("serve.enabled: false switches the unit off")
+	}
+}

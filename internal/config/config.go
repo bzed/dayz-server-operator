@@ -79,6 +79,9 @@ type Notify struct {
 // Serve configures `dzo serve`: the JSON API of this installation and the
 // endpoint the dzo-admin mods call (§C12, §C16).
 type Serve struct {
+	// Enabled says whether `dzo units sync` runs `dzo serve` as a unit. Unset means: when an
+	// instance runs the dzo-admin mod, which needs the endpoint; true and false force it.
+	Enabled *bool `yaml:"enabled"`
 	// Installation names this installation in the API, so one web interface
 	// can tell several apart.
 	Installation string `yaml:"installation"`
@@ -100,6 +103,9 @@ type Backend struct {
 // Web configures `dzo web`, the web interface. It reaches installations only
 // through their API, so it can run on another host and serve several.
 type Web struct {
+	// Enabled makes `dzo units sync` run `dzo web` as a unit. The web interface is optional, so
+	// it is off unless set.
+	Enabled           bool   `yaml:"enabled"`
 	Listen            string `yaml:"listen"`
 	AllowInsecureHTTP bool   `yaml:"allow_insecure_http"`
 	// Assets is the directory with htmx and Leaflet (Debian's libjs-*).

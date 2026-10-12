@@ -76,8 +76,10 @@ What runs on the host
      - daily snapshot retention and database backup
    * - ``dzo-exporter.service``
      - ``/metrics`` for Prometheus and ``/status`` for Icinga
+   * - ``dzo-serve.service``
+     - the API and the endpoint of the dzo-admin mods (``dzo serve``); written when an instance runs dzo-admin
    * - ``dzo-web.service``
-     - optional web interface (``dzo serve``)
+     - optional web interface (``dzo web``), when ``web.enabled`` is set
 
 All periodic work runs as systemd timers. dzo never uses cron.
 

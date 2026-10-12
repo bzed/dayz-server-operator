@@ -13,6 +13,11 @@ base URL and one token for each.
 Running it
 ----------
 
+``dzo instance apply`` (``dzo units sync``) writes ``dzo-serve.service`` and enables it as soon as an
+instance runs the dzo-admin mod, which needs the endpoint; ``serve.enabled: true`` or ``false`` in
+``config.yaml`` forces it on or off. ``systemctl --user reload dzo-serve`` re-reads the site (the same as
+``SIGHUP``).
+
 ``dzo serve`` listens on ``serve.listen`` (default ``127.0.0.1:8080``) for the
 API and on ``serve.mod_listen`` (default ``127.0.0.1:2400``) for the
 :doc:`dzo-admin mods <admin-map>`. Both refuse non-local addresses unless

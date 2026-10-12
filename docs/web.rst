@@ -15,8 +15,12 @@ one web interface can show **several dzo installations** side by side.
 .. code-block:: sh
 
    sudo -iu dayz dzo token create web --role operator --delegate > /var/lib/dzo/secrets/web.token
-   sudo -iu dayz dzo serve &      # the API (normally a systemd unit)
+   sudo -iu dayz dzo serve &      # the API; a unit (dzo-serve.service) once an instance runs dzo-admin
    sudo -iu dayz dzo web          # http://127.0.0.1:8081
+
+To run the web interface as a unit, set ``web.enabled: true`` in ``config.yaml`` and run
+``dzo instance apply <name>`` (or ``dzo units sync``): it writes ``dzo-web.service`` and starts it.
+It is off by default, because the web interface is optional and needs the token file above.
 
 Several installations
 ---------------------

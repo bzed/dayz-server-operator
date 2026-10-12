@@ -210,16 +210,32 @@ func exporterUnit(o Options) File {
 			"[Install]\nWantedBy=default.target\n")}
 }
 
+func serveUnit(o Options) File {
+	return File{Dir: Systemd, Name: "dzo-serve.service", Enable: "dzo-serve.service", Content: generated(
+		"[Unit]\nDescription=dzo serve (the API and the endpoint of the dzo-admin mods)\nAfter=network.target\n\n" +
+			"[Service]\nExecStart=" + o.cmd("serve") + "\nExecReload=/bin/kill -HUP $MAINPID\nRestart=on-failure\nRestartSec=5\n\n" +
+			"[Install]\nWantedBy=default.target\n")}
+}
+
+func webUnit(o Options) File {
+	return File{Dir: Systemd, Name: "dzo-web.service", Enable: "dzo-web.service", Content: generated(
+		"[Unit]\nDescription=dzo web interface\nAfter=network.target\n\n" +
+			"[Service]\nExecStart=" + o.cmd("web") + "\nRestart=on-failure\nRestartSec=5\n\n" +
+			"[Install]\nWantedBy=default.target\n")}
+}
+
 // Desired returns the unit files of the whole installation, and warnings
 // about instances that cannot be deployed yet.
 func Desired(o Options, tree *site.Tree) (files []File, warnings []string, err error) {
 	minCheck := time.Duration(0)
 	var slots []string // the minutes at which update restarts must be started
+	adminMod := false  // an instance runs the dzo-admin mod, which calls dzo serve
 	for _, name := range tree.InstanceNames() {
 		inst, err := resolve.Resolve(o.Cfg, tree, name)
 		if err != nil {
 			return nil, nil, err
 		}
+		adminMod = adminMod || inst.AdminEnabled()
 		if len(inst.Missing) == 0 {
 			unit, err := quadlet.RenderContainer(inst.Quadlet)
 			if err != nil {
@@ -281,6 +297,12 @@ func Desired(o Options, tree *site.Tree) (files []File, warnings []string, err e
 	}
 	files = append(files, timer(o, "dzo-status", "Write the local status snapshot", o.cmd("status", "--write", status), []string{"minutely"}, false)...)
 	files = append(files, exporterUnit(o))
+	if o.Cfg.Serve.Enabled != nil && *o.Cfg.Serve.Enabled || o.Cfg.Serve.Enabled == nil && adminMod {
+		files = append(files, serveUnit(o))
+	}
+	if o.Cfg.Web.Enabled {
+		files = append(files, webUnit(o))
+	}
 	return files, warnings, nil
 }
 

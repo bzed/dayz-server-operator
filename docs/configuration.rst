@@ -49,12 +49,14 @@ Operator configuration
        admins: {events: [drift, render_failed, job_failed, steam_auth]}
 
    serve:                          # `dzo serve`, see the API page
+     enabled: null                 # unit: null = when an instance runs dzo-admin, true or false to force
      installation: default         # name of this installation in the API
      listen: 127.0.0.1:8080        # /api/v1
      mod_listen: 127.0.0.1:2400    # where the dzo-admin mods connect
      allow_insecure_http: false    # plain HTTP on a non-local address
 
    web:                            # `dzo web`, see the web interface page
+     enabled: false                # true: dzo units sync writes and starts dzo-web.service
      listen: 127.0.0.1:8081
      user_header: X-Forwarded-User # set by your authenticating reverse proxy
      assets: /usr/share/javascript # htmx and Leaflet (Debian packages)
