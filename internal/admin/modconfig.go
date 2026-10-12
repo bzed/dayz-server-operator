@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 )
 
 // WatchRule is a class watch rule (§C16 path 1): entities of these classes
@@ -20,10 +21,12 @@ type WatchRule struct {
 	Layer   string   `yaml:"layer" json:"layer"`
 	Classes []string `yaml:"classes" json:"classes"`
 	Icon    string   `yaml:"icon,omitempty" json:"icon"`
-	Label   string   `yaml:"label,omitempty" json:"label"`
-	Max     int      `yaml:"max,omitempty" json:"max"`
-	Cluster int      `yaml:"cluster,omitempty" json:"-"`
-	OnlyIf  string   `yaml:"only_if,omitempty" json:"-"`
+	// Color is applied by dzo, not by the mod: the hub puts it on the markers of the layer.
+	Color   string `yaml:"color,omitempty" json:"-"`
+	Label   string `yaml:"label,omitempty" json:"label"`
+	Max     int    `yaml:"max,omitempty" json:"max"`
+	Cluster int    `yaml:"cluster,omitempty" json:"-"`
+	OnlyIf  string `yaml:"only_if,omitempty" json:"-"`
 }
 
 // Validate checks one rule.
@@ -34,8 +37,26 @@ func (w WatchRule) Validate() error {
 	if w.OnlyIf != "" {
 		return fmt.Errorf("watch rule %q: only_if is not supported yet", w.Layer)
 	}
+	if w.Icon != "" && !IconNameOK(w.Icon) {
+		return fmt.Errorf("watch rule %q: icon %q: want a Fork Awesome icon name such as fire or car (lowercase letters, digits and dashes)", w.Layer, w.Icon)
+	}
+	if w.Color != "" && !ColorOK(w.Color) {
+		return fmt.Errorf("watch rule %q: color %q: want #rgb, #rrggbb or a colour name such as red", w.Layer, w.Color)
+	}
 	return nil
 }
+
+var (
+	iconNameRe = regexp.MustCompile(`^(fa-)?[a-z0-9]+(-[a-z0-9]+)*$`)
+	colorRe    = regexp.MustCompile(`^(#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})|[a-zA-Z]+)$`)
+)
+
+// IconNameOK reports whether s can be an icon name of the map: Fork Awesome's name without the fa-
+// prefix (fa- is accepted too).
+func IconNameOK(s string) bool { return iconNameRe.MatchString(s) }
+
+// ColorOK reports whether s is a colour the map takes: #rgb, #rgba, #rrggbb, #rrggbbaa or a name.
+func ColorOK(s string) bool { return colorRe.MatchString(s) }
 
 // ModConfig is $profile:dzo-admin/config.json (DZOAdminConfig in the mod).
 type ModConfig struct {

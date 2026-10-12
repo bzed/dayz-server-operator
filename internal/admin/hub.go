@@ -74,6 +74,9 @@ type Hub struct {
 	Allow, Deny []string
 	// MarkerDir is the file-drop directory ($profile:dzo-admin/markers).
 	MarkerDir string
+	// Styles are the icon and colour the site config gives a layer (the watch rules); they fill in
+	// what a marker leaves unset, before the defaults of the layers the mod defines do.
+	Styles map[string]Layer
 
 	now func() time.Time
 
@@ -126,7 +129,7 @@ func (h *Hub) Sync(req SyncRequest) SyncReply {
 	if req.Markers != nil {
 		h.markers = req.Markers
 		h.layers = req.Layers
-		h.emit("markers", append([]Marker(nil), h.markers...))
+		h.emit("markers", h.styledLocked(h.markers))
 	}
 	if req.Events != nil {
 		h.events = req.Events
@@ -268,11 +271,44 @@ func (h *Hub) Layers() []Layer {
 	return out
 }
 
+// styledLocked returns a copy of ms in which the icon and colour a marker leaves unset are those
+// of its layer: from the site config (watch rules), else from the layer the mod defined.
+func (h *Hub) styledLocked(ms []Marker) []Marker {
+	out := append([]Marker(nil), ms...)
+	for i := range out {
+		m := &out[i]
+		if m.Icon != "" && m.Color != "" {
+			continue
+		}
+		var mod Layer
+		for _, l := range h.layers {
+			if l.Name == m.Layer {
+				mod = l
+			}
+		}
+		site := h.Styles[m.Layer]
+		if m.Icon == "" {
+			m.Icon = firstNonEmpty(site.Icon, mod.Icon)
+		}
+		if m.Color == "" {
+			m.Color = firstNonEmpty(site.Color, mod.Color)
+		}
+	}
+	return out
+}
+
+func firstNonEmpty(a, b string) string {
+	if a != "" {
+		return a
+	}
+	return b
+}
+
 // Markers returns the markers of one layer (all layers if empty): what the
 // mod pushed plus the file-drop markers.
 func (h *Hub) Markers(layer string) []Marker {
 	h.mu.Lock()
-	dir, mods := h.MarkerDir, append([]Marker(nil), h.markers...)
+	dir, mods := h.MarkerDir, h.styledLocked(h.markers)
 	h.mu.Unlock()
 	all := append(mods, h.files.load(dir, h.now())...)
 	if layer == "" {

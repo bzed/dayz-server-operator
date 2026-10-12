@@ -4,6 +4,7 @@
 {{with .Data}}
 {{if .Err}}<p class="flash err">{{.Err}}</p>{{end}}
 <link rel="stylesheet" href="/vendor/leaflet/leaflet.css">
+<link rel="stylesheet" href="/vendor/fork-awesome/css/fork-awesome.css">
 <div id="map" data-stream="/b/{{.Backend}}/i/{{.Instance}}/stream" data-base="/b/{{.Backend}}/i/{{.Instance}}" data-size="{{.Size}}" data-role="{{.Role}}"{{if .TileMap}} data-tiles="/b/{{.Backend}}/tiles/{{.TileMap}}" data-meta="{{.Meta}}"{{end}}></div>
 <div class="maptitle"><strong>{{.Instance}}</strong>{{if .World}}<span class="mute">{{.World}}</span>{{end}}<a href="/b/{{.Backend}}/i/{{.Instance}}">players and vehicles</a><span class="conn">connection lost, retrying</span></div>
 <div id="flash"></div>

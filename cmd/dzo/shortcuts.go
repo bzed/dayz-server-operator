@@ -11,6 +11,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/bzed/dayz-server-operator/internal/admin"
 	"github.com/bzed/dayz-server-operator/internal/config"
 	"github.com/bzed/dayz-server-operator/internal/instance"
 	"github.com/bzed/dayz-server-operator/internal/resolve"
@@ -163,6 +164,7 @@ func newSiteValidateCmd() *cobra.Command {
 				return err
 			}
 			failed := 0
+			icons := admin.IconNames(cfg.Web.Assets)
 			for _, name := range tree.InstanceNames() {
 				if _, err := resolve.Resolve(cfg, tree, name); err != nil {
 					failed++
@@ -172,6 +174,9 @@ func newSiteValidateCmd() *cobra.Command {
 				_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%-20s ok\n", name)
 				for _, w := range debugClientWarnings(name, tree.Instances[name].Mods) {
 					_, _ = fmt.Fprintln(cmd.ErrOrStderr(), w)
+				}
+				for _, ic := range admin.UnknownIcons(tree.Instances[name].AdminMap.Watch, icons) {
+					_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "warning: %s: admin_map icon %q is not in the Fork Awesome font installed here; the map shows a dot instead\n", name, ic)
 				}
 			}
 			if failed > 0 {

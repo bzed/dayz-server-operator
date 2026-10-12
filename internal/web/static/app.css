@@ -156,6 +156,8 @@ main > .flash.err { margin: 1rem; }
 .pm.dragging .pm-dot { cursor: grabbing; border-color: var(--flare); }
 .vm { position: absolute; left: -8px; top: -8px; width: 16px; height: 16px; border: 2px solid var(--signal); background: color-mix(in srgb, var(--signal) 25%, var(--surface)); cursor: pointer; }
 .vm::after { content: ""; position: absolute; left: 50%; top: 50%; width: 4px; height: 4px; margin: -2px 0 0 -2px; background: var(--ink); }
+.mi { position: absolute; left: -12px; top: -12px; width: 24px; height: 24px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; border: 2px solid var(--mc); border-radius: 50%; background: var(--surface); color: var(--mc); font-size: 13px; cursor: pointer; }
+.mi .fa { line-height: 1; }
 .vm.ruined { border-color: var(--muted); background: var(--surface); opacity: .8; }
 
 /* Context menu. */

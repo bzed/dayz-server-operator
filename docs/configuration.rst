@@ -182,7 +182,7 @@ instance.yaml
      deny_classes: ["Land_*"]      # items admins may not spawn (trailing * = prefix)
    admin_map:
      watch:
-       - {layer: ufo_crash, classes: ["UFO_Crash_Site*"], icon: ufo}
+       - {layer: ufo_crash, classes: ["UFO_Crash_Site*"], icon: rocket, color: "#8e44ad"}
 
 Main keys:
 

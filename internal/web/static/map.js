@@ -645,6 +645,35 @@
     });
   }
 
+  // ---- marker icons ----
+  //
+  // A marker's icon is the name of a Fork Awesome icon (fire, car, ...), from Debian's
+  // fonts-fork-awesome. A name the font does not know, or a font that is not there, leaves the
+  // marker a coloured dot.
+  var glyphs = {};
+  function iconClass(name) {
+    var n = String(name || '').replace(/^fa-/, '');
+    if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(n)) { return ''; }
+    if (!(n in glyphs)) {
+      var probe = mk('i', 'fa fa-' + n);
+      probe.style.cssText = 'position:absolute;visibility:hidden';
+      document.body.appendChild(probe);
+      var c = getComputedStyle(probe, '::before').content;
+      glyphs[n] = c && c !== 'none' && c !== 'normal' ? 'fa fa-' + n : '';
+      document.body.removeChild(probe);
+    }
+    return glyphs[n];
+  }
+  function markerColor(c) {
+    return c && window.CSS && CSS.supports('color', c) ? c : '#7a3db8';
+  }
+  function markerIcon(cls, color) {
+    var root = mk('div', 'mi');
+    root.style.setProperty('--mc', color);
+    root.appendChild(mk('i', cls));
+    return elIcon('mi-wrap', root);
+  }
+
   function onMarkers(list) {
     Object.keys(markerLayers).forEach(function (k) { markerLayers[k].clearLayers(); });
     list.forEach(function (m) {
@@ -654,13 +683,17 @@
         markerLayers[m.layer] = group;
         control.addOverlay(group, m.layer);
       }
-      var color = m.color || '#7a3db8';
+      var color = markerColor(m.color);
+      var glyph = m.shape && m.shape !== 'point' ? '' : iconClass(m.icon);
       var shape;
       if (m.shape === 'circle') {
         shape = L.circle(ll(m), { radius: m.radius || 50, color: color, weight: 2, fillOpacity: 0.15 });
       } else if ((m.shape === 'polygon' || m.shape === 'polyline') && m.points && m.points.length) {
         var pts = m.points.map(function (p) { return [p.z, p.x]; });
         shape = m.shape === 'polygon' ? L.polygon(pts, { color: color }) : L.polyline(pts, { color: color });
+      } else if (glyph) {
+        shape = L.marker(ll(m), { icon: markerIcon(glyph, color) });
+        named(shape, function () { return (m.label || m.id) + ' (' + m.layer + ')'; });
       } else {
         shape = L.circleMarker(ll(m), { radius: 5, color: color, fillOpacity: 0.9 });
       }

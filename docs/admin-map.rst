@@ -144,10 +144,11 @@ Configure per instance which object classes appear on the map:
 
    admin_map:
      watch:
-       - {layer: campfire,  classes: ["FireplaceBase"], icon: fire, max: 200}
-       - {layer: ufo_crash, classes: ["UFO_Crash_Site*"], icon: ufo, label: "UFO"}
-       - {layer: ai_convoy, classes: ["eAIBase"], icon: ai, cluster: 50}
+       - {layer: campfire,  classes: ["FireplaceBase"], icon: fire, color: "#e67e22", max: 200}
+       - {layer: ufo_crash, classes: ["UFO_Crash_Site*"], icon: rocket, color: "#8e44ad", label: "UFO"}
+       - {layer: ai_convoy, classes: ["eAIBase"], icon: android, color: red, cluster: 50}
 
+``icon`` and ``color`` give the markers of the layer their look, see :ref:`map-icons`.
 Rules apply to items (including fireplaces) and cars; buildings, animals and
 players cannot be watched this way yet. Subclasses match too, and a ``*`` at the end of a class name matches a prefix.
 ``max`` limits the markers of a layer. ``cluster`` is a hint for the map
@@ -161,7 +162,7 @@ A mod calls the API only when dzo-admin is present:
 
 .. code-block:: c
 
-   DZOAdmin_Map.Upsert("ufo_crash", m_CrashId, GetPosition(), "ufo", "UFO crash", props, 3600);
+   DZOAdmin_Map.Upsert("ufo_crash", m_CrashId, GetPosition(), "rocket", "UFO crash", props, 3600);
    DZOAdmin_Map.Track("ai_convoy", convoyLeader, "truck", "Convoy " + m_Name);  // follows the entity
    DZOAdmin_Map.Remove("ufo_crash", m_CrashId);
 
@@ -199,7 +200,7 @@ Marker fields
    * - ``entity``
      - follow an object; the marker moves with it and disappears with it
    * - ``icon``, ``color``, ``label``
-     - presentation
+     - presentation: an icon name (:ref:`map-icons`) and a colour; a marker that sets neither gets those of its layer
    * - ``props``
      - key/value pairs shown in the tooltip
    * - ``ttl``
@@ -207,20 +208,35 @@ Marker fields
    * - ``visibility``
      - lowest role that sees the marker (``admin`` by default)
 
-Icons
-~~~~~
+.. _map-icons:
 
-There is no list of icons to choose from yet. ``icon`` is a free name (``fire``,
-``ufo`` and ``ai`` in the examples above are just names): dzo-admin sends it with
-the marker, and it appears in the marker's ``icon`` field of the API, but the map
-does not use it. It draws every marker as a coloured shape: a dot for a point, or
-the circle, polygon or line the marker asks for, in the marker's ``color`` (a CSS
-colour such as ``#c0392b``; the default is purple). What is shown on hover is the
-``label`` (the class name for a watch rule) and the ``props``. A watch rule has no
-``color`` setting; a mod that uses the script API sets the colour of its markers
-and layers in code.
+Icons and colours
+~~~~~~~~~~~~~~~~~
 
-Choose icon names you would want to see as pictures later, and keep them short and
-lowercase. Built-in icons and icons shipped inside mod PBOs are planned; when they
-exist this page will list the names the map knows, and a name it does not know
-will fall back to the coloured shape, as every name does today.
+A point marker is drawn as a round badge with an icon in it, in the marker's colour.
+The icons are those of `Fork Awesome <https://forkaweso.me/Fork-Awesome/icons/>`_ (a
+community fork of Font Awesome 4.7, SIL OFL), which comes with the ``fonts-fork-awesome``
+package that dzo depends on. ``icon`` is the icon's name without the ``fa-``
+prefix: ``fire``, ``car``, ``truck``, ``plane``, ``ambulance``, ``bus``, ``tree``,
+``bomb``, ``crosshairs``, ``user-secret``, ``rocket``, ``android``, ``flag``, ``home``,
+``medkit``, ``key``, ``gift``, ``trophy``, ``wrench``, ``star``, ``bolt``, ``eye``
+and about nine hundred more. Browse the gallery on the Fork Awesome site, or list
+the names installed on the host:
+
+.. code-block:: sh
+
+   grep -o '^\.fa-[a-z0-9-]*' /usr/share/javascript/fork-awesome/css/fork-awesome.css | sed 's/^\.fa-//' | sort -u
+
+``color`` is a CSS colour: ``#rgb``, ``#rrggbb`` (``#rrggbbaa`` with transparency), or a name
+such as ``red`` or ``orange``. Circles, polygons and lines use it for their outline.
+
+Where the look comes from, first match wins:
+
+1. the marker itself (``icon`` and ``color`` in the API, the file drop or the script API);
+2. the ``icon`` and ``color`` of the ``admin_map.watch`` rule for its layer in ``instance.yaml``;
+3. the layer the mod defined with ``DZOAdmin_Map.DefineLayer(name, icon, color)``.
+
+A marker with no icon, or with a name the font does not have, is a plain dot, and with no
+colour the default purple. ``dzo site validate`` warns about an icon name of a watch rule that
+the installed font does not know, and rejects a malformed name or colour. Lines, circles and
+polygons have no icon. Icons shipped inside mod PBOs are not supported.
