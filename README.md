@@ -129,8 +129,8 @@ $ dzo backup create chernarus && dzo backup list chernarus
 $ dzo restore chernarus <snapshot>               # or one path of it
 
 $ dzo token create web --role operator --delegate > /var/lib/dzo/secrets/web.token
-$ dzo serve &                                    # /api/v1 and the endpoint of dzo-admin
-$ dzo web                                        # http://127.0.0.1:8081
+$ dzo instance apply chernarus                   # starts dzo-serve (API, dzo-admin endpoint) and dzo-web:
+                                                 # http://127.0.0.1:8081 (to try them by hand: dzo serve, dzo web)
 $ dzo player list chernarus
 $ dzo player msg chernarus all "restart in 5 minutes"
 $ dzo rcon exec --instance chernarus players

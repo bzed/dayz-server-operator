@@ -56,7 +56,7 @@ Operator configuration
      allow_insecure_http: false    # plain HTTP on a non-local address
 
    web:                            # `dzo web`, see the web interface page
-     enabled: false                # true: dzo units sync writes and starts dzo-web.service
+     enabled: null                 # unit: null = once backends or web.token exist, true or false to force
      listen: 127.0.0.1:8081
      user_header: X-Forwarded-User # set by your authenticating reverse proxy
      assets: /usr/share/javascript # htmx and Leaflet (Debian packages)

@@ -79,7 +79,7 @@ What runs on the host
    * - ``dzo-serve.service``
      - the API and the endpoint of the dzo-admin mods (``dzo serve``); written when an instance runs dzo-admin
    * - ``dzo-web.service``
-     - optional web interface (``dzo web``), when ``web.enabled`` is set
+     - optional web interface (``dzo web``), written once the web interface is set up (``web.backends`` or ``web.token``)
 
 All periodic work runs as systemd timers. dzo never uses cron.
 

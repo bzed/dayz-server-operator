@@ -210,6 +210,16 @@ func exporterUnit(o Options) File {
 			"[Install]\nWantedBy=default.target\n")}
 }
 
+// webConfigured reports whether the web interface has been set up: it has backends of its own, or
+// the API token it uses for this host's API exists.
+func webConfigured(cfg *config.Config) bool {
+	if len(cfg.Web.Backends) > 0 {
+		return true
+	}
+	_, err := os.Stat(filepath.Join(cfg.Paths.Secrets, "web.token"))
+	return err == nil
+}
+
 func serveUnit(o Options) File {
 	return File{Dir: Systemd, Name: "dzo-serve.service", Enable: "dzo-serve.service", Content: generated(
 		"[Unit]\nDescription=dzo serve (the API and the endpoint of the dzo-admin mods)\nAfter=network.target\n\n" +
@@ -300,7 +310,7 @@ func Desired(o Options, tree *site.Tree) (files []File, warnings []string, err e
 	if o.Cfg.Serve.Enabled != nil && *o.Cfg.Serve.Enabled || o.Cfg.Serve.Enabled == nil && adminMod {
 		files = append(files, serveUnit(o))
 	}
-	if o.Cfg.Web.Enabled {
+	if w := o.Cfg.Web; w.Enabled != nil && *w.Enabled || w.Enabled == nil && webConfigured(o.Cfg) {
 		files = append(files, webUnit(o))
 	}
 	return files, warnings, nil

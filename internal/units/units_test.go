@@ -387,11 +387,31 @@ func TestServeAndWebUnits(t *testing.T) {
 		t.Error("without an instance that runs dzo-admin, dzo serve is not needed")
 	}
 	if _, ok := got["dzo-web.service"]; ok {
-		t.Error("the web interface is optional: off unless enabled")
+		t.Error("the web interface is optional: off until it is set up")
 	}
+	// set up: this host's API token exists
+	write(t, filepath.Join(e.opts.Cfg.Paths.Secrets, "web.token"), "tok")
+	if _, ok := unitNames(t, e)["dzo-web.service"]; !ok {
+		t.Error("with web.token in place the web interface is set up")
+	}
+	off := false
+	e.opts.Cfg.Web.Enabled = &off
+	if _, ok := unitNames(t, e)["dzo-web.service"]; ok {
+		t.Error("web.enabled: false switches the unit off")
+	}
+	e.opts.Cfg.Web.Enabled = nil
+	if err := os.Remove(filepath.Join(e.opts.Cfg.Paths.Secrets, "web.token")); err != nil {
+		t.Fatal(err)
+	}
+	// set up: backends of its own
+	e.opts.Cfg.Web.Backends = []config.Backend{{Name: "main", URL: "http://127.0.0.1:8080", TokenFile: "/x"}}
+	if _, ok := unitNames(t, e)["dzo-web.service"]; !ok {
+		t.Error("with web.backends the web interface is set up")
+	}
+	e.opts.Cfg.Web.Backends = nil
 
 	yes, no := true, false
-	e.opts.Cfg.Serve.Enabled, e.opts.Cfg.Web.Enabled = &yes, true
+	e.opts.Cfg.Serve.Enabled, e.opts.Cfg.Web.Enabled = &yes, &yes
 	got = unitNames(t, e)
 	if s := got["dzo-serve.service"]; !strings.Contains(s, "ExecStart=/usr/bin/dzo serve\n") || !strings.Contains(s, "ExecReload=/bin/kill -HUP $MAINPID") {
 		t.Errorf("serve unit:\n%s", s)

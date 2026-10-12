@@ -103,9 +103,10 @@ type Backend struct {
 // Web configures `dzo web`, the web interface. It reaches installations only
 // through their API, so it can run on another host and serve several.
 type Web struct {
-	// Enabled makes `dzo units sync` run `dzo web` as a unit. The web interface is optional, so
-	// it is off unless set.
-	Enabled           bool   `yaml:"enabled"`
+	// Enabled says whether `dzo units sync` runs `dzo web` as a unit. Unset means: when the web
+	// interface is set up, that is when web.backends lists a backend or ${paths.secrets}/web.token
+	// exists; true and false force it.
+	Enabled           *bool  `yaml:"enabled"`
 	Listen            string `yaml:"listen"`
 	AllowInsecureHTTP bool   `yaml:"allow_insecure_http"`
 	// Assets is the directory with htmx and Leaflet (Debian's libjs-*).
