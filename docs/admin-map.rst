@@ -210,6 +210,17 @@ Marker fields
 Icons
 ~~~~~
 
-Markers carry an icon name, which is shown in the tooltip; the map draws every
-marker as a coloured shape today. Built-in icons and icons shipped inside mod
-PBOs are planned.
+There is no list of icons to choose from yet. ``icon`` is a free name (``fire``,
+``ufo`` and ``ai`` in the examples above are just names): dzo-admin sends it with
+the marker, and it appears in the marker's ``icon`` field of the API, but the map
+does not use it. It draws every marker as a coloured shape: a dot for a point, or
+the circle, polygon or line the marker asks for, in the marker's ``color`` (a CSS
+colour such as ``#c0392b``; the default is purple). What is shown on hover is the
+``label`` (the class name for a watch rule) and the ``props``. A watch rule has no
+``color`` setting; a mod that uses the script API sets the colour of its markers
+and layers in code.
+
+Choose icon names you would want to see as pictures later, and keep them short and
+lowercase. Built-in icons and icons shipped inside mod PBOs are planned; when they
+exist this page will list the names the map knows, and a name it does not know
+will fall back to the coloured shape, as every name does today.
