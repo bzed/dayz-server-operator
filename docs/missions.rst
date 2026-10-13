@@ -233,13 +233,15 @@ and these variables: ``DZO_INSTANCE``, ``DZO_HOOK_POINT``, ``DZO_MAP``,
 The merge itself
 ~~~~~~~~~~~~~~~~
 
-The staging area is the pristine mission, then the instance's ``messages.xml``, then the
+The staging area is the pristine mission, then the instance's ``messages.xml`` (its own file, or generated from ``welcome`` and ``messages``, see :doc:`configuration`; empty when there is nothing to send), then the
 mods in list order, then the overlays in list order. After the merge every file it wrote must
 parse, and every ``<ce folder>`` must exist with the files it names, or the render stops before
 the live mission is touched. Notes on what is built:
 
 * ``init.c`` of an integration is a unified diff, applied with ``patch`` to the mission's
   ``init.c``; a diff that does not apply fails the render.
+* ``messages.xml`` is always written by dzo and never has a countdown or shutdown; a file that
+  has one fails the render.
 * ``globals.xml`` is not a Central Economy file type: it is copied into the mod's folder and not
   registered.
 * Two contributors that replace the same file (``cfgweather.xml``, ``messages.xml``) are reported

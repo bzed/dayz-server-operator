@@ -74,7 +74,9 @@ when it starts, then at 20, 15, 10, 5, 4, 3, 2 and 1 minutes left, and in the
 last minute at 30, 15, 10, 5, 4, 3, 2 and 1 seconds, all counted down to the
 kick. With 30/7/3 the first message reads "in 27 minutes". Each message is
 ``<text> in <time>``; the lock is announced as well. The kick tries up to three
-passes, then kicks everyone.
+passes, then kicks everyone. The countdown is dzo's own and runs over RCon; the server's
+built-in countdown and shutdown of ``messages.xml`` are never used (see ``messages`` in
+:doc:`configuration`).
 
 dzo talks to the server over its own BattlEye RCon client. The restart itself
 goes through the unit's stop (see :ref:`stopping-the-server`). If RCon does not

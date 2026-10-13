@@ -169,6 +169,10 @@ instance.yaml
    restarts:
      schedule: ["04:00", "Sat 16:00"]   # restart times; Mon,Thu 04:00 for some weekdays
      announce: {minutes: 30, lock: 7, kick: 3}
+   welcome: "Welcome to #name!"    # the default; "" for no welcome message
+   messages:                       # more server messages, written to db/messages.xml
+     - {text: "Homepage: example.org, rules: example.org/rules", on_connect: true, delay: 1}
+     - {text: "Please read the rules: example.org/rules", repeat: 45}
    health: {startup_timeout: 45m, interval: 60s, retries: 5}
    restart_limit: {burst: 5, interval: 30min}
    backup:
@@ -237,6 +241,29 @@ Main keys:
    What happens when a mod update is found: ``auto`` restarts the server
    gracefully within the update windows, ``notify`` only reports, ``manual``
    only records it.
+
+``welcome``
+   The message every player gets when joining. The default is ``Welcome to #name!``; DayZ
+   replaces ``#name`` with the server name (``hostname`` in ``serverDZ.cfg``). Set your own text
+   (``#name`` and ``#port`` work in it, the usual 160 characters apply), or ``""`` for none. Can
+   be set under ``defaults:`` in ``site.yaml``.
+
+``messages``
+   Further messages the server sends on its own, from the mission's ``db/messages.xml``. A
+   message has ``text`` (up to 160 characters), ``on_connect: true`` to send it once to a player
+   who joins (``delay`` minutes later, default immediately) and/or ``repeat`` to send it to
+   everybody every that many minutes. All times are minutes. Good for the homepage and the rules.
+   It can be set under ``defaults:`` in ``site.yaml``; an instance's own list replaces it.
+
+   dzo always manages this file: the welcome message and ``messages:`` are written to it, and
+   with ``welcome: ""`` and no ``messages:`` it is empty, which disables server messages. The
+   example messages of the pristine mission are never used. Instead of ``messages:`` you can put
+   your own ``instances/<name>/messages.xml`` in the site repository (not together with
+   ``messages:``); it is used as it is, without the welcome message. Neither a ``deadline``
+   (countdown), ``shutdown`` nor ``#tmin`` is accepted, in ``messages:``, in that file, or in a
+   mod integration's ``messages.xml``: restarts and stops are announced by dzo itself, see
+   ``restarts.announce`` and :doc:`operations`. The server reads the file at start, so changes
+   take effect at the next restart.
 
 ``updates.restart_minute``
    With ``policy: auto``, the minute of the hour at which update restarts happen: ``0`` is the
