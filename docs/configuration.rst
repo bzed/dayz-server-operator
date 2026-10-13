@@ -260,8 +260,8 @@ Main keys:
    example messages of the pristine mission are never used. Instead of ``messages:`` you can put
    your own ``instances/<name>/messages.xml`` in the site repository (not together with
    ``messages:``); it is used as it is, without the welcome message. Neither a ``deadline``
-   (countdown), ``shutdown`` nor ``#tmin`` is accepted, in ``messages:``, in that file, or in a
-   mod integration's ``messages.xml``: restarts and stops are announced by dzo itself, see
+   (countdown), ``shutdown`` nor ``#tmin`` is accepted, in ``messages:``, in that file, or in a mod
+   integration's or an overlay's ``messages.xml``: restarts and stops are announced by dzo itself, see
    ``restarts.announce`` and :doc:`operations`. The server reads the file at start, so changes
    take effect at the next restart.
 

@@ -243,3 +243,12 @@ func TestGeneratedMessagesReplacePristine(t *testing.T) {
 		t.Errorf("db/messages.xml = %s", got)
 	}
 }
+
+func TestOverlayMessagesWithCountdownRejected(t *testing.T) {
+	d := stagingTree(t)
+	bad := []byte("<messages><message><deadline>60</deadline><shutdown>1</shutdown><text>x</text></message></messages>")
+	_, err := Integrate(d, []Contribution{{Name: "overlay o", Folder: "custom_o", Files: []ContribFile{{Name: "db/messages.xml", Data: bad}}}})
+	if err == nil || !strings.Contains(err.Error(), "deadline") {
+		t.Errorf("err = %v", err)
+	}
+}
