@@ -152,6 +152,8 @@ type Instance struct {
 	Logs     site.LogsConfig   `yaml:"logs"`
 	Admin    site.AdminConfig  `yaml:"admin,omitempty"`
 	AdminMap site.AdminMap     `yaml:"admin_map,omitempty"`
+	Welcome  *string           `yaml:"welcome,omitempty"`
+	Messages []site.Message    `yaml:"messages,omitempty"`
 
 	// Missing lists what is not downloaded yet; Quadlet is only populated
 	// when it is empty.
@@ -220,7 +222,7 @@ func Resolve(cfg *config.Config, t *site.Tree, name string) (*Instance, error) {
 	// Site defaults fill every field the instance leaves unset.
 	def := reflect.ValueOf(t.Site.Defaults)
 	ownRules := raw.Logs.Rotate
-	for _, f := range []string{"RConBind", "Params", "Updates", "Restarts", "Health", "RestartLimit", "Stop", "Notify", "Container", "Backup", "Logs"} {
+	for _, f := range []string{"RConBind", "Params", "Updates", "Restarts", "Health", "RestartLimit", "Stop", "Notify", "Container", "Backup", "Logs", "Welcome", "Messages"} {
 		fillZero(reflect.ValueOf(&raw).Elem().FieldByName(f), def.FieldByName(f))
 	}
 
@@ -244,7 +246,7 @@ func Resolve(cfg *config.Config, t *site.Tree, name string) (*Instance, error) {
 		Binary: cfg.Binary,
 		Name:   name, Map: raw.Map, Ports: raw.Ports, RConBind: raw.RConBind, Network: raw.Network, Image: t.Site.Image,
 		Params: raw.Params, Overlays: raw.Overlays, Updates: raw.Updates, Restarts: raw.Restarts,
-		Health: raw.Health, RestartLimit: raw.RestartLimit, Stop: raw.Stop, Notify: raw.Notify, Container: raw.Container, Hooks: raw.Hooks, Backup: raw.Backup, Logs: raw.Logs, Admin: raw.Admin, AdminMap: raw.AdminMap,
+		Health: raw.Health, RestartLimit: raw.RestartLimit, Stop: raw.Stop, Notify: raw.Notify, Container: raw.Container, Hooks: raw.Hooks, Backup: raw.Backup, Logs: raw.Logs, Admin: raw.Admin, AdminMap: raw.AdminMap, Welcome: raw.Welcome, Messages: raw.Messages,
 		Mission: Mission{Source: src, Fallback: raw.FallbackMission, Unmanaged: raw.Mission.Unmanaged, Drift: raw.Mission.Drift},
 		Product: Product{Name: raw.Product, Product: prod},
 		Paths: Paths{

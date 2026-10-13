@@ -90,8 +90,11 @@ func TestInstanceRender(t *testing.T) {
 	if err != nil {
 		t.Fatalf("render: %v\n%s", err, out)
 	}
-	if !strings.Contains(out, "written: 3") { // init.c, types.xml, cfgweather.xml from the fallback
+	if !strings.Contains(out, "written: 4") { // init.c, types.xml, cfgweather.xml from the fallback, the generated messages.xml
 		t.Errorf("output = %s", out)
+	}
+	if b, _ := os.ReadFile(filepath.Join(live, "db", "messages.xml")); !strings.Contains(string(b), "<text>Welcome to #name!</text>") {
+		t.Errorf("a render without messages config writes the default welcome: %s", b)
 	}
 	if b, _ := os.ReadFile(filepath.Join(live, "cfgweather.xml")); string(b) != "weather" {
 		t.Errorf("fallback file = %q", b)

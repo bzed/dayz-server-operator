@@ -54,11 +54,11 @@ type Options struct {
 func Collect(ctx context.Context, t *site.Tree, inst *resolve.Instance, o Options) ([]mission.Contribution, error) {
 	var out []mission.Contribution
 	instDir := filepath.Join(t.Dir, "instances", inst.Name)
-	if data, err := os.ReadFile(filepath.Join(instDir, "messages.xml")); err == nil { //nolint:gosec // the site checkout
-		out = append(out, mission.Contribution{Name: "instance messages.xml", Folder: "custom_instance", Files: []mission.ContribFile{{Name: "messages.xml", Data: data}}})
-	} else if !os.IsNotExist(err) {
+	msgs, err := instanceMessages(instDir, inst)
+	if err != nil {
 		return nil, err
 	}
+	out = append(out, mission.Contribution{Name: "instance messages.xml", Folder: "custom_instance", Files: []mission.ContribFile{{Name: "messages.xml", Data: msgs}}})
 
 	// EditorFiles (.dze) for the DayZEditorLoader servermod go to <mission>/EditorFiles.
 	if files, err := readFiles("EditorFiles", filepath.Join(instDir, "EditorFiles"), ""); err == nil {
@@ -95,6 +95,11 @@ func Collect(ctx context.Context, t *site.Tree, inst *resolve.Instance, o Option
 			if data, err = Normalize(k, data, li.Normalize); err != nil {
 				return nil, fmt.Errorf("mod %d (%s): normalize: %w", m.ID, li.Name, err)
 			}
+			if strings.EqualFold(k, "messages.xml") || strings.EqualFold(k, "db/messages.xml") {
+				if err := site.CheckMessagesXML(data); err != nil {
+					return nil, fmt.Errorf("mod %d (%s): %w", m.ID, li.Name, err)
+				}
+			}
 			c.Files = append(c.Files, mission.ContribFile{Name: k, Data: data})
 		}
 		c.AfterMerge = hookRunner(inst, li.Hooks.PostMerge, li.Dir, o)
@@ -117,6 +122,33 @@ func Collect(ctx context.Context, t *site.Tree, inst *resolve.Instance, o Option
 		out = append(out, mission.Contribution{Name: "instance post_merge hooks", Folder: "custom_instance", AfterMerge: hookRunner(inst, inst.Hooks.PostMerge, instDir, o)})
 	}
 	return out, nil
+}
+
+// instanceMessages is the instance's db/messages.xml: its own instances/<name>/messages.xml (used
+// as is), or generated from the welcome message and messages: in instance.yaml. With no welcome
+// and no messages it is an empty <messages>: dzo never leaves the pristine mission's example
+// messages (possibly a shutdown countdown) in place. A file with a countdown or shutdown is
+// refused, restarts are dzo's.
+func instanceMessages(instDir string, inst *resolve.Instance) ([]byte, error) {
+	data, err := os.ReadFile(filepath.Join(instDir, "messages.xml")) //nolint:gosec // the site checkout
+	switch {
+	case err == nil:
+		if len(inst.Messages) > 0 {
+			return nil, fmt.Errorf("instance %s: both instances/%s/messages.xml and messages: in instance.yaml are set, use one", inst.Name, inst.Name)
+		}
+		if err := site.CheckMessagesXML(data); err != nil {
+			return nil, fmt.Errorf("instance %s: %w", inst.Name, err)
+		}
+		return data, nil
+	case os.IsNotExist(err):
+		var ms []site.Message
+		if w, ok := site.WelcomeMessage(inst.Welcome); ok {
+			ms = append(ms, w)
+		}
+		return site.RenderMessagesXML(append(ms, inst.Messages...))
+	default:
+		return nil, err
+	}
 }
 
 func contains(l []string, s string) bool {

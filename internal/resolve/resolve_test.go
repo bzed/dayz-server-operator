@@ -456,3 +456,30 @@ func TestAdminMapWatchRulesMergeWithTheSiteDefaults(t *testing.T) {
 		t.Errorf("beta watch = %+v: only the default", w)
 	}
 }
+
+func TestMessagesDefaultsAndInstanceWins(t *testing.T) {
+	cfg, tree, _ := fixture(t, false)
+	empty := ""
+	own := "Own welcome"
+	tree.Site.Defaults.Welcome = &own
+	tree.Site.Defaults.Messages = []site.Message{{Text: "Site info", Repeat: 30}}
+	raw := tree.Instances["beta"]
+	raw.Welcome = &empty
+	raw.Messages = []site.Message{{Text: "Beta info", Repeat: 10}}
+	tree.Instances["beta"] = raw
+
+	alpha, err := Resolve(cfg, tree, "alpha")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if alpha.Welcome == nil || *alpha.Welcome != "Own welcome" || len(alpha.Messages) != 1 || alpha.Messages[0].Text != "Site info" {
+		t.Errorf("alpha = %v %+v: the site defaults fill in", alpha.Welcome, alpha.Messages)
+	}
+	beta, err := Resolve(cfg, tree, "beta")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if beta.Welcome == nil || *beta.Welcome != "" || len(beta.Messages) != 1 || beta.Messages[0].Text != "Beta info" {
+		t.Errorf("beta = %v %+v: its own welcome (even empty) and list replace the defaults", beta.Welcome, beta.Messages)
+	}
+}

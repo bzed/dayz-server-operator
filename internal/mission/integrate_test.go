@@ -229,3 +229,17 @@ func TestIntegrateStrategiesOnlyApplyAtTheTop(t *testing.T) {
 		t.Error("touched files must be listed")
 	}
 }
+
+func TestGeneratedMessagesReplacePristine(t *testing.T) {
+	d := stagingTree(t)
+	data, err := site.RenderMessagesXML(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Integrate(d, []Contribution{{Name: "instance messages.xml", Folder: "custom_instance", Files: []ContribFile{{Name: "messages.xml", Data: data}}}}); err != nil {
+		t.Fatal(err)
+	}
+	if got := readStaging(t, d, "db/messages.xml"); strings.Contains(got, "<message>") || !strings.Contains(got, "<messages>") {
+		t.Errorf("db/messages.xml = %s", got)
+	}
+}
