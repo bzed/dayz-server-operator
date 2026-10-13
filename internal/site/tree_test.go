@@ -72,6 +72,8 @@ func TestLoadTreeErrors(t *testing.T) {
 		{"unknown key", map[string]string{"site.yaml": "imagee: x\n"}, "imagee"},
 		{"bad local mod", map[string]string{"site.yaml": "local_mods: {x: {url: u}}\n"}, "sha256 is required"},
 		{"local mod both", map[string]string{"site.yaml": "local_mods: {x: {url: u, sha256: s, path: /p}}\n"}, "exactly one"},
+		{"defaults message never sent", map[string]string{"site.yaml": "defaults: {messages: [{text: hi}]}\n"}, "defaults.messages"},
+		{"defaults welcome too long", map[string]string{"site.yaml": "defaults: {welcome: \"" + strings.Repeat("a", 161) + "\"}\n"}, "defaults.welcome"},
 		{"local mod rel path", map[string]string{"site.yaml": "local_mods: {x: {path: rel}}\n"}, "absolute"},
 		{"bad preset", map[string]string{"integrations/maps/v.yaml": "gitt: x\n"}, "gitt"},
 		{"name mismatch", map[string]string{"instances/b/instance.yaml": goodInstance}, "does not match directory"},

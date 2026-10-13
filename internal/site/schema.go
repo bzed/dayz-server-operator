@@ -469,6 +469,8 @@ type Instance struct {
 	Logs            LogsConfig      `yaml:"logs,omitempty"`
 	Admin           AdminConfig     `yaml:"admin,omitempty"`
 	AdminMap        AdminMap        `yaml:"admin_map,omitempty"`
+	Welcome         *string         `yaml:"welcome,omitempty"`
+	Messages        []Message       `yaml:"messages,omitempty"`
 }
 
 // Validate checks the invariants the rest of dzo relies on. It does not
@@ -546,6 +548,12 @@ func (i Instance) Validate() error {
 	case "", PolicyAuto, PolicyNotify, PolicyManual:
 	default:
 		errs = append(errs, fmt.Sprintf("updates.policy: invalid value %q", i.Updates.Policy))
+	}
+	if err := ValidateMessages(i.Messages); err != nil {
+		errs = append(errs, err.Error())
+	}
+	if err := ValidateWelcome(i.Welcome); err != nil {
+		errs = append(errs, err.Error())
 	}
 	if len(errs) > 0 {
 		return fmt.Errorf("instance %q: %s", i.Name, joinErrs(errs))

@@ -32,6 +32,9 @@ type Defaults struct {
 	Container    ContainerConfig `yaml:"container,omitempty"`
 	Backup       BackupConfig    `yaml:"backup,omitempty"`
 	Logs         LogsConfig      `yaml:"logs,omitempty"`
+	// Welcome and Messages are the server messages of an instance that sets none.
+	Welcome  *string   `yaml:"welcome,omitempty"`
+	Messages []Message `yaml:"messages,omitempty"`
 }
 
 // LocalModSource is one site.yaml `local_mods` entry (§C7): a release
@@ -100,6 +103,12 @@ func LoadTree(dir string) (*Tree, error) {
 		if err := w.Validate(); err != nil {
 			errs = append(errs, fmt.Errorf("site.yaml defaults.admin_map: %w", err))
 		}
+	}
+	if err := ValidateMessages(t.Site.Defaults.Messages); err != nil {
+		errs = append(errs, fmt.Errorf("site.yaml defaults.%w", err))
+	}
+	if err := ValidateWelcome(t.Site.Defaults.Welcome); err != nil {
+		errs = append(errs, fmt.Errorf("site.yaml defaults.%w", err))
 	}
 	for name, l := range t.Site.LocalMods {
 		if err := l.Validate(name); err != nil {
