@@ -78,9 +78,16 @@ func TestModConfigAndEndpoint(t *testing.T) {
 		t.Fatalf("endpoints %q %q", alpha, beta)
 	}
 	mc, err := ModConfig(cfg, insts[0])
-	if err != nil || !mc.AllowSpawn || mc.VehiclesS != 30 || mc.DenyClasses[0] != "Land_*" || len(mc.Watch) != 1 {
+	if err != nil || !mc.AllowSpawn || mc.VehiclesS != 30 || mc.DenyClasses[0] != "Land_*" || len(mc.Watch) != len(admin.VanillaEventWatch())+1 || mc.Watch[len(mc.Watch)-1].Layer != "fire" {
 		t.Fatalf("mod config %+v %v", mc, err)
 	}
+	// The events of the Central Economy can be switched off for an instance.
+	off := false
+	insts[0].AdminMap.VanillaEvents = &off
+	if mc, err = ModConfig(cfg, insts[0]); err != nil || len(mc.Watch) != 1 {
+		t.Fatalf("without the vanilla events: %+v %v", mc.Watch, err)
+	}
+	insts[0].AdminMap.VanillaEvents = nil
 	if err := WriteModConfig(cfg, insts[0]); err != nil {
 		t.Fatal(err)
 	}

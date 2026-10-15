@@ -136,67 +136,77 @@ dzo-admin reports effect areas (contaminated zones) with their position and
 radius, and events that other mods publish through the marker API. They are shown
 as a map layer and available at ``/events`` in the API.
 
-The events of the Central Economy are found too. Most of what they place (police
-car wrecks, supply crates, convoy wrecks, trains) are plain game objects without
-a script class, so the mod cannot see them being created. Instead dzo reads the
-live mission when it writes the mod's config: ``db/events.xml``,
-``cfgeventspawns.xml`` and ``cfgeventgroups.xml``, plus every file of those kinds
-that a ``<ce folder>`` of ``cfgeconomycore.xml`` registers (the files of mods and
-overlays; events and positions of several files add up). For every active event
-with fixed places it hands the mod those places and the classes the event spawns
-there (``event_scan`` in ``config.json``). For an event whose objects come from a
-group, only the group's main object is looked for: the distinct one, a wreck first
-(the helicopter, the police car, the tank), then another vehicle; decals, craters
-and sandbags only if nothing else is in the group. The mod, which runs on the
-server only, looks at all places once per round (90 seconds, spread evenly, so the
-cost does not depend on the map; ``event_scan_s`` in the mod's ``config.json``)
-and reports the ones where it finds the object. An event that despawned
-disappears after at most one round, and the map shows it at the next
-``events_s`` update.
+The events of the Central Economy are shown the way mods show theirs: by the class of
+an object that belongs to the event. An event places a distinct object in the world, the
+wreck of the helicopter, the police car, the tank, a locked container, and a class watch
+rule (see below) turns every object of such a class into a marker with an icon. dzo ships
+rules for the events of the vanilla missions, so nothing has to be configured, and no
+spawn positions or event files are involved: an event that a mission or a mod adds, or
+reconfigures through other files, is found as soon as a rule names its class. The
+watch covers items, vehicles and buildings (which is what the wrecks, crashes, containers and
+cisterns are), and a marker is gone when its object is.
 
-A dynamic gas zone (a thrown M18 smoke grenade) is reported when it is created,
-with the radius of the zone (120 m), and the map draws that circle around the
-icon. Static contaminated areas are drawn the same way.
-
-Each event has an icon, a colour and a label on the map:
+The shipped rules, one layer each (the layer is switched on and off in the map's layer
+control):
 
 .. list-table::
    :header-rows: 1
 
-   * - Event
+   * - Layer
      - Icon
-   * - ``StaticHeliCrash``, ``StaticHeliCrashBig``
+     - Classes (subclasses match too)
+   * - Helicopter crashes
      - plane
-   * - ``StaticSantaCrash``
+     - ``Wreck_UH1Y``, ``Wreck_Mi8_Crashed``, ``StaticObj_Wreck_Mi24_TK``, ``StaticObj_Wreck_Chinook``
+   * - Santa's sleigh
      - gift
-   * - ``StaticMilitaryConvoy``
-     - truck
-   * - ``StaticPoliceCar``, ``StaticPoliceSituation``
-     - car, bullhorn
-   * - ``StaticTrain``
-     - train
-   * - ``StaticAirplaneCrate``
+     - ``Wreck_SantasSleigh``
+   * - Airplane crates
      - archive
-   * - ``StaticAmbulance``
+     - ``StaticObj_Misc_SupplyBox*_DE``
+   * - Trains
+     - train
+     - ``StaticObj_Wreck_Train_*_DE``
+   * - Police cars
+     - car
+     - the police wrecks of the maps (``Land_Wreck_sed01_aban1_police*`` and its siblings)
+   * - Ambulances
      - ambulance
-   * - ``StaticBoatFishing``, ``StaticBoatMilitary``
-     - ship, anchor
-   * - ``StaticBonfire``, ``StaticChristmasTree``
-     - fire, tree
-   * - ``StaticContainerLocked``
-     - lock
-   * - ``StaticWaterTruck``
+     - ``Land_Wreck_S1023_Medic_Beige_DE``
+   * - Water trucks
      - tint
-   * - ``StaticScientist``
+     - ``Land_Wreck_Truck01_Aban1_Cistern``, ``…Aban2_Cistern``
+   * - Military wrecks
+     - truck
+     - ``StaticObj_Wreck_*_DE``, ``Land_Wreck_*_TK_DE`` (convoys)
+   * - Roadblock wrecks
+     - bullhorn
+     - ``Land_Wreck_*_DE``, ``Land_wreck_*_DE`` (roadblocks, abandoned vehicles)
+   * - Locked containers
+     - lock
+     - ``ContainerLockedBase``
+   * - Fishing boats, military boats
+     - ship, anchor
+     - ``Land_Boat_Small9_DE``, ``StaticObj_PatrolBoat_Military_DE``
+   * - Scientists
      - flask
-   * - ``ItemBricks``, ``ItemPlanks``
+     - ``StaticObj_FrozenScientist_DE``
+   * - Bonfires, Christmas trees
+     - fire, tree
+     - ``Bonfire``, ``ChristmasTree``
+   * - Brick piles, plank piles
      - cubes
-   * - contaminated areas
-     - exclamation-triangle
+     - ``PileOfBricks``, ``PileOfWoodenPlanks``
 
-Any other event of a mission gets a flag. Infected, animals, ambient life and the
-berries and mushrooms have no place of their own and are not shown; the vehicle
-events appear as vehicles. Only the server needs dzo-admin.
+The first rule that matches a class wins, so the specific rules stand before the
+catch-alls. A rule of your own with the same layer name (in ``admin_map: watch`` of an
+instance or ``defaults:``) replaces the shipped one; ``admin_map: {vanilla_events: false}``
+turns all of them off for an instance. Vehicles that events spawn are in the vehicle
+layer, and infected, animals and the berries and mushrooms are not shown.
+
+Contaminated areas are events of the mod itself: a static or dynamic gas zone (a thrown
+M18 smoke grenade) is reported as soon as it is created, with the radius of the zone
+(120 m for a dynamic one), and the map draws that circle around the icon.
 
 Markers from other mods
 -----------------------
@@ -230,7 +240,7 @@ nothing you care about (for example ``classes: ["NoSuchClass"]``) if you have to
 ``dzo instance show <name>`` prints the merged list.
 
 Rules apply to items (including fireplaces) and cars; buildings, animals and
-players cannot be watched this way yet. Subclasses match too, and a ``*`` at the end of a class name matches a prefix.
+players cannot be watched this way yet. Subclasses match too, and one ``*`` in a class name stands for any text (``Wreck_*``, ``*_DE``, ``StaticObj_Wreck_*_DE``).
 ``max`` limits the markers of a layer. ``cluster`` is a hint for the map
 display. ``only_if`` is not supported yet and is rejected, so that it is never
 silently ignored.

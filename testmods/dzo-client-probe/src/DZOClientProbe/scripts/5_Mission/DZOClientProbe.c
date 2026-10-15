@@ -73,8 +73,8 @@ modded class MissionServer
 		}
 	}
 
-	// A Central Economy event object as the CE places it: a police car wreck, a plain engine object. The
-	// test's config.json (event_scan) tells dzo-admin to look for it at this place.
+	// A Central Economy event object as the CE places it: a police car wreck, a plain engine object that has
+	// no script class. The test's watch rule selects its class.
 	void DZOProbeEvent()
 	{
 		Object o = GetGame().CreateObjectEx("Land_Wreck_sed01_aban1_police", Vector(7500, GetGame().SurfaceY(7500, 7500), 7500), ECE_PLACE_ON_SURFACE);

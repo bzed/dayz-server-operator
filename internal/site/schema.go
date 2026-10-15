@@ -431,6 +431,9 @@ func MergeWatch(defaults, own []admin.WatchRule) []admin.WatchRule {
 // AdminMap is the zero-code marker integration (§C16 path 1).
 type AdminMap struct {
 	Watch []admin.WatchRule `yaml:"watch,omitempty"`
+	// VanillaEvents is whether the map shows the events of the Central Economy (admin.VanillaEventWatch)
+	// as marker layers: the default. A rule of the site or the instance with the same layer replaces one.
+	VanillaEvents *bool `yaml:"vanilla_events,omitempty"`
 }
 
 // Validate checks the intervals and watch rules.

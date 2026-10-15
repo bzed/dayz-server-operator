@@ -72,18 +72,20 @@ s=0
 waitfor 30 "! '$work/dzo' vehicle list t1 --config '$work/config.yaml' --token-file '$work/api.token' | grep -q '^$bike '" || s=1
 verdict "motorbike: delete" $s
 
-# Central Economy events: dzo-admin looks for the objects of an event at the places dzo gave it (event_scan).
+# Central Economy events are found by the class of their object: a plain building object (no script class of its
+# own, like the wrecks the events place) is a marker when a watch rule selects its class, wildcards included.
 touch "$tree/profiles/dzo_probe/event"
 ev() { curl -s -H "Authorization: Bearer $(cat "$work/api.token")" "http://127.0.0.1:$api/api/v1/instances/t1/events"; }
+mk() { curl -s -H "Authorization: Bearer $(cat "$work/api.token")" "http://127.0.0.1:$api/api/v1/instances/t1/map/markers"; }
 s=0
-waitfor 90 "curl -s -H 'Authorization: Bearer $(cat "$work/api.token")' http://127.0.0.1:$api/api/v1/instances/t1/events | grep -q 'StaticPoliceCar'" || s=1
-verdict "event scan: the police car wreck is an event" $s
+waitfor 60 "curl -s -H 'Authorization: Bearer $(cat "$work/api.token")' http://127.0.0.1:$api/api/v1/instances/t1/map/markers | grep -q 'Police cars'" || s=1
+verdict "event object: the police car wreck is a marker of its layer" $s
 s=0
-ev | grep -q '"icon":"car"' && ev | grep -q 'Police car' || s=1
-verdict "event scan: the event has its icon and label" $s
+mk | grep -o '{[^{}]*"layer":"Police cars"[^{}]*}' | grep -q '"icon":"car"' || s=1
+verdict "event object: with the icon of the layer" $s
 s=0
-[ "$(ev | grep -o 'StaticPoliceCar' | wc -l)" = 1 ] || s=1 # one event, not one per place
-verdict "event scan: only the place with the object is reported" $s
+waitfor 40 "curl -s -H 'Authorization: Bearer $(cat "$work/api.token")' http://127.0.0.1:$api/api/v1/instances/t1/map/markers | grep -o '{[^{}]*\"layer\":\"Police cars\"[^{}]*}' | grep -Eq '\"x\":7500[,.}]'" || s=1 # the server's own police events are markers too
+verdict "event object: at the place of the wreck" $s
 
 # A dynamic gas zone (as a thrown M18 smoke grenade makes it) is an event with the size of the zone.
 touch "$tree/profiles/dzo_probe/gas"
@@ -130,7 +132,7 @@ serve: {installation: t, listen: "127.0.0.1:$api", mod_listen: "127.0.0.1:$mod"}
 Y
 tok=$(head -c16 /dev/urandom | od -An -tx1 | tr -d ' \n')
 echo "$tok" >"$work/secrets/admin/t1.token"
-echo "{\"version\":1,\"endpoint\":\"http://127.0.0.1:$mod/\",\"token\":\"$tok\",\"sync_ms\":500,\"players_s\":2,\"vehicles_s\":5,\"markers_s\":10,\"events_s\":5,\"allow_spawn\":true,\"event_scan_s\":4,\"event_scan\":[{\"name\":\"StaticPoliceCar\",\"classes\":[\"Land_Wreck_sed01_aban1_police\"],\"radius\":8,\"spawns\":[{\"x\":7500,\"y\":0,\"z\":7500},{\"x\":7000,\"y\":0,\"z\":7000}]}],\"watch\":[{\"layer\":\"lights\",\"classes\":[\"Chemlight_Red\"],\"icon\":\"flare\",\"label\":\"watched chemlight\",\"max\":20}]}" >"$tree/profiles/dzo-admin/config.json"
+echo "{\"version\":1,\"endpoint\":\"http://127.0.0.1:$mod/\",\"token\":\"$tok\",\"sync_ms\":500,\"players_s\":2,\"vehicles_s\":5,\"markers_s\":10,\"events_s\":5,\"allow_spawn\":true,\"watch\":[{\"layer\":\"Police cars\",\"classes\":[\"Land_Wreck_sed01_aban1_police*\"],\"icon\":\"car\",\"label\":\"Police car\"},{\"layer\":\"lights\",\"classes\":[\"Chemlight_Red\"],\"icon\":\"flare\",\"label\":\"watched chemlight\",\"max\":20}]}" >"$tree/profiles/dzo-admin/config.json"
 chmod 600 "$work/secrets/admin/t1.token" "$tree/profiles/dzo-admin/config.json"
 "$work/dzo" token create tester --role admin --config "$work/config.yaml" >"$work/api.token"
 chmod 600 "$work/api.token"
