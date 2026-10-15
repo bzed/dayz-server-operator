@@ -609,7 +609,10 @@
 
   var vm = {};
   function vehicleIcon(v) {
-    var root = mk('div', 'vm' + (v.kind === 'motorbike' ? ' bike' : '') + (v.ruined ? ' ruined' : ''));
+    var bike = v.kind === 'motorbike';
+    var glyph = bike ? iconClass('motorcycle') : '';
+    var root = mk('div', 'vm' + (bike ? ' bike' : '') + (glyph ? ' glyph' : '') + (v.ruined ? ' ruined' : ''));
+    if (glyph) { root.appendChild(mk('i', glyph)); }
     return elIcon('vm-wrap', root);
   }
   function vehicleLines(v) { return ['health ' + Math.round(v.health * 100) + '%', 'fuel ' + Math.round(v.fuel * 100) + '%', 'crew ' + (v.occupants || []).length]; }
