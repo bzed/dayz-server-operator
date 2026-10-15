@@ -23,9 +23,11 @@ admin actions:
 
 The mod connects *out* to dzo: about once a second it posts what changed and the
 results of finished actions to ``dzo serve``, and gets the next actions in the
-reply. Nothing connects into the game server. The mod only knows persistent
-vehicles of the car type (``CarScript``, which includes most modded cars); boats
-and helicopters are not reported yet.
+reply. Nothing connects into the game server. The mod knows persistent
+vehicles of the car type (``CarScript``, which includes most modded cars) and, on DayZ 1.30,
+motorbikes (``MotorbikeScript``); both can be repaired and deleted. Each vehicle has a kind,
+``car`` or ``motorbike``, shown in the vehicle list and as a round icon on the map. Boats and
+helicopters are not reported yet.
 
 Installing it
 ~~~~~~~~~~~~~

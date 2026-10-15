@@ -609,7 +609,7 @@
 
   var vm = {};
   function vehicleIcon(v) {
-    var root = mk('div', 'vm' + (v.ruined ? ' ruined' : ''));
+    var root = mk('div', 'vm' + (v.kind === 'motorbike' ? ' bike' : '') + (v.ruined ? ' ruined' : ''));
     return elIcon('vm-wrap', root);
   }
   function vehicleLines(v) { return ['health ' + Math.round(v.health * 100) + '%', 'fuel ' + Math.round(v.fuel * 100) + '%', 'crew ' + (v.occupants || []).length]; }
@@ -622,7 +622,7 @@
         var m = L.marker(ll(v), { icon: vehicleIcon(v) });
         e = vm[v.id] = { m: m, data: v, ruined: v.ruined };
         onMenu(m, function () { return vehicleSpec(e.data); });
-        named(m, function () { return 'Vehicle ' + e.data.type; });
+        named(m, function () { return (e.data.kind === 'motorbike' ? 'Motorbike ' : 'Vehicle ') + e.data.type; });
         m.addTo(vehicles);
       }
       e.data = v;

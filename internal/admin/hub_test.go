@@ -280,3 +280,11 @@ func TestHubAsksForTheHelloItMissed(t *testing.T) {
 		t.Error("a known world is not asked for again")
 	}
 }
+
+func TestSyncVehicleKind(t *testing.T) {
+	r := SyncRequest{Vehicles: []Vehicle{{ID: "a"}, {ID: "b", Kind: "motorbike"}}}
+	r.Normalise()
+	if r.Vehicles[0].Kind != "car" || r.Vehicles[1].Kind != "motorbike" {
+		t.Errorf("kinds = %q, %q", r.Vehicles[0].Kind, r.Vehicles[1].Kind)
+	}
+}

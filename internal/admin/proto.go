@@ -58,6 +58,7 @@ type Player struct {
 // Vehicle is one persistent vehicle.
 type Vehicle struct {
 	ID        string   `json:"id"`
+	Kind      string   `json:"kind"` // car or motorbike; an older mod sends none and is taken as car
 	Type      string   `json:"type"`
 	X         float64  `json:"x"`
 	Y         float64  `json:"y"`
@@ -203,6 +204,11 @@ type SyncReply struct {
 // Normalise drops the parts a mod request lists as not included. A request
 // without a Has list (from Go callers) is taken as it is.
 func (r *SyncRequest) Normalise() {
+	for i := range r.Vehicles {
+		if r.Vehicles[i].Kind == "" {
+			r.Vehicles[i].Kind = "car"
+		}
+	}
 	if r.Has == nil {
 		return
 	}

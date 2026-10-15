@@ -61,7 +61,7 @@ func newEnv(t *testing.T, role api.Role) *env {
 	t.Cleanup(ws.Close)
 	hub.Sync(admin.SyncRequest{Proto: 1, Hello: true, ModVersion: "0.1.0", World: "enoch",
 		Players:  []admin.Player{{SteamID: "7656", Name: "<b>alice</b>", Alive: true, X: 1, Z: 2}},
-		Vehicles: []admin.Vehicle{{ID: "1.2.3.4", Type: "OffroadHatchback", Health: 0.5, Fuel: 0.25}},
+		Vehicles: []admin.Vehicle{{ID: "1.2.3.4", Kind: "car", Type: "OffroadHatchback", Health: 0.5, Fuel: 0.25}, {ID: "5.6.7.8", Kind: "motorbike", Type: "Motorbike_01"}},
 		Types:    &admin.TypesChunk{Hash: "h", Total: 2, Names: []string{"AKM", "AK74"}},
 	})
 	return &env{t: t, web: ws, srv: srv, hub: hub, api: apiSrv, assets: assets}
@@ -143,7 +143,7 @@ func TestInstanceAndFragments(t *testing.T) {
 		t.Fatalf("player names must be escaped: %s", body)
 	}
 	_, body, _ = e.get("/b/main/i/alpha/vehicles")
-	if !strings.Contains(body, "OffroadHatchback") || !strings.Contains(body, "50%") || !strings.Contains(body, "/vehicles/1.2.3.4/repair") {
+	if !strings.Contains(body, "OffroadHatchback") || !strings.Contains(body, "50%") || !strings.Contains(body, "/vehicles/1.2.3.4/repair") || !strings.Contains(body, "Motorbike_01") || !strings.Contains(body, "<td>motorbike</td>") {
 		t.Fatalf("vehicles: %s", body)
 	}
 	_, body, _ = e.get("/b/main/i/alpha/players/7656/panel")

@@ -23,11 +23,12 @@
 {{define "vehicles"}}
 {{if .Err}}<p class="flash err">{{.Err}}</p>{{else if not .Items}}<p>No vehicles reported.</p>{{else}}
 <div class="scroll"><table>
-  <thead><tr><th>Class</th><th>Position</th><th>Health</th><th>Fuel</th><th>Crew</th><th></th></tr></thead>
+  <thead><tr><th>Class</th><th>Kind</th><th>Position</th><th>Health</th><th>Fuel</th><th>Crew</th><th></th></tr></thead>
   <tbody>
   {{range .Items}}
     <tr>
       <td>{{.Type}}{{if .Ruined}} <em>(ruined)</em>{{end}}</td>
+      <td>{{.Kind}}</td>
       <td>{{printf "%.0f / %.0f" .X .Z}}</td>
       <td>{{pct .Health}}</td>
       <td>{{pct .Fuel}}</td>

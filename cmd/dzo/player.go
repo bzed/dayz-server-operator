@@ -165,7 +165,7 @@ func newVehicleCmd() *cobra.Command {
 				return err
 			}
 			for _, v := range vs {
-				_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%s  %-24s %6.0f %6.0f  health %.2f fuel %.2f crew %d\n", v.ID, v.Type, v.X, v.Z, v.Health, v.Fuel, len(v.Occupants))
+				_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%s  %-9s %-24s %6.0f %6.0f  health %.2f fuel %.2f crew %d\n", v.ID, v.Kind, v.Type, v.X, v.Z, v.Health, v.Fuel, len(v.Occupants))
 			}
 			return nil
 		},

@@ -47,7 +47,8 @@ waitfor() { timeout "$1" bash -c "until $2; do sleep 3; done"; }
 
 go build -o "$work/dzo" ./cmd/dzo
 "$work/dzo" servermods build --src servermods --out "$work/built" >/dev/null
-"$work/dzo" servermods build --src testmods --out "$work/tbuilt" >/dev/null
+mkdir "$work/tsrc" && cp -r testmods/dzo-client-probe "$work/tsrc/" && git -C "$work/tsrc/dzo-client-probe" init -q && git -C "$work/tsrc/dzo-client-probe" add -A && git -C "$work/tsrc/dzo-client-probe" -c user.name=t -c user.email=t@t commit -qm probe # dzo-be-test is built with armake2, not by dzo
+"$work/dzo" servermods build --src "$work/tsrc" --out "$work/tbuilt" >/dev/null
 
 srv=$("$dev/find-dayzserver.sh" "${exp[@]}")
 "$dev/make-server-tree.sh" "$tree" "$srv" >/dev/null
@@ -166,6 +167,28 @@ verdict "teleport is refused in a vehicle" $s
 s=0
 waitfor 30 "'$work/dzo' vehicle list t1 --config '$work/config.yaml' --token-file '$work/api.token' | grep -q 'Offroad_02.*crew 1'" || s=1
 verdict "vehicle state: the car has crew 1" $s
+
+# 1.30 only: Motorbike is not a Car, dzo-admin keeps a registry for it. 1.29 has no motorbikes.
+# The world already has motorbikes of the economy: the probe's is the id that is new.
+vl() { "$work/dzo" vehicle list t1 --config "$work/config.yaml" --token-file "$work/api.token" "$@"; }
+vl | awk '$2 == "motorbike" {print $1}' | sort >"$work/bikes.before"
+touch "$tree/profiles/dzo_probe/bike"
+s=0
+bike=
+for _ in $(seq 20); do
+	bike=$(vl | awk '$2 == "motorbike" && /Motorbike_01_Blue/ {print $1}' | sort | comm -13 "$work/bikes.before" - | head -1)
+	[ -n "$bike" ] && break
+	sleep 3
+done
+[ -n "$bike" ] || s=1
+verdict "motorbike: listed with kind motorbike" $s
+s=0
+"$work/dzo" vehicle repair t1 "$bike" --config "$work/config.yaml" --token-file "$work/api.token" >/dev/null || s=1
+verdict "motorbike: repair" $s
+s=0
+"$work/dzo" vehicle delete t1 "$bike" --config "$work/config.yaml" --token-file "$work/api.token" >/dev/null || s=1
+waitfor 30 "! '$work/dzo' vehicle list t1 --config '$work/config.yaml' --token-file '$work/api.token' | grep -q '^$bike '" || s=1
+verdict "motorbike: delete" $s
 
 echo "== $pass passed, $fail failed"
 [ "$fail" = 0 ]

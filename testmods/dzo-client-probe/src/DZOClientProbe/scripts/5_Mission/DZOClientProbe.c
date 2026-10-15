@@ -29,6 +29,11 @@ modded class MissionServer
 				DeleteFile("$profile:dzo_probe/board");
 				DZOProbeBoard(p);
 			}
+			if (FileExist("$profile:dzo_probe/bike"))
+			{
+				DeleteFile("$profile:dzo_probe/bike");
+				DZOProbeBike(p);
+			}
 			array<EntityAI> items = new array<EntityAI>;
 			p.GetInventory().EnumerateInventory(InventoryTraversalType.PREORDER, items);
 			int light = 0;
@@ -53,6 +58,13 @@ modded class MissionServer
 			}
 			Print("DZO-PROBE player " + p.GetIdentity().GetName() + " items=" + items.Count() + " chemlight=" + light + " hands=" + hands + " transport=" + p.IsInTransport() + " crew=" + crew);
 		}
+	}
+
+	// 1.30: a parked motorbike next to the player, for dzo-admin's vehicle list.
+	void DZOProbeBike(PlayerBase p)
+	{
+		Object bike = GetGame().CreateObjectEx("Motorbike_01_Blue", p.GetPosition() + "-4 0 0", ECE_PLACE_ON_SURFACE | ECE_CREATEPHYSICS);
+		Print("DZO-PROBE bike: " + bike);
 	}
 
 	void DZOProbeBoard(PlayerBase p)
