@@ -2,7 +2,7 @@
 {{/* SPDX-License-Identifier: AGPL-3.0-or-later */}}
 {{define "audit"}}{{template "head" .}}
 {{with .Data}}
-<h1>Audit log <small>{{.Backend}}</small></h1>
+<h1><i class="fa fa-history" aria-hidden="true"></i>Audit log <small>{{.Backend}}</small></h1>
 {{if .Err}}<p class="flash err">{{.Err}}</p>{{else if not .Entries}}<p>No entries.</p>{{else}}
 <div class="scroll"><table>
   <thead><tr><th>Time</th><th>Who</th><th>Via</th><th>Instance</th><th>Action</th><th>Target</th><th>Detail</th><th>Result</th></tr></thead>

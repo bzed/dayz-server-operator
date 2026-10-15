@@ -12,7 +12,7 @@
       <td>{{printf "%.0f / %.0f" .X .Z}}</td>
       <td>{{printf "%.0f" .Health}}</td>
       <td>{{.Ping}}</td>
-      <td><button hx-get="/b/{{$.Backend}}/i/{{$.Instance}}/players/{{.SteamID}}/panel" hx-target="#panel">Actions</button></td>
+      <td><button hx-get="/b/{{$.Backend}}/i/{{$.Instance}}/players/{{.SteamID}}/panel" hx-target="#panel"><i class="fa fa-cog" aria-hidden="true"></i>Actions</button></td>
     </tr>
   {{end}}
   </tbody>
@@ -28,14 +28,14 @@
   {{range .Items}}
     <tr>
       <td>{{.Type}}{{if .Ruined}} <em>(ruined)</em>{{end}}</td>
-      <td>{{.Kind}}</td>
+      <td>{{if eq .Kind "motorbike"}}<i class="fa fa-motorcycle" aria-hidden="true"></i>{{else}}<i class="fa fa-car" aria-hidden="true"></i>{{end}}{{.Kind}}</td>
       <td>{{printf "%.0f / %.0f" .X .Z}}</td>
       <td>{{pct .Health}}</td>
       <td>{{pct .Fuel}}</td>
       <td>{{len .Occupants}}</td>
       <td>
-        <button hx-post="/b/{{$.Backend}}/i/{{$.Instance}}/vehicles/{{.ID}}/repair" hx-target="#flash" hx-vals='{"scope": "all"}'>Repair</button>
-        <button class="danger" hx-post="/b/{{$.Backend}}/i/{{$.Instance}}/vehicles/{{.ID}}/delete" hx-target="#flash" hx-confirm="Delete this {{.Type}}?">Delete</button>
+        <button hx-post="/b/{{$.Backend}}/i/{{$.Instance}}/vehicles/{{.ID}}/repair" hx-target="#flash" hx-vals='{"scope": "all"}'><i class="fa fa-wrench" aria-hidden="true"></i>Repair</button>
+        <button class="danger" hx-post="/b/{{$.Backend}}/i/{{$.Instance}}/vehicles/{{.ID}}/delete" hx-target="#flash" hx-confirm="Delete this {{.Type}}?"><i class="fa fa-trash" aria-hidden="true"></i>Delete</button>
       </td>
     </tr>
   {{end}}
@@ -48,17 +48,17 @@
 {{if .Err}}<p class="flash err">{{.Err}}</p>{{else}}
 {{$base := printf "/b/%s/i/%s/players/%s" .Backend .Instance .Player.SteamID}}
 <div class="panel">
-  <h3>{{.Player.Name}} <small>{{.Player.SteamID}}</small></h3>
+  <h3><i class="fa fa-user" aria-hidden="true"></i>{{.Player.Name}} <small>{{.Player.SteamID}}</small></h3>
   <div id="panel-flash"></div>
   <form hx-post="{{$base}}/message" hx-target="#panel-flash" hx-on::after-request="this.reset()">
     <input name="text" placeholder="Direct message" maxlength="400" required size="40">
-    <button>Message</button>
+    <button><i class="fa fa-comment" aria-hidden="true"></i>Message</button>
   </form>
   <form hx-post="{{$base}}/teleport" hx-target="#panel-flash">
     <input name="x" type="number" step="any" placeholder="x (east)" size="8">
     <input name="z" type="number" step="any" placeholder="z (north)" size="8">
     or to player <input name="to" placeholder="Steam ID" size="18">
-    <button>Teleport</button>
+    <button><i class="fa fa-location-arrow" aria-hidden="true"></i>Teleport</button>
   </form>
   <form hx-post="{{$base}}/give" hx-target="#panel-flash">
     <input name="type" list="types" placeholder="Class name" required size="26" autocomplete="off"
@@ -67,7 +67,7 @@
     <input name="quantity" type="number" step="any" min="0" placeholder="qty" size="5">
     <input name="health" type="number" step="0.1" min="0" max="1" placeholder="health 0-1" size="8">
     <select name="target"><option value="inventory">inventory</option><option value="hands">hands</option><option value="ground">ground</option></select>
-    <button>Give</button>
+    <button><i class="fa fa-gift" aria-hidden="true"></i>Give</button>
   </form>
 </div>
 {{end}}

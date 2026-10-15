@@ -2,32 +2,32 @@
 {{/* SPDX-License-Identifier: AGPL-3.0-or-later */}}
 {{define "instance"}}{{template "head" .}}
 {{with .Data}}
-<h1>{{.Instance}} <small>{{$.Backend}}</small></h1>
+<h1><i class="fa fa-server" aria-hidden="true"></i>{{.Instance}} <small>{{$.Backend}}</small></h1>
 {{if .Err}}<p class="flash err">{{.Err}}</p>{{else}}
 <p>
   {{if .Status.Connected}}<span class="dot on"></span>dzo-admin connected{{with .Status.Hello}} (mod {{.ModVersion}}, world {{.World}}){{end}}
   {{else}}<span class="dot"></span>dzo-admin not connected{{end}}
-  <a class="btn" href="/b/{{.Backend}}/i/{{.Instance}}/map">Open live map</a>
+  <a class="btn" href="/b/{{.Backend}}/i/{{.Instance}}/map"><i class="fa fa-map" aria-hidden="true"></i>Open live map</a>
 </p>
 <div id="flash"></div>
 
 <section>
-  <h2>Broadcast</h2>
+  <h2><i class="fa fa-bullhorn" aria-hidden="true"></i>Broadcast</h2>
   <form hx-post="/b/{{.Backend}}/i/{{.Instance}}/message" hx-target="#flash" hx-on::after-request="this.reset()">
     <input name="text" placeholder="Message to all players" maxlength="400" required size="50">
     <select name="style"><option value="chat">chat</option><option value="important">important</option><option value="notification">on screen</option></select>
-    <button>Send</button>
+    <button><i class="fa fa-paper-plane" aria-hidden="true"></i>Send</button>
   </form>
 </section>
 
 <section>
-  <h2>Players</h2>
+  <h2><i class="fa fa-users" aria-hidden="true"></i>Players</h2>
   <div hx-get="/b/{{.Backend}}/i/{{.Instance}}/players" hx-trigger="load, every 5s"></div>
   <div id="panel"></div>
 </section>
 
 <section>
-  <h2>Vehicles</h2>
+  <h2><i class="fa fa-car" aria-hidden="true"></i>Vehicles</h2>
   <div hx-get="/b/{{.Backend}}/i/{{.Instance}}/vehicles" hx-trigger="load, every 15s"></div>
 </section>
 {{end}}

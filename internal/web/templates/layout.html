@@ -7,15 +7,16 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="csrf" content="{{.CSRF}}">
 <title>{{.Title}} · dzo</title>
+<link rel="stylesheet" href="/vendor/fork-awesome/css/fork-awesome.css">
 <link rel="stylesheet" href="/static/app.css">
 <script src="/vendor/htmx/htmx.min.js" defer></script>
 </head>
 <body class="{{.Class}}" hx-headers='{"X-CSRF-Token": "{{.CSRF}}"}'>
 <header>
-  <a class="brand" href="/">dzo</a>
+  <a class="brand" href="/"><i class="fa fa-crosshairs" aria-hidden="true"></i>dzo</a>
   <nav>
-    {{range .Backends}}<a href="/b/{{.Name}}/audit">{{.Name}} audit</a>{{end}}
-    <a href="/docs/">docs</a>
+    {{range .Backends}}<a href="/b/{{.Name}}/audit"><i class="fa fa-history" aria-hidden="true"></i>{{.Name}} audit</a>{{end}}
+    <a href="/docs/"><i class="fa fa-book" aria-hidden="true"></i>docs</a>
   </nav>
   <span class="ver">{{.Version}}</span>
 </header>

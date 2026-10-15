@@ -82,6 +82,9 @@ input, select, button, .btn { font: inherit; padding: .35rem .6rem; border: 1px 
 input::placeholder { color: var(--muted); opacity: .8; }
 button, .btn { cursor: pointer; background: var(--ink); color: var(--bg); font-weight: 600; text-decoration: none; display: inline-block; }
 button:hover, .btn:hover { filter: brightness(1.15); }
+/* The icons in text: headings, buttons, links, table cells (not the map's markers). */
+h1 .fa, h2 .fa, h3 .fa, th .fa, td .fa, button .fa, .btn .fa, nav .fa, .maptitle .fa { margin-right: .4em; }
+.brand .fa { margin-right: .3em; }
 button.danger { background: var(--flare); border-color: var(--flare); color: #fff; }
 button.quiet { background: transparent; color: var(--ink); }
 

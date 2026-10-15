@@ -1,14 +1,14 @@
 {{/* SPDX-FileCopyrightText: 2026 Bernd Zeimetz <bernd@bzed.de> */}}
 {{/* SPDX-License-Identifier: AGPL-3.0-or-later */}}
 {{define "dashboard"}}{{template "head" .}}
-<h1>Servers</h1>
+<h1><i class="fa fa-server" aria-hidden="true"></i>Servers</h1>
 {{range .Data}}{{$b := .Name}}
 <section>
-  <h2>{{.Name}}{{with .Info}} <small>installation {{.Installation}}, dzo {{.Version}}, you are {{.Role}}</small>{{end}}</h2>
+  <h2><i class="fa fa-cloud" aria-hidden="true"></i>{{.Name}}{{with .Info}} <small>installation {{.Installation}}, dzo {{.Version}}, you are {{.Role}}</small>{{end}}</h2>
   {{if .Err}}<p class="flash err">{{.Err}}</p>{{end}}
   {{if .Instances}}
   <div class="scroll"><table class="rows">
-    <thead><tr><th>Instance</th><th>Game server</th><th>Players</th><th>Vehicles</th><th></th></tr></thead>
+    <thead><tr><th>Instance</th><th>Game server</th><th><i class="fa fa-users" aria-hidden="true"></i>Players</th><th><i class="fa fa-car" aria-hidden="true"></i>Vehicles</th><th></th></tr></thead>
     <tbody>
     {{range .Instances}}
       <tr{{if not .Connected}} class="off"{{end}}>
@@ -16,7 +16,7 @@
         <td class="state">{{if .Connected}}<span class="dot on"></span>connected{{else}}<span class="dot"></span>not connected{{end}}</td>
         <td>{{.Players}}</td>
         <td>{{.Vehicles}}</td>
-        <td><a class="btn" href="/b/{{$b}}/i/{{.Instance}}/map">Open map</a></td>
+        <td><a class="btn" href="/b/{{$b}}/i/{{.Instance}}/map"><i class="fa fa-map" aria-hidden="true"></i>Open map</a></td>
       </tr>
     {{end}}
     </tbody>

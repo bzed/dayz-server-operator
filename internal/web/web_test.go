@@ -118,6 +118,10 @@ func TestDashboard(t *testing.T) {
 	if code != 200 || !strings.Contains(body, "site-a") || !strings.Contains(body, `href="/b/main/i/alpha"`) || !strings.Contains(body, "connected") {
 		t.Fatalf("dashboard: %d %s", code, body)
 	}
+	// Every page loads the icon font, and the buttons keep their text next to the icon.
+	if !strings.Contains(body, "/vendor/fork-awesome/css/fork-awesome.css") || !strings.Contains(body, `fa-map`) || !strings.Contains(body, "Open map") {
+		t.Fatalf("dashboard icons: %s", body)
+	}
 	if !strings.Contains(body, "api: ") && !strings.Contains(body, "down") {
 		t.Fatal("an unreachable backend must be shown with its error")
 	}
@@ -143,7 +147,7 @@ func TestInstanceAndFragments(t *testing.T) {
 		t.Fatalf("player names must be escaped: %s", body)
 	}
 	_, body, _ = e.get("/b/main/i/alpha/vehicles")
-	if !strings.Contains(body, "OffroadHatchback") || !strings.Contains(body, "50%") || !strings.Contains(body, "/vehicles/1.2.3.4/repair") || !strings.Contains(body, "Motorbike_01") || !strings.Contains(body, "<td>motorbike</td>") {
+	if !strings.Contains(body, "OffroadHatchback") || !strings.Contains(body, "50%") || !strings.Contains(body, "/vehicles/1.2.3.4/repair") || !strings.Contains(body, "Motorbike_01") || !strings.Contains(body, "fa-motorcycle") {
 		t.Fatalf("vehicles: %s", body)
 	}
 	_, body, _ = e.get("/b/main/i/alpha/players/7656/panel")
