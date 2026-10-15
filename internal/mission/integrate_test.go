@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -145,9 +146,24 @@ func TestIntegrateReplaceReportsConflicts(t *testing.T) {
 
 func TestIntegrateGlobalsAndUnsafeNames(t *testing.T) {
 	d := stagingTree(t)
-	res, err := Integrate(d, []Contribution{{Name: "m", Folder: "mod_1", Files: []ContribFile{{Name: "globals.xml", Data: []byte(`<variables/>`)}}}})
-	if err != nil || len(res.Notes) != 1 {
-		t.Fatalf("globals: err=%v notes=%v", err, res.Notes)
+	if err := os.WriteFile(filepath.Join(d, "db/globals.xml"), []byte(`<variables><var name="A" type="0" value="1"/><var name="B" type="0" value="1"/></variables>`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	res, err := Integrate(d, []Contribution{
+		{Name: "m1", Folder: "mod_1", Files: []ContribFile{{Name: "globals.xml", Data: []byte(`<variables><var name="B" type="0" value="2"/></variables>`)}}},
+		{Name: "m2", Folder: "mod_2", Files: []ContribFile{{Name: "globals.xml", Data: []byte(`<variables><var name="C" type="0" value="3"/></variables>`)}}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	g := readStaging(t, d, "db/globals.xml")
+	for _, want := range []string{`name="A"`, `name="B" type="0" value="2"`, `name="C"`} {
+		if !strings.Contains(g, want) {
+			t.Errorf("db/globals.xml lacks %s:\n%s", want, g)
+		}
+	}
+	if !slices.Contains(res.Touched, "db/globals.xml") {
+		t.Errorf("touched = %v", res.Touched)
 	}
 	if strings.Contains(readStaging(t, d, "cfgeconomycore.xml"), "mod_1") {
 		t.Error("globals.xml must not be registered as a CE file")

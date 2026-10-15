@@ -60,6 +60,7 @@ var (
 		"cfgenvironment.xml":     {"cfgenvironment.xml", "env", "name"},
 		"cfgrandompresets.xml":   {"cfgrandompresets.xml", "randompresets", "name"},
 		"zombie_territories.xml": {"env/zombie_territories.xml", "territory-type", "name"},
+		"globals.xml":            {"db/globals.xml", "variables", "name"},
 	}
 	jsonAppendKeys = map[string][]string{
 		"cfggameplay.json":            {"objectSpawnersArr", "spawnGearPresetFiles", "playerRestrictedAreaFiles"},
@@ -95,11 +96,6 @@ func Integrate(staging string, cs []Contribution) (IntegrateResult, error) {
 				err = WriteFile(staging, rel, f.Data)
 				touch(rel)
 				ceFiles = append(ceFiles, ce.CEFile{Name: base, Type: ceTypes[base]})
-			case base == "globals.xml":
-				rel := path.Join(c.Folder, base)
-				err = WriteFile(staging, rel, f.Data)
-				touch(rel)
-				res.Notes = append(res.Notes, c.Name+": globals.xml is not a Central Economy file type, it is copied to "+c.Folder+"/ but not registered")
 			case xmlAppend[base].path != "":
 				x := xmlAppend[base]
 				err = MergeXMLFile(staging, x.path, x.root, f.Data, x.key)

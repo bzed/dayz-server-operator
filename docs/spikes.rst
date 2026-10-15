@@ -96,8 +96,8 @@ What it found:
 * **``init.c`` made the legacy start skip a file.** ``xml.sh`` runs under ``set -e`` and ``INIT=local`` asks for an ``init.c`` that does not exist,
   so for mod 2981609048 it stopped before ``types.xml``: dzo registers ``mod_2981609048`` (and the converter keeps the
   patch but does not activate it, see :doc:`migration`).
-* **Registration of ``globals.xml``.** The legacy start registered the ``globals.xml`` of an overlay as a Central Economy file; dzo copies it
-  and does not.
+* **Registration of ``globals.xml``.** The legacy start registered the ``globals.xml`` of an overlay as a Central Economy file; dzo does not
+  register it and merges its variables into ``db/globals.xml``.
 * **Extra files.** The legacy start copied the merged files into ``custom_<name>/`` again and the other files only when the overlay had
   a Central Economy file; dzo copies the files it did not merge, always (so the JSON files that ``cfggameplay.json`` points at
   are there).

@@ -139,12 +139,12 @@ Each file type has a fixed merge strategy:
 
    * - Files
      - Strategy
-   * - ``types``, ``spawnabletypes``, ``events``, ``globals``
+   * - ``types``, ``spawnabletypes``, ``events``
      - copied to ``mod_<id>/`` and registered as a ``<ce folder>`` in
        ``cfgeconomycore.xml``
    * - ``mapgrouppos``, ``mapgroupproto``, ``cfgeventgroups``,
        ``cfgeventspawns``, ``cfgenvironment``, ``cfgrandompresets``,
-       ``zombie_territories``
+       ``zombie_territories``, ``globals`` (into ``db/globals.xml``)
      - XML elements appended to the mission file
    * - ``cfggameplay.json``
      - deep merge; known lists (object spawners, spawn gear presets,
@@ -242,8 +242,8 @@ the live mission is touched. Notes on what is built:
   ``init.c``; a diff that does not apply fails the render.
 * ``messages.xml`` is always written by dzo and never has a countdown or shutdown; a file that
   has one fails the render.
-* ``globals.xml`` is not a Central Economy file type: it is copied into the mod's folder and not
-  registered.
+* ``globals.xml`` is not a Central Economy file type, so it is not registered: its ``<var>`` elements
+  are merged by ``name`` into ``db/globals.xml`` (the later contributor wins a variable).
 * Two contributors that replace the same file (``cfgweather.xml``, ``messages.xml``) are reported
   as a conflict; the later one wins. Elements of the XML files that are merged by ``name`` are
   replaced silently; in ``mapgrouppos.xml`` a group is identified by ``name`` and ``pos``, because the file
