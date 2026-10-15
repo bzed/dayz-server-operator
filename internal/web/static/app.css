@@ -159,9 +159,9 @@ main > .flash.err { margin: 1rem; }
 .mi { position: absolute; left: -12px; top: -12px; width: 24px; height: 24px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; border: 2px solid var(--mc); border-radius: 50%; background: var(--surface); color: var(--mc); font-size: 13px; cursor: pointer; }
 .mi .fa { line-height: 1; }
 .vm.bike { border-radius: 50%; }
-.vm.bike.glyph { left: -12px; top: -12px; width: 24px; height: 24px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; font-size: 13px; color: var(--ink); }
-.vm.bike.glyph::after { display: none; }
-.vm.bike .fa { line-height: 1; }
+.vm.glyph { left: -12px; top: -12px; width: 24px; height: 24px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; font-size: 13px; color: var(--ink); }
+.vm.glyph::after { display: none; }
+.vm .fa { line-height: 1; }
 .vm.ruined { border-color: var(--muted); background: var(--surface); opacity: .8; }
 
 /* Context menu. */

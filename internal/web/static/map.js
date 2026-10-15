@@ -610,7 +610,7 @@
   var vm = {};
   function vehicleIcon(v) {
     var bike = v.kind === 'motorbike';
-    var glyph = bike ? iconClass('motorcycle') : '';
+    var glyph = iconClass(bike ? 'motorcycle' : 'car');
     var root = mk('div', 'vm' + (bike ? ' bike' : '') + (glyph ? ' glyph' : '') + (v.ruined ? ' ruined' : ''));
     if (glyph) { root.appendChild(mk('i', glyph)); }
     return elIcon('vm-wrap', root);
