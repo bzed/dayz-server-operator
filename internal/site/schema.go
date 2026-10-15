@@ -471,6 +471,8 @@ type Instance struct {
 	AdminMap        AdminMap        `yaml:"admin_map,omitempty"`
 	Welcome         *string         `yaml:"welcome,omitempty"`
 	Messages        []Message       `yaml:"messages,omitempty"`
+	// Priority lists the Steam64 IDs that skip the login queue (rendered to the server root's priority.txt).
+	Priority []string `yaml:"priority,omitempty"`
 }
 
 // Validate checks the invariants the rest of dzo relies on. It does not
@@ -550,6 +552,9 @@ func (i Instance) Validate() error {
 		errs = append(errs, fmt.Sprintf("updates.policy: invalid value %q", i.Updates.Policy))
 	}
 	if err := ValidateMessages(i.Messages); err != nil {
+		errs = append(errs, err.Error())
+	}
+	if err := ValidatePriority(i.Priority); err != nil {
 		errs = append(errs, err.Error())
 	}
 	if err := ValidateWelcome(i.Welcome); err != nil {

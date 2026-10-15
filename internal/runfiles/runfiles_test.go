@@ -152,3 +152,12 @@ func TestCustomKeys(t *testing.T) {
 		t.Errorf("keys = %v", names)
 	}
 }
+
+func TestPriorityFile(t *testing.T) {
+	if got := string(PriorityFile([]string{"76561198000000001", "76561198000000002"})); got != "76561198000000001;76561198000000002;" {
+		t.Errorf("got %q", got)
+	}
+	if got := PriorityFile(nil); len(got) != 0 {
+		t.Errorf("no ids gave %q", got)
+	}
+}

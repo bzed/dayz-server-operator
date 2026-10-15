@@ -249,7 +249,7 @@ func prepareRunfiles(cfg *config.Config, inst *resolve.Instance) (runfiles.Input
 	}
 	keys = append(keys, extra...)
 	return runfiles.Input{
-		RuntimeDir: inst.Paths.Runtime, ProfilesDir: inst.Paths.Profiles, StorageDir: inst.Paths.Storage, ServerCfg: src, Template: inst.Map,
+		RuntimeDir: inst.Paths.Runtime, ProfilesDir: inst.Paths.Profiles, StorageDir: inst.Paths.Storage, ServerCfg: src, Priority: inst.Priority, Template: inst.Map,
 		QueryPort: inst.Ports.Query, RConPort: inst.Ports.RCon, RConPass: pw, Keys: keys, RConIP: rconBind(inst),
 	}, nil
 }

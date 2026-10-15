@@ -138,10 +138,11 @@ func RConPassword(secretsDir, name string) (string, error) {
 
 // Input is everything Write needs for one instance.
 type Input struct {
-	RuntimeDir  string // the instance's runtime/
-	ProfilesDir string // the instance's profiles/
-	StorageDir  string // the instance's storage/<map>, created if missing; empty skips it
-	ServerCfg   []byte // the site's serverDZ.cfg
+	RuntimeDir  string   // the instance's runtime/
+	ProfilesDir string   // the instance's profiles/
+	StorageDir  string   // the instance's storage/<map>, created if missing; empty skips it
+	ServerCfg   []byte   // the site's serverDZ.cfg
+	Priority    []string // Steam64 IDs for priority.txt
 	Template    string
 	QueryPort   int
 	RConPort    int
@@ -150,7 +151,7 @@ type Input struct {
 	Keys        []string
 }
 
-// Write renders runtime/keys, runtime/serverDZ.cfg and the BattlEye seed
+// Write renders runtime/keys, runtime/serverDZ.cfg, runtime/priority.txt and the BattlEye seed
 // config. The keys are copied, not linked: they are mounted into the
 // container, where a link into the cache would not resolve. Stale BattlEye
 // working copies are removed so that the seed's port takes effect.
@@ -176,6 +177,11 @@ func Write(in Input) error {
 		}
 	}
 	if err := os.WriteFile(filepath.Join(in.RuntimeDir, "serverDZ.cfg"), cfg.Bytes(), 0o600); err != nil {
+		return err
+	}
+	// priority.txt (queue priority) is mounted into the server root; an empty list gives an empty
+	// file so that the mount source always exists.
+	if err := os.WriteFile(filepath.Join(in.RuntimeDir, "priority.txt"), PriorityFile(in.Priority), 0o640); err != nil { //nolint:gosec // read by the container's root
 		return err
 	}
 	// The server's stdin (mounted at /stdin): the answer "Ignore" to the assertion prompt that
@@ -204,4 +210,14 @@ func Hex(n int) string {
 	b := make([]byte, n)
 	_, _ = rand.Read(b)
 	return hex.EncodeToString(b)
+}
+
+// PriorityFile renders priority.txt: every Steam64 ID followed by a semicolon ("id1;id2;"). No IDs
+// give an empty file.
+func PriorityFile(ids []string) []byte {
+	var b strings.Builder
+	for _, id := range ids {
+		b.WriteString(id + ";")
+	}
+	return []byte(b.String())
 }

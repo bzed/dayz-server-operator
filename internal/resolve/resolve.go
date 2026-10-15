@@ -154,6 +154,7 @@ type Instance struct {
 	AdminMap site.AdminMap     `yaml:"admin_map,omitempty"`
 	Welcome  *string           `yaml:"welcome,omitempty"`
 	Messages []site.Message    `yaml:"messages,omitempty"`
+	Priority []string          `yaml:"priority,omitempty"`
 
 	// Missing lists what is not downloaded yet; Quadlet is only populated
 	// when it is empty.
@@ -246,7 +247,7 @@ func Resolve(cfg *config.Config, t *site.Tree, name string) (*Instance, error) {
 		Binary: cfg.Binary,
 		Name:   name, Map: raw.Map, Ports: raw.Ports, RConBind: raw.RConBind, Network: raw.Network, Image: t.Site.Image,
 		Params: raw.Params, Overlays: raw.Overlays, Updates: raw.Updates, Restarts: raw.Restarts,
-		Health: raw.Health, RestartLimit: raw.RestartLimit, Stop: raw.Stop, Notify: raw.Notify, Container: raw.Container, Hooks: raw.Hooks, Backup: raw.Backup, Logs: raw.Logs, Admin: raw.Admin, AdminMap: raw.AdminMap, Welcome: raw.Welcome, Messages: raw.Messages,
+		Health: raw.Health, RestartLimit: raw.RestartLimit, Stop: raw.Stop, Notify: raw.Notify, Container: raw.Container, Hooks: raw.Hooks, Backup: raw.Backup, Logs: raw.Logs, Admin: raw.Admin, AdminMap: raw.AdminMap, Welcome: raw.Welcome, Messages: raw.Messages, Priority: raw.Priority,
 		Mission: Mission{Source: src, Fallback: raw.FallbackMission, Unmanaged: raw.Mission.Unmanaged, Drift: raw.Mission.Drift},
 		Product: Product{Name: raw.Product, Product: prod},
 		Paths: Paths{
@@ -483,6 +484,10 @@ func buildQuadlet(inst *Instance) quadlet.ContainerSpec {
 		// Also inside the server folder, like profiles/ and mpmissions/: $storage: is resolved relative to it.
 		{Source: inst.Paths.Storage, Destination: "/dayz/storage"},
 		{Source: filepath.Join(rt, "serverDZ.cfg"), Destination: "/dayz/profiles/serverDZ.cfg", ReadOnly: true},
+		// The queue priority list lives in the server root, not in profiles/.
+		{Source: filepath.Join(rt, "priority.txt"), Destination: "/dayz/priority.txt", ReadOnly: true},
+		// The queue priority list lives in the server root, not in profiles/.
+		{Source: filepath.Join(rt, "priority.txt"), Destination: "/dayz/priority.txt", ReadOnly: true},
 	}
 	var clientMods, serverMods []string
 	for _, m := range inst.Mods {

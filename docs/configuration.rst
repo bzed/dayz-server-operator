@@ -173,6 +173,8 @@ instance.yaml
    messages:                       # more server messages, written to db/messages.xml
      - {text: "Homepage: example.org, rules: example.org/rules", on_connect: true, delay: 1}
      - {text: "Please read the rules: example.org/rules", repeat: 45}
+   priority:                       # Steam64 IDs that skip the login queue (priority.txt)
+     - "76561198108512982"
    health: {startup_timeout: 45m, interval: 60s, retries: 5}
    restart_limit: {burst: 5, interval: 30min}
    backup:
@@ -264,6 +266,11 @@ Main keys:
    integration's or an overlay's ``messages.xml``: restarts and stops are announced by dzo itself, see
    ``restarts.announce`` and :doc:`operations`. The server reads the file at start, so changes
    take effect at the next restart.
+
+``priority``
+   Steam64 IDs (17 digits) of players who skip the login queue when the server is full. dzo writes
+   them to ``priority.txt`` in the server root (``/dayz`` in the container) as ``id1;id2;``, and
+   the server reads it at start. Per instance, in ``instance.yaml``.
 
 ``updates.restart_minute``
    With ``policy: auto``, the minute of the hour at which update restarts happen: ``0`` is the
