@@ -147,12 +147,19 @@ func TestInstanceAndFragments(t *testing.T) {
 		t.Fatalf("player names must be escaped: %s", body)
 	}
 	_, body, _ = e.get("/b/main/i/alpha/vehicles")
-	if !strings.Contains(body, "OffroadHatchback") || !strings.Contains(body, "50%") || !strings.Contains(body, "/vehicles/1.2.3.4/repair") || !strings.Contains(body, "Motorbike_01") || !strings.Contains(body, "fa-motorcycle") {
+	if !strings.Contains(body, "OffroadHatchback") || !strings.Contains(body, "50%") || !strings.Contains(body, "/vehicles/1.2.3.4/panel") || !strings.Contains(body, "Motorbike_01") || !strings.Contains(body, "fa-motorcycle") {
 		t.Fatalf("vehicles: %s", body)
 	}
 	_, body, _ = e.get("/b/main/i/alpha/players/7656/panel")
 	if !strings.Contains(body, `hx-post="/b/main/i/alpha/players/7656/teleport"`) {
 		t.Fatalf("panel: %s", body)
+	}
+	_, body, _ = e.get("/b/main/i/alpha/vehicles/1.2.3.4/panel")
+	if !strings.Contains(body, `hx-post="/b/main/i/alpha/vehicles/1.2.3.4/flip"`) || !strings.Contains(body, `"scope": "missing"`) {
+		t.Fatalf("vehicle panel: %s", body)
+	}
+	if _, body, _ = e.get("/b/main/i/alpha/vehicles/nope/panel"); !strings.Contains(body, "not found") {
+		t.Fatalf("panel for an absent vehicle: %s", body)
 	}
 	if _, body, _ = e.get("/b/main/i/alpha/players/9999/panel"); !strings.Contains(body, "not online") {
 		t.Fatalf("panel for an absent player: %s", body)
@@ -230,7 +237,8 @@ func TestActions(t *testing.T) {
 		"/b/main/i/alpha/players/7656/message":    {"text": {"hello"}},
 		"/b/main/i/alpha/players/7656/teleport":   {"x": {"10"}, "z": {"20"}},
 		"/b/main/i/alpha/players/7656/give":       {"type": {"AKM"}, "quantity": {"1"}, "health": {"0.5"}, "target": {"hands"}},
-		"/b/main/i/alpha/vehicles/1.2.3.4/repair": {"scope": {"all"}},
+		"/b/main/i/alpha/vehicles/1.2.3.4/repair": {"scope": {"missing"}},
+		"/b/main/i/alpha/vehicles/1.2.3.4/flip":   {},
 		"/b/main/i/alpha/vehicles/1.2.3.4/delete": {"force": {"1"}},
 	} {
 		code, body := e.post(path, form, map[string]string{"X-Forwarded-User": "alice@example.invalid"})

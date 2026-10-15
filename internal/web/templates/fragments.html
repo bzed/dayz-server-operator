@@ -12,7 +12,7 @@
       <td>{{printf "%.0f / %.0f" .X .Z}}</td>
       <td>{{printf "%.0f" .Health}}</td>
       <td>{{.Ping}}</td>
-      <td><button hx-get="/b/{{$.Backend}}/i/{{$.Instance}}/players/{{.SteamID}}/panel" hx-target="#panel"><i class="fa fa-cog" aria-hidden="true"></i>Actions</button></td>
+      <td><button hx-get="/b/{{$.Backend}}/i/{{$.Instance}}/players/{{.SteamID}}/panel" hx-target="closest tr" hx-swap="afterend" data-rowpanel><i class="fa fa-cog" aria-hidden="true"></i>Actions</button></td>
     </tr>
   {{end}}
   </tbody>
@@ -33,10 +33,7 @@
       <td>{{pct .Health}}</td>
       <td>{{pct .Fuel}}</td>
       <td>{{len .Occupants}}</td>
-      <td>
-        <button hx-post="/b/{{$.Backend}}/i/{{$.Instance}}/vehicles/{{.ID}}/repair" hx-target="#flash" hx-vals='{"scope": "all"}'><i class="fa fa-wrench" aria-hidden="true"></i>Repair</button>
-        <button class="danger" hx-post="/b/{{$.Backend}}/i/{{$.Instance}}/vehicles/{{.ID}}/delete" hx-target="#flash" hx-confirm="Delete this {{.Type}}?"><i class="fa fa-trash" aria-hidden="true"></i>Delete</button>
-      </td>
+      <td><button hx-get="/b/{{$.Backend}}/i/{{$.Instance}}/vehicles/{{.ID}}/panel" hx-target="closest tr" hx-swap="afterend" data-rowpanel><i class="fa fa-cog" aria-hidden="true"></i>Actions</button></td>
     </tr>
   {{end}}
   </tbody>
@@ -45,10 +42,11 @@
 {{end}}
 
 {{define "panel"}}
-{{if .Err}}<p class="flash err">{{.Err}}</p>{{else}}
+<tr class="rowpanel"><td colspan="6">
+{{if .Err}}<p class="flash err">{{.Err}}</p><button class="quiet" data-close><i class="fa fa-times" aria-hidden="true"></i>Close</button>{{else}}
 {{$base := printf "/b/%s/i/%s/players/%s" .Backend .Instance .Player.SteamID}}
 <div class="panel">
-  <h3><i class="fa fa-user" aria-hidden="true"></i>{{.Player.Name}} <small>{{.Player.SteamID}}</small></h3>
+  <h3><i class="fa fa-user" aria-hidden="true"></i>{{.Player.Name}} <small>{{.Player.SteamID}}</small> <button class="quiet" data-close><i class="fa fa-times" aria-hidden="true"></i>Close</button></h3>
   <div id="panel-flash"></div>
   <form hx-post="{{$base}}/message" hx-target="#panel-flash" hx-on::after-request="this.reset()">
     <input name="text" placeholder="Direct message" maxlength="400" required size="40">
@@ -71,6 +69,32 @@
   </form>
 </div>
 {{end}}
+</td></tr>
+{{end}}
+
+{{define "vpanel"}}
+<tr class="rowpanel"><td colspan="7">
+{{if .Err}}<p class="flash err">{{.Err}}</p><button class="quiet" data-close><i class="fa fa-times" aria-hidden="true"></i>Close</button>{{else}}
+{{$base := printf "/b/%s/i/%s/vehicles/%s" .Backend .Instance .Vehicle.ID}}
+<div class="panel">
+  <h3><i class="fa fa-wrench" aria-hidden="true"></i>{{.Vehicle.Type}} <small>{{.Vehicle.ID}}</small> <button class="quiet" data-close><i class="fa fa-times" aria-hidden="true"></i>Close</button></h3>
+  <div id="panel-flash"></div>
+  <p>
+    <strong>Repair:</strong>
+    <button hx-post="{{$base}}/repair" hx-target="#panel-flash" hx-vals='{"scope": "all"}' title="Repair every part, refuel and add the parts that are missing"><i class="fa fa-wrench" aria-hidden="true"></i>Everything</button>
+    <button hx-post="{{$base}}/repair" hx-target="#panel-flash" hx-vals='{"scope": "engine"}'>Body</button>
+    <button hx-post="{{$base}}/repair" hx-target="#panel-flash" hx-vals='{"scope": "parts"}'>Parts</button>
+    <button hx-post="{{$base}}/repair" hx-target="#panel-flash" hx-vals='{"scope": "wheels"}'>Wheels</button>
+    <button hx-post="{{$base}}/repair" hx-target="#panel-flash" hx-vals='{"scope": "fluids"}'><i class="fa fa-tint" aria-hidden="true"></i>Refuel</button>
+    <button hx-post="{{$base}}/repair" hx-target="#panel-flash" hx-vals='{"scope": "missing"}'><i class="fa fa-plus" aria-hidden="true"></i>Add missing parts</button>
+  </p>
+  <p>
+    <button hx-post="{{$base}}/flip" hx-target="#panel-flash" title="Stand it upright on its wheels"><i class="fa fa-refresh" aria-hidden="true"></i>Flip upright</button>
+    <button class="danger" hx-post="{{$base}}/delete" hx-target="#panel-flash" {{if .Vehicle.Occupants}}hx-vals='{"force": "1"}' {{end}}hx-confirm="Delete this {{.Vehicle.Type}}{{if .Vehicle.Occupants}} with {{len .Vehicle.Occupants}} inside{{end}}?"><i class="fa fa-trash" aria-hidden="true"></i>Delete</button>
+  </p>
+</div>
+{{end}}
+</td></tr>
 {{end}}
 
 {{define "types"}}{{range .}}<option value="{{.}}">{{end}}{{end}}

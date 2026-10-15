@@ -179,6 +179,7 @@ func TestValidate(t *testing.T) {
 		{"spawn no class", Command{Kind: KindSpawnItem, SteamID: "1"}, "needs type"},
 		{"repair scope", Command{Kind: KindVehicleRepair, Vehicle: "v", Scope: "x"}, "scope"},
 		{"repair no vehicle", Command{Kind: KindVehicleRepair}, "vehicle"},
+		{"flip no vehicle", Command{Kind: KindVehicleFlip}, "vehicle"},
 		{"delete no vehicle", Command{Kind: KindVehicleDelete}, "vehicle"},
 		{"kind", Command{Kind: "explode"}, "unknown command"},
 	}
@@ -192,6 +193,8 @@ func TestValidate(t *testing.T) {
 		{Kind: KindSpawnItem, SteamID: "1", Type: "AKM"},
 		{Kind: KindSpawnItem, SteamID: "1", Type: "Ammo_556x45", Target: "hands", Quantity: 5, Health: 1},
 		{Kind: KindVehicleRepair, Vehicle: "v", Scope: "wheels"},
+		{Kind: KindVehicleRepair, Vehicle: "v", Scope: "missing"},
+		{Kind: KindVehicleFlip, Vehicle: "v"},
 		{Kind: KindTeleport, SteamID: "1", ToSteamID: "2"},
 	} {
 		if _, err := h.Enqueue(ok); err != nil {

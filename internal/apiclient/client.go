@@ -210,6 +210,11 @@ func (c *Client) Repair(ctx context.Context, name, vehicle, scope string) (api.A
 	return c.action(ctx, http.MethodPost, inst(name)+"/vehicles/"+url.PathEscape(vehicle)+"/repair", map[string]string{"scope": scope})
 }
 
+// Flip stands a vehicle upright on its wheels.
+func (c *Client) Flip(ctx context.Context, name, vehicle string) (api.ActionResult, error) {
+	return c.action(ctx, http.MethodPost, inst(name)+"/vehicles/"+url.PathEscape(vehicle)+"/flip", nil)
+}
+
 // DeleteVehicle deletes a vehicle; force also removes it with crew inside.
 func (c *Client) DeleteVehicle(ctx context.Context, name, vehicle string, force bool) (api.ActionResult, error) {
 	path := inst(name) + "/vehicles/" + url.PathEscape(vehicle)

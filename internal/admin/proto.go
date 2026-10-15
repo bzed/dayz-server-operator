@@ -141,6 +141,7 @@ const (
 	KindTeleport      = "teleport"
 	KindSpawnItem     = "spawn_item"
 	KindVehicleRepair = "vehicle_repair"
+	KindVehicleFlip   = "vehicle_flip"
 	KindVehicleDelete = "vehicle_delete"
 )
 

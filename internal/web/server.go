@@ -105,6 +105,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET "+inst+"/players", s.playersFragment)
 	mux.HandleFunc("GET "+inst+"/vehicles", s.vehiclesFragment)
 	mux.HandleFunc("GET "+inst+"/players/{steamid}/panel", s.playerPanel)
+	mux.HandleFunc("GET "+inst+"/vehicles/{id}/panel", s.vehiclePanel)
 	mux.HandleFunc("GET "+inst+"/types", s.typesFragment)
 	mux.HandleFunc("GET /b/{backend}/tiles/{map}/{rest...}", s.tiles)
 	mux.HandleFunc("GET "+inst+"/map", s.mapPage)
@@ -114,6 +115,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST "+inst+"/players/{steamid}/teleport", s.act(actTeleport))
 	mux.HandleFunc("POST "+inst+"/players/{steamid}/give", s.act(actGive))
 	mux.HandleFunc("POST "+inst+"/vehicles/{id}/repair", s.act(actRepair))
+	mux.HandleFunc("POST "+inst+"/vehicles/{id}/flip", s.act(actFlip))
 	mux.HandleFunc("POST "+inst+"/vehicles/{id}/delete", s.act(actDelete))
 	return secure(mux)
 }

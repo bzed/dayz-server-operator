@@ -22,13 +22,12 @@
 
 <section>
   <h2><i class="fa fa-users" aria-hidden="true"></i>Players</h2>
-  <div hx-get="/b/{{.Backend}}/i/{{.Instance}}/players" hx-trigger="load, every 5s"></div>
-  <div id="panel"></div>
+  <div hx-get="/b/{{.Backend}}/i/{{.Instance}}/players" hx-trigger="load, every 5s" data-poll></div>
 </section>
 
 <section>
   <h2><i class="fa fa-car" aria-hidden="true"></i>Vehicles</h2>
-  <div hx-get="/b/{{.Backend}}/i/{{.Instance}}/vehicles" hx-trigger="load, every 15s"></div>
+  <div hx-get="/b/{{.Backend}}/i/{{.Instance}}/vehicles" hx-trigger="load, every 15s" data-poll></div>
 </section>
 {{end}}
 {{end}}

@@ -105,7 +105,11 @@ Acting
        ``health`` 0 to 1)
    * - ``POST /instances/<i>/vehicles/<id>/repair`` ``{"scope"}``
      - ``operator``
-     - ``all``, ``engine``, ``parts``, ``wheels`` or ``fluids``
+     - ``all`` (repair, refuel and fit missing parts), ``engine``, ``parts``,
+       ``wheels``, ``fluids`` (refuel) or ``missing`` (fit missing parts)
+   * - ``POST /instances/<i>/vehicles/<id>/flip``
+     - ``operator``
+     - stand the vehicle upright on its wheels
    * - ``DELETE /instances/<i>/vehicles/<id>[?force=1]``
      - ``operator``
      - delete a vehicle (``force``: even with crew inside)

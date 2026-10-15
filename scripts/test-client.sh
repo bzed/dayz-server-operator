@@ -68,6 +68,12 @@ s=0
 "$work/dzo" vehicle repair t1 "$bike" --config "$work/config.yaml" --token-file "$work/api.token" >/dev/null || s=1
 verdict "motorbike: repair" $s
 s=0
+"$work/dzo" vehicle repair t1 "$bike" --scope missing --config "$work/config.yaml" --token-file "$work/api.token" >/dev/null || s=1
+verdict "motorbike: add missing parts" $s
+s=0
+"$work/dzo" vehicle flip t1 "$bike" --config "$work/config.yaml" --token-file "$work/api.token" >/dev/null || s=1
+verdict "motorbike: flip" $s
+s=0
 "$work/dzo" vehicle delete t1 "$bike" --config "$work/config.yaml" --token-file "$work/api.token" >/dev/null || s=1
 waitfor 30 "! '$work/dzo' vehicle list t1 --config '$work/config.yaml' --token-file '$work/api.token' | grep -q '^$bike '" || s=1
 verdict "motorbike: delete" $s

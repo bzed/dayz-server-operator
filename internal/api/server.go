@@ -132,6 +132,7 @@ func (s *Server) Handler() http.Handler {
 	route("POST "+base+"/instances/{instance}/players/{steamid}/teleport", PermTeleport, true, s.teleport)
 	route("POST "+base+"/instances/{instance}/players/{steamid}/give", PermSpawn, true, s.give)
 	route("POST "+base+"/instances/{instance}/vehicles/{id}/repair", PermRepair, true, s.repair)
+	route("POST "+base+"/instances/{instance}/vehicles/{id}/flip", PermRepair, true, s.flip)
 	route("DELETE "+base+"/instances/{instance}/vehicles/{id}", PermDelete, true, s.deleteVehicle)
 	return mux
 }
@@ -464,6 +465,11 @@ func (s *Server) repair(w http.ResponseWriter, r *http.Request, c *call) {
 	}
 	cmd := admin.Command{Kind: admin.KindVehicleRepair, Vehicle: r.PathValue("id"), Scope: b.Scope}
 	s.run(w, r, c, cmd, "vehicle_repair", cmd.Vehicle)
+}
+
+func (s *Server) flip(w http.ResponseWriter, r *http.Request, c *call) {
+	cmd := admin.Command{Kind: admin.KindVehicleFlip, Vehicle: r.PathValue("id")}
+	s.run(w, r, c, cmd, "vehicle_flip", cmd.Vehicle)
 }
 
 func (s *Server) deleteVehicle(w http.ResponseWriter, r *http.Request, c *call) {

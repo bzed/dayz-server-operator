@@ -96,7 +96,8 @@ Instance
    Broadcast message, the player list (refreshed every 5 seconds) with a panel of
    actions per player (message, teleport to coordinates or to another player,
    give item with a search over the server's item classes), and the vehicle list
-   with repair and delete.
+   with repair (everything, or only body, parts, wheels, fuel or missing parts), flip and delete. The
+   actions open directly under the player or vehicle they apply to.
 
 Live map
    Players, vehicles, active events and marker layers on a map that updates as

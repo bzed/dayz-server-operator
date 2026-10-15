@@ -487,12 +487,13 @@
       title: v.type + (v.ruined ? ' (ruined)' : ''),
       sub: 'health ' + Math.round(v.health * 100) + '%  fuel ' + Math.round(v.fuel * 100) + '%  crew ' + crew + '\n' + posText(v),
       items: [
-        { label: 'Repair everything', min: 'operator', run: repair('all') },
+        { label: 'Repair everything (refuel, add parts)', min: 'operator', run: repair('all') },
         { label: 'Repair only…', min: 'operator', view: function () {
-          return { title: 'Repair ' + v.type, items: ['engine', 'parts', 'wheels', 'fluids'].map(function (s) {
-            return { label: s.charAt(0).toUpperCase() + s.slice(1), min: 'operator', run: repair(s) };
+          return { title: 'Repair ' + v.type, items: [['engine', 'Body'], ['parts', 'Parts'], ['wheels', 'Wheels'], ['fluids', 'Refuel'], ['missing', 'Add missing parts']].map(function (s) {
+            return { label: s[1], min: 'operator', run: repair(s[0]) };
           }) };
         } },
+        { label: 'Flip upright', min: 'operator', run: function () { act('/vehicles/' + id + '/flip', {}); } },
         { label: 'Delete…', min: 'operator', danger: true, view: function () {
           return { title: 'Delete ' + v.type + '?', text: crew ? crew + ' inside will be removed with it.' : 'It is removed from the world.', submit: 'Delete', danger: true,
             run: function () { act('/vehicles/' + id + '/delete', crew ? { force: '1' } : {}); } };

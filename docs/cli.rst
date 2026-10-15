@@ -225,8 +225,10 @@ installation (default: the local ``serve.listen``). They need the
      - spawn an item for a player
    * - ``dzo vehicle list <instance>``
      - persistent vehicles
-   * - ``dzo vehicle repair <instance> <id> [--scope all|engine|parts|wheels|fluids]``
-     - repair a vehicle
+   * - ``dzo vehicle repair <instance> <id> [--scope all|engine|parts|wheels|fluids|missing]``
+     - repair a vehicle; ``all`` also refuels it and fits missing parts
+   * - ``dzo vehicle flip <instance> <id>``
+     - stand a vehicle upright on its wheels
    * - ``dzo vehicle delete <instance> <id> [--force]``
      - delete a vehicle (``--force``: even with players inside)
 

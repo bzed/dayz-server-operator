@@ -198,6 +198,7 @@ func TestActions(t *testing.T) {
 		{"POST", "/api/v1/instances/alpha/players/7656/give", `{"type":"AKM","quantity":1,"health":1,"target":"hands"}`},
 		{"POST", "/api/v1/instances/alpha/vehicles/v1/repair", `{"scope":"wheels"}`},
 		{"POST", "/api/v1/instances/alpha/vehicles/v1/repair", ``},
+		{"POST", "/api/v1/instances/alpha/vehicles/v1/flip", ``},
 		{"DELETE", "/api/v1/instances/alpha/vehicles/v1?force=1", ``},
 	}
 	for _, tc := range cases {

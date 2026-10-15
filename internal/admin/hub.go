@@ -458,11 +458,11 @@ func (h *Hub) validate(c *Command) error {
 		switch c.Scope {
 		case "":
 			c.Scope = "all"
-		case "all", "engine", "parts", "wheels", "fluids":
+		case "all", "engine", "parts", "wheels", "fluids", "missing":
 		default:
 			return fmt.Errorf("admin: unknown repair scope %q", c.Scope)
 		}
-	case KindVehicleDelete:
+	case KindVehicleFlip, KindVehicleDelete:
 		return need("vehicle", c.Vehicle)
 	default:
 		return fmt.Errorf("admin: unknown command kind %q", c.Kind)

@@ -135,6 +135,34 @@ func (s *Server) playerPanel(w http.ResponseWriter, r *http.Request) {
 	s.render(w, "panel", v)
 }
 
+type vpanelView struct {
+	Backend, Instance string
+	Vehicle           admin.Vehicle
+	Err               string
+}
+
+// vehiclePanel is the action block for one vehicle, shown under its row.
+func (s *Server) vehiclePanel(w http.ResponseWriter, r *http.Request) {
+	b, c, inst, ok := s.target(w, r)
+	if !ok {
+		return
+	}
+	v := vpanelView{Backend: b.Name, Instance: inst}
+	vehicles, err := c.Vehicles(r.Context(), inst)
+	if err != nil {
+		v.Err = err.Error()
+	}
+	for _, x := range vehicles {
+		if x.ID == r.PathValue("id") {
+			v.Vehicle = x
+		}
+	}
+	if v.Vehicle.ID == "" && v.Err == "" {
+		v.Err = "vehicle not found"
+	}
+	s.render(w, "vpanel", v)
+}
+
 // typesFragment answers the item picker's search with <option>s for a datalist.
 func (s *Server) typesFragment(w http.ResponseWriter, r *http.Request) {
 	_, c, inst, ok := s.target(w, r)
@@ -334,6 +362,10 @@ func actGive(r *http.Request, c *apiclient.Client, inst string) (api.ActionResul
 
 func actRepair(r *http.Request, c *apiclient.Client, inst string) (api.ActionResult, error) {
 	return c.Repair(r.Context(), inst, r.PathValue("id"), r.PostFormValue("scope"))
+}
+
+func actFlip(r *http.Request, c *apiclient.Client, inst string) (api.ActionResult, error) {
+	return c.Flip(r.Context(), inst, r.PathValue("id"))
 }
 
 func actDelete(r *http.Request, c *apiclient.Client, inst string) (api.ActionResult, error) {
