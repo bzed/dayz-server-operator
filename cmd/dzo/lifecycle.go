@@ -22,7 +22,6 @@ import (
 	"github.com/bzed/dayz-server-operator/internal/config"
 	"github.com/bzed/dayz-server-operator/internal/instance"
 	"github.com/bzed/dayz-server-operator/internal/mission"
-	"github.com/bzed/dayz-server-operator/internal/moddeps"
 	"github.com/bzed/dayz-server-operator/internal/product"
 	"github.com/bzed/dayz-server-operator/internal/quadlet"
 	"github.com/bzed/dayz-server-operator/internal/resolve"
@@ -151,66 +150,6 @@ func newInstanceApplyCmd() *cobra.Command {
 	return c
 }
 
-// addonPatches reads the CfgPatches classes of every PBO below dir/addons and dir/dta (the
-// scripts of the game are there). PBOs without a config are skipped and counted.
-func addonPatches(dir string) ([]moddeps.Patch, int, error) {
-	var files []string
-	for _, sub := range []string{"addons", "dta"} {
-		f, _ := filepath.Glob(filepath.Join(dir, sub, "*.pbo"))
-		files = append(files, f...)
-	}
-	sort.Strings(files)
-	var out []moddeps.Patch
-	skipped := 0
-	for _, f := range files {
-		p, err := loadPatches(f)
-		if err != nil {
-			skipped++
-			continue
-		}
-		out = append(out, p...)
-	}
-	return out, skipped, nil
-}
-
-// checkBuildDependencies validates the mods' requiredAddons against a server build: what the build
-// does not provide, another mod must. It prints the problems and returns their number.
-func checkBuildDependencies(cmd *cobra.Command, inst *resolve.Instance, buildDir string) (int, error) {
-	out := cmd.OutOrStdout()
-	baseline, skipped, err := addonPatches(buildDir)
-	if err != nil {
-		return 0, err
-	}
-	// The DLC maps ship their addons next to the game's.
-	dlc, _ := filepath.Glob(filepath.Join(buildDir, "*", "addons"))
-	for _, d := range dlc {
-		p, _, _ := addonPatches(filepath.Dir(d))
-		baseline = append(baseline, p...)
-	}
-	mods := []moddeps.Mod{{ID: 0, Patches: baseline}}
-	names := map[uint64]string{}
-	for i, m := range inst.Mods {
-		if m.Dir == "" {
-			continue
-		}
-		p, _, _ := addonPatches(m.Dir)
-		id := uint64(i + 1) //nolint:gosec // bounded by the mod list
-		mods = append(mods, moddeps.Mod{ID: id, Patches: p})
-		names[id] = m.Name
-	}
-	res := moddeps.Validate(mods)
-	for _, m := range res.Missing {
-		_, _ = fmt.Fprintf(out, "dependency: %s [%s]\n", m.String(), names[m.ModID])
-	}
-	if skipped > 0 {
-		_, _ = fmt.Fprintf(out, "note: %d addon PBO(s) of the build had no readable config (data PBOs have none) and were skipped\n", skipped)
-	}
-	if res.OK() {
-		_, _ = fmt.Fprintln(out, "every requiredAddons entry of the mods is provided by the new build or another mod")
-	}
-	return len(res.Missing), nil
-}
-
 func newInstanceUpgradeCmd() *cobra.Command {
 	var configPath, build, text string
 	var dry, wipe, yes, now bool
@@ -219,8 +158,7 @@ func newInstanceUpgradeCmd() *cobra.Command {
 		Use:   "upgrade <name> --build <buildid> [--wipe] [--dry-run]",
 		Short: "Switch an instance to another installed server build: announce, stop, snapshot, wipe, switch, render, start",
 		Long: "An instance runs the server build it was deployed with; a newer build (dzo product update) waits until you " +
-			"upgrade each instance explicitly. --dry-run shows the render plan for the new build and checks the mods' " +
-			"dependencies against it. --wipe also deletes the world (the persistence) after a destructive snapshot.",
+			"upgrade each instance explicitly. --dry-run shows the render plan for the new build. --wipe also deletes the world (the persistence) after a destructive snapshot.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, inst, err := loadInstance(configPath, args[0])
@@ -244,22 +182,12 @@ func newInstanceUpgradeCmd() *cobra.Command {
 			if dry {
 				cp := *inst
 				cp.Product.Build, cp.Product.Dir = build, newDir
-				if n, err := checkBuildDependencies(cmd, &cp, newDir); err != nil {
-					return err
-				} else if n > 0 {
-					_, _ = fmt.Fprintf(out, "%d dependency problem(s): the server would not start\n", n)
-				}
 				return renderInstance(cmd, cfg, &cp, true, false)
 			}
 			if wipe {
 				if err := confirm(cmd, yes, "This deletes the world (persistence) of "+inst.Name+" after a snapshot."); err != nil {
 					return err
 				}
-			}
-			if n, err := checkBuildDependencies(cmd, inst, newDir); err != nil {
-				return err
-			} else if n > 0 {
-				return fmt.Errorf("%d dependency problem(s) against build %s: not upgrading", n, build)
 			}
 			lc := instance.Lifecycle{UserMode: true}
 			r := rconRestarter(cmd, cfg, inst, lc)
@@ -284,7 +212,7 @@ func newInstanceUpgradeCmd() *cobra.Command {
 	}
 	configFlag(c, &configPath)
 	c.Flags().StringVar(&build, "build", "", "the installed build to switch to (required)")
-	c.Flags().BoolVar(&dry, "dry-run", false, "show the render plan and the dependency check for the new build, change nothing")
+	c.Flags().BoolVar(&dry, "dry-run", false, "show the render plan for the new build, change nothing")
 	c.Flags().BoolVar(&wipe, "wipe", false, "also delete the world (persistence) after a destructive snapshot")
 	c.Flags().BoolVar(&yes, "yes", false, "do not ask for confirmation (with --wipe)")
 	c.Flags().BoolVar(&now, "now", false, "no countdown: lock, kick and switch at once")

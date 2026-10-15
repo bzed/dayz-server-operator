@@ -838,8 +838,8 @@ if its launch or config model differs, a new **product driver** in code (an inte
      `<buildid>/`). Running servers are not affected. `--force` re-validates and re-snapshots the current build (the equivalent of the forced mod refresh for the server).
   2. The admin prepares what the new version needs: mod updates or new mods, config changes in the site repo, and a wipe decision.
   3. `dzo instance upgrade <name> --build <buildid> [--wipe] [--dry-run]` runs stop → snapshot (`update` trigger, plus `destructive` if `--wipe`)
-     → optional wipe (§C11) → switch to the build → render → start, announced like any restart. `--dry-run` shows the render plan and
-     the dependency check against the new build first. Each instance is upgraded separately; nothing forces all instances of a product to switch at once.
+     → optional wipe (§C11) → switch to the build → render → start, announced like any restart. `--dry-run` shows the render plan first. An upgrade does not check
+     mod dependencies (they are unreliable and DayZ tolerates the gaps). Each instance is upgraded separately; nothing forces all instances of a product to switch at once.
 * **Mod dependencies instead of load order:** DayZ does not (yet) honour the `-mod=` order in a reliable way. What actually decides loading is each
   addon's `CfgPatches` `requiredAddons`, and for mod developers the effective order is chaotic anyway. dzo therefore reads the (rapified)
   `config.bin`/`config.cpp` `CfgPatches` from each mod generation's PBOs (with the `pbo` lib plus a config parser) and:
