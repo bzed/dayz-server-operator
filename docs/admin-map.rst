@@ -19,7 +19,7 @@ admin actions:
   on-screen notification),
 * teleport (to a map position or to another player),
 * spawn items into a player's inventory, hands or on the ground,
-* repair or delete vehicles.
+* repair vehicles (including refuelling and fitting missing parts), flip them upright, or delete them.
 
 The mod connects *out* to dzo: about once a second it posts what changed and the
 results of finished actions to ``dzo serve``, and gets the next actions in the
@@ -175,7 +175,7 @@ control):
      - ``Land_Wreck_S1023_Medic_Beige_DE``
    * - Water trucks
      - tint
-     - ``Land_Wreck_Truck01_Aban1_Cistern``, ``…Aban2_Cistern``
+     - ``Land_Wreck_Truck01_Aban1_Cistern*``, ``…Aban2_Cistern*`` (the ``_DE`` event variants too)
    * - Military wrecks
      - truck
      - ``StaticObj_Wreck_*_DE``, ``Land_Wreck_*_TK_DE`` (convoys)

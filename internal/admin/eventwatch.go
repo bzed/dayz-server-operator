@@ -23,7 +23,7 @@ func VanillaEventWatch() []WatchRule {
 			"Land_Wreck_sed01_aban1_police*", "Land_Wreck_sed01_aban2_police*", "Land_Wreck_hb01_aban1_police*", "Land_Wreck_hb01_aban2_police*",
 			"Land_Wreck_sed02_aban1_Police*", "Land_Wreck_sed02_aban2_Police*", "Land_Wreck_UAZ_Aban1_Police*", "Land_Wreck_UAZ_Aban2_Police*"}},
 		{Layer: "Ambulances", Icon: "ambulance", Color: "#c0392b", Label: "Ambulance", Classes: []string{"Land_Wreck_S1023_Medic_Beige_DE"}},
-		{Layer: "Water trucks", Icon: "tint", Color: "#2a8aa8", Label: "Water truck", Classes: []string{"Land_Wreck_Truck01_Aban1_Cistern", "Land_Wreck_Truck01_Aban2_Cistern"}},
+		{Layer: "Water trucks", Icon: "tint", Color: "#2a8aa8", Label: "Water truck", Classes: []string{"Land_Wreck_Truck01_Aban1_Cistern*", "Land_Wreck_Truck01_Aban2_Cistern*"}},
 		{Layer: "Military wrecks", Icon: "truck", Color: "#5b7a3a", Label: "Military convoy", Classes: []string{"StaticObj_Wreck_*_DE", "Land_Wreck_*_TK_DE"}},
 		{Layer: "Roadblock wrecks", Icon: "bullhorn", Color: "#2f6fb5", Label: "Roadblock / abandoned vehicles", Classes: []string{"Land_Wreck_*_DE", "Land_wreck_*_DE"}},
 		{Layer: "Locked containers", Icon: "lock", Color: "#7a3db8", Label: "Locked container", Classes: []string{"ContainerLockedBase"}},
