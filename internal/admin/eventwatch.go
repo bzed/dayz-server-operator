@@ -15,7 +15,7 @@ package admin
 func VanillaEventWatch() []WatchRule {
 	return []WatchRule{
 		{Layer: "Helicopter crashes", Icon: "plane", Color: "#d9822b", Label: "Helicopter crash",
-			Classes: []string{"Wreck_UH1Y", "Wreck_Mi8_Crashed", "StaticObj_Wreck_Mi24_TK", "StaticObj_Wreck_Chinook"}},
+			Classes: []string{"Wreck_UH1Y", "Wreck_Mi8_Crashed", "StaticObj_Wreck_Mi24_TK*", "StaticObj_Wreck_Chinook*"}},
 		{Layer: "Santa's sleigh", Icon: "gift", Color: "#c0392b", Label: "Santa's sleigh", Classes: []string{"Wreck_SantasSleigh"}},
 		{Layer: "Airplane crates", Icon: "archive", Color: "#8a5a2b", Label: "Airplane supply crate", Classes: []string{"StaticObj_Misc_SupplyBox*_DE"}},
 		{Layer: "Trains", Icon: "train", Color: "#6b6b6b", Label: "Train", Classes: []string{"StaticObj_Wreck_Train_*_DE"}},
@@ -26,7 +26,7 @@ func VanillaEventWatch() []WatchRule {
 		{Layer: "Water trucks", Icon: "tint", Color: "#2a8aa8", Label: "Water truck", Classes: []string{"Land_Wreck_Truck01_Aban1_Cistern*", "Land_Wreck_Truck01_Aban2_Cistern*"}},
 		{Layer: "Military wrecks", Icon: "truck", Color: "#5b7a3a", Label: "Military convoy", Classes: []string{"StaticObj_Wreck_*_DE", "Land_Wreck_*_TK_DE"}},
 		{Layer: "Roadblock wrecks", Icon: "bullhorn", Color: "#2f6fb5", Label: "Roadblock / abandoned vehicles", Classes: []string{"Land_Wreck_*_DE", "Land_wreck_*_DE"}},
-		{Layer: "Locked containers", Icon: "lock", Color: "#7a3db8", Label: "Locked container", Classes: []string{"ContainerLockedBase"}},
+		{Layer: "Locked containers", Icon: "lock", Color: "#7a3db8", Label: "Locked container", Classes: []string{"ContainerLockedBase", "Land_Mil_Container*_DE"}},
 		{Layer: "Fishing boats", Icon: "ship", Color: "#2a8aa8", Label: "Fishing boat", Classes: []string{"Land_Boat_Small9_DE"}},
 		{Layer: "Military boats", Icon: "anchor", Color: "#5b7a3a", Label: "Military boat", Classes: []string{"StaticObj_PatrolBoat_Military_DE"}},
 		{Layer: "Scientists", Icon: "flask", Color: "#6a1b9a", Label: "Scientist camp", Classes: []string{"StaticObj_FrozenScientist_DE"}},

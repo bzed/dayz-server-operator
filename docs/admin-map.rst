@@ -157,7 +157,7 @@ control):
      - Classes (subclasses match too)
    * - Helicopter crashes
      - plane
-     - ``Wreck_UH1Y``, ``Wreck_Mi8_Crashed``, ``StaticObj_Wreck_Mi24_TK``, ``StaticObj_Wreck_Chinook``
+     - ``Wreck_UH1Y``, ``Wreck_Mi8_Crashed``, ``StaticObj_Wreck_Mi24_TK*``, ``StaticObj_Wreck_Chinook*`` (the ``_DE`` event variants too)
    * - Santa's sleigh
      - gift
      - ``Wreck_SantasSleigh``
@@ -184,7 +184,7 @@ control):
      - ``Land_Wreck_*_DE``, ``Land_wreck_*_DE`` (roadblocks, abandoned vehicles)
    * - Locked containers
      - lock
-     - ``ContainerLockedBase``
+     - ``ContainerLockedBase``, ``Land_Mil_Container*_DE`` (the military containers of Nasdara)
    * - Fishing boats, military boats
      - ship, anchor
      - ``Land_Boat_Small9_DE``, ``StaticObj_PatrolBoat_Military_DE``
