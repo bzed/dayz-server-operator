@@ -23,6 +23,13 @@ modded class MissionServer
 			DeleteFile("$profile:dzo_probe/event");
 			DZOProbeEvent();
 		}
+		if (FileExist("$profile:dzo_probe/gas"))
+		{
+			DeleteFile("$profile:dzo_probe/gas");
+			// What a thrown M18 smoke grenade ends up with: the dynamic area.
+			Object gas = GetGame().CreateObjectEx("ContaminatedArea_Dynamic", Vector(7300, GetGame().SurfaceY(7300, 7300), 7300), ECE_PLACE_ON_SURFACE);
+			Print("DZO-PROBE gas: " + gas);
+		}
 		if (FileExist("$profile:dzo_probe/bike"))
 		{
 			DeleteFile("$profile:dzo_probe/bike");

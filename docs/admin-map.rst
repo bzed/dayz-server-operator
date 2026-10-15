@@ -139,14 +139,24 @@ as a map layer and available at ``/events`` in the API.
 The events of the Central Economy are found too. Most of what they place (police
 car wrecks, supply crates, convoy wrecks, trains) are plain game objects without
 a script class, so the mod cannot see them being created. Instead dzo reads the
-live mission (``db/events.xml``, ``cfgeventspawns.xml``, ``cfgeventgroups.xml``)
-when it writes the mod's config and hands the mod, for every active event with
-fixed places, those places and the classes the event spawns there (``event_scan``
-in ``config.json``). The mod, which runs on the server only, looks at a few
-places per second and reports the ones where it finds the objects. An event that
-despawned disappears after one round over all places (a minute or so on the big
-maps). Events of a mod or an overlay are included, because the live mission is
-what is read.
+live mission when it writes the mod's config: ``db/events.xml``,
+``cfgeventspawns.xml`` and ``cfgeventgroups.xml``, plus every file of those kinds
+that a ``<ce folder>`` of ``cfgeconomycore.xml`` registers (the files of mods and
+overlays; events and positions of several files add up). For every active event
+with fixed places it hands the mod those places and the classes the event spawns
+there (``event_scan`` in ``config.json``). For an event whose objects come from a
+group, only the group's main object is looked for: the distinct one, a wreck first
+(the helicopter, the police car, the tank), then another vehicle; decals, craters
+and sandbags only if nothing else is in the group. The mod, which runs on the
+server only, looks at all places once per round (90 seconds, spread evenly, so the
+cost does not depend on the map; ``event_scan_s`` in the mod's ``config.json``)
+and reports the ones where it finds the object. An event that despawned
+disappears after at most one round, and the map shows it at the next
+``events_s`` update.
+
+A dynamic gas zone (a thrown M18 smoke grenade) is reported when it is created,
+with the radius of the zone (120 m), and the map draws that circle around the
+icon. Static contaminated areas are drawn the same way.
 
 Each event has an icon, a colour and a label on the map:
 
