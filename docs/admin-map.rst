@@ -132,11 +132,61 @@ it on your host from your own game files and does not ship it.
 Active events
 -------------
 
-dzo-admin reports effect areas (for example contaminated zones) with their
-position and radius, and events that other mods publish through the marker API.
-They are shown as a map layer and available at ``/events`` in the API. Events of
-the Central Economy (helicopter crashes, convoys) are not detected yet; add
-them with watch rules below until they are.
+dzo-admin reports effect areas (contaminated zones) with their position and
+radius, and events that other mods publish through the marker API. They are shown
+as a map layer and available at ``/events`` in the API.
+
+The events of the Central Economy are found too. Most of what they place (police
+car wrecks, supply crates, convoy wrecks, trains) are plain game objects without
+a script class, so the mod cannot see them being created. Instead dzo reads the
+live mission (``db/events.xml``, ``cfgeventspawns.xml``, ``cfgeventgroups.xml``)
+when it writes the mod's config and hands the mod, for every active event with
+fixed places, those places and the classes the event spawns there (``event_scan``
+in ``config.json``). The mod, which runs on the server only, looks at a few
+places per second and reports the ones where it finds the objects. An event that
+despawned disappears after one round over all places (a minute or so on the big
+maps). Events of a mod or an overlay are included, because the live mission is
+what is read.
+
+Each event has an icon, a colour and a label on the map:
+
+.. list-table::
+   :header-rows: 1
+
+   * - Event
+     - Icon
+   * - ``StaticHeliCrash``, ``StaticHeliCrashBig``
+     - plane
+   * - ``StaticSantaCrash``
+     - gift
+   * - ``StaticMilitaryConvoy``
+     - truck
+   * - ``StaticPoliceCar``, ``StaticPoliceSituation``
+     - car, bullhorn
+   * - ``StaticTrain``
+     - train
+   * - ``StaticAirplaneCrate``
+     - archive
+   * - ``StaticAmbulance``
+     - ambulance
+   * - ``StaticBoatFishing``, ``StaticBoatMilitary``
+     - ship, anchor
+   * - ``StaticBonfire``, ``StaticChristmasTree``
+     - fire, tree
+   * - ``StaticContainerLocked``
+     - lock
+   * - ``StaticWaterTruck``
+     - tint
+   * - ``StaticScientist``
+     - flask
+   * - ``ItemBricks``, ``ItemPlanks``
+     - cubes
+   * - contaminated areas
+     - exclamation-triangle
+
+Any other event of a mission gets a flag. Infected, animals, ambient life and the
+berries and mushrooms have no place of their own and are not shown; the vehicle
+events appear as vehicles. Only the server needs dzo-admin.
 
 Markers from other mods
 -----------------------

@@ -246,7 +246,14 @@ func (h *Hub) Vehicles() []Vehicle {
 func (h *Hub) Events() []Event {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	return append([]Event(nil), h.events...)
+	out := append([]Event(nil), h.events...)
+	for i := range out {
+		if out[i].Icon == "" {
+			s := StyleOfEvent(out[i].Category)
+			out[i].Icon, out[i].Color, out[i].Label = s.Icon, s.Color, s.Label
+		}
+	}
+	return out
 }
 
 // Layers returns the defined marker layers, plus the layers markers use

@@ -641,9 +641,23 @@
   function onEvents(list) {
     events.clearLayers();
     list.forEach(function (e) {
-      var m = L.circle(ll(e), { radius: e.radius || 50, className: 'ev' });
-      bindTip(m, e.name, [e.category]);
-      onMenu(m, function () { return plainSpec(e.name, [e.category, posText(e)], e, e.radius || 50); });
+      var color = markerColor(e.color);
+      var glyph = iconClass(e.icon);
+      var title = e.label || e.name;
+      var sub = e.name !== title ? e.name : e.category;
+      var m;
+      if (e.radius) {
+        // An area (a contaminated zone): the circle, and the icon in its middle.
+        L.circle(ll(e), { radius: e.radius, className: 'ev', color: color, fillColor: color }).addTo(events);
+      }
+      if (glyph) {
+        m = L.marker(ll(e), { icon: markerIcon(glyph, color) });
+        named(m, function () { return title; });
+      } else {
+        m = L.circleMarker(ll(e), { radius: 5, color: color, fillOpacity: 0.9 });
+      }
+      bindTip(m, title, [sub]);
+      onMenu(m, function () { return plainSpec(title, [sub, posText(e)], e, e.radius || 50); });
       m.addTo(events);
     });
   }

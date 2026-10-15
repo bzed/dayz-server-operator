@@ -11,20 +11,23 @@
 # Needs, on a machine that does not run dzo instances: the Steam DayZ Server tool (stable 223350, or
 # --exp 1042420), the DayZ client of the same build, a running logged-in Steam, sway, and the dayz-dev
 # skill's scripts (DAYZ_DEV_SCRIPTS, default ~/.claude/skills/dayz-dev/scripts). One game at a time.
-# Usage: scripts/test-client.sh [--exp] [--keep]
+# --no-client runs only the checks that need no player (motorbike, event scan) and starts no game, so it
+# can run while a DayZ client is open.
+# Usage: scripts/test-client.sh [--exp] [--keep] [--no-client]
 set -euo pipefail
 cd "$(dirname "$0")/.."
 dev=${DAYZ_DEV_SCRIPTS:-$HOME/.claude/skills/dayz-dev/scripts}
-exp=() keep=0 product=stable
+exp=() keep=0 noclient=0 product=stable
 for a in "$@"; do
 	case $a in
 	--exp) exp=(-e) product=experimental ;;
 	--keep) keep=1 ;;
-	*) echo "usage: $0 [--exp] [--keep]" >&2; exit 2 ;;
+	--no-client) noclient=1 ;;
+	*) echo "usage: $0 [--exp] [--keep] [--no-client]" >&2; exit 2 ;;
 	esac
 done
 [ -x "$dev/dayz-client-headless.sh" ] || { echo "dayz-dev scripts not found in $dev (DAYZ_DEV_SCRIPTS)" >&2; exit 2; }
-"$dev/dayz-client-headless.sh" status >&2 || { echo "a DayZ client is running; one game at a time" >&2; exit 2; }
+[ "$noclient" = 1 ] || "$dev/dayz-client-headless.sh" status >&2 || { echo "a DayZ client is running; one game at a time" >&2; exit 2; }
 
 work=$(mktemp -d /tmp/dzcl.XXXXXX)
 tree=$work/tree
@@ -44,6 +47,45 @@ bad() { echo "FAIL $1"; fail=$((fail + 1)); }
 # verdict <name> <status>: PASS when the status is 0.
 verdict() { if [ "$2" = 0 ]; then ok "$1"; else bad "$1"; fi; }
 waitfor() { timeout "$1" bash -c "until $2; do sleep 3; done"; }
+
+# server_tests: needs the server, dzo serve and the probe, no client.
+server_tests() {
+# 1.30 only: Motorbike is not a Car, dzo-admin keeps a registry for it. 1.29 has no motorbikes.
+# The world already has motorbikes of the economy: the probe's is the id that is new.
+vl() { "$work/dzo" vehicle list t1 --config "$work/config.yaml" --token-file "$work/api.token" "$@"; }
+vl | awk '$2 == "motorbike" {print $1}' | sort >"$work/bikes.before"
+touch "$tree/profiles/dzo_probe/bike"
+s=0
+bike=
+for _ in $(seq 20); do
+	bike=$(vl | awk '$2 == "motorbike" && /Motorbike_01_Blue/ {print $1}' | sort | comm -13 "$work/bikes.before" - | head -1)
+	[ -n "$bike" ] && break
+	sleep 3
+done
+[ -n "$bike" ] || s=1
+verdict "motorbike: listed with kind motorbike" $s
+s=0
+"$work/dzo" vehicle repair t1 "$bike" --config "$work/config.yaml" --token-file "$work/api.token" >/dev/null || s=1
+verdict "motorbike: repair" $s
+s=0
+"$work/dzo" vehicle delete t1 "$bike" --config "$work/config.yaml" --token-file "$work/api.token" >/dev/null || s=1
+waitfor 30 "! '$work/dzo' vehicle list t1 --config '$work/config.yaml' --token-file '$work/api.token' | grep -q '^$bike '" || s=1
+verdict "motorbike: delete" $s
+
+# Central Economy events: dzo-admin looks for the objects of an event at the places dzo gave it (event_scan).
+touch "$tree/profiles/dzo_probe/event"
+ev() { curl -s -H "Authorization: Bearer $(cat "$work/api.token")" "http://127.0.0.1:$api/api/v1/instances/t1/events"; }
+s=0
+waitfor 90 "curl -s -H 'Authorization: Bearer $(cat "$work/api.token")' http://127.0.0.1:$api/api/v1/instances/t1/events | grep -q 'StaticPoliceCar'" || s=1
+verdict "event scan: the police car wreck is an event" $s
+s=0
+ev | grep -q '"icon":"car"' && ev | grep -q 'Police car' || s=1
+verdict "event scan: the event has its icon and label" $s
+s=0
+[ "$(ev | grep -o 'StaticPoliceCar' | wc -l)" = 1 ] || s=1 # one event, not one per place
+verdict "event scan: only the place with the object is reported" $s
+}
+
 
 go build -o "$work/dzo" ./cmd/dzo
 "$work/dzo" servermods build --src servermods --out "$work/built" >/dev/null
@@ -78,7 +120,7 @@ serve: {installation: t, listen: "127.0.0.1:$api", mod_listen: "127.0.0.1:$mod"}
 Y
 tok=$(head -c16 /dev/urandom | od -An -tx1 | tr -d ' \n')
 echo "$tok" >"$work/secrets/admin/t1.token"
-echo "{\"version\":1,\"endpoint\":\"http://127.0.0.1:$mod/\",\"token\":\"$tok\",\"sync_ms\":500,\"players_s\":2,\"vehicles_s\":5,\"markers_s\":10,\"events_s\":5,\"allow_spawn\":true,\"watch\":[{\"layer\":\"lights\",\"classes\":[\"Chemlight_Red\"],\"icon\":\"flare\",\"label\":\"watched chemlight\",\"max\":20}]}" >"$tree/profiles/dzo-admin/config.json"
+echo "{\"version\":1,\"endpoint\":\"http://127.0.0.1:$mod/\",\"token\":\"$tok\",\"sync_ms\":500,\"players_s\":2,\"vehicles_s\":5,\"markers_s\":10,\"events_s\":5,\"allow_spawn\":true,\"event_scan\":[{\"name\":\"StaticPoliceCar\",\"classes\":[\"Land_Wreck_sed01_aban1_police\"],\"radius\":8,\"spawns\":[{\"x\":7500,\"y\":0,\"z\":7500},{\"x\":7000,\"y\":0,\"z\":7000}]}],\"watch\":[{\"layer\":\"lights\",\"classes\":[\"Chemlight_Red\"],\"icon\":\"flare\",\"label\":\"watched chemlight\",\"max\":20}]}" >"$tree/profiles/dzo-admin/config.json"
 chmod 600 "$work/secrets/admin/t1.token" "$tree/profiles/dzo-admin/config.json"
 "$work/dzo" token create tester --role admin --config "$work/config.yaml" >"$work/api.token"
 chmod 600 "$work/api.token"
@@ -104,6 +146,13 @@ adm=$(ls "$tree"/profiles/*.ADM | tail -1)
 s=0
 grep -E 'SCRIPT +\(E\)' "$script" | grep -qv 'BunkerBroadcast' && s=1
 verdict "scripts compile: no SCRIPT (E) beyond vanilla noise" $s
+
+if [ "$noclient" = 1 ]; then
+	server_tests
+	echo "== $pass passed, $fail failed"
+	[ "$fail" = 0 ]
+	exit
+fi
 
 "$dev/dayz-client-headless.sh" "${exp[@]}" start "$work/client" -name=dzotester -connect=127.0.0.1 -port="$game" >/dev/null 2>&1
 waitfor 240 "grep -q 'dzotester.*is connected' '$adm'" || { bad "client joined"; exit 1; }
@@ -168,27 +217,6 @@ s=0
 waitfor 30 "'$work/dzo' vehicle list t1 --config '$work/config.yaml' --token-file '$work/api.token' | grep -q 'Offroad_02.*crew 1'" || s=1
 verdict "vehicle state: the car has crew 1" $s
 
-# 1.30 only: Motorbike is not a Car, dzo-admin keeps a registry for it. 1.29 has no motorbikes.
-# The world already has motorbikes of the economy: the probe's is the id that is new.
-vl() { "$work/dzo" vehicle list t1 --config "$work/config.yaml" --token-file "$work/api.token" "$@"; }
-vl | awk '$2 == "motorbike" {print $1}' | sort >"$work/bikes.before"
-touch "$tree/profiles/dzo_probe/bike"
-s=0
-bike=
-for _ in $(seq 20); do
-	bike=$(vl | awk '$2 == "motorbike" && /Motorbike_01_Blue/ {print $1}' | sort | comm -13 "$work/bikes.before" - | head -1)
-	[ -n "$bike" ] && break
-	sleep 3
-done
-[ -n "$bike" ] || s=1
-verdict "motorbike: listed with kind motorbike" $s
-s=0
-"$work/dzo" vehicle repair t1 "$bike" --config "$work/config.yaml" --token-file "$work/api.token" >/dev/null || s=1
-verdict "motorbike: repair" $s
-s=0
-"$work/dzo" vehicle delete t1 "$bike" --config "$work/config.yaml" --token-file "$work/api.token" >/dev/null || s=1
-waitfor 30 "! '$work/dzo' vehicle list t1 --config '$work/config.yaml' --token-file '$work/api.token' | grep -q '^$bike '" || s=1
-verdict "motorbike: delete" $s
-
+server_tests
 echo "== $pass passed, $fail failed"
 [ "$fail" = 0 ]

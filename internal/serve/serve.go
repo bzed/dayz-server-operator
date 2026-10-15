@@ -64,6 +64,11 @@ func ModConfig(cfg *config.Config, inst *resolve.Instance) (admin.ModConfig, err
 		Endpoint: endpoint, SyncMS: a.SyncMS, PlayersS: a.PlayersS, VehiclesS: a.VehiclesS, MarkersS: a.MarkersS, EventsS: a.EventsS,
 		AllowSpawn: a.AllowSpawn == nil || *a.AllowSpawn, AllowClasses: a.AllowClasses, DenyClasses: a.DenyClasses, Watch: inst.AdminMap.Watch,
 	}
+	if a.EventsS >= 0 {
+		if mc.EventScan, err = admin.BuildEventScan(inst.Paths.Live); err != nil {
+			return admin.ModConfig{}, fmt.Errorf("the events of the live mission: %w", err)
+		}
+	}
 	return mc, nil
 }
 

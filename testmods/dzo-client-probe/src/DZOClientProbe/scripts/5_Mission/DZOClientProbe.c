@@ -17,6 +17,17 @@ modded class MissionServer
 
 	void DZOProbeTick()
 	{
+		// These two need no player: the server-only run of test-client.sh (--no-client) uses them.
+		if (FileExist("$profile:dzo_probe/event"))
+		{
+			DeleteFile("$profile:dzo_probe/event");
+			DZOProbeEvent();
+		}
+		if (FileExist("$profile:dzo_probe/bike"))
+		{
+			DeleteFile("$profile:dzo_probe/bike");
+			DZOProbeBike();
+		}
 		array<Man> men = new array<Man>;
 		GetGame().GetPlayers(men);
 		foreach (Man m : men)
@@ -28,11 +39,6 @@ modded class MissionServer
 			{
 				DeleteFile("$profile:dzo_probe/board");
 				DZOProbeBoard(p);
-			}
-			if (FileExist("$profile:dzo_probe/bike"))
-			{
-				DeleteFile("$profile:dzo_probe/bike");
-				DZOProbeBike(p);
 			}
 			array<EntityAI> items = new array<EntityAI>;
 			p.GetInventory().EnumerateInventory(InventoryTraversalType.PREORDER, items);
@@ -60,10 +66,18 @@ modded class MissionServer
 		}
 	}
 
-	// 1.30: a parked motorbike next to the player, for dzo-admin's vehicle list.
-	void DZOProbeBike(PlayerBase p)
+	// A Central Economy event object as the CE places it: a police car wreck, a plain engine object. The
+	// test's config.json (event_scan) tells dzo-admin to look for it at this place.
+	void DZOProbeEvent()
 	{
-		Object bike = GetGame().CreateObjectEx("Motorbike_01_Blue", p.GetPosition() + "-4 0 0", ECE_PLACE_ON_SURFACE | ECE_CREATEPHYSICS);
+		Object o = GetGame().CreateObjectEx("Land_Wreck_sed01_aban1_police", Vector(7500, GetGame().SurfaceY(7500, 7500), 7500), ECE_PLACE_ON_SURFACE);
+		Print("DZO-PROBE event: " + o + " at " + o.GetPosition());
+	}
+
+	// 1.30: a parked motorbike, for dzo-admin's vehicle list.
+	void DZOProbeBike()
+	{
+		Object bike = GetGame().CreateObjectEx("Motorbike_01_Blue", "7520 0 7500", ECE_PLACE_ON_SURFACE | ECE_CREATEPHYSICS);
 		Print("DZO-PROBE bike: " + bike);
 	}
 

@@ -121,6 +121,10 @@ type Event struct {
 	Z        float64 `json:"z"`
 	Radius   float64 `json:"radius"`
 	Source   string  `json:"source"`
+	// Icon, Color and Label come from the event style (dzo fills them in, the mod does not send them).
+	Icon  string `json:"icon,omitempty"`
+	Color string `json:"color,omitempty"`
+	Label string `json:"label,omitempty"`
 }
 
 // TypesChunk is one piece of the spawnable class list.

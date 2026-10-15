@@ -72,6 +72,8 @@ type ModConfig struct {
 	AllowClasses []string    `json:"allow_classes"`
 	DenyClasses  []string    `json:"deny_classes"`
 	Watch        []WatchRule `json:"watch"`
+	// EventScan is where the mod looks for the objects of Central Economy events, see BuildEventScan.
+	EventScan []ScanRule `json:"event_scan,omitempty"`
 }
 
 // WithDefaults fills the intervals the instance config left at zero.
