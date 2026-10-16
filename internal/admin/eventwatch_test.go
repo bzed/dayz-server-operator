@@ -14,6 +14,9 @@ func TestVanillaEventWatch(t *testing.T) {
 		if r.Icon == "" || r.Color == "" || r.Label == "" || seen[r.Layer] {
 			t.Errorf("layer %q: icon, colour and label are needed, and a layer once", r.Layer)
 		}
+		if r.Visibility != "viewer" {
+			t.Errorf("layer %q: events are visible to every role", r.Layer)
+		}
 		seen[r.Layer] = true
 	}
 }

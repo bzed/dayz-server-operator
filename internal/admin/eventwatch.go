@@ -13,7 +13,7 @@ package admin
 //
 // The first rule that matches a class wins, so the specific rules come before the catch-alls.
 func VanillaEventWatch() []WatchRule {
-	return []WatchRule{
+	rules := []WatchRule{
 		{Layer: "Helicopter crashes", Icon: "plane", Color: "#d9822b", Label: "Helicopter crash",
 			Classes: []string{"Wreck_UH1Y", "Wreck_Mi8_Crashed", "StaticObj_Wreck_Mi24_TK*", "StaticObj_Wreck_Chinook*"}},
 		{Layer: "Santa's sleigh", Icon: "gift", Color: "#c0392b", Label: "Santa's sleigh", Classes: []string{"Wreck_SantasSleigh"}},
@@ -35,4 +35,9 @@ func VanillaEventWatch() []WatchRule {
 		{Layer: "Brick piles", Icon: "cubes", Color: "#a0522d", Label: "Bricks", Classes: []string{"PileOfBricks"}},
 		{Layer: "Plank piles", Icon: "cubes", Color: "#8b6b3d", Label: "Planks", Classes: []string{"PileOfWoodenPlanks"}},
 	}
+	// Events are not secret: everyone who sees the map sees them.
+	for i := range rules {
+		rules[i].Visibility = "viewer"
+	}
+	return rules
 }

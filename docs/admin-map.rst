@@ -230,6 +230,8 @@ Configure per instance which object classes appear on the map:
        - {layer: ai_convoy, classes: ["eAIBase"], icon: android, color: red, cluster: 50}
 
 ``icon`` and ``color`` give the markers of the layer their look, see :ref:`map-icons`.
+``visibility`` (``viewer``, ``moderator``, ``operator`` or ``admin``) is the lowest role that sees the
+markers of the layer; without it they are admin-only. The shipped event rules use ``viewer``.
 Watch rules can also be set once for all instances, under ``defaults:`` in ``site.yaml``
 (``defaults: admin_map: watch: [...]``). They are merged with the rules of an instance **by layer
 name, and the instance wins**: a rule of the instance replaces the default rule of the same layer

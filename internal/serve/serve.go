@@ -91,7 +91,7 @@ func AddHubs(reg *admin.Registry, cfg *config.Config, tree *site.Tree) error {
 		h.Allow, h.Deny, h.MarkerDir = inst.Admin.AllowClasses, inst.Admin.DenyClasses, admin.MarkerDir(inst.Paths.Profiles)
 		h.Styles = map[string]admin.Layer{}
 		for _, w := range inst.AdminMap.Watch {
-			h.Styles[w.Layer] = admin.Layer{Name: w.Layer, Icon: w.Icon, Color: w.Color}
+			h.Styles[w.Layer] = admin.Layer{Name: w.Layer, Icon: w.Icon, Color: w.Color, Visibility: w.Visibility}
 		}
 		reg.Add(h)
 	}

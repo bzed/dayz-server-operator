@@ -42,6 +42,7 @@ func TestWatchRuleIconAndColorValidation(t *testing.T) {
 		{Layer: "l", Classes: []string{"X"}, Icon: "fa fa-fire"},
 		{Layer: "l", Classes: []string{"X"}, Color: "#12"},
 		{Layer: "l", Classes: []string{"X"}, Color: "url(x)"},
+		{Layer: "l", Classes: []string{"X"}, Visibility: "root"},
 	} {
 		if w.Validate() == nil {
 			t.Errorf("%+v should be rejected", w)
@@ -63,6 +64,28 @@ func TestHubFillsMarkerStyleFromTheLayer(t *testing.T) {
 	for id, want := range map[string][2]string{"1": {"fire", "#e67e22"}, "2": {"fire", "red"}, "3": {"car", "blue"}, "4": {"", ""}} {
 		if m := byID[id]; m.Icon != want[0] || m.Color != want[1] {
 			t.Errorf("marker %s = icon %q color %q, want %v", id, m.Icon, m.Color, want)
+		}
+	}
+}
+
+func TestHubAppliesTheVisibilityOfAWatchRule(t *testing.T) {
+	h := NewHub("x")
+	h.Styles = map[string]Layer{"events": {Visibility: "viewer"}, "secret": {}}
+	h.Sync(SyncRequest{Markers: []Marker{
+		{Layer: "events", ID: "1", Source: "watch", Visibility: "admin"},
+		{Layer: "events", ID: "2", Source: "api", Visibility: "admin"},
+		{Layer: "secret", ID: "3", Source: "watch", Visibility: "admin"},
+	}})
+	got := map[string]string{}
+	for _, m := range h.Markers("") {
+		got[m.ID] = m.Visibility
+	}
+	if got["1"] != "viewer" || got["2"] != "admin" || got["3"] != "admin" {
+		t.Errorf("visibilities = %v", got)
+	}
+	for _, l := range h.Layers() {
+		if l.Name == "events" && l.Visibility != "viewer" {
+			t.Errorf("layer events visibility = %q", l.Visibility)
 		}
 	}
 }

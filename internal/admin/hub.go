@@ -271,7 +271,7 @@ func (h *Hub) Layers() []Layer {
 	for _, m := range markers {
 		if !seen[m.Layer] {
 			seen[m.Layer] = true
-			out = append(out, Layer{Name: m.Layer})
+			out = append(out, Layer{Name: m.Layer, Visibility: h.Styles[m.Layer].Visibility})
 		}
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
@@ -284,6 +284,11 @@ func (h *Hub) styledLocked(ms []Marker) []Marker {
 	out := append([]Marker(nil), ms...)
 	for i := range out {
 		m := &out[i]
+		site := h.Styles[m.Layer]
+		// The mod marks every marker admin-only; the rule of a watched layer says who sees it.
+		if m.Source == "watch" && site.Visibility != "" {
+			m.Visibility = site.Visibility
+		}
 		if m.Icon != "" && m.Color != "" {
 			continue
 		}
@@ -293,7 +298,6 @@ func (h *Hub) styledLocked(ms []Marker) []Marker {
 				mod = l
 			}
 		}
-		site := h.Styles[m.Layer]
 		if m.Icon == "" {
 			m.Icon = firstNonEmpty(site.Icon, mod.Icon)
 		}

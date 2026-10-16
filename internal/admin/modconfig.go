@@ -22,11 +22,14 @@ type WatchRule struct {
 	Classes []string `yaml:"classes" json:"classes"`
 	Icon    string   `yaml:"icon,omitempty" json:"icon"`
 	// Color is applied by dzo, not by the mod: the hub puts it on the markers of the layer.
-	Color   string `yaml:"color,omitempty" json:"-"`
-	Label   string `yaml:"label,omitempty" json:"label"`
-	Max     int    `yaml:"max,omitempty" json:"max"`
-	Cluster int    `yaml:"cluster,omitempty" json:"-"`
-	OnlyIf  string `yaml:"only_if,omitempty" json:"-"`
+	Color string `yaml:"color,omitempty" json:"-"`
+	// Visibility is the lowest role that sees the markers of the layer, applied by dzo like Color;
+	// without it they are admin-only.
+	Visibility string `yaml:"visibility,omitempty" json:"-"`
+	Label      string `yaml:"label,omitempty" json:"label"`
+	Max        int    `yaml:"max,omitempty" json:"max"`
+	Cluster    int    `yaml:"cluster,omitempty" json:"-"`
+	OnlyIf     string `yaml:"only_if,omitempty" json:"-"`
 }
 
 // Validate checks one rule.
@@ -43,7 +46,19 @@ func (w WatchRule) Validate() error {
 	if w.Color != "" && !ColorOK(w.Color) {
 		return fmt.Errorf("watch rule %q: color %q: want #rgb, #rrggbb or a colour name such as red", w.Layer, w.Color)
 	}
+	if w.Visibility != "" && !VisibilityOK(w.Visibility) {
+		return fmt.Errorf("watch rule %q: visibility %q: want viewer, moderator, operator or admin", w.Layer, w.Visibility)
+	}
 	return nil
+}
+
+// VisibilityOK reports whether s is a role a marker can be limited to.
+func VisibilityOK(s string) bool {
+	switch s {
+	case "viewer", "moderator", "operator", "admin":
+		return true
+	}
+	return false
 }
 
 var (
