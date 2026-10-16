@@ -95,7 +95,6 @@ Volume=/DATA/instances/beta/profiles:/dayz/profiles
 Volume=/DATA/instances/beta/storage/empty.beta:/dayz/storage
 Volume=/DATA/instances/beta/runtime/serverDZ.cfg:/dayz/profiles/serverDZ.cfg:ro
 Volume=/DATA/instances/beta/runtime/priority.txt:/dayz/priority.txt:ro
-Volume=/DATA/instances/beta/runtime/priority.txt:/dayz/priority.txt:ro
 Volume=/DATA/cache/local/dzo-admin/abcd:/dayz/@dzo-admin:O
 Volume=/var/lib/GeoIP:/var/lib/GeoIP:ro
 Volume=/DATA/instances/beta/runtime/stdin:/stdin:ro

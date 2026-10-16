@@ -102,7 +102,6 @@ Volume=/DATA/instances/alpha/profiles:/dayz/profiles
 Volume=/DATA/instances/alpha/storage/dayzOffline.chernarusplus:/dayz/storage
 Volume=/DATA/instances/alpha/runtime/serverDZ.cfg:/dayz/profiles/serverDZ.cfg:ro
 Volume=/DATA/instances/alpha/runtime/priority.txt:/dayz/priority.txt:ro
-Volume=/DATA/instances/alpha/runtime/priority.txt:/dayz/priority.txt:ro
 Volume=/DATA/cache/workshop/221100/1559212036/111:/dayz/@1559212036:O
 Volume=/DATA/cache/workshop/221100/1828439124/222:/dayz/@1828439124:O
 Volume=/DATA/instances/alpha/runtime/stdin:/stdin:ro

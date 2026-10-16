@@ -486,8 +486,6 @@ func buildQuadlet(inst *Instance) quadlet.ContainerSpec {
 		{Source: filepath.Join(rt, "serverDZ.cfg"), Destination: "/dayz/profiles/serverDZ.cfg", ReadOnly: true},
 		// The queue priority list lives in the server root, not in profiles/.
 		{Source: filepath.Join(rt, "priority.txt"), Destination: "/dayz/priority.txt", ReadOnly: true},
-		// The queue priority list lives in the server root, not in profiles/.
-		{Source: filepath.Join(rt, "priority.txt"), Destination: "/dayz/priority.txt", ReadOnly: true},
 	}
 	var clientMods, serverMods []string
 	for _, m := range inst.Mods {
