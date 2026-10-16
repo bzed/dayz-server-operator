@@ -115,8 +115,7 @@ marker file, seats the player in a new car; it is a test aid and never part of a
 the Steam DayZ Server tool and the client of the same build, a logged-in Steam and one game at a
 time; on a machine that runs dzo instances, run it elsewhere.
 
-The BattlEye event patterns of ``internal/battleye`` come from a real capture (spike S4 on the
-:doc:`spikes` page). To repeat it you need a client that runs BattlEye: the headless client of the
+The BattlEye event patterns of ``internal/battleye`` come from a real capture (see :doc:`faq`). To repeat it you need a client that runs BattlEye: the headless client of the
 ``dayz-dev`` skill starts ``DayZ_x64.exe`` without it, so set
 ``PROTON_BATTLEYE_RUNTIME="$STEAM_ROOT/steamapps/common/Proton BattlEye Runtime"`` in its launch
 script, as Steam does. Build and sign ``testmods/dzo-be-test`` (``dayz-mod-pack.sh -C testmods/dzo-be-test

@@ -90,19 +90,19 @@ commands do not run steamcmd through its image yet. Details in the README.
   `make servermods`: pack `src/DZOAdmin` into `dist/servermods/dzo-admin/
   addons/dzoadmin.pbo` with the `pbo` library (prefix from `$PBOPREFIX$`),
   plus `meta.cpp`. Deterministic output (fixed timestamps, sorted entries).
-- MetricZ/LogZ forks (MIT) and the analyzer are later submodules; wire the
+- The MetricZ fork (MIT) is a later submodule; wire the
   packing generically over `servermods/*` so adding one is one line.
 - `compat.yaml` format + writer: dzo version, server build id, each servermod
   commit + PBO sha256. `debian/rules` runs `make servermods`; `dzo.install`
   ships `servermods/` to `/usr/share/dzo/servermods/`. `debian/copyright`
-  gets a stanza per submodule licence (MetricZ/LogZ MIT).
+  gets a stanza per submodule licence (MetricZ MIT).
 - `dzo` refuses to activate a shipped servermod whose hash differs from
   `compat.yaml` unless told to.
 - Acceptance: `make deb` from a fresh recursive clone; PBO hash reproducible
   across two builds.
 
-Status: done for dzo-admin, the only servermod there is. MetricZ, LogZ and the
-analyzer are not submodules yet; adding one is a `.gitmodules` entry and a
+Status: done for dzo-admin, the only servermod there is. MetricZ is not a
+submodule yet; adding one is a `.gitmodules` entry and a
 `debian/copyright` stanza. `server_build` in `compat.yaml` is filled by M7.
 
 ## M7: `dzo test boot`  [C22]  (dev machines only)
@@ -123,7 +123,7 @@ runtime files the boot needs (keys, `serverDZ.cfg`, BattlEye config).
 Status: the converter is done (`dzo legacy convert-config`, `internal/legacy`): it
 converted all five legacy branches into a site that validates and resolves
 (`dzo site validate`). Spike S0 compared the mission of three converted branches with the legacy render
-(`docs/spikes.rst`); it is an env-gated test, not a CI test, because it needs podman and
+(`internal/legacy`); it is an env-gated test, not a CI test, because it needs podman and
 the legacy repository. The first instance of the converted config has not been rolled out.
 
 - `dzo legacy convert-config` from `../dayzdockerserver` for hashima first,

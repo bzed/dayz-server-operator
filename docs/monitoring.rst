@@ -133,10 +133,19 @@ dzo does not ship logs itself. It writes them to stable places that a log agent
 (Grafana Alloy, promtail, vector) can collect:
 
 * journald: ``dzo-<name>.service`` (server console) and ``dzo-*`` jobs, as
-  structured JSON with ``instance``, ``job`` and ``event`` fields;
-* LogZ output in the configured ``container.logz_dir``.
+  structured JSON with ``instance``, ``job`` and ``event`` fields.
 
-``dzo loki-config`` prints a ready-made agent configuration snippet.
+For the game's own logs we recommend the
+`dzo_logz <https://steamcommunity.com/sharedfiles/filedetails/?id=3818110406>`_
+mod together with a Loki installation, so that the logs are searchable and kept
+for as long as you want. This is a setup you do yourself:
+
+* install and configure the dzo_logz mod as described on its Workshop page;
+* run Loki (with the retention and disk space that the log volume needs) and a
+  log agent that ships the mod's log files, plus the journald logs above, to it.
+
+dzo does not configure the mod, does not generate any agent or Loki
+configuration, and does not read these logs.
 
 Operator jobs (update check, download, render, restart) can also be exported as
 OpenTelemetry traces if an OTLP endpoint is configured.

@@ -64,4 +64,4 @@ Where to start
 
    cli
    development
-   spikes
+   faq

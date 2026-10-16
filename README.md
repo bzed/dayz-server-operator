@@ -190,9 +190,8 @@ with a real Steam account, and on a workstation with the DayZ client:
 - A web page for backups.
 - Downloading map tiles from the client depot automatically (you point `dzo` at
   the client's world PBO).
-- Golden-master tests for maps whose mission is not Bohemia's (spike S0 compared
-  three branches; see [MILESTONES.md](MILESTONES.md) and the
-  [spikes page](docs/spikes.rst)).
+- Golden-master tests for maps whose mission is not Bohemia's (three branches were compared as data
+  by hand; see [MILESTONES.md](MILESTONES.md)).
 - A size-plausibility check of downloaded workshop items, and a check of real
   workshop PBOs for their prefix.
 - The `compat.yaml` boot-test gate for the servermods (`make servermods` writes
@@ -220,7 +219,7 @@ Things that could not be checked yet, roughly in the order they would bite:
   kick, disconnect) were captured from a real client with BattlEye and the patterns
   fixed; the verified-GUID line needs a BattlEye master that answers, which it did not
   from the development host or the workstation (`Ban check timed out`). See the
-  [spikes page](docs/spikes.rst) (S4).
+  [FAQ](docs/faq.rst).
 - **steamcmd's failure paths.** A real login, server install, workshop
   download and forced refresh have worked. The wording of the other prompts
   (wrong password, Steam Guard by mail or by mobile confirmation, rate

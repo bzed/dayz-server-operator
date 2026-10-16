@@ -175,8 +175,6 @@ Monitoring and notifications
      - Icinga plugin, game server only
    * - ``dzo notify test [--target <name>]``
      - send a test notification
-   * - ``dzo loki-config``
-     - print a log agent configuration snippet
 
 Web interface and API
 ---------------------
