@@ -54,7 +54,7 @@ func deepMerge(base, overlay any, appendKeys map[string]bool) any {
 	baseMap, baseIsMap := base.(map[string]any)
 	overlayMap, overlayIsMap := overlay.(map[string]any)
 	if baseIsMap && overlayIsMap {
-		result := make(map[string]any, len(baseMap)+len(overlayMap))
+		result := make(map[string]any, len(baseMap))
 		for k, v := range baseMap {
 			result[k] = v
 		}
