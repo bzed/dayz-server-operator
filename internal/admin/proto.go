@@ -183,6 +183,8 @@ type SyncRequest struct {
 	World      string `json:"world"`
 	Seq        int    `json:"seq"`
 	Hello      Flag   `json:"hello"`
+	// Clock is the in-game time of day in minutes since midnight; it counts when Has lists "clock".
+	Clock int `json:"clock"`
 	// Has names the parts the mod included. Its JSON writer turns a missing
 	// array into [], so an empty array alone does not mean "none".
 	Has      []string    `json:"has"`

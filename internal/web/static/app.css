@@ -106,6 +106,7 @@ body.map main { flex: 1; min-height: 0; max-width: none; margin: 0; padding: 0; 
 .maptitle strong { font: 600 1.3rem/1.2 var(--display); }
 .maptitle .stats { display: flex; gap: .8rem; white-space: nowrap; font-size: .95rem; }
 .maptitle .stats [hidden] { display: none; }
+.maptitle .stats .fa { margin-right: .3em; }
 .maptitle .conn { display: none; color: var(--flare); font-weight: 600; }
 .stale .conn { display: inline; }
 #flash { position: absolute; z-index: 1100; top: 10px; left: 50%; transform: translateX(-50%); width: min(26rem, calc(100% - 20px)); pointer-events: none; }

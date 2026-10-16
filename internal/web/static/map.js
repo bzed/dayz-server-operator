@@ -733,7 +733,7 @@
   // ---- statistics in the title: players online, uptime, next scheduled restart ----
 
   var stats = document.getElementById('stats');
-  var st = { online: null, since: null, next: null, connected: true };
+  var st = { clock: '', online: null, since: null, next: null, connected: true };
   function span(d) {
     if (d < 60) { return '<1m'; }
     var m = Math.floor(d / 60) % 60, h = Math.floor(d / 3600) % 24, days = Math.floor(d / 86400);
@@ -748,6 +748,11 @@
       nx = st.next <= now ? 'now' : 'in ' + span((st.next - now) / 1000);
       stats.querySelector('.st-restart').title = new Date(st.next).toLocaleString();
     }
+    var ck = stats.querySelector('.st-clock');
+    ck.hidden = !st.connected || !st.clock;
+    ck.lastChild.textContent = st.clock;
+    var hr = parseInt(st.clock, 10);
+    ck.firstChild.className = 'fa fa-' + (hr >= 6 && hr < 18 ? 'sun-o' : 'moon-o');
     [['.st-players', st.online === null ? '' : st.online + ' online'], ['.st-up', up && 'up ' + up], ['.st-restart', nx && 'restart ' + nx]].forEach(function (x) {
       var s = stats.querySelector(x[0]);
       s.textContent = x[1];
@@ -756,6 +761,7 @@
   }
   function onStatus(s) {
     st.connected = !!s.connected;
+    st.clock = s.game_time || '';
     st.since = s.hello && s.hello.since ? Date.parse(s.hello.since) : null;
     st.next = s.next_restart ? Date.parse(s.next_restart) : null;
     if (st.online === null) { st.online = s.players; }

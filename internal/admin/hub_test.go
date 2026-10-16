@@ -318,3 +318,24 @@ func TestStatusCarriesTheNextRestartAndAnnouncesChanges(t *testing.T) {
 		t.Error("no schedule, no next restart")
 	}
 }
+
+func TestStatusCarriesTheGameTime(t *testing.T) {
+	h := NewHub("x")
+	h.Sync(SyncRequest{Hello: true, World: "w"})
+	if h.Status().GameTime != "" {
+		t.Error("an older mod sends no clock")
+	}
+	ch := h.Subscribe(context.Background())
+	h.Sync(SyncRequest{Has: []string{"clock"}, Clock: 14*60 + 5})
+	if got := h.Status().GameTime; got != "14:05" {
+		t.Errorf("game time = %q", got)
+	}
+	select {
+	case ev := <-ch:
+		if s, ok := ev.Data.(Status); !ok || ev.Kind != "status" || s.GameTime != "14:05" {
+			t.Errorf("event = %+v", ev)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("no status event for the new time")
+	}
+}

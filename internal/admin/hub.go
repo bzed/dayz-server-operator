@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -63,6 +64,8 @@ type Status struct {
 	Markers   int       `json:"markers"`
 	Events    int       `json:"events"`
 	Types     int       `json:"types"`
+	// GameTime is the in-game time of day ("14:05"), when the mod reports it.
+	GameTime string `json:"game_time,omitempty"`
 	// NextRestart is the next scheduled restart of the instance, when it has a schedule.
 	NextRestart *time.Time `json:"next_restart,omitempty"`
 }
@@ -90,6 +93,8 @@ type Hub struct {
 	// sentPlayers and sentRestart are what the last status event said, so a change is announced.
 	sentPlayers int
 	sentRestart time.Time
+	sentClock   string
+	gameTime    string
 	players     []Player
 	vehicles    []Vehicle
 	markers     []Marker
@@ -123,6 +128,9 @@ func (h *Hub) Sync(req SyncRequest) SyncReply {
 		h.hello = &Hello{ModVersion: req.ModVersion, Proto: req.Proto, World: req.World, Since: now}
 		h.emit("status", h.statusLocked())
 	}
+	if slices.Contains(req.Has, "clock") && req.Clock >= 0 && req.Clock < 24*60 {
+		h.gameTime = fmt.Sprintf("%02d:%02d", req.Clock/60, req.Clock%60)
+	}
 	if req.Players != nil {
 		h.players = req.Players
 		h.linkVehiclesLocked()
@@ -135,8 +143,13 @@ func (h *Hub) Sync(req SyncRequest) SyncReply {
 		}
 		if s.Players != h.sentPlayers || !next.Equal(h.sentRestart) {
 			h.sentPlayers, h.sentRestart = s.Players, next
+			h.sentClock = s.GameTime
 			h.emit("status", s)
 		}
+	}
+	if h.gameTime != h.sentClock {
+		h.sentClock = h.gameTime
+		h.emit("status", h.statusLocked())
 	}
 	if req.Vehicles != nil {
 		h.vehicles = req.Vehicles
@@ -236,6 +249,7 @@ func (h *Hub) statusLocked() Status {
 		Instance: h.Name, Connected: h.connectedLocked(), LastSeen: h.lastSeen, Hello: h.hello,
 		Players: len(h.players), Vehicles: len(h.vehicles), Markers: len(h.markers), Events: len(h.events), Types: len(h.types.names),
 	}
+	s.GameTime = h.gameTime
 	if h.NextRestart != nil {
 		if t := h.NextRestart(h.now()); !t.IsZero() {
 			s.NextRestart = &t
