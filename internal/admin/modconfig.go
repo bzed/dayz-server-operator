@@ -153,4 +153,6 @@ func WriteModConfig(profilesDir, tokenDir, instance string, cfg ModConfig) error
 }
 
 // MarkerDir is where the file drop of an instance lives.
-func MarkerDir(profilesDir string) string { return filepath.Join(profilesDir, "dzo", "admin", "markers") }
+func MarkerDir(profilesDir string) string {
+	return filepath.Join(profilesDir, "dzo", "admin", "markers")
+}
