@@ -103,7 +103,9 @@ Acting
      - ``operator``
      - spawn an item (``target``: ``inventory``, ``hands``, ``ground``;
        ``health`` 0 to 1; ``attachments`` true: the item gets the kit the game's own debug spawn
-       gives it, such as a battery for a flashlight)
+       gives it, such as a battery for a flashlight; when that leaves it bare, the mod fits the parts it
+       found in the item configs, cached in ``profiles/dzo-admin/kits.json`` and scanned again when the
+       class list changes or a part no longer fits)
    * - ``POST /instances/<i>/vehicles/<id>/repair`` ``{"scope"}``
      - ``operator``
      - ``all`` (repair, refuel and fit missing parts), ``engine``, ``parts``,

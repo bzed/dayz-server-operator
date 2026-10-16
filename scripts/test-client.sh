@@ -212,6 +212,20 @@ sleep 5
 s=1
 probe | grep -q 'hands=Chemlight_Red' && s=0
 verdict "spawn_item into the hands" $s
+# With attachments: the item is given the kit it needs (the game's debug spawn, else the kit found in the configs).
+for t in "Flashlight --attachments" "PersonalRadio" "Rangefinder --attachments"; do
+	dzo player give t1 "$id" $t | grep -q ok || true
+done
+sleep 6
+s=1
+probe | grep -q 'Flashlight:[^;]*Battery' && s=0
+verdict "spawn_item with attachments: a flashlight gets its battery" $s
+s=1
+probe | grep -q 'Rangefinder:[^;]*Battery' && s=0
+verdict "spawn_item with attachments: a rangefinder gets its battery" $s
+s=0
+probe | grep -q 'PersonalRadio:' && s=1
+verdict "spawn_item without attachments: a bare radio" $s
 s=1
 out=$(dzo player give t1 "$id" NoSuchThing 2>&1 || true)
 case $out in *'unknown class'*) s=0 ;; esac

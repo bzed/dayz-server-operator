@@ -3,7 +3,7 @@
 
 // Test aid for scripts/test-client.sh, never for production. Every 3 s it logs what each connected
 // player has, as one line
-//   DZO-PROBE player <name> items=<count> chemlight=<count> hands=<type> transport=<0|1> crew=<vehicle>/<seat0>
+//   DZO-PROBE player <name> items=<count> chemlight=<count> hands=<type> kit=<Type:Part+Part; of the items that carry attachments> transport=<0|1> crew=<vehicle>/<seat0>
 // and a file $profile:dzo_probe/board puts the first player into the driver seat of a new Offroad_02,
 // so dzo-admin's vehicle crew can be checked. The player is the only thing the probe touches.
 modded class MissionServer
@@ -59,6 +59,17 @@ modded class MissionServer
 			EntityAI inHands = p.GetHumanInventory().GetEntityInHands();
 			if (inHands)
 				hands = inHands.GetType();
+			// "Type:Part+Part;" for every item that carries attachments (the player's clothes are skipped by the grep).
+			string kit = "";
+			foreach (EntityAI k : items)
+			{
+				if (k.GetInventory().AttachmentCount() == 0 || k.IsClothing())
+					continue;
+				kit = kit + k.GetType() + ":";
+				for (int a = 0; a < k.GetInventory().AttachmentCount(); a++)
+					kit = kit + k.GetInventory().GetAttachmentFromIndex(a).GetType() + "+";
+				kit = kit + ";";
+			}
 			string crew = "";
 			Transport t = Transport.Cast(p.GetParent());
 			if (t)
@@ -69,7 +80,7 @@ modded class MissionServer
 					driver = h.GetIdentity().GetName();
 				crew = t.GetType() + "/" + driver;
 			}
-			Print("DZO-PROBE player " + p.GetIdentity().GetName() + " items=" + items.Count() + " chemlight=" + light + " hands=" + hands + " transport=" + p.IsInTransport() + " crew=" + crew);
+			Print("DZO-PROBE player " + p.GetIdentity().GetName() + " items=" + items.Count() + " chemlight=" + light + " hands=" + hands + " kit=" + kit + " transport=" + p.IsInTransport() + " crew=" + crew);
 		}
 	}
 
