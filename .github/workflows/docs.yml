@@ -5,7 +5,8 @@
 # repository, and publish both on GitHub Pages from main (the docs at /, the
 # repository at /apt/). Pull requests only build the docs. Needs Settings >
 # Pages > Source: "GitHub Actions" once, and the secret APT_GPG_PRIVATE_KEY
-# (see docs/installation.rst). Third-party actions are pinned by commit SHA.
+# (see docs/installation.rst). Only the commit that is the head of main when the
+# deploy job runs updates the site. Third-party actions are pinned by commit SHA.
 
 name: Docs
 
@@ -120,11 +121,29 @@ jobs:
     needs: publish
     runs-on: ubuntu-latest
     permissions:
+      contents: read
       pages: write
       id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      # Only the commit that is the head of main right now may update the site: a re-run of an older
+      # run, or a run that main has moved past while it was building, must not put old pages over new.
+      # Asked here, at the last moment, not at the start of the workflow.
+      - id: head
+        name: Is this the head of main?
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          head=$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq .sha)
+          if [ "$head" = "$GITHUB_SHA" ]; then
+            echo "current=true" >>"$GITHUB_OUTPUT"
+          else
+            echo "current=false" >>"$GITHUB_OUTPUT"
+            echo "::notice title=Pages not updated::$GITHUB_SHA is not the head of main ($head), so it does not publish"
+          fi
       - id: deployment
+        if: steps.head.outputs.current == 'true'
         uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
