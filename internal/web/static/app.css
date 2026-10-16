@@ -147,13 +147,13 @@ main > .flash.err { margin: 1rem; }
    child is centred on that point with negative offsets, so the centre of the
    dot is the position and the crosshair shown while dragging passes through it. */
 .pm { position: absolute; left: 0; top: 0; width: 0; height: 0; }
-.pm-dot { position: absolute; left: -9px; top: -9px; width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--ink); background: var(--hc, var(--online)); cursor: grab; }
-.pm-dot::after { content: ""; position: absolute; left: 50%; top: 50%; width: 4px; height: 4px; margin: -2px 0 0 -2px; border-radius: 50%; background: var(--ink); }
+.pm-dot { position: absolute; left: -7px; top: -7px; width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--ink); background: var(--hc, var(--online)); cursor: grab; }
+.pm-dot::after { content: ""; position: absolute; left: 50%; top: 50%; width: 3px; height: 3px; margin: -1.5px 0 0 -1.5px; border-radius: 50%; background: var(--ink); }
 .pm.hurt .pm-dot { border-color: var(--flare); border-width: 3px; }
 .pm.dead .pm-dot { background: var(--bg); border-style: dashed; }
 .pm.drive .pm-dot { border-radius: 4px; }
 .pm.ro .pm-dot { cursor: pointer; }
-.pm-l { position: absolute; left: 14px; top: -10px; white-space: nowrap; font: 600 .95rem/1.1 var(--display); background: color-mix(in srgb, var(--surface) 88%, transparent); padding: 1px 4px; border-radius: 2px; pointer-events: none; }
+.pm-l { position: absolute; left: 12px; top: -10px; white-space: nowrap; font: 600 .95rem/1.1 var(--display); background: color-mix(in srgb, var(--surface) 88%, transparent); padding: 1px 4px; border-radius: 2px; pointer-events: none; }
 .far .pm-l { display: none; }
 .pm::before, .pm::after { content: ""; position: absolute; background: var(--flare); pointer-events: none; opacity: 0; }
 .pm::before { left: -60px; top: -.5px; width: 120px; height: 1px; }
@@ -169,6 +169,11 @@ main > .flash.err { margin: 1rem; }
 .vm.glyph::after { display: none; }
 .vm .fa { line-height: 1; }
 .vm.ruined { border-color: var(--muted); background: var(--surface); opacity: .8; }
+
+/* Zoomed out the world is crowded: vehicles and markers shrink so that they do not
+   cover each other and the players, which are small but still easy to see. */
+.far .vm, .far .mi { transform: scale(.55); }
+.far .pm-dot { transform: scale(.8); }
 
 /* Context menu. */
 .ctx { position: absolute; z-index: 1200; min-width: 14rem; max-width: min(22rem, calc(100% - 8px)); max-height: calc(100% - 8px); overflow-y: auto; background: var(--surface); border: 1px solid var(--ink); border-radius: var(--r); padding: .25rem 0; font-size: .95rem; }

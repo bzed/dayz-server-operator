@@ -562,7 +562,7 @@
   function playerLines(p) { return [p.steam_id, 'health ' + Math.round(p.health) + (p.alive ? '' : ' (dead)'), 'ping ' + p.ping]; }
 
   function makePlayer(p) {
-    var m = L.marker(ll(p), { icon: playerIcon(p), draggable: can('operator'), autoPan: true, riseOnHover: true });
+    var m = L.marker(ll(p), { icon: playerIcon(p), draggable: can('operator'), autoPan: true, riseOnHover: true, zIndexOffset: 1000 });
     var e = { m: m, data: p, key: p.name + playerState(p), drag: null };
     var root = function () { return m.getElement() && m.getElement().firstChild; };
     m.on('dragstart', function () {
