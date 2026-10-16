@@ -20,7 +20,7 @@ COVERAGE_MIN := 85
 GO           ?= go
 
 .PHONY: all cheatsheet docs build build-static test test-race cover coverage-check cover-html lint vet fmt fmt-check \
-        licenses reuse deb clean tidy generate servermods test-findfile test-client
+        licenses reuse vulncheck check deb clean tidy generate servermods test-findfile test-client
 
 all: lint reuse test build
 
@@ -84,6 +84,13 @@ lint:
 reuse:
 	reuse lint
 	cmp LICENSE LICENSES/AGPL-3.0-or-later.txt
+
+## vulncheck: scan the dependencies and the code for known vulnerabilities.
+vulncheck:
+	$(GO) run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
+
+## check: everything to run before pushing (mirrors CI; see AGENTS.md).
+check: fmt-check vet lint reuse vulncheck test-race coverage-check
 
 ## vet: run go vet.
 vet:

@@ -100,9 +100,19 @@ jobs:
           go-version-file: go.mod
       - run: make licenses
 
+  vulncheck:
+    name: Vulnerability check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - run: make vulncheck
+
   build:
     name: Build binaries
-    needs: [lint, reuse, test, licenses]
+    needs: [lint, reuse, test, licenses, vulncheck]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -120,7 +130,7 @@ jobs:
 
   deb:
     name: Build Debian package
-    needs: [lint, reuse, test, licenses]
+    needs: [lint, reuse, test, licenses, vulncheck]
     runs-on: ubuntu-latest
     # Built inside a real debian:trixie container, not the Ubuntu host
     # actions run on by default: dpkg-buildpackage/lintian/debhelper
