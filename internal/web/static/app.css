@@ -140,42 +140,51 @@ main > .flash.err { margin: 1rem; }
 .tiles .g-major { stroke: #fff; stroke-opacity: .3; }
 .tiles .g-minor { stroke: #fff; stroke-opacity: .12; }
 .tiles .gl { color: #9db3a4; }
-.tiles .pm-dot, .tiles .vm { box-shadow: 0 0 0 2px rgb(255 255 255 / .85); }
 .ev { stroke: var(--flare); fill: var(--flare); fill-opacity: .14; stroke-width: 2px; }
 
-/* Icons. The marker root is 0x0 and sits exactly on the world position; every
-   child is centred on that point with negative offsets, so the centre of the
-   dot is the position and the crosshair shown while dragging passes through it. */
+/* Markers. Three kinds of thing, told apart by shape and by edge, with no frame around any icon so that
+   the glyph gets all the room:
+     players   a round dot, the colour of their health, in a white ring;
+     vehicles  a white glyph with a dark edge (it moves);
+     events    a glyph in the colour of its layer with a light edge (it stays where it is).
+   The edge is what keeps a glyph readable on paper, on dark imagery and on sand alike. Every marker root
+   is 0x0 and sits exactly on the world position; every child is centred on that point with negative
+   offsets, so the centre of the dot is the position and the crosshair shown while dragging passes
+   through it. */
+:root {
+  --edge-dark: #10140f;
+  --edge-light: #fff;
+  --edge-v: drop-shadow(1px 0 0 var(--edge-dark)) drop-shadow(-1px 0 0 var(--edge-dark)) drop-shadow(0 1px 0 var(--edge-dark)) drop-shadow(0 -1px 0 var(--edge-dark));
+  --edge-e: drop-shadow(1px 0 0 var(--edge-light)) drop-shadow(-1px 0 0 var(--edge-light)) drop-shadow(0 1px 0 var(--edge-light)) drop-shadow(0 -1px 0 var(--edge-light)) drop-shadow(0 0 1.5px rgb(0 0 0 / .8));
+}
 .pm { position: absolute; left: 0; top: 0; width: 0; height: 0; }
-.pm-dot { position: absolute; left: -7px; top: -7px; width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--ink); background: var(--hc, var(--online)); cursor: grab; }
-.pm-dot::after { content: ""; position: absolute; left: 50%; top: 50%; width: 3px; height: 3px; margin: -1.5px 0 0 -1.5px; border-radius: 50%; background: var(--ink); }
-.pm.hurt .pm-dot { border-color: var(--flare); border-width: 3px; }
-.pm.dead .pm-dot { background: var(--bg); border-style: dashed; }
-.pm.drive .pm-dot { border-radius: 4px; }
+.pm-dot { position: absolute; left: -6px; top: -6px; width: 12px; height: 12px; border-radius: 50%; background: var(--hc, var(--online)); box-shadow: 0 0 0 2px var(--edge-light), 0 0 0 3px var(--edge-dark); cursor: grab; }
+.pm-dot::after { content: ""; position: absolute; left: 50%; top: 50%; width: 3px; height: 3px; margin: -1.5px 0 0 -1.5px; border-radius: 50%; background: var(--edge-dark); }
+.pm.hurt .pm-dot { box-shadow: 0 0 0 2px var(--flare), 0 0 0 3px var(--edge-dark); }
+.pm.dead .pm-dot { background: transparent; }
+.pm.dead .pm-dot::after { display: none; }
 .pm.ro .pm-dot { cursor: pointer; }
-.pm-l { position: absolute; left: 12px; top: -10px; white-space: nowrap; font: 600 .95rem/1.1 var(--display); background: color-mix(in srgb, var(--surface) 88%, transparent); padding: 1px 4px; border-radius: 2px; pointer-events: none; }
+.pm-l { position: absolute; left: 14px; top: -10px; white-space: nowrap; font: 600 .95rem/1.1 var(--display); background: color-mix(in srgb, var(--surface) 88%, transparent); padding: 1px 4px; border-radius: 2px; pointer-events: none; }
 .far .pm-l { display: none; }
 .pm::before, .pm::after { content: ""; position: absolute; background: var(--flare); pointer-events: none; opacity: 0; }
 .pm::before { left: -60px; top: -.5px; width: 120px; height: 1px; }
 .pm::after { left: -.5px; top: -60px; width: 1px; height: 120px; }
 .pm.dragging::before, .pm.dragging::after { opacity: .9; }
-.pm.dragging .pm-dot { cursor: grabbing; border-color: var(--flare); }
-.vm { position: absolute; left: -8px; top: -8px; width: 16px; height: 16px; border: 2px solid var(--signal); background: color-mix(in srgb, var(--signal) 25%, var(--surface)); cursor: pointer; }
-.vm::after { content: ""; position: absolute; left: 50%; top: 50%; width: 4px; height: 4px; margin: -2px 0 0 -2px; background: var(--ink); }
-.mi { position: absolute; left: -12px; top: -12px; width: 24px; height: 24px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; border: 2px solid var(--mc); border-radius: 50%; background: var(--surface); color: var(--mc); font-size: 13px; cursor: pointer; }
-.mi .fa { line-height: 1; }
+.pm.dragging .pm-dot { cursor: grabbing; box-shadow: 0 0 0 2px var(--flare), 0 0 0 3px var(--edge-dark); }
+.vm, .mi { position: absolute; left: -12px; top: -12px; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.vm .fa, .mi .fa { line-height: 1; }
+.vm .fa { font-size: 21px; color: var(--edge-light); filter: var(--edge-v); }
+.mi .fa { font-size: 18px; color: var(--mc); filter: var(--edge-e); }
+/* Without the icon font a vehicle is a white diamond. */
+.vm.dot::before { content: ""; width: 9px; height: 9px; background: var(--edge-light); border: 2px solid var(--edge-dark); transform: rotate(45deg); }
+.vm.ruined .fa { opacity: .6; filter: grayscale(1) var(--edge-v); }
 /* Icons Fork Awesome does not have, drawn like its glyphs (the colour of the text): Font Awesome Free 6.7.2, CC BY 4.0. */
 .fa-helicopter::before { content: ""; display: inline-block; width: 1.25em; height: 1em; vertical-align: -.125em; background: currentColor; -webkit-mask: url(/static/icons/helicopter.svg) center / contain no-repeat; mask: url(/static/icons/helicopter.svg) center / contain no-repeat; }
-.vm.bike { border-radius: 50%; }
-.vm.glyph { left: -12px; top: -12px; width: 24px; height: 24px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; font-size: 13px; color: var(--ink); }
-.vm.glyph::after { display: none; }
-.vm .fa { line-height: 1; }
-.vm.ruined { border-color: var(--muted); background: var(--surface); opacity: .8; }
 
 /* Zoomed out the world is crowded: vehicles and markers shrink so that they do not
-   cover each other and the players, which are small but still easy to see. */
-.far .vm, .far .mi { transform: scale(.55); }
-.far .pm-dot { transform: scale(.8); }
+   cover each other and the players, which stay easy to see. */
+.far .vm, .far .mi { transform: scale(.7); }
+.far .pm-dot { transform: scale(.85); }
 
 /* Context menu. */
 .ctx { position: absolute; z-index: 1200; min-width: 14rem; max-width: min(22rem, calc(100% - 8px)); max-height: calc(100% - 8px); overflow-y: auto; background: var(--surface); border: 1px solid var(--ink); border-radius: var(--r); padding: .25rem 0; font-size: .95rem; }
