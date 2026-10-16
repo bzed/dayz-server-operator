@@ -316,7 +316,8 @@ package that dzo depends on. ``icon`` is the icon's name without the ``fa-``
 prefix: ``fire``, ``car``, ``truck``, ``plane``, ``ambulance``, ``bus``, ``tree``,
 ``bomb``, ``crosshairs``, ``user-secret``, ``rocket``, ``android``, ``flag``, ``home``,
 ``medkit``, ``key``, ``gift``, ``trophy``, ``wrench``, ``star``, ``bolt``, ``eye``
-and about nine hundred more. Browse the gallery on the Fork Awesome site, or list
+and about nine hundred more, plus ``helicopter`` (Fork Awesome has none; dzo ships the
+Font Awesome Free one, CC BY 4.0). Browse the gallery on the Fork Awesome site, or list
 the names installed on the host:
 
 .. code-block:: sh

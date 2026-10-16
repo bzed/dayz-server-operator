@@ -29,6 +29,15 @@ Files: internal/web/static/fonts/SourceSans3-*
 Copyright: 2010-2021, 2023 Adobe (http://www.adobe.com/), with Reserved Font Name 'Source'
 License: OFL-1.1
 
+Files: internal/web/static/icons/*
+Copyright: 2024 Fonticons, Inc. (https://fontawesome.com), Font Awesome Free 6.7.2
+License: CC-BY-4.0
+
+License: CC-BY-4.0
+ The icons are licensed under the Creative Commons Attribution 4.0 International
+ licence. The licence text is in LICENSES/CC-BY-4.0.txt of the source package, and
+ at https://creativecommons.org/licenses/by/4.0/legalcode .
+
 License: OFL-1.1
  This Font Software is licensed under the SIL Open Font License, Version 1.1.
  The licence text is in LICENSES/OFL-1.1.txt of the source package, and at

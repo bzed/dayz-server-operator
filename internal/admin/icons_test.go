@@ -20,10 +20,11 @@ func TestIconNamesAndUnknownIcons(t *testing.T) {
 		t.Fatal(err)
 	}
 	names := IconNames(dir)
-	if !names["fire"] || !names["user-secret"] || len(names) != 2 {
+	// helicopter is not in Fork Awesome; dzo ships it itself (web/static/icons).
+	if !names["fire"] || !names["user-secret"] || !names["helicopter"] || len(names) != 3 {
 		t.Fatalf("names = %v", names)
 	}
-	rules := []WatchRule{{Layer: "a", Icon: "fire"}, {Layer: "b", Icon: "fa-user-secret"}, {Layer: "c", Icon: "firee"}, {Layer: "d"}}
+	rules := []WatchRule{{Layer: "a", Icon: "fire"}, {Layer: "b", Icon: "fa-user-secret"}, {Layer: "c", Icon: "firee"}, {Layer: "d"}, {Layer: "e", Icon: "helicopter"}}
 	if got := UnknownIcons(rules, names); !slices.Equal(got, []string{"firee"}) {
 		t.Errorf("unknown = %v", got)
 	}

@@ -14,7 +14,7 @@ package admin
 // The first rule that matches a class wins, so the specific rules come before the catch-alls.
 func VanillaEventWatch() []WatchRule {
 	rules := []WatchRule{
-		{Layer: "Helicopter crashes", Icon: "plane", Color: "#d9822b", Label: "Helicopter crash",
+		{Layer: "Helicopter crashes", Icon: "helicopter", Color: "#d9822b", Label: "Helicopter crash",
 			Classes: []string{"Wreck_UH1Y", "Wreck_Mi8_Crashed", "StaticObj_Wreck_Mi24_TK*", "StaticObj_Wreck_Chinook*"}},
 		{Layer: "Santa's sleigh", Icon: "gift", Color: "#c0392b", Label: "Santa's sleigh", Classes: []string{"Wreck_SantasSleigh"}},
 		{Layer: "Airplane crates", Icon: "archive", Color: "#8a5a2b", Label: "Airplane supply crate", Classes: []string{"StaticObj_Misc_SupplyBox*_DE"}},

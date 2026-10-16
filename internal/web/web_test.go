@@ -193,6 +193,9 @@ func TestMapAndAudit(t *testing.T) {
 	if c, js, _ := e.get("/static/map.js"); c != 200 || !strings.Contains(js, "EventSource") {
 		t.Fatalf("map.js: %d", c)
 	}
+	if c, svg, _ := e.get("/static/icons/helicopter.svg"); c != 200 || !strings.Contains(svg, "Font Awesome Free") {
+		t.Fatalf("the helicopter icon is not served: %d", c)
+	}
 	if c, _, _ := e.get("/static/app.css"); c != 200 {
 		t.Fatal("app.css")
 	}
