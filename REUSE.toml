@@ -30,6 +30,12 @@ path = "assets/logo.png"
 SPDX-FileCopyrightText = "2026 Bernd Zeimetz <bernd@bzed.de>"
 SPDX-License-Identifier = "AGPL-3.0-or-later"
 
+# The PNG renderings of internal/web/static/favicon.svg (the tab icon); a PNG cannot carry a comment header.
+[[annotations]]
+path = ["internal/web/static/favicon-32.png", "internal/web/static/apple-touch-icon.png"]
+SPDX-FileCopyrightText = "2026 Bernd Zeimetz <bernd@bzed.de>"
+SPDX-License-Identifier = "AGPL-3.0-or-later"
+
 # Font Awesome Free icons that Fork Awesome does not have; the SVG carries its own notice in a comment, as the
 # licence asks, and cannot take a REUSE header.
 [[annotations]]

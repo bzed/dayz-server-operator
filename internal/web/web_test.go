@@ -119,6 +119,15 @@ func TestDashboard(t *testing.T) {
 		t.Fatalf("dashboard: %d %s", code, body)
 	}
 	// Every page loads the icon font, and the buttons keep their text next to the icon.
+	// The tab has an icon: an SVG, and a PNG for the browsers that cannot take one.
+	for _, f := range []string{"favicon.svg", "favicon-32.png", "apple-touch-icon.png"} {
+		if !strings.Contains(body, "/static/"+f) {
+			t.Errorf("the page does not link /static/%s", f)
+		}
+		if c, _, h := e.get("/static/" + f); c != 200 || !strings.HasPrefix(h.Get("Content-Type"), "image/") {
+			t.Errorf("/static/%s: %d %q", f, c, h.Get("Content-Type"))
+		}
+	}
 	if !strings.Contains(body, "/vendor/fork-awesome/css/fork-awesome.css") || !strings.Contains(body, `fa-map`) || !strings.Contains(body, "Open map") {
 		t.Fatalf("dashboard icons: %s", body)
 	}
