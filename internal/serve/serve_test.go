@@ -189,3 +189,31 @@ func TestRunErrors(t *testing.T) {
 		t.Fatal("bad mod listen")
 	}
 }
+
+// The shipped event rules reach the hub as they reach the mod: the mod marks every watch marker
+// admin-only, the rule's visibility and colour are what lets the operator see an event.
+func TestAddHubsStylesTheVanillaEvents(t *testing.T) {
+	cfg, tree := fixture(t)
+	reg := admin.NewRegistry(TokenDir(cfg))
+	if err := AddHubs(reg, cfg, tree); err != nil {
+		t.Fatal(err)
+	}
+	h, ok := reg.Hub("alpha")
+	if !ok {
+		t.Fatal("no hub for alpha")
+	}
+	h.Sync(admin.SyncRequest{Has: []string{"markers"}, Markers: []admin.Marker{
+		{ID: "w1", Layer: "Police cars", Shape: "point", Icon: "car", Source: "watch", Visibility: "admin"},
+		{ID: "w2", Layer: "fire", Shape: "point", Icon: "fire", Source: "watch", Visibility: "admin"},
+	}})
+	got := map[string]admin.Marker{}
+	for _, m := range h.Markers("") {
+		got[m.Layer] = m
+	}
+	if m := got["Police cars"]; m.Visibility != "viewer" || m.Color == "" {
+		t.Errorf("event marker: visibility %q colour %q, want viewer and the colour of the rule", m.Visibility, m.Color)
+	}
+	if m := got["fire"]; m.Visibility != "admin" {
+		t.Errorf("the instance's own rule without a visibility stays admin-only, got %q", m.Visibility)
+	}
+}

@@ -62,12 +62,19 @@ func ModConfig(cfg *config.Config, inst *resolve.Instance) (admin.ModConfig, err
 	a := inst.Admin
 	mc := admin.ModConfig{
 		Endpoint: endpoint, SyncMS: a.SyncMS, PlayersS: a.PlayersS, VehiclesS: a.VehiclesS, MarkersS: a.MarkersS, EventsS: a.EventsS,
-		AllowSpawn: a.AllowSpawn == nil || *a.AllowSpawn, AllowClasses: a.AllowClasses, DenyClasses: a.DenyClasses, Watch: inst.AdminMap.Watch,
-	}
-	if inst.AdminMap.VanillaEvents == nil || *inst.AdminMap.VanillaEvents {
-		mc.Watch = site.MergeWatch(admin.VanillaEventWatch(), mc.Watch)
+		AllowSpawn: a.AllowSpawn == nil || *a.AllowSpawn, AllowClasses: a.AllowClasses, DenyClasses: a.DenyClasses, Watch: watchRules(inst),
 	}
 	return mc, nil
+}
+
+// watchRules are the watch rules of an instance: its own, plus the shipped rules for the events of the
+// Central Economy unless the instance turns them off. The mod gets them as its rules and the hub styles
+// the markers with them (colour, and which role sees them), so both must use this list.
+func watchRules(inst *resolve.Instance) []admin.WatchRule {
+	if inst.AdminMap.VanillaEvents == nil || *inst.AdminMap.VanillaEvents {
+		return site.MergeWatch(admin.VanillaEventWatch(), inst.AdminMap.Watch)
+	}
+	return inst.AdminMap.Watch
 }
 
 // WriteModConfig writes the mod's config.json and rotates its token.
@@ -93,7 +100,7 @@ func AddHubs(reg *admin.Registry, cfg *config.Config, tree *site.Tree) error {
 			h.NextRestart = func(after time.Time) time.Time { return site.NextRestart(sched, after) }
 		}
 		h.Styles = map[string]admin.Layer{}
-		for _, w := range inst.AdminMap.Watch {
+		for _, w := range watchRules(inst) {
 			h.Styles[w.Layer] = admin.Layer{Name: w.Layer, Icon: w.Icon, Color: w.Color, Visibility: w.Visibility}
 		}
 		reg.Add(h)
