@@ -292,6 +292,28 @@ func TestSyncVehicleKind(t *testing.T) {
 	}
 }
 
+// Bicycles are cars to the game (the DayZBicycle mod derives them from CarScript); the hub gives the
+// vehicles whose class matches its bicycle classes the kind "bicycle", for the icon and the list.
+func TestSyncMarksBicyclesByClass(t *testing.T) {
+	h := NewHub("x")
+	h.Bicycles = DefaultBicycleClasses()
+	h.Sync(SyncRequest{Has: []string{"vehicles"}, Vehicles: []Vehicle{
+		{ID: "1", Kind: "car", Type: "Old_Bike_Red"}, {ID: "2", Kind: "car", Type: "Lady_Bicycle_Purple"},
+		{ID: "3", Kind: "car", Type: "Old_BikeArma"}, {ID: "4", Kind: "car", Type: "MMTArma"},
+		{ID: "5", Kind: "car", Type: "Offroad_02"}, {ID: "6", Kind: "motorbike", Type: "Old_Bike"},
+	}})
+	got := map[string]string{}
+	for _, v := range h.Vehicles() {
+		got[v.ID] = v.Kind
+	}
+	want := map[string]string{"1": "bicycle", "2": "bicycle", "3": "bicycle", "4": "bicycle", "5": "car", "6": "motorbike"}
+	for id, k := range want {
+		if got[id] != k {
+			t.Errorf("vehicle %s: kind %q, want %q", id, got[id], k)
+		}
+	}
+}
+
 func TestStatusCarriesTheNextRestartAndAnnouncesChanges(t *testing.T) {
 	h := NewHub("x")
 	next := time.Date(2026, 10, 16, 5, 0, 0, 0, time.UTC)

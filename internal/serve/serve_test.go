@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -215,5 +216,31 @@ func TestAddHubsStylesTheVanillaEvents(t *testing.T) {
 	}
 	if m := got["fire"]; m.Visibility != "admin" {
 		t.Errorf("the instance's own rule without a visibility stays admin-only, got %q", m.Visibility)
+	}
+}
+
+// The bicycle classes of a hub are the shipped ones plus the ones the instance lists.
+func TestAddHubsBicycleClasses(t *testing.T) {
+	cfg, tree := fixture(t)
+	reg := admin.NewRegistry(TokenDir(cfg))
+	if err := AddHubs(reg, cfg, tree); err != nil {
+		t.Fatal(err)
+	}
+	h, _ := reg.Hub("alpha")
+	h.Sync(admin.SyncRequest{Has: []string{"vehicles"}, Vehicles: []admin.Vehicle{{ID: "1", Kind: "car", Type: "Old_Bike_Red"}, {ID: "2", Kind: "car", Type: "TandemBike"}}})
+	kinds := map[string]string{}
+	for _, v := range h.Vehicles() {
+		kinds[v.ID] = v.Kind
+	}
+	if kinds["1"] != "bicycle" || kinds["2"] != "car" {
+		t.Fatalf("shipped classes: %v", kinds)
+	}
+	insts, err := resolve.ResolveAll(cfg, tree)
+	if err != nil {
+		t.Fatal(err)
+	}
+	insts[0].Admin.BicycleClasses = []string{"TandemBike"}
+	if got := bicycleClasses(insts[0]); !slices.Contains(got, "TandemBike") || !slices.Contains(got, "Old_Bike*") {
+		t.Fatalf("bicycle classes %v", got)
 	}
 }

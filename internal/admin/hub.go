@@ -77,6 +77,9 @@ type Hub struct {
 	// Allow and Deny are the class-name globs (trailing *) that limit item
 	// spawns on top of the mod's own check (§C16).
 	Allow, Deny []string
+	// Bicycles are the class-name globs of the vehicles that are bicycles (see DefaultBicycleClasses):
+	// the game has them as cars, the hub reports them with the kind "bicycle".
+	Bicycles []string
 	// MarkerDir is the file-drop directory ($profile:dzo/admin/markers).
 	MarkerDir string
 	// Styles are the icon and colour the site config gives a layer (the watch rules); they fill in
@@ -155,6 +158,11 @@ func (h *Hub) Sync(req SyncRequest) SyncReply {
 	}
 	if req.Vehicles != nil {
 		h.vehicles = req.Vehicles
+		for i := range h.vehicles {
+			if h.vehicles[i].Kind == "car" && MatchGlobs(h.Bicycles, h.vehicles[i].Type) {
+				h.vehicles[i].Kind = "bicycle"
+			}
+		}
 		h.linkVehiclesLocked()
 		h.emit("vehicles", append([]Vehicle(nil), h.vehicles...))
 	}

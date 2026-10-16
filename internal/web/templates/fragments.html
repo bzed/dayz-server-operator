@@ -28,7 +28,7 @@
   {{range .Items}}
     <tr>
       <td>{{.Type}}{{if .Ruined}} <em>(ruined)</em>{{end}}</td>
-      <td>{{if eq .Kind "motorbike"}}<i class="fa fa-motorcycle" aria-hidden="true"></i>{{else}}<i class="fa fa-car" aria-hidden="true"></i>{{end}}{{.Kind}}</td>
+      <td>{{if eq .Kind "motorbike"}}<i class="fa fa-motorcycle" aria-hidden="true"></i>{{else if eq .Kind "bicycle"}}<i class="fa fa-bicycle" aria-hidden="true"></i>{{else}}<i class="fa fa-car" aria-hidden="true"></i>{{end}}{{.Kind}}</td>
       <td>{{printf "%.0f / %.0f" .X .Z}}</td>
       <td>{{pct .Health}}</td>
       <td>{{pct .Fuel}}</td>

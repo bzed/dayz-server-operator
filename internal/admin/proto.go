@@ -58,7 +58,7 @@ type Player struct {
 // Vehicle is one persistent vehicle.
 type Vehicle struct {
 	ID        string   `json:"id"`
-	Kind      string   `json:"kind"` // car or motorbike; an older mod sends none and is taken as car
+	Kind      string   `json:"kind"` // car, motorbike or bicycle (the hub's); an older mod sends none and is taken as car
 	Type      string   `json:"type"`
 	X         float64  `json:"x"`
 	Y         float64  `json:"y"`

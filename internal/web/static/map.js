@@ -618,8 +618,8 @@
 
   var vm = {};
   function vehicleIcon(v) {
-    var bike = v.kind === 'motorbike';
-    var glyph = iconClass(bike ? 'motorcycle' : 'car');
+    var bike = v.kind === 'motorbike' || v.kind === 'bicycle';
+    var glyph = iconClass(v.kind === 'bicycle' ? 'bicycle' : bike ? 'motorcycle' : 'car');
     var root = mk('div', 'vm' + (bike ? ' bike' : '') + (glyph ? ' glyph' : '') + (v.ruined ? ' ruined' : ''));
     if (glyph) { root.appendChild(mk('i', glyph)); }
     return elIcon('vm-wrap', root);
@@ -634,7 +634,7 @@
         var m = L.marker(ll(v), { icon: vehicleIcon(v) });
         e = vm[v.id] = { m: m, data: v, ruined: v.ruined };
         onMenu(m, function () { return vehicleSpec(e.data); });
-        named(m, function () { return (e.data.kind === 'motorbike' ? 'Motorbike ' : 'Vehicle ') + e.data.type; });
+        named(m, function () { return (e.data.kind === 'motorbike' ? 'Motorbike ' : e.data.kind === 'bicycle' ? 'Bicycle ' : 'Vehicle ') + e.data.type; });
         m.addTo(vehicles);
       }
       e.data = v;

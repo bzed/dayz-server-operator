@@ -67,6 +67,11 @@ func ModConfig(cfg *config.Config, inst *resolve.Instance) (admin.ModConfig, err
 	return mc, nil
 }
 
+// bicycleClasses are the classes of an instance's bicycles: the shipped ones and its own.
+func bicycleClasses(inst *resolve.Instance) []string {
+	return append(admin.DefaultBicycleClasses(), inst.Admin.BicycleClasses...)
+}
+
 // watchRules are the watch rules of an instance: its own, plus the shipped rules for the events of the
 // Central Economy unless the instance turns them off. The mod gets them as its rules and the hub styles
 // the markers with them (colour, and which role sees them), so both must use this list.
@@ -95,7 +100,7 @@ func AddHubs(reg *admin.Registry, cfg *config.Config, tree *site.Tree) error {
 	}
 	for _, inst := range all {
 		h := admin.NewHub(inst.Name)
-		h.Allow, h.Deny, h.MarkerDir = inst.Admin.AllowClasses, inst.Admin.DenyClasses, admin.MarkerDir(inst.Paths.Profiles)
+		h.Allow, h.Deny, h.Bicycles, h.MarkerDir = inst.Admin.AllowClasses, inst.Admin.DenyClasses, bicycleClasses(inst), admin.MarkerDir(inst.Paths.Profiles)
 		if sched := inst.Restarts.Schedule; len(sched) > 0 {
 			h.NextRestart = func(after time.Time) time.Time { return site.NextRestart(sched, after) }
 		}

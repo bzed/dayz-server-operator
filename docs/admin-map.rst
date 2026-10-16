@@ -26,8 +26,10 @@ results of finished actions to ``dzo serve``, and gets the next actions in the
 reply. Nothing connects into the game server. The mod knows persistent
 vehicles of the car type (``CarScript``, which includes most modded cars) and, on DayZ 1.30,
 motorbikes (``MotorbikeScript``); both can be repaired and deleted. Each vehicle has a kind,
-``car`` or ``motorbike``, shown in the vehicle list; cars get a car icon and motorbikes a motorcycle icon on the map. Boats and
-helicopters are not reported yet.
+``car``, ``motorbike`` or ``bicycle``, shown in the vehicle list; cars get a car icon, motorbikes a motorcycle icon and
+bicycles a bicycle icon on the map. Bicycles are cars to the game; dzo calls the vehicles of the DayZBicycle mod
+(``Old_Bike*``, ``Lady_Bicycle*``, ``MMTArma``, the classes of its event) bicycles, and ``admin.bicycle_classes`` adds
+the classes of other bicycle mods. Boats and helicopters are not reported yet.
 
 Installing it
 ~~~~~~~~~~~~~
@@ -71,7 +73,9 @@ Settings in ``instance.yaml`` under ``admin`` (see :doc:`configuration`):
 * ``allow_spawn``, ``allow_classes``, ``deny_classes``: which item classes
   admins may spawn. A class must be a valid class name, must not match a deny
   entry, and, if an allow list exists, must match it. dzo also rejects classes
-  the server did not report.
+  the server did not report;
+* ``bicycle_classes``: class names (trailing ``*`` = prefix) of bicycles of other mods, on top of the
+  DayZBicycle classes dzo knows.
 
 Without dzo-admin the web interface cannot show the map or run actions. Other
 features that do not need it (status, RCon) are unaffected.
