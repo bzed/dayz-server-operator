@@ -545,10 +545,15 @@
 
   var pm = {};
   function playerState(p) {
-    return (p.alive ? (p.unconscious ? 'hurt' : '') : 'dead') + (p.vehicle ? ' drive' : '') + (can('operator') ? '' : ' ro');
+    return (p.alive ? (p.unconscious ? 'hurt' : '') : 'dead') + (p.vehicle ? ' drive' : '') + (can('operator') ? '' : ' ro') + ' h' + Math.round(p.health / 5);
+  }
+  // The dot goes from red (no health) through yellow to green (full health, 100).
+  function healthColor(h) {
+    return 'hsl(' + Math.round(120 * Math.max(0, Math.min(100, h)) / 100) + ' 75% 42%)';
   }
   function playerIcon(p) {
     var root = mk('div', 'pm ' + playerState(p));
+    root.style.setProperty('--hc', healthColor(p.health));
     root.appendChild(mk('span', 'pm-dot'));
     root.appendChild(mk('span', 'pm-l', p.name));
     return elIcon('pm-wrap', root);
@@ -591,6 +596,8 @@
 
   function onPlayers(list) {
     playerList = list;
+    st.online = list.length;
+    drawStats();
     var seen = {};
     list.forEach(function (p) {
       seen[p.steam_id] = true;
@@ -723,7 +730,40 @@
     });
   }
 
-  var handlers = { players: onPlayers, vehicles: onVehicles, events: onEvents, markers: onMarkers };
+  // ---- statistics in the title: players online, uptime, next scheduled restart ----
+
+  var stats = document.getElementById('stats');
+  var st = { online: null, since: null, next: null, connected: true };
+  function span(d) {
+    if (d < 60) { return '<1m'; }
+    var m = Math.floor(d / 60) % 60, h = Math.floor(d / 3600) % 24, days = Math.floor(d / 86400);
+    return days ? days + 'd ' + h + 'h' : h ? h + 'h ' + m + 'm' : m + 'm';
+  }
+  function drawStats() {
+    if (!stats) { return; }
+    var now = Date.now();
+    var up = st.connected && st.since ? span((now - st.since) / 1000) : '';
+    var nx = '';
+    if (st.next) {
+      nx = st.next <= now ? 'now' : 'in ' + span((st.next - now) / 1000);
+      stats.querySelector('.st-restart').title = new Date(st.next).toLocaleString();
+    }
+    [['.st-players', st.online === null ? '' : st.online + ' online'], ['.st-up', up && 'up ' + up], ['.st-restart', nx && 'restart ' + nx]].forEach(function (x) {
+      var s = stats.querySelector(x[0]);
+      s.textContent = x[1];
+      s.hidden = !x[1];
+    });
+  }
+  function onStatus(s) {
+    st.connected = !!s.connected;
+    st.since = s.hello && s.hello.since ? Date.parse(s.hello.since) : null;
+    st.next = s.next_restart ? Date.parse(s.next_restart) : null;
+    if (st.online === null) { st.online = s.players; }
+    drawStats();
+  }
+  setInterval(drawStats, 30000);
+
+  var handlers = { players: onPlayers, vehicles: onVehicles, events: onEvents, markers: onMarkers, status: onStatus };
   var es = new EventSource(el.dataset.stream);
   es.addEventListener('error', function () { document.querySelector('main').classList.add('stale'); });
   Object.keys(handlers).forEach(function (kind) {

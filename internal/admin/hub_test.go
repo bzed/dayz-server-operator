@@ -291,3 +291,30 @@ func TestSyncVehicleKind(t *testing.T) {
 		t.Errorf("kinds = %q, %q", r.Vehicles[0].Kind, r.Vehicles[1].Kind)
 	}
 }
+
+func TestStatusCarriesTheNextRestartAndAnnouncesChanges(t *testing.T) {
+	h := NewHub("x")
+	next := time.Date(2026, 10, 16, 5, 0, 0, 0, time.UTC)
+	h.NextRestart = func(time.Time) time.Time { return next }
+	h.Sync(SyncRequest{Hello: true, World: "w"})
+	ch := h.Subscribe(context.Background())
+	if s := h.Status(); s.NextRestart == nil || !s.NextRestart.Equal(next) {
+		t.Fatalf("next restart = %v", s.NextRestart)
+	}
+	h.Sync(SyncRequest{Has: []string{"players"}, Players: []Player{{SteamID: "1"}}})
+	select {
+	case ev := <-ch:
+		for ev.Kind != "status" {
+			ev = <-ch
+		}
+		if s := ev.Data.(Status); s.Players != 1 {
+			t.Errorf("players = %d", s.Players)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("no status event when the player count changed")
+	}
+	h2 := NewHub("y")
+	if h2.Status().NextRestart != nil {
+		t.Error("no schedule, no next restart")
+	}
+}

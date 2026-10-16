@@ -147,3 +147,40 @@ func (c RestartsConfig) Validate() error {
 	}
 	return nil
 }
+
+// Next returns the first time after `after` that matches the entry, in the location of `after`
+// (the systemd timers that run the restarts use the local time of the host).
+func (r RestartTime) Next(after time.Time) time.Time {
+	day := time.Date(after.Year(), after.Month(), after.Day(), 0, 0, 0, 0, after.Location())
+	for i := 0; i <= 8; i++ {
+		d := day.AddDate(0, 0, i)
+		if len(r.Days) > 0 && indexOfInt(r.Days, (int(d.Weekday())+6)%7) < 0 {
+			continue
+		}
+		for h := 0; h < 24; h++ {
+			if r.Hour >= 0 && r.Hour != h {
+				continue
+			}
+			if t := time.Date(d.Year(), d.Month(), d.Day(), h, r.Minute, 0, 0, d.Location()); t.After(after) {
+				return t
+			}
+		}
+	}
+	return time.Time{}
+}
+
+// NextRestart returns the earliest next time of the restarts.schedule entries (invalid entries are
+// skipped), or the zero time when there are none.
+func NextRestart(entries []string, after time.Time) time.Time {
+	var next time.Time
+	for _, e := range entries {
+		rt, err := ParseRestartTime(e)
+		if err != nil {
+			continue
+		}
+		if t := rt.Next(after); !t.IsZero() && (next.IsZero() || t.Before(next)) {
+			next = t
+		}
+	}
+	return next
+}

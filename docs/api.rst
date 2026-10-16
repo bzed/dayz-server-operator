@@ -59,7 +59,7 @@ All paths start with ``/api/v1``. Responses are JSON.
    * - ``GET /instances``
      - instances you may see, each with the mod's connection state and counts
    * - ``GET /instances/<i>``
-     - one instance's state
+     - one instance's state, with ``next_restart`` when the instance has a ``restarts.schedule``
    * - ``GET /instances/<i>/players``
      - online players: Steam ID, name, position, health, ping, vehicle
    * - ``GET /instances/<i>/vehicles``

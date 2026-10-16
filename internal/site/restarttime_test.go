@@ -111,3 +111,27 @@ func TestMergeWatchByLayerInstanceWins(t *testing.T) {
 		t.Errorf("no own rules = %v", out)
 	}
 }
+
+func TestNextRestart(t *testing.T) {
+	loc := time.UTC
+	at := func(s string) time.Time { v, _ := time.ParseInLocation("2006-01-02 15:04", s, loc); return v }
+	for _, c := range []struct {
+		entries []string
+		after   string
+		want    string
+	}{
+		{[]string{"01:00", "05:00", "09:00"}, "2026-10-16 02:06", "2026-10-16 05:00"},
+		{[]string{"01:00", "05:00"}, "2026-10-16 06:00", "2026-10-17 01:00"},
+		{[]string{"05:00"}, "2026-10-16 05:00", "2026-10-17 05:00"},
+		{[]string{"*:30"}, "2026-10-16 02:45", "2026-10-16 03:30"},
+		{[]string{"Mon,Thu 04:30"}, "2026-10-16 02:00", "2026-10-19 04:30"}, // 2026-10-16 is a Friday
+		{[]string{"Mon 04:30", "nonsense"}, "2026-10-16 02:00", "2026-10-19 04:30"},
+	} {
+		if got := NextRestart(c.entries, at(c.after)); !got.Equal(at(c.want)) {
+			t.Errorf("%v after %s = %v, want %s", c.entries, c.after, got, c.want)
+		}
+	}
+	if !NextRestart(nil, time.Now()).IsZero() {
+		t.Error("no schedule, no restart")
+	}
+}

@@ -101,7 +101,10 @@ Instance
 
 Live map
    Players, vehicles, active events and marker layers on a map that updates as
-   the server reports, on the map's satellite imagery if you built it (see
+   the server reports. A player's icon goes from red to green with the player's health
+   (a thick red ring: unconscious, dashed: dead). The title shows the players online, the
+   uptime (since ``dzo serve`` last saw the mod start) and, if the instance has a
+   ``restarts.schedule``, the time to the next scheduled restart, on the map's satellite imagery if you built it (see
    :doc:`admin-map`). The map always fits the window and zooms in to a few
    pixels per metre; ``Fit`` shows the whole world again. Icons sit exactly on
    their position. **Drag a player's icon** and drop it to teleport the player

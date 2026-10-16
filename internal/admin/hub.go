@@ -63,6 +63,8 @@ type Status struct {
 	Markers   int       `json:"markers"`
 	Events    int       `json:"events"`
 	Types     int       `json:"types"`
+	// NextRestart is the next scheduled restart of the instance, when it has a schedule.
+	NextRestart *time.Time `json:"next_restart,omitempty"`
 }
 
 // Hub holds one instance's world state and command queue. The mod side is
@@ -77,22 +79,27 @@ type Hub struct {
 	// Styles are the icon and colour the site config gives a layer (the watch rules); they fill in
 	// what a marker leaves unset, before the defaults of the layers the mod defines do.
 	Styles map[string]Layer
+	// NextRestart returns the next scheduled restart after a time, or the zero time; nil without a schedule.
+	NextRestart func(time.Time) time.Time
 
 	now func() time.Time
 
 	mu       sync.Mutex
 	hello    *Hello
 	lastSeen time.Time
-	players  []Player
-	vehicles []Vehicle
-	markers  []Marker
-	layers   []Layer
-	events   []Event
-	types    typeList
-	queue    []*pending
-	byID     map[string]*pending
-	subs     map[chan StreamEvent]struct{}
-	files    fileMarkers
+	// sentPlayers and sentRestart are what the last status event said, so a change is announced.
+	sentPlayers int
+	sentRestart time.Time
+	players     []Player
+	vehicles    []Vehicle
+	markers     []Marker
+	layers      []Layer
+	events      []Event
+	types       typeList
+	queue       []*pending
+	byID        map[string]*pending
+	subs        map[chan StreamEvent]struct{}
+	files       fileMarkers
 }
 
 // NewHub returns an empty hub for an instance.
@@ -120,6 +127,16 @@ func (h *Hub) Sync(req SyncRequest) SyncReply {
 		h.players = req.Players
 		h.linkVehiclesLocked()
 		h.emit("players", append([]Player(nil), h.players...))
+		// The status carries the player count and the next restart, which the map shows.
+		s := h.statusLocked()
+		var next time.Time
+		if s.NextRestart != nil {
+			next = *s.NextRestart
+		}
+		if s.Players != h.sentPlayers || !next.Equal(h.sentRestart) {
+			h.sentPlayers, h.sentRestart = s.Players, next
+			h.emit("status", s)
+		}
 	}
 	if req.Vehicles != nil {
 		h.vehicles = req.Vehicles
@@ -215,10 +232,16 @@ func (h *Hub) connectedLocked() bool {
 }
 
 func (h *Hub) statusLocked() Status {
-	return Status{
+	s := Status{
 		Instance: h.Name, Connected: h.connectedLocked(), LastSeen: h.lastSeen, Hello: h.hello,
 		Players: len(h.players), Vehicles: len(h.vehicles), Markers: len(h.markers), Events: len(h.events), Types: len(h.types.names),
 	}
+	if h.NextRestart != nil {
+		if t := h.NextRestart(h.now()); !t.IsZero() {
+			s.NextRestart = &t
+		}
+	}
+	return s
 }
 
 // Status reports whether the mod is connected and how much state it pushed.
