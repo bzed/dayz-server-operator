@@ -218,12 +218,12 @@ func fetchAndUnpack(ctx context.Context, src LocalSource, dst string) error {
 // safeJoin maps an archive member name below dst, rejecting absolute paths
 // and "..", and checks that the joined path is still inside dst.
 func safeJoin(dst, name string) (string, error) {
-	clean := filepath.Clean(filepath.FromSlash(name))
-	if filepath.IsAbs(clean) || clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
+	local := filepath.FromSlash(name)
+	if !filepath.IsLocal(local) {
 		return "", fmt.Errorf("product: archive member %q escapes the mod dir", name)
 	}
 	root := filepath.Clean(dst)
-	joined := filepath.Join(root, clean)
+	joined := filepath.Join(root, local)
 	if joined != root && !strings.HasPrefix(joined, root+string(filepath.Separator)) {
 		return "", fmt.Errorf("product: archive member %q escapes the mod dir", name)
 	}
