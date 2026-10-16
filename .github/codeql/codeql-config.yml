@@ -1,0 +1,10 @@
+# SPDX-FileCopyrightText: 2026 Bernd Zeimetz <bernd@bzed.de>
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# Used by .github/workflows/codeql.yml.
+
+name: dzo CodeQL config
+
+# Test code is not shipped, and its fixtures trip the security queries.
+paths-ignore:
+  - "**/*_test.go"
