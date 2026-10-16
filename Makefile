@@ -87,7 +87,7 @@ reuse:
 
 ## vulncheck: scan the dependencies and the code for known vulnerabilities.
 vulncheck:
-	$(GO) run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
+	$(GO) run golang.org/x/vuln/cmd/govulncheck@v1.7.0 ./...
 
 ## check: everything to run before pushing (mirrors CI; see AGENTS.md).
 check: fmt-check vet lint reuse vulncheck test-race coverage-check
