@@ -94,7 +94,7 @@ func TestModConfigAndEndpoint(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(TokenDir(cfg), "alpha.token")); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := os.Stat(filepath.Join(insts[0].Paths.Profiles, "dzo-admin", "config.json")); err != nil {
+	if _, err := os.Stat(filepath.Join(insts[0].Paths.Profiles, "dzo", "admin", "config.json")); err != nil {
 		t.Fatal(err)
 	}
 	cfg.Serve.ModListen = "nonsense"

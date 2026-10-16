@@ -48,7 +48,7 @@ func profile(t *testing.T) string {
 	put(t, root, "script_1.log", "s1", 3*time.Hour)
 	put(t, root, "script_2.log", "s2", 2*time.Hour)
 	put(t, root, "serverDZ.cfg", "x", 9*time.Hour)
-	put(t, root, "dzo-admin/config.json", "{}", 9*time.Hour)
+	put(t, root, "dzo/admin/config.json", "{}", 9*time.Hour)
 	put(t, root, "big.dat", strings.Repeat("x", unmatchedMin), 9*time.Hour)
 	return root
 }

@@ -764,7 +764,7 @@ Steps (each a pure function over a staging tree, unit-testable):
 6. serverDZ.cfg: parse (tolerant parser for the `key = value;` + `class` syntax), enforce `template`,
    `steamQueryPort`, `instanceId` uniqueness, write `runtime/serverDZ.cfg`.
 7. BattlEye cfg with the password from `secrets/` → `profiles/battleye/beserver_x64.cfg`; delete stale `beserver_x64_active_*`.
-   Profile mod configs for active mods dzo knows: `$profile:dzo-admin/config.json` (§C16), and in `$profile:metricz/config.json` /
+   Profile mod configs for active mods dzo knows: `$profile:dzo/admin/config.json` (§C16), and in `$profile:metricz/config.json` /
    `$profile:logz/config.json` **only the keys dzo needs** (§C23), set by a key-level JSON merge. All other keys stay as the admin left them.
 8. Args: `-config -port -profiles -BEpath -mod -servermod -cpuCount … + extra`.
 9. **Apply**: compare staging with live + manifest → classify (unchanged / update / drift / new / obsolete / foreign-conflict)
@@ -1062,7 +1062,7 @@ logs:
   server (or the mod) may still be writing, and it is the one an admin looks at first. All older matches are archived.
   The built-in default list for the DayZ product driver contains only the server's own files (the first five lines above, exact names confirmed in S9). BattlEye and mod logs are site config.
 * **Safety:** only regular files strictly below `profiles/` are touched. dzo does not follow symlinks and never matches a file modified within `min_age`. A hard exclusion
-  list covers what dzo or the game need (`serverDZ.cfg`, the BattlEye config, `$profile:dzo-admin/`, mod `config.json` files the render manages, `*.json`/`*.xml`
+  list covers what dzo or the game need (`serverDZ.cfg`, the BattlEye config, `$profile:dzo/admin/`, mod `config.json` files the render manages, `*.json`/`*.xml`
   mod configs unless a rule explicitly names them). A rule that matches an excluded file is a validation error, not a silent skip.
 * **Move:** the archive is outside the instance subvolume, so a plain rename would cross a btrfs subvolume boundary (EXDEV). dzo streams each file through gzip into
   `${paths.logs}/<name>/<YYYY-MM-DD>/<relative path>.gz` (or a reflink copy with `compress: none`), fsyncs, then unlinks the original. Name clashes get a numeric suffix.
@@ -1260,7 +1260,7 @@ them: **spawn items for a player**, **teleport players** (click on the map), **r
   (with the `prefix` header; no signing needed for a servermod) and publishes a release archive. Sites reference it in `site.yaml` as
   `local_mods: {dzo-admin: {url: …, sha256: …}}` and enable it per instance with `{local: dzo-admin, server: true}`. An upgrade is a reviewed
   commit that bumps URL + hash, rolled out under the update policy. Developers point `path:` at their build output. dzo recognises the mod by its
-  `CfgPatches` class, not by its name or source, and then writes `$profile:dzo-admin/config.json` in the render. Version skew between `dzo` and the mod
+  `CfgPatches` class, not by its name or source, and then writes `$profile:dzo/admin/config.json` in the render. Version skew between `dzo` and the mod
   is handled by the `hello` protocol version.
 * Every `dzo-admin` build is **boot-tested** (§C22) before release, as the skill demands for any mod change: the script module count
   rises over the vanilla baseline, there are no `SCRIPT (E)` lines, the mod's own "loaded" line is printed, and the mod registers with the
@@ -1283,8 +1283,8 @@ them: **spawn items for a player**, **teleport players** (click on the map), **r
   with `network: host`; the host-mapped gateway address pasta provides, i.e. `host.containers.internal`, with `network: publish`; the render step writes
   the right URL into the mod config, verified in S5)
   via the engine's `RestApi`/`RestContext`. It pushes state and polls or long-polls pending actions, then posts the results.
-  The per-instance token and endpoint are in `$profile:dzo-admin/config.json`, written by the render step (not in git).
-  Fallback transport: a file spool in `$profile:dzo-admin/{in,out}/`. Inbound connections into the game process are never needed.
+  The per-instance token and endpoint are in `$profile:dzo/admin/config.json`, written by the render step (not in git).
+  Fallback transport: a file spool in `$profile:dzo/admin/{in,out}/`. Inbound connections into the game process are never needed.
 ### Map marker API for other mods
 
 `dzo-admin` is a **platform for map content**, not only for its own data. Other mods (UFO crashes, AI convoys, helicopter
@@ -1333,7 +1333,7 @@ crashes, camp fires, trader zones, events, …) must be able to put markers on t
    mechanism for the soft dependency is verified with the `dayz-dev` skill before the API is frozen. `#ifdef` on another mod's define is
    doubtful across independent PBOs without a config-level dependency, so the planned fallback is a **runtime lookup** (resolve the `DZOAdmin_Map`
    type by name and call it only if present, verified in S8). The **file drop** (3.) always works as the lowest common denominator, and the API is versioned (`DZOAdmin_Map.API_VERSION`).
-3. **File drop (no script coupling at all):** a mod or external tool writes `$profile:dzo-admin/markers/<layer>.json`
+3. **File drop (no script coupling at all):** a mod or external tool writes `$profile:dzo/admin/markers/<layer>.json`
    (same marker schema). `dzo-admin` (or `dzo` directly, since it can read the profile dir) picks it up. This suits tools and scripts outside the game,
    and mods that already write JSON.
 
@@ -1364,7 +1364,7 @@ trains (HypeTrain), infected/animal hordes, plus modded events registered by mod
 1. **Event → class mapping generated by dzo:** dzo already renders the effective CE files (vanilla + `mod_*`/`custom_*` folders, §C6). From
    `events.xml` it derives, per event, the **child types** (`<child type="Wreck_UH1Y" …>`) and event metadata (name, category, lifetime, `active`
    flag, position source), and from `cfgeventspawns.xml` the configured spawn positions. This mapping is pushed to `dzo-admin` in its config
-   (`$profile:dzo-admin/events.json`), so no hand-written rules are needed and new mods' events work automatically.
+   (`$profile:dzo/admin/events.json`), so no hand-written rules are needed and new mods' events work automatically.
 2. **In the game:** `dzo-admin` registers the relevant classes (same efficient hooking as the class-watch rules of the marker API, §C16) and
    groups spawned entities into **event instances**: an entity of an event's child type near a configured event spawn position = one active event
    occurrence (id, event name, position, radius/extent, spawned_at, child entity count). Occurrences end when their entities are deleted or despawn

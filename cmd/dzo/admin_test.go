@@ -207,7 +207,7 @@ func TestRenderWritesAdminConfig(t *testing.T) {
 	if err != nil || !strings.Contains(out, "dzo-admin config written") {
 		t.Fatalf("render: %v\n%s", err, out)
 	}
-	conf, err := os.ReadFile(filepath.Join(root, "profiles", "dzo-admin", "config.json"))
+	conf, err := os.ReadFile(filepath.Join(root, "profiles", "dzo", "admin", "config.json"))
 	if err != nil || !strings.Contains(string(conf), "Land_*") || !strings.Contains(string(conf), "http://127.0.0.1:2400/") {
 		t.Fatalf("config.json: %v\n%s", err, conf)
 	}

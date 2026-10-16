@@ -73,7 +73,7 @@ func IconNameOK(s string) bool { return iconNameRe.MatchString(s) }
 // ColorOK reports whether s is a colour the map takes: #rgb, #rgba, #rrggbb, #rrggbbaa or a name.
 func ColorOK(s string) bool { return colorRe.MatchString(s) }
 
-// ModConfig is $profile:dzo-admin/config.json (DZOAdminConfig in the mod).
+// ModConfig is $profile:dzo/admin/config.json (DZOAdminConfig in the mod).
 type ModConfig struct {
 	Version      int         `json:"version"`
 	Endpoint     string      `json:"endpoint"`
@@ -149,8 +149,8 @@ func WriteModConfig(profilesDir, tokenDir, instance string, cfg ModConfig) error
 	if err := writeFile0600(filepath.Join(tokenDir, instance+".token"), []byte(tok+"\n")); err != nil {
 		return err
 	}
-	return writeFile0600(filepath.Join(profilesDir, "dzo-admin", "config.json"), append(b, '\n'))
+	return writeFile0600(filepath.Join(profilesDir, "dzo", "admin", "config.json"), append(b, '\n'))
 }
 
 // MarkerDir is where the file drop of an instance lives.
-func MarkerDir(profilesDir string) string { return filepath.Join(profilesDir, "dzo-admin", "markers") }
+func MarkerDir(profilesDir string) string { return filepath.Join(profilesDir, "dzo", "admin", "markers") }

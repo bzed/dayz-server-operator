@@ -77,7 +77,7 @@ type Hub struct {
 	// Allow and Deny are the class-name globs (trailing *) that limit item
 	// spawns on top of the mod's own check (§C16).
 	Allow, Deny []string
-	// MarkerDir is the file-drop directory ($profile:dzo-admin/markers).
+	// MarkerDir is the file-drop directory ($profile:dzo/admin/markers).
 	MarkerDir string
 	// Styles are the icon and colour the site config gives a layer (the watch rules); they fill in
 	// what a marker leaves unset, before the defaults of the layers the mod defines do.

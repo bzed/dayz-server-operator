@@ -121,7 +121,7 @@ grep -q '^BattlEye' "$cfg" || sed -i '1i BattlEye = 0;' "$cfg" # the headless cl
 sed -i 's/^BattlEye = .*/BattlEye = 0;/; s/^password = .*/password = "";/' "$cfg"
 
 # The operator side: a config, a one-instance site, the instance's mod token and an API token.
-mkdir -p "$work/site/instances/t1" "$work/secrets/admin" "$tree/profiles/dzo-admin"
+mkdir -p "$work/site/instances/t1" "$work/secrets/admin" "$tree/profiles/dzo/admin"
 cp -r scripts/findfile-site/integrations "$work/site/"
 echo 'local_mods: {}' >"$work/site/site.yaml"
 cat >"$work/site/instances/t1/instance.yaml" <<Y
@@ -138,8 +138,8 @@ serve: {installation: t, listen: "127.0.0.1:$api", mod_listen: "127.0.0.1:$mod"}
 Y
 tok=$(head -c16 /dev/urandom | od -An -tx1 | tr -d ' \n')
 echo "$tok" >"$work/secrets/admin/t1.token"
-echo "{\"version\":1,\"endpoint\":\"http://127.0.0.1:$mod/\",\"token\":\"$tok\",\"sync_ms\":500,\"players_s\":2,\"vehicles_s\":5,\"markers_s\":10,\"events_s\":5,\"allow_spawn\":true,\"watch\":[{\"layer\":\"Police cars\",\"classes\":[\"Land_Wreck_sed01_aban1_police*\"],\"icon\":\"car\",\"label\":\"Police car\"},{\"layer\":\"lights\",\"classes\":[\"Chemlight_Red\"],\"icon\":\"flare\",\"label\":\"watched chemlight\",\"max\":20}]}" >"$tree/profiles/dzo-admin/config.json"
-chmod 600 "$work/secrets/admin/t1.token" "$tree/profiles/dzo-admin/config.json"
+echo "{\"version\":1,\"endpoint\":\"http://127.0.0.1:$mod/\",\"token\":\"$tok\",\"sync_ms\":500,\"players_s\":2,\"vehicles_s\":5,\"markers_s\":10,\"events_s\":5,\"allow_spawn\":true,\"watch\":[{\"layer\":\"Police cars\",\"classes\":[\"Land_Wreck_sed01_aban1_police*\"],\"icon\":\"car\",\"label\":\"Police car\"},{\"layer\":\"lights\",\"classes\":[\"Chemlight_Red\"],\"icon\":\"flare\",\"label\":\"watched chemlight\",\"max\":20}]}" >"$tree/profiles/dzo/admin/config.json"
+chmod 600 "$work/secrets/admin/t1.token" "$tree/profiles/dzo/admin/config.json"
 "$work/dzo" token create tester --role admin --config "$work/config.yaml" >"$work/api.token"
 chmod 600 "$work/api.token"
 dzo() { "$work/dzo" "$@" --config "$work/config.yaml" --token-file "$work/api.token"; }

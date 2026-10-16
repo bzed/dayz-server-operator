@@ -87,7 +87,7 @@ func fakeServer() {
 	if fake["mdmp"] {
 		_ = os.WriteFile(filepath.Join(profiles, "x.mdmp"), []byte("dump"), 0o600)
 	}
-	if b, err := os.ReadFile(filepath.Join(profiles, "dzo-admin", "config.json")); err == nil && !fake["noadmin"] {
+	if b, err := os.ReadFile(filepath.Join(profiles, "dzo", "admin", "config.json")); err == nil && !fake["noadmin"] {
 		var c admin.ModConfig
 		if json.Unmarshal(b, &c) == nil {
 			body, _ := json.Marshal(admin.SyncRequest{Token: c.Token, Proto: admin.ProtocolVersion, ModVersion: "t", World: "w", Hello: true})

@@ -58,7 +58,7 @@ Run ``dzo mod add dzo-admin --instance deerisle --server`` to install it, then
 start the instance. dzo recognises the mod by the name ``dzo-admin``.
 
 Every time the instance starts, ``dzo instance render`` writes the mod's
-configuration to ``profiles/dzo-admin/config.json`` with a **new token** (the
+configuration to ``profiles/dzo/admin/config.json`` with a **new token** (the
 file is readable by the owner only and is not part of the site repository). The
 token is the only protection of the endpoint, so keep ``serve.mod_listen`` on
 the local host. With ``network: host`` the mod connects to ``127.0.0.1``; with
@@ -268,7 +268,7 @@ dependency.
 3. File drop
 ~~~~~~~~~~~~
 
-Write ``$profile:dzo-admin/markers/<layer>.json``, either a JSON list of
+Write ``$profile:dzo/admin/markers/<layer>.json``, either a JSON list of
 markers or ``{"markers": [...]}``. The layer name defaults to the file name,
 and dzo re-reads the files every few seconds. This works for any mod or
 external tool, and also when the mod cannot use ``#ifdef``.

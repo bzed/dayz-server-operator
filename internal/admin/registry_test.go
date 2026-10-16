@@ -224,7 +224,7 @@ func TestWriteModConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 	var got ModConfig
-	b, err := os.ReadFile(filepath.Join(profiles, "dzo-admin", "config.json"))
+	b, err := os.ReadFile(filepath.Join(profiles, "dzo", "admin", "config.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -241,11 +241,11 @@ func TestWriteModConfig(t *testing.T) {
 	if err := WriteModConfig(profiles, tokens, "alpha", in); err != nil {
 		t.Fatal(err)
 	}
-	b2, _ := os.ReadFile(filepath.Join(profiles, "dzo-admin", "config.json"))
+	b2, _ := os.ReadFile(filepath.Join(profiles, "dzo", "admin", "config.json"))
 	if string(b2) == string(b) {
 		t.Fatal("token must rotate on every write")
 	}
-	if MarkerDir("/p") != "/p/dzo-admin/markers" {
+	if MarkerDir("/p") != "/p/dzo/admin/markers" {
 		t.Fatal("MarkerDir")
 	}
 	if err := WriteModConfig(filepath.Join(tokens, "alpha.token", "x"), tokens, "b", in); err == nil {

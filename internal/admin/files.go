@@ -15,7 +15,7 @@ import (
 const fileMarkerTTL = 5 * time.Second
 
 // fileMarkers reads the file drop (§C16 path 3): any mod or tool writes
-// <layer>.json into $profile:dzo-admin/markers/, either a JSON array of
+// <layer>.json into $profile:dzo/admin/markers/, either a JSON array of
 // markers or {"markers": [...]}. The layer defaults to the file name.
 type fileMarkers struct {
 	mu      sync.Mutex

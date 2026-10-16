@@ -89,7 +89,7 @@ detection exists as a Discord event — define the automatic de-escalation, not 
    itself. Then a daemon restart can never double-fire.
 3. **`dzo-admin` endpoint under `publish` networking** (§C16): the mod talks to `127.0.0.1` — true
    only in `host` mode. Under pasta the host is reachable via the gateway address pasta provides;
-   the rendered `$profile:dzo-admin/config.json` must be network-mode aware. Also note: in host
+   the rendered `$profile:dzo/admin/config.json` must be network-mode aware. Also note: in host
    mode every process on the host shares that endpoint's network namespace — the instance token is
    the only guard; say so explicitly in §C13.
 4. **Quadlet sketch network deps** (§C5): `After=network-online.target`/`Wants=…` in a **user**
