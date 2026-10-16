@@ -221,8 +221,12 @@ installation (default: the local ``serve.listen``). They need the
      - teleport a player
    * - ``dzo player give <instance> <steamid> <class> [--qty <n>] [--health <0..1>] [--target inventory|hands|ground] [--attachments]``
      - spawn an item for a player
+   * - ``dzo player spawn <instance> <class> --x <x> --z <z> [--qty <n>] [--health <0..1>] [--attachments]``
+     - spawn an item on the ground at a position; a quantity above the stack size makes more stacks
    * - ``dzo vehicle list <instance>``
      - persistent vehicles
+   * - ``dzo vehicle spawn <instance> <class> --x <x> --z <z>``
+     - spawn a vehicle with its parts and fuel on the ground at a position
    * - ``dzo vehicle repair <instance> <id> [--scope all|engine|parts|wheels|fluids|missing]``
      - repair a vehicle; ``all`` also refuels it and fits missing parts
    * - ``dzo vehicle flip <instance> <id>``

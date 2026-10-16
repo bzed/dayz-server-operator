@@ -18,7 +18,7 @@ admin actions:
 * direct messages and broadcasts (in chat, as an important message, or as an
   on-screen notification),
 * teleport (to a map position or to another player),
-* spawn items into a player's inventory, hands or on the ground,
+* spawn items into a player's inventory, hands or on the ground, and items and vehicles at a point of the map,
 * repair vehicles (including refuelling and fitting missing parts), flip them upright, or delete them.
 
 The mod connects *out* to dzo: about once a second it posts what changed and the

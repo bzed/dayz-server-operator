@@ -72,6 +72,8 @@ All paths start with ``/api/v1``. Responses are JSON.
      - markers you may see
    * - ``GET /instances/<i>/types[?q=<text>&limit=<n>]``
      - search the item classes the server reported: public (scope 2) items, weapons, magazines and clothing, without the classes that crash a vanilla server or raise script errors when they are created (found with ``scripts/test-spawnable.sh``; run it for a server with mods). The web interface offers them as you type, and ``spawn_item`` refuses any class that is not in the list
+   * - ``GET /instances/<i>/vehicle-types[?q=<text>&limit=<n>]``
+     - search the vehicle classes the server reported: public cars, boats and helicopters of the game and the loaded mods. ``spawn-vehicle`` refuses any class that is not in the list. The mod does not know which of a mod's vehicles are broken: try them on a test server
    * - ``GET /instances/<i>/stream``
      - server-sent events ``status``, ``players``, ``vehicles``, ``markers``,
        ``events`` and ``result``; the current state first, then every change
@@ -105,7 +107,14 @@ Acting
        ``health`` 0 to 1; ``attachments`` true: the item gets the kit the game's own debug spawn
        gives it, such as a battery for a flashlight; when that leaves it bare, the mod fits the parts it
        found in the item configs, cached in ``profiles/dzo/admin/kits.json`` and scanned again when the
-       class list changes or a part no longer fits)
+       class list changes or a part no longer fits). A ``quantity`` above what one stack holds makes
+       as many stacks as it needs, at most 50
+   * - ``POST /instances/<i>/spawn`` ``{"type", "quantity", "health", "x", "z", "attachments"}``
+     - ``operator``
+     - spawn an item on the ground at a position, as ``give`` with ``target`` ``ground`` does at a player
+   * - ``POST /instances/<i>/spawn-vehicle`` ``{"type", "x", "z"}``
+     - ``operator``
+     - spawn a vehicle on the ground at a position, with the parts and fuel of the game's debug spawn
    * - ``POST /instances/<i>/vehicles/<id>/repair`` ``{"scope"}``
      - ``operator``
      - ``all`` (repair, refuel and fit missing parts), ``engine``, ``parts``,

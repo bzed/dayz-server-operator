@@ -112,7 +112,7 @@ Live map
    there; the crosshair and the coordinate readout show where it will land, and
    you confirm before anything happens. **Right-click** (or click, or press the
    menu key on a focused icon) for the actions on a player, vehicle, event or
-   marker; right-click empty ground to teleport a player there. Menu entries
+   marker; right-click empty ground to teleport a player there, spawn an item there (as many stacks as the quantity needs) or spawn a vehicle there. Menu entries
    you lack the role for are not shown. See :doc:`admin-map`.
 
 Audit log

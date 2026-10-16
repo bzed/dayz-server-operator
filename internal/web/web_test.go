@@ -177,6 +177,9 @@ func TestInstanceAndFragments(t *testing.T) {
 	if !strings.Contains(body, `<option value="AKM">`) {
 		t.Fatalf("types: %s", body)
 	}
+	if _, body, _ = e.get("/b/main/i/alpha/vehicle-types?type=zz"); strings.Contains(body, "AKM") {
+		t.Fatalf("vehicle types: %s", body)
+	}
 	if _, body, _ = e.get("/b/main/i/zzz"); !strings.Contains(body, "unknown instance") {
 		t.Fatalf("unknown instance: %s", body)
 	}
@@ -249,6 +252,8 @@ func TestActions(t *testing.T) {
 		"/b/main/i/alpha/players/7656/message":    {"text": {"hello"}},
 		"/b/main/i/alpha/players/7656/teleport":   {"x": {"10"}, "z": {"20"}},
 		"/b/main/i/alpha/players/7656/give":       {"type": {"AKM"}, "quantity": {"1"}, "health": {"0.5"}, "target": {"hands"}},
+		"/b/main/i/alpha/spawn":                   {"type": {"AKM"}, "quantity": {"20"}, "x": {"10"}, "z": {"20"}},
+		"/b/main/i/alpha/spawn-vehicle":           {"type": {"AKM"}, "x": {"10"}, "z": {"20"}},
 		"/b/main/i/alpha/vehicles/1.2.3.4/repair": {"scope": {"missing"}},
 		"/b/main/i/alpha/vehicles/1.2.3.4/flip":   {},
 		"/b/main/i/alpha/vehicles/1.2.3.4/delete": {"force": {"1"}},

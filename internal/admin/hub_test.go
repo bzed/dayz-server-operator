@@ -177,6 +177,11 @@ func TestValidate(t *testing.T) {
 		{"spawn target", Command{Kind: KindSpawnItem, SteamID: "1", Type: "AKM", Target: "moon"}, "target"},
 		{"spawn health", Command{Kind: KindSpawnItem, SteamID: "1", Type: "AKM", Health: 2}, "health"},
 		{"spawn no class", Command{Kind: KindSpawnItem, SteamID: "1"}, "needs type"},
+		{"spawn at nowhere", Command{Kind: KindSpawnItem, Type: "AKM"}, "position"},
+		{"spawn at into hands", Command{Kind: KindSpawnItem, Type: "AKM", X: 1, Z: 2, Target: "hands"}, "ground"},
+		{"spawn vehicle no class", Command{Kind: KindSpawnVehicle, X: 1, Z: 2}, "needs type"},
+		{"spawn vehicle denied", Command{Kind: KindSpawnVehicle, Type: "Land_Wall", X: 1, Z: 2}, "denied"},
+		{"spawn vehicle nowhere", Command{Kind: KindSpawnVehicle, Type: "AKM"}, "position"},
 		{"repair scope", Command{Kind: KindVehicleRepair, Vehicle: "v", Scope: "x"}, "scope"},
 		{"repair no vehicle", Command{Kind: KindVehicleRepair}, "vehicle"},
 		{"flip no vehicle", Command{Kind: KindVehicleFlip}, "vehicle"},
@@ -192,6 +197,8 @@ func TestValidate(t *testing.T) {
 	for _, ok := range []Command{
 		{Kind: KindSpawnItem, SteamID: "1", Type: "AKM"},
 		{Kind: KindSpawnItem, SteamID: "1", Type: "Ammo_556x45", Target: "hands", Quantity: 5, Health: 1},
+		{Kind: KindSpawnItem, Type: "AKM", X: 100, Z: 200, Quantity: 20},
+		{Kind: KindSpawnVehicle, Type: "AKM", X: 100, Z: 200},
 		{Kind: KindVehicleRepair, Vehicle: "v", Scope: "wheels"},
 		{Kind: KindVehicleRepair, Vehicle: "v", Scope: "missing"},
 		{Kind: KindVehicleFlip, Vehicle: "v"},
@@ -200,6 +207,41 @@ func TestValidate(t *testing.T) {
 		if _, err := h.Enqueue(ok); err != nil {
 			t.Errorf("%+v: %v", ok, err)
 		}
+	}
+}
+
+func TestSpawnAtPositionDefaultsToGround(t *testing.T) {
+	h, _ := testHub()
+	hello(h)
+	if _, err := h.Enqueue(Command{Kind: KindSpawnItem, Type: "AKM", X: 5, Z: 6}); err != nil {
+		t.Fatal(err)
+	}
+	r := h.Sync(SyncRequest{Proto: 1})
+	if len(r.Commands) != 1 || r.Commands[0].Target != "ground" || r.Commands[0].SteamID != "" {
+		t.Fatalf("commands = %+v", r.Commands)
+	}
+}
+
+func TestSpawnVehicleChecksVehicleTypes(t *testing.T) {
+	h, _ := testHub()
+	h.Sync(SyncRequest{Proto: 1, Hello: true, Types: &TypesChunk{Hash: "i", Offset: 0, Total: 1, Names: []string{"AKM"}},
+		VehicleTypes: &TypesChunk{Hash: "v", Offset: 0, Total: 2, Names: []string{"Offroad_02", "Hatchback_02"}}})
+	if got := h.VehicleTypes("off", 5); len(got) != 1 || got[0] != "Offroad_02" {
+		t.Fatalf("search = %v", got)
+	}
+	if _, err := h.Enqueue(Command{Kind: KindSpawnVehicle, Type: "Offroad_02", X: 1, Z: 2}); err != nil {
+		t.Fatal(err)
+	}
+	// An item is no vehicle, and a vehicle is no item.
+	if _, err := h.Enqueue(Command{Kind: KindSpawnVehicle, Type: "AKM", X: 1, Z: 2}); err == nil || !strings.Contains(err.Error(), "unknown class") {
+		t.Fatalf("item as vehicle: %v", err)
+	}
+	if _, err := h.Enqueue(Command{Kind: KindSpawnItem, Type: "Offroad_02", X: 1, Z: 2}); err == nil || !strings.Contains(err.Error(), "unknown class") {
+		t.Fatalf("vehicle as item: %v", err)
+	}
+	// A vehicle chunk that does not follow the ones before asks the mod to start again.
+	if r := h.Sync(SyncRequest{Proto: 1, VehicleTypes: &TypesChunk{Hash: "w", Offset: 3, Total: 9, Names: []string{"x"}}}); !r.ResendTypes {
+		t.Fatal("a broken vehicle list must be sent again")
 	}
 }
 

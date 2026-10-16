@@ -199,6 +199,22 @@ func (c *Client) Teleport(ctx context.Context, name, steamID string, x, z float6
 	return c.action(ctx, http.MethodPost, inst(name)+"/players/"+url.PathEscape(steamID)+"/teleport", body)
 }
 
+// VehicleTypes searches the vehicle classes the map can spawn.
+func (c *Client) VehicleTypes(ctx context.Context, name, q string, limit int) (out []string, err error) {
+	return out, c.get(ctx, fmt.Sprintf("%s/vehicle-types?q=%s&limit=%d", inst(name), url.QueryEscape(q), limit), &out)
+}
+
+// Spawn puts an item on the ground at a position.
+func (c *Client) Spawn(ctx context.Context, name, class string, quantity, health, x, z float64, attachments bool) (api.ActionResult, error) {
+	body := map[string]any{"type": class, "quantity": quantity, "health": health, "x": x, "z": z, "attachments": attachments}
+	return c.action(ctx, http.MethodPost, inst(name)+"/spawn", body)
+}
+
+// SpawnVehicle puts a vehicle on the ground at a position.
+func (c *Client) SpawnVehicle(ctx context.Context, name, class string, x, z float64) (api.ActionResult, error) {
+	return c.action(ctx, http.MethodPost, inst(name)+"/spawn-vehicle", map[string]any{"type": class, "x": x, "z": z})
+}
+
 // Give spawns an item for a player.
 func (c *Client) Give(ctx context.Context, name, steamID, class string, quantity, health float64, target string, attachments bool) (api.ActionResult, error) {
 	body := map[string]any{"type": class, "quantity": quantity, "health": health, "target": target, "attachments": attachments}

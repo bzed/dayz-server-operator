@@ -78,6 +78,53 @@ s=0
 waitfor 30 "! '$work/dzo' vehicle list t1 --config '$work/config.yaml' --token-file '$work/api.token' | grep -q '^$bike '" || s=1
 verdict "motorbike: delete" $s
 
+# Missing parts: bare cars (as the economy leaves them) get their parts, the headlights in both slots and the battery.
+touch "$tree/profiles/dzo_probe/bare"
+s=0
+waitfor 60 "[ \$('$work/dzo' vehicle list t1 --config '$work/config.yaml' --token-file '$work/api.token' | awk '\$3 ~ /^(Offroad_02|Hatchback_02|CivilianSedan|OffroadHatchback)\$/ && \$4 > 7390 && \$4 < 7440' | wc -l) = 4 ]" || s=1
+verdict "repair: the bare cars are listed" $s
+for id in $(vl | awk '$3 ~ /^(Offroad_02|Hatchback_02|CivilianSedan|OffroadHatchback)$/ && $4 > 7390 && $4 < 7440 {print $1}'); do
+	"$work/dzo" vehicle repair t1 "$id" --scope missing --config "$work/config.yaml" --token-file "$work/api.token" >/dev/null || s=1
+done
+verdict "repair: add missing parts to the bare cars" $s
+sleep 2
+touch "$tree/profiles/dzo_probe/parts"
+waitfor 20 "grep -q 'DZO-PROBE parts bare' '$script'" || true
+sleep 4
+for car in Offroad_02 Hatchback_02 CivilianSedan OffroadHatchback; do
+	s=0
+	line=$(grep "DZO-PROBE parts bare $car " "$script" | tail -1 || true)
+	[ "$(grep -o 'HeadlightH7' <<<"$line" | wc -l || true)" = 2 ] || s=1
+	grep -Eq 'CarBattery|TruckBattery' <<<"$line" || s=1
+	[ "$s" = 0 ] || echo "$line" >&2
+	verdict "repair: $car has both headlights and the battery" $s
+done
+
+# A vehicle spawned on the map comes with its parts.
+s=0
+"$work/dzo" vehicle spawn t1 Offroad_02 --x 7600 --z 7600 --config "$work/config.yaml" --token-file "$work/api.token" >/dev/null || s=1
+verdict "spawn vehicle: at a position" $s
+touch "$tree/profiles/dzo_probe/parts"
+sleep 5
+s=0
+line=$(grep "DZO-PROBE parts spawned Offroad_02 " "$script" | tail -1 || true)
+[ "$(grep -o 'HeadlightH7' <<<"$line" | wc -l)" = 2 ] && grep -q 'CarBattery' <<<"$line" || s=1
+[ "$s" = 0 ] || echo "$line" >&2
+verdict "spawn vehicle: with both headlights and the battery" $s
+
+# More than a stack holds is more stacks, on the ground at a position.
+s=0
+"$work/dzo" player spawn t1 Nail --qty 500 --x 7450 --z 7450 --config "$work/config.yaml" --token-file "$work/api.token" >/dev/null || s=1
+verdict "spawn item: at a position" $s
+touch "$tree/profiles/dzo_probe/ground"
+sleep 5
+s=0
+line=$(grep 'DZO-PROBE ground Nail' "$script" | tail -1 || true)
+case $line in *'quantity=500'*) ;; *) s=1 ;; esac
+case $line in *'stacks=1 '*) s=1 ;; esac
+[ "$s" = 0 ] || echo "$line" >&2
+verdict "spawn item: 500 nails are several stacks that add up" $s
+
 # Central Economy events are found by the class of their object: a plain building object (no script class of its
 # own, like the wrecks the events place) is a marker when a watch rule selects its class, wildcards included.
 touch "$tree/profiles/dzo_probe/event"

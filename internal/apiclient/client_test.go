@@ -95,6 +95,8 @@ func TestActions(t *testing.T) {
 		"tp":        func() (api.ActionResult, error) { return c.Teleport(ctx, "alpha", "1", 10, 20, "") },
 		"tp-player": func() (api.ActionResult, error) { return c.Teleport(ctx, "alpha", "1", 0, 0, "2") },
 		"give":      func() (api.ActionResult, error) { return c.Give(ctx, "alpha", "1", "AKM", 1, 1, "hands", true) },
+		"spawn":     func() (api.ActionResult, error) { return c.Spawn(ctx, "alpha", "AKM", 20, 1, 10, 20, false) },
+		"spawn-veh": func() (api.ActionResult, error) { return c.SpawnVehicle(ctx, "alpha", "AKM", 10, 20) },
 		"repair":    func() (api.ActionResult, error) { return c.Repair(ctx, "alpha", "v", "") },
 		"delete":    func() (api.ActionResult, error) { return c.DeleteVehicle(ctx, "alpha", "v", true) },
 	} {

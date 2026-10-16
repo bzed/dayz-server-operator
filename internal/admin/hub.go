@@ -106,6 +106,7 @@ type Hub struct {
 	layers    []Layer
 	events    []Event
 	types     typeList
+	vtypes    typeList
 	queue     []*pending
 	byID      map[string]*pending
 	subs      map[chan StreamEvent]struct{}
@@ -179,6 +180,11 @@ func (h *Hub) Sync(req SyncRequest) SyncReply {
 	}
 	if req.Types != nil {
 		if !h.types.add(*req.Types) {
+			h.wantTypes = true
+		}
+	}
+	if req.VehicleTypes != nil {
+		if !h.vtypes.add(*req.VehicleTypes) {
 			h.wantTypes = true
 		}
 	}
@@ -391,9 +397,20 @@ func (h *Hub) Markers(layer string) []Marker {
 func (h *Hub) Types(q string, limit int) []string {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	return h.types.search(q, limit)
+}
+
+// VehicleTypes searches the list of vehicle classes the mod can spawn, like Types.
+func (h *Hub) VehicleTypes(q string, limit int) []string {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.vtypes.search(q, limit)
+}
+
+func (t *typeList) search(q string, limit int) []string {
 	q = strings.ToLower(q)
 	out := []string{}
-	for _, n := range h.types.names {
+	for _, n := range t.names {
 		if q == "" || strings.Contains(strings.ToLower(n), q) {
 			out = append(out, n)
 			if limit > 0 && len(out) >= limit {
@@ -488,14 +505,21 @@ func (h *Hub) validate(c *Command) error {
 			return errors.New("admin: teleport needs a position or to_steam_id")
 		}
 	case KindSpawnItem:
-		if err := need("steam_id", c.SteamID); err != nil {
-			return err
-		}
 		if err := need("type", c.Type); err != nil {
 			return err
 		}
-		if err := h.checkClass(c.Type); err != nil {
+		if err := h.checkClass(c.Type, &h.types); err != nil {
 			return err
+		}
+		if c.SteamID == "" {
+			// No player: the item lies on the ground at the position.
+			if c.X == 0 && c.Z == 0 {
+				return errors.New("admin: spawn_item needs steam_id or a position")
+			}
+			if c.Target != "" && c.Target != "ground" {
+				return fmt.Errorf("admin: an item spawned at a position lies on the ground, not in %q", c.Target)
+			}
+			c.Target = "ground"
 		}
 		switch c.Target {
 		case "":
@@ -506,6 +530,16 @@ func (h *Hub) validate(c *Command) error {
 		}
 		if c.Health < 0 || c.Health > 1 || c.Quantity < 0 {
 			return errors.New("admin: health must be 0..1 and quantity not negative")
+		}
+	case KindSpawnVehicle:
+		if err := need("type", c.Type); err != nil {
+			return err
+		}
+		if err := h.checkClass(c.Type, &h.vtypes); err != nil {
+			return err
+		}
+		if c.X == 0 && c.Z == 0 {
+			return errors.New("admin: spawn_vehicle needs a position")
 		}
 	case KindVehicleRepair:
 		if err := need("vehicle", c.Vehicle); err != nil {
@@ -526,7 +560,7 @@ func (h *Hub) validate(c *Command) error {
 	return nil
 }
 
-func (h *Hub) checkClass(name string) error {
+func (h *Hub) checkClass(name string, list *typeList) error {
 	if !validClass(name) {
 		return fmt.Errorf("admin: %q is not a valid class name", name)
 	}
@@ -538,7 +572,7 @@ func (h *Hub) checkClass(name string) error {
 	if len(h.Allow) > 0 && !MatchGlobs(h.Allow, name) {
 		return fmt.Errorf("admin: class %q is not in the allow list of this instance", name)
 	}
-	if h.types.complete() && !h.types.has(name) {
+	if list.complete() && !list.has(name) {
 		return fmt.Errorf("admin: unknown class %q", name)
 	}
 	return nil

@@ -196,6 +196,8 @@ func TestActions(t *testing.T) {
 		{"POST", "/api/v1/instances/alpha/players/7656/teleport", `{"to_steam_id":"7657"}`},
 		{"POST", "/api/v1/instances/alpha/players/7656/teleport", `{"x":1,"z":2,"y":30}`},
 		{"POST", "/api/v1/instances/alpha/players/7656/give", `{"type":"AKM","quantity":1,"health":1,"target":"hands"}`},
+		{"POST", "/api/v1/instances/alpha/spawn", `{"type":"AKM","quantity":20,"x":100,"z":200}`},
+		{"POST", "/api/v1/instances/alpha/spawn-vehicle", `{"type":"AKM","x":100,"z":200}`},
 		{"POST", "/api/v1/instances/alpha/vehicles/v1/repair", `{"scope":"wheels"}`},
 		{"POST", "/api/v1/instances/alpha/vehicles/v1/repair", ``},
 		{"POST", "/api/v1/instances/alpha/vehicles/v1/flip", ``},
@@ -243,6 +245,8 @@ func TestActionFailures(t *testing.T) {
 		{"/api/v1/instances/alpha/message", `{"text":""}`, 400},
 		{"/api/v1/instances/alpha/message", `{"txt":"x"}`, 400},
 		{"/api/v1/instances/alpha/players/1/give", `{"type":"bad class"}`, 400},
+		{"/api/v1/instances/alpha/spawn", `{"type":"AKM"}`, 400},
+		{"/api/v1/instances/alpha/spawn-vehicle", `{"x":1,"z":2}`, 400},
 		{"/api/v1/instances/alpha/message?wait=abc", `{"text":"x"}`, 400},
 	} {
 		if c, b := e.do("POST", tc.path, op, tc.body); c != tc.want {
@@ -261,7 +265,7 @@ func TestPermissions(t *testing.T) {
 	if c, _ := e.do("POST", "/api/v1/instances/alpha/players/7656/message", mod, `{"text":"hi"}`); c != 200 {
 		t.Fatalf("moderator message: %d", c)
 	}
-	for _, p := range []string{"/message", "/players/7656/teleport", "/players/7656/give", "/vehicles/v1/repair"} {
+	for _, p := range []string{"/message", "/players/7656/teleport", "/players/7656/give", "/spawn", "/spawn-vehicle", "/vehicles/v1/repair"} {
 		if c, _ := e.do("POST", "/api/v1/instances/alpha"+p, mod, `{"text":"x"}`); c != 403 {
 			t.Fatalf("moderator %s: %d", p, c)
 		}

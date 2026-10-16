@@ -140,6 +140,7 @@ const (
 	KindMessage       = "message"
 	KindTeleport      = "teleport"
 	KindSpawnItem     = "spawn_item"
+	KindSpawnVehicle  = "spawn_vehicle"
 	KindVehicleRepair = "vehicle_repair"
 	KindVehicleFlip   = "vehicle_flip"
 	KindVehicleDelete = "vehicle_delete"
@@ -197,7 +198,9 @@ type SyncRequest struct {
 	Layers   []Layer     `json:"layers"`
 	Events   []Event     `json:"events"`
 	Types    *TypesChunk `json:"types"` // {} (Total 0) when there is no chunk
-	Results  []Result    `json:"results"`
+	// VehicleTypes is the same for the vehicle classes the map can spawn.
+	VehicleTypes *TypesChunk `json:"vehicle_types"`
+	Results      []Result    `json:"results"`
 }
 
 // SyncReply is the answer to a sync: the commands waiting for the mod.
@@ -243,5 +246,8 @@ func (r *SyncRequest) Normalise() {
 	}
 	if r.Types != nil && r.Types.Total == 0 {
 		r.Types = nil
+	}
+	if r.VehicleTypes != nil && r.VehicleTypes.Total == 0 {
+		r.VehicleTypes = nil
 	}
 }

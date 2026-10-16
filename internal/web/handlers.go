@@ -174,6 +174,16 @@ func (s *Server) typesFragment(w http.ResponseWriter, r *http.Request) {
 	s.render(w, "types", names)
 }
 
+// vehicleTypesFragment is typesFragment for the vehicle picker.
+func (s *Server) vehicleTypesFragment(w http.ResponseWriter, r *http.Request) {
+	_, c, inst, ok := s.target(w, r)
+	if !ok {
+		return
+	}
+	names, _ := c.VehicleTypes(r.Context(), inst, r.URL.Query().Get("type"), 30)
+	s.render(w, "types", names)
+}
+
 // mapSizes are the world sizes in metres of the vanilla maps. Unverified for
 // maps other than chernarusplus and enoch; unknown worlds use the default.
 var mapSizes = map[string]int{"chernarusplus": 15360, "enoch": 12800, "sakhal": 15360}
@@ -358,6 +368,14 @@ func actTeleport(r *http.Request, c *apiclient.Client, inst string) (api.ActionR
 
 func actGive(r *http.Request, c *apiclient.Client, inst string) (api.ActionResult, error) {
 	return c.Give(r.Context(), inst, r.PathValue("steamid"), strings.TrimSpace(r.PostFormValue("type")), num(r, "quantity"), num(r, "health"), r.PostFormValue("target"), r.PostFormValue("attachments") != "")
+}
+
+func actSpawn(r *http.Request, c *apiclient.Client, inst string) (api.ActionResult, error) {
+	return c.Spawn(r.Context(), inst, strings.TrimSpace(r.PostFormValue("type")), num(r, "quantity"), num(r, "health"), num(r, "x"), num(r, "z"), r.PostFormValue("attachments") != "")
+}
+
+func actSpawnVehicle(r *http.Request, c *apiclient.Client, inst string) (api.ActionResult, error) {
+	return c.SpawnVehicle(r.Context(), inst, strings.TrimSpace(r.PostFormValue("type")), num(r, "x"), num(r, "z"))
 }
 
 func actRepair(r *http.Request, c *apiclient.Client, inst string) (api.ActionResult, error) {

@@ -522,6 +522,19 @@
         { label: 'Teleport a player here…', min: 'operator', view: function () {
           return playerPicker('Teleport to ' + at.x + ' / ' + at.z, 'Pick the player to move', function (p) { teleport(p, at); });
         } },
+        { label: 'Spawn item here…', min: 'operator', view: function () {
+          return { title: 'Spawn at ' + at.x + ' / ' + at.z, submit: 'Spawn', fields: [
+            { name: 'type', label: 'Class name', required: true, suggest: '/types' },
+            { name: 'quantity', label: 'Quantity (as many stacks as it needs)', type: 'number', step: 'any', min: 0, pair: true },
+            { name: 'health', label: 'Health 0 to 1', type: 'number', step: '0.1', min: 0, max: 1, pair: true },
+            { name: 'attachments', label: 'Attachments', options: [['', 'none'], ['1', 'with its kit']] }
+          ], run: function (v) { act('/spawn', { type: v.type, quantity: v.quantity, health: v.health, attachments: v.attachments, x: at.x, z: at.z }); } };
+        } },
+        { label: 'Spawn vehicle here…', min: 'operator', view: function () {
+          return { title: 'Spawn vehicle at ' + at.x + ' / ' + at.z, submit: 'Spawn', fields: [
+            { name: 'type', label: 'Class name', required: true, suggest: '/vehicle-types' }
+          ], run: function (v) { act('/spawn-vehicle', { type: v.type, x: at.x, z: at.z }); } };
+        } },
         '-',
         { label: 'Centre here', run: function () { map.panTo(latlng, { animate: !still }); } },
         { label: 'Show the whole map', run: function () { toFit(true); } },

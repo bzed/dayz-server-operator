@@ -35,6 +35,22 @@ modded class MissionServer
 			DeleteFile("$profile:dzo_probe/bike");
 			DZOProbeBike();
 		}
+		if (FileExist("$profile:dzo_probe/bare"))
+		{
+			DeleteFile("$profile:dzo_probe/bare");
+			DZOProbeBareCars();
+		}
+		if (FileExist("$profile:dzo_probe/parts"))
+		{
+			DeleteFile("$profile:dzo_probe/parts");
+			DZOProbeParts(Vector(7400, 0, 7400), "bare");
+			DZOProbeParts(Vector(7600, 0, 7600), "spawned");
+		}
+		if (FileExist("$profile:dzo_probe/ground"))
+		{
+			DeleteFile("$profile:dzo_probe/ground");
+			DZOProbeGround();
+		}
 		array<Man> men = new array<Man>;
 		GetGame().GetPlayers(men);
 		foreach (Man m : men)
@@ -97,6 +113,57 @@ modded class MissionServer
 	{
 		Object bike = GetGame().CreateObjectEx("Motorbike_01_Blue", "7520 0 7500", ECE_PLACE_ON_SURFACE | ECE_CREATEPHYSICS);
 		Print("DZO-PROBE bike: " + bike);
+	}
+
+	// Cars without parts, as the economy leaves them, for dzo-admin's "add missing parts".
+	void DZOProbeBareCars()
+	{
+		TStringArray types = {"Offroad_02", "Hatchback_02", "CivilianSedan", "OffroadHatchback"};
+		for (int i = 0; i < types.Count(); i++)
+		{
+			vector pos = Vector(7400 + i * 8, 0, 7400);
+			pos[1] = GetGame().SurfaceY(pos[0], pos[2]);
+			Object car = GetGame().CreateObjectEx(types.Get(i), pos, ECE_PLACE_ON_SURFACE | ECE_CREATEPHYSICS);
+			Print("DZO-PROBE bare: " + types.Get(i) + " " + car);
+		}
+	}
+
+	// DZO-PROBE parts <tag> <type> <Part+Part+...>: the attachments of every car around pos.
+	void DZOProbeParts(vector pos, string tag)
+	{
+		array<Object> objs = new array<Object>;
+		array<CargoBase> proxies = new array<CargoBase>;
+		pos[1] = GetGame().SurfaceY(pos[0], pos[2]);
+		GetGame().GetObjectsAtPosition(pos, 40, objs, proxies);
+		foreach (Object o : objs)
+		{
+			CarScript car = CarScript.Cast(o);
+			if (!car)
+				continue;
+			string parts = "";
+			for (int a = 0; a < car.GetInventory().AttachmentCount(); a++)
+				parts = parts + car.GetInventory().GetAttachmentFromIndex(a).GetType() + "+";
+			Print("DZO-PROBE parts " + tag + " " + car.GetType() + " " + parts);
+		}
+	}
+
+	// DZO-PROBE ground <type> stacks=<n> quantity=<sum>: Nail items lying around 7450/7450.
+	void DZOProbeGround()
+	{
+		array<Object> objs = new array<Object>;
+		array<CargoBase> proxies = new array<CargoBase>;
+		GetGame().GetObjectsAtPosition(Vector(7450, GetGame().SurfaceY(7450, 7450), 7450), 20, objs, proxies);
+		int stacks = 0;
+		float qty = 0;
+		foreach (Object o : objs)
+		{
+			ItemBase ib = ItemBase.Cast(o);
+			if (!ib || ib.GetType() != "Nail")
+				continue;
+			stacks++;
+			qty = qty + ib.GetQuantity();
+		}
+		Print("DZO-PROBE ground Nail stacks=" + stacks + " quantity=" + qty);
 	}
 
 	void DZOProbeBoard(PlayerBase p)

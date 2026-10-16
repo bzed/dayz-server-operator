@@ -147,13 +147,33 @@ func newPlayerCmd() *cobra.Command {
 	give.Flags().Float64Var(&health, "health", 0, "health 0..1, 0 = default")
 	give.Flags().BoolVar(&attachments, "attachments", false, "with the kit the game's debug spawn gives it (a flashlight with its battery, a weapon with its parts)")
 	give.Flags().StringVar(&target, "target", "inventory", "inventory, hands or ground")
-	cmd.AddCommand(msg, tp, give)
+	var sx, sz float64
+	spawn := &cobra.Command{
+		Use: "spawn <instance> <class>", Short: "Spawn an item on the ground at a position", Args: cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			c, err := t.client()
+			if err != nil {
+				return err
+			}
+			r, err := c.Spawn(ctxOf(cmd), args[0], args[1], qty, health, sx, sz, attachments)
+			if err != nil {
+				return err
+			}
+			return printResult(cmd, r)
+		},
+	}
+	spawn.Flags().Float64Var(&qty, "qty", 0, "quantity, 0 = default; more than a stack holds makes more stacks")
+	spawn.Flags().Float64Var(&health, "health", 0, "health 0..1, 0 = default")
+	spawn.Flags().BoolVar(&attachments, "attachments", false, "with the kit the game's debug spawn gives it")
+	spawn.Flags().Float64Var(&sx, "x", 0, "world x (east)")
+	spawn.Flags().Float64Var(&sz, "z", 0, "world z (north)")
+	cmd.AddCommand(msg, tp, give, spawn)
 	return cmd
 }
 
 func newVehicleCmd() *cobra.Command {
 	var t apiTarget
-	cmd := &cobra.Command{Use: "vehicle", Short: "List, repair, flip and delete vehicles through dzo-admin (needs `dzo serve`)"}
+	cmd := &cobra.Command{Use: "vehicle", Short: "List, spawn, repair, flip and delete vehicles through dzo-admin (needs `dzo serve`)"}
 	t.flags(cmd)
 	cmd.AddCommand(&cobra.Command{
 		Use: "list <instance>", Short: "List vehicles", Args: cobra.ExactArgs(1),
@@ -202,6 +222,23 @@ func newVehicleCmd() *cobra.Command {
 			return printResult(cmd, r)
 		},
 	}
+	var vx, vz float64
+	spawn := &cobra.Command{
+		Use: "spawn <instance> <class>", Short: "Spawn a vehicle on the ground at a position", Args: cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			c, err := t.client()
+			if err != nil {
+				return err
+			}
+			r, err := c.SpawnVehicle(ctxOf(cmd), args[0], args[1], vx, vz)
+			if err != nil {
+				return err
+			}
+			return printResult(cmd, r)
+		},
+	}
+	spawn.Flags().Float64Var(&vx, "x", 0, "world x (east)")
+	spawn.Flags().Float64Var(&vz, "z", 0, "world z (north)")
 	var force bool
 	del := &cobra.Command{
 		Use: "delete <instance> <id>", Short: "Delete a vehicle", Args: cobra.ExactArgs(2),
@@ -218,6 +255,6 @@ func newVehicleCmd() *cobra.Command {
 		},
 	}
 	del.Flags().BoolVar(&force, "force", false, "delete even with players inside")
-	cmd.AddCommand(repair, flip, del)
+	cmd.AddCommand(spawn, repair, flip, del)
 	return cmd
 }

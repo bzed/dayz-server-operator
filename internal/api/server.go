@@ -124,6 +124,7 @@ func (s *Server) Handler() http.Handler {
 		writeJSON(w, 200, filterMarkers(c.hub.Markers(r.URL.Query().Get("layer")), c.who.Token.Role))
 	})
 	route("GET "+base+"/instances/{instance}/types", PermView, true, s.types)
+	route("GET "+base+"/instances/{instance}/vehicle-types", PermView, true, s.vehicleTypes)
 	route("GET "+base+"/instances/{instance}/stream", PermView, true, s.stream)
 	route("GET "+base+"/instances/{instance}/commands/{id}", PermView, true, s.command)
 
@@ -131,6 +132,8 @@ func (s *Server) Handler() http.Handler {
 	route("POST "+base+"/instances/{instance}/players/{steamid}/message", PermMessage, true, s.message)
 	route("POST "+base+"/instances/{instance}/players/{steamid}/teleport", PermTeleport, true, s.teleport)
 	route("POST "+base+"/instances/{instance}/players/{steamid}/give", PermSpawn, true, s.give)
+	route("POST "+base+"/instances/{instance}/spawn", PermSpawn, true, s.spawn)
+	route("POST "+base+"/instances/{instance}/spawn-vehicle", PermSpawn, true, s.spawnVehicle)
 	route("POST "+base+"/instances/{instance}/vehicles/{id}/repair", PermRepair, true, s.repair)
 	route("POST "+base+"/instances/{instance}/vehicles/{id}/flip", PermRepair, true, s.flip)
 	route("DELETE "+base+"/instances/{instance}/vehicles/{id}", PermDelete, true, s.deleteVehicle)
@@ -211,6 +214,10 @@ func (s *Server) audit(w http.ResponseWriter, r *http.Request, _ *call) {
 
 func (s *Server) types(w http.ResponseWriter, r *http.Request, c *call) {
 	writeJSON(w, 200, c.hub.Types(r.URL.Query().Get("q"), queryInt(r, "limit", 50, 500)))
+}
+
+func (s *Server) vehicleTypes(w http.ResponseWriter, r *http.Request, c *call) {
+	writeJSON(w, 200, c.hub.VehicleTypes(r.URL.Query().Get("q"), queryInt(r, "limit", 50, 500)))
 }
 
 func queryInt(r *http.Request, key string, def, max int) int {
@@ -381,7 +388,12 @@ func detail(c admin.Command) string {
 			return "to player " + c.ToSteamID
 		}
 		return fmt.Sprintf("to %.0f/%.0f", c.X, c.Z)
+	case admin.KindSpawnVehicle:
+		return fmt.Sprintf("%s at %.0f/%.0f", c.Type, c.X, c.Z)
 	case admin.KindSpawnItem:
+		if c.SteamID == "" {
+			return fmt.Sprintf("%s x%g at %.0f/%.0f", c.Type, c.Quantity, c.X, c.Z)
+		}
 		if c.Attachments {
 			return fmt.Sprintf("%s x%g into %s, with attachments", c.Type, c.Quantity, c.Target)
 		}
@@ -457,6 +469,40 @@ func (s *Server) give(w http.ResponseWriter, r *http.Request, c *call) {
 	}
 	cmd := admin.Command{Kind: admin.KindSpawnItem, SteamID: r.PathValue("steamid"), Type: b.Type, Quantity: b.Quantity, Health: b.Health, Target: b.Target, Attachments: b.Attachments}
 	s.run(w, r, c, cmd, "spawn_item", cmd.SteamID)
+}
+
+type spawnBody struct {
+	Type        string  `json:"type"`
+	Quantity    float64 `json:"quantity"`
+	Health      float64 `json:"health"`
+	X           float64 `json:"x"`
+	Z           float64 `json:"z"`
+	Attachments bool    `json:"attachments"`
+}
+
+// spawn puts an item on the ground at a position, the same as give with target ground does at a player.
+func (s *Server) spawn(w http.ResponseWriter, r *http.Request, c *call) {
+	var b spawnBody
+	if !decode(w, r, &b) {
+		return
+	}
+	cmd := admin.Command{Kind: admin.KindSpawnItem, Type: b.Type, Quantity: b.Quantity, Health: b.Health, X: b.X, Z: b.Z, Attachments: b.Attachments}
+	s.run(w, r, c, cmd, "spawn_item", fmt.Sprintf("%.0f/%.0f", b.X, b.Z))
+}
+
+type spawnVehicleBody struct {
+	Type string  `json:"type"`
+	X    float64 `json:"x"`
+	Z    float64 `json:"z"`
+}
+
+func (s *Server) spawnVehicle(w http.ResponseWriter, r *http.Request, c *call) {
+	var b spawnVehicleBody
+	if !decode(w, r, &b) {
+		return
+	}
+	cmd := admin.Command{Kind: admin.KindSpawnVehicle, Type: b.Type, X: b.X, Z: b.Z}
+	s.run(w, r, c, cmd, "spawn_vehicle", fmt.Sprintf("%.0f/%.0f", b.X, b.Z))
 }
 
 type repairBody struct {
