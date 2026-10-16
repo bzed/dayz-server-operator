@@ -206,6 +206,9 @@ type SyncReply struct {
 	// Hello asks the mod to send its hello again (with the world name): set while the hub
 	// does not know the world, for example after dzo serve restarted under a running server.
 	Hello bool `json:"hello,omitempty"`
+	// ResendTypes asks the mod to send the class list again from the start: a chunk arrived that
+	// does not follow the ones the hub has.
+	ResendTypes bool `json:"resend_types,omitempty"`
 }
 
 // Normalise drops the parts a mod request lists as not included. A request

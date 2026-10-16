@@ -71,7 +71,7 @@ All paths start with ``/api/v1``. Responses are JSON.
    * - ``GET /instances/<i>/map/markers[?layer=<name>]``
      - markers you may see
    * - ``GET /instances/<i>/types[?q=<text>&limit=<n>]``
-     - search the item classes the server reported
+     - search the item classes the server reported: public (scope 2) items, weapons, magazines and clothing with a model, without map objects (``Land_*``, ``StaticObj_*``, ``bldr_*``), debug and placing helpers, and the classes known to be unfinished or to crash a server. The web interface offers them as you type, and ``spawn_item`` refuses any class that is not in the list
    * - ``GET /instances/<i>/stream``
      - server-sent events ``status``, ``players``, ``vehicles``, ``markers``,
        ``events`` and ``result``; the current state first, then every change

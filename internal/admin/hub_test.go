@@ -339,3 +339,20 @@ func TestStatusCarriesTheGameTime(t *testing.T) {
 		t.Fatal("no status event for the new time")
 	}
 }
+
+func TestHubAsksForTheClassListAgainWhenAChunkDoesNotFit(t *testing.T) {
+	h := NewHub("x")
+	h.Sync(SyncRequest{Hello: true, World: "w"})
+	// the first chunk was lost (dzo restarted): the next one starts at 2
+	r := h.Sync(SyncRequest{Types: &TypesChunk{Hash: "h", Offset: 2, Total: 4, Names: []string{"c", "d"}}})
+	if !r.ResendTypes {
+		t.Fatal("a chunk that does not follow should make the hub ask again")
+	}
+	if r := h.Sync(SyncRequest{Types: &TypesChunk{Hash: "h", Offset: 0, Total: 4, Names: []string{"a", "b"}}}); r.ResendTypes {
+		t.Error("the restart of the transfer fits")
+	}
+	h.Sync(SyncRequest{Types: &TypesChunk{Hash: "h", Offset: 2, Total: 4, Names: []string{"c", "d"}}})
+	if got := h.Types("", 0); len(got) != 4 {
+		t.Errorf("types = %v", got)
+	}
+}

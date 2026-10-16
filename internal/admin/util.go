@@ -36,12 +36,14 @@ type typeList struct {
 	set   map[string]bool
 }
 
-func (t *typeList) add(c TypesChunk) {
+// add takes a chunk of the list and reports whether it fits; a chunk that does not (the first
+// ones were lost, for example when dzo restarted) means the mod has to start the transfer again.
+func (t *typeList) add(c TypesChunk) bool {
 	if c.Hash != t.hash || c.Offset == 0 {
 		*t = typeList{hash: c.Hash, total: c.Total}
 	}
 	if c.Offset != len(t.names) {
-		return // out of order: wait for a restart of the transfer
+		return false
 	}
 	t.names = append(t.names, c.Names...)
 	if t.complete() {
@@ -51,6 +53,7 @@ func (t *typeList) add(c TypesChunk) {
 			t.set[n] = true
 		}
 	}
+	return true
 }
 
 func (t *typeList) complete() bool { return t.total > 0 && len(t.names) == t.total }

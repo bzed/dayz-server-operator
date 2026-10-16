@@ -94,17 +94,19 @@ type Hub struct {
 	sentPlayers int
 	sentRestart time.Time
 	sentClock   string
-	gameTime    string
-	players     []Player
-	vehicles    []Vehicle
-	markers     []Marker
-	layers      []Layer
-	events      []Event
-	types       typeList
-	queue       []*pending
-	byID        map[string]*pending
-	subs        map[chan StreamEvent]struct{}
-	files       fileMarkers
+	// wantTypes asks the mod to send the class list again from the start.
+	wantTypes bool
+	gameTime  string
+	players   []Player
+	vehicles  []Vehicle
+	markers   []Marker
+	layers    []Layer
+	events    []Event
+	types     typeList
+	queue     []*pending
+	byID      map[string]*pending
+	subs      map[chan StreamEvent]struct{}
+	files     fileMarkers
 }
 
 // NewHub returns an empty hub for an instance.
@@ -166,13 +168,16 @@ func (h *Hub) Sync(req SyncRequest) SyncReply {
 		h.emit("events", append([]Event(nil), h.events...))
 	}
 	if req.Types != nil {
-		h.types.add(*req.Types)
+		if !h.types.add(*req.Types) {
+			h.wantTypes = true
+		}
 	}
 	for i := range req.Results {
 		h.finishLocked(req.Results[i])
 	}
 
-	reply := SyncReply{OK: true, Proto: ProtocolVersion, Commands: []Command{}, Hello: h.hello != nil && h.hello.World == ""}
+	reply := SyncReply{OK: true, Proto: ProtocolVersion, Commands: []Command{}, Hello: h.hello != nil && h.hello.World == "", ResendTypes: h.wantTypes}
+	h.wantTypes = false
 	live := h.queue[:0]
 	for _, p := range h.queue {
 		switch {
