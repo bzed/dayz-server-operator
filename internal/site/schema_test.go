@@ -409,3 +409,12 @@ func TestAgeParsesDaysAndDurations(t *testing.T) {
 		}
 	}
 }
+
+func TestAdminConfigVehicleKinds(t *testing.T) {
+	if err := (AdminConfig{VehicleKinds: map[string][]string{"bicycle": {"Tandem*"}, "helicopter": {"Heli_*"}}}).Validate(); err != nil {
+		t.Fatal(err)
+	}
+	if err := (AdminConfig{VehicleKinds: map[string][]string{"rocket": {"X"}}}).Validate(); err == nil {
+		t.Fatal("an unknown kind must fail: its icon would not exist")
+	}
+}

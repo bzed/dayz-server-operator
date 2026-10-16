@@ -395,9 +395,10 @@ type AdminConfig struct {
 	AllowSpawn   *bool    `yaml:"allow_spawn,omitempty"`
 	AllowClasses []string `yaml:"allow_classes,omitempty"`
 	DenyClasses  []string `yaml:"deny_classes,omitempty"`
-	// BicycleClasses are class-name globs of bicycles of other mods, on top of the ones dzo knows
-	// (admin.DefaultBicycleClasses): the map and the vehicle list show them as bicycles.
-	BicycleClasses []string `yaml:"bicycle_classes,omitempty"`
+	// VehicleKinds are class-name globs by kind (bicycle, helicopter) of other mods, on top of the
+	// classes dzo knows (admin.DefaultVehicleKinds): the map and the vehicle list show them with the
+	// icon of the kind.
+	VehicleKinds map[string][]string `yaml:"vehicle_kinds,omitempty"`
 }
 
 // MergeWatch combines the watch rules of the site defaults with an instance's, by layer name:
@@ -444,6 +445,11 @@ func (a AdminConfig) Validate() error {
 	for name, v := range map[string]int{"sync_ms": a.SyncMS, "players_s": a.PlayersS, "vehicles_s": a.VehiclesS, "markers_s": a.MarkersS, "events_s": a.EventsS} {
 		if v < 0 {
 			return fmt.Errorf("admin.%s must not be negative", name)
+		}
+	}
+	for k := range a.VehicleKinds {
+		if !admin.VehicleKindOK(k) {
+			return fmt.Errorf("admin.vehicle_kinds: unknown kind %q (bicycle or helicopter)", k)
 		}
 	}
 	return nil

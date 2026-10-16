@@ -13,12 +13,13 @@ var classRe = regexp.MustCompile(`^[A-Za-z0-9_]{1,128}$`)
 
 func validClass(s string) bool { return classRe.MatchString(s) }
 
-// MatchGlobs reports whether name equals one of the patterns, where a
-// trailing "*" makes a pattern a prefix match (the same rule the mod uses).
+// MatchGlobs reports whether name equals one of the patterns, where one "*"
+// stands for any text: "Old_Bike*", "*_DE", "StaticObj_Wreck_*_DE" (the same
+// rule the mod uses).
 func MatchGlobs(patterns []string, name string) bool {
 	for _, p := range patterns {
-		if strings.HasSuffix(p, "*") {
-			if strings.HasPrefix(name, strings.TrimSuffix(p, "*")) {
+		if before, after, ok := strings.Cut(p, "*"); ok {
+			if len(name) >= len(before)+len(after) && strings.HasPrefix(name, before) && strings.HasSuffix(name, after) {
 				return true
 			}
 		} else if p != "" && p == name {

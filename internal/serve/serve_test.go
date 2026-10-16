@@ -219,28 +219,29 @@ func TestAddHubsStylesTheVanillaEvents(t *testing.T) {
 	}
 }
 
-// The bicycle classes of a hub are the shipped ones plus the ones the instance lists.
-func TestAddHubsBicycleClasses(t *testing.T) {
+// The classes of a vehicle kind are the shipped ones plus the ones the instance lists.
+func TestAddHubsVehicleKinds(t *testing.T) {
 	cfg, tree := fixture(t)
 	reg := admin.NewRegistry(TokenDir(cfg))
 	if err := AddHubs(reg, cfg, tree); err != nil {
 		t.Fatal(err)
 	}
 	h, _ := reg.Hub("alpha")
-	h.Sync(admin.SyncRequest{Has: []string{"vehicles"}, Vehicles: []admin.Vehicle{{ID: "1", Kind: "car", Type: "Old_Bike_Red"}, {ID: "2", Kind: "car", Type: "TandemBike"}}})
+	h.Sync(admin.SyncRequest{Has: []string{"vehicles"}, Vehicles: []admin.Vehicle{{ID: "1", Kind: "car", Type: "Old_Bike_Red"}, {ID: "2", Kind: "car", Type: "TandemBike"}, {ID: "3", Kind: "car", Type: "ExpansionMh6"}}})
 	kinds := map[string]string{}
 	for _, v := range h.Vehicles() {
 		kinds[v.ID] = v.Kind
 	}
-	if kinds["1"] != "bicycle" || kinds["2"] != "car" {
+	if kinds["1"] != "bicycle" || kinds["2"] != "car" || kinds["3"] != "helicopter" {
 		t.Fatalf("shipped classes: %v", kinds)
 	}
 	insts, err := resolve.ResolveAll(cfg, tree)
 	if err != nil {
 		t.Fatal(err)
 	}
-	insts[0].Admin.BicycleClasses = []string{"TandemBike"}
-	if got := bicycleClasses(insts[0]); !slices.Contains(got, "TandemBike") || !slices.Contains(got, "Old_Bike*") {
-		t.Fatalf("bicycle classes %v", got)
+	insts[0].Admin.VehicleKinds = map[string][]string{"bicycle": {"TandemBike"}}
+	got := vehicleKinds(insts[0])
+	if !slices.Contains(got["bicycle"], "TandemBike") || !slices.Contains(got["bicycle"], "Old_Bike*") || !slices.Contains(got["helicopter"], "RFMosquito") {
+		t.Fatalf("vehicle kinds %v", got)
 	}
 }

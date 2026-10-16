@@ -262,6 +262,9 @@ func TestMatchGlobs(t *testing.T) {
 	if !MatchGlobs([]string{"A*", "B"}, "Abc") || !MatchGlobs([]string{"B"}, "B") || MatchGlobs([]string{"B"}, "Bc") || MatchGlobs([]string{""}, "") || MatchGlobs(nil, "x") {
 		t.Fatal("MatchGlobs")
 	}
+	if !MatchGlobs([]string{"Wreck_*_DE"}, "Wreck_Train_DE") || MatchGlobs([]string{"Wreck_*_DE"}, "Wreck_Train") || MatchGlobs([]string{"ab*ba"}, "aba") || !MatchGlobs([]string{"*_DE"}, "X_DE") {
+		t.Fatal("MatchGlobs with the star inside")
+	}
 }
 
 func TestHubAsksForTheHelloItMissed(t *testing.T) {
@@ -292,21 +295,24 @@ func TestSyncVehicleKind(t *testing.T) {
 	}
 }
 
-// Bicycles are cars to the game (the DayZBicycle mod derives them from CarScript); the hub gives the
-// vehicles whose class matches its bicycle classes the kind "bicycle", for the icon and the list.
-func TestSyncMarksBicyclesByClass(t *testing.T) {
+// Bicycles and the helicopters of mods are cars to the game (they derive from CarScript); the hub gives
+// the vehicles whose class matches the classes of a kind that kind, for the icon and the list.
+func TestSyncMarksVehicleKindsByClass(t *testing.T) {
 	h := NewHub("x")
-	h.Bicycles = DefaultBicycleClasses()
+	h.Kinds = DefaultVehicleKinds()
 	h.Sync(SyncRequest{Has: []string{"vehicles"}, Vehicles: []Vehicle{
 		{ID: "1", Kind: "car", Type: "Old_Bike_Red"}, {ID: "2", Kind: "car", Type: "Lady_Bicycle_Purple"},
 		{ID: "3", Kind: "car", Type: "Old_BikeArma"}, {ID: "4", Kind: "car", Type: "MMTArma"},
 		{ID: "5", Kind: "car", Type: "Offroad_02"}, {ID: "6", Kind: "motorbike", Type: "Old_Bike"},
+		{ID: "7", Kind: "car", Type: "ExpansionMh6_Wasp"}, {ID: "8", Kind: "car", Type: "ExpansionUh1h"},
+		{ID: "9", Kind: "car", Type: "ExpansionMerlin_Ion"}, {ID: "10", Kind: "car", Type: "ExpansionGyrocopter"},
+		{ID: "11", Kind: "car", Type: "RFMosquito"}, {ID: "12", Kind: "car", Type: "ExpansionUAZ"},
 	}})
 	got := map[string]string{}
 	for _, v := range h.Vehicles() {
 		got[v.ID] = v.Kind
 	}
-	want := map[string]string{"1": "bicycle", "2": "bicycle", "3": "bicycle", "4": "bicycle", "5": "car", "6": "motorbike"}
+	want := map[string]string{"1": "bicycle", "2": "bicycle", "3": "bicycle", "4": "bicycle", "5": "car", "6": "motorbike", "7": "helicopter", "8": "helicopter", "9": "helicopter", "10": "helicopter", "11": "helicopter", "12": "car"}
 	for id, k := range want {
 		if got[id] != k {
 			t.Errorf("vehicle %s: kind %q, want %q", id, got[id], k)

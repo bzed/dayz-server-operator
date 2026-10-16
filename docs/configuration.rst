@@ -237,7 +237,7 @@ Main keys:
    ``disabled``, the update intervals ``sync_ms`` (default 1000),
    ``players_s`` (5), ``vehicles_s`` (60), ``markers_s`` (10) and ``events_s``
    (30), ``allow_spawn`` (default true), and ``allow_classes`` /
-   ``deny_classes`` for item spawns, ``bicycle_classes`` for bicycles of other mods. ``admin_map.watch`` lists class watch rules.
+   ``deny_classes`` for item spawns, ``vehicle_kinds`` for the bicycles and helicopters of other mods. ``admin_map.watch`` lists class watch rules.
 
 ``updates.policy``
    What happens when a mod update is found: ``auto`` restarts the server

@@ -26,10 +26,16 @@ results of finished actions to ``dzo serve``, and gets the next actions in the
 reply. Nothing connects into the game server. The mod knows persistent
 vehicles of the car type (``CarScript``, which includes most modded cars) and, on DayZ 1.30,
 motorbikes (``MotorbikeScript``); both can be repaired and deleted. Each vehicle has a kind,
-``car``, ``motorbike`` or ``bicycle``, shown in the vehicle list; cars get a car icon, motorbikes a motorcycle icon and
-bicycles a bicycle icon on the map. Bicycles are cars to the game; dzo calls the vehicles of the DayZBicycle mod
-(``Old_Bike*``, ``Lady_Bicycle*``, ``MMTArma``, the classes of its event) bicycles, and ``admin.bicycle_classes`` adds
-the classes of other bicycle mods. Boats and helicopters are not reported yet.
+``car``, ``motorbike``, ``bicycle`` or ``helicopter``, shown in the vehicle list, with an icon of its own on the map.
+Bicycles and the helicopters of mods are cars to the game; dzo gives a car the kind whose class list has its class:
+``bicycle`` for the DayZBicycle mod (``Old_Bike*``, ``Lady_Bicycle*``, ``MMTArma``, the classes of its event) and
+``helicopter`` for the helicopters of DayZ Expansion (``ExpansionMh6*``, ``ExpansionMerlin*``, ``ExpansionUh1h*``,
+``ExpansionGyrocopter*``) and the Mosquito of Deer Isle (``RFMosquito``). ``admin.vehicle_kinds`` adds the classes of
+other mods. Boats are not reported yet.
+
+Markers have no frame, so that the icon gets all the room, and are told apart by shape and edge: players are round dots
+in the colour of their health, with a white ring; vehicles are white icons with a dark edge; events and other markers are
+icons in the colour of their layer with a light edge. Zoomed out they shrink, the players least.
 
 Installing it
 ~~~~~~~~~~~~~
@@ -74,8 +80,9 @@ Settings in ``instance.yaml`` under ``admin`` (see :doc:`configuration`):
   admins may spawn. A class must be a valid class name, must not match a deny
   entry, and, if an allow list exists, must match it. dzo also rejects classes
   the server did not report;
-* ``bicycle_classes``: class names (trailing ``*`` = prefix) of bicycles of other mods, on top of the
-  DayZBicycle classes dzo knows.
+* ``vehicle_kinds``: class names (one ``*`` allowed) by kind, ``bicycle`` or ``helicopter``, of other
+  mods, on top of the classes dzo knows:
+  ``vehicle_kinds: {helicopter: ["MyHeli_*"], bicycle: ["Tandem*"]}``.
 
 Without dzo-admin the web interface cannot show the map or run actions. Other
 features that do not need it (status, RCon) are unaffected.
@@ -160,7 +167,7 @@ control):
      - Icon
      - Classes (subclasses match too)
    * - Helicopter crashes
-     - plane
+     - helicopter
      - ``Wreck_UH1Y``, ``Wreck_Mi8_Crashed``, ``StaticObj_Wreck_Mi24_TK*``, ``StaticObj_Wreck_Chinook*`` (the ``_DE`` event variants too)
    * - Santa's sleigh
      - gift
@@ -176,13 +183,13 @@ control):
      - the police wrecks of the maps (``Land_Wreck_sed01_aban1_police*`` and its siblings)
    * - Ambulances
      - ambulance
-     - ``Land_Wreck_S1023_Medic_Beige_DE``
+     - ``Land_Wreck_S1023_Medic_Beige_DE``, ``Land_jmc_van_ambulance`` (Deer Isle)
    * - Water trucks
      - tint
      - ``Land_Wreck_Truck01_Aban1_Cistern*``, ``…Aban2_Cistern*`` (the ``_DE`` event variants too)
    * - Military wrecks
      - truck
-     - ``StaticObj_Wreck_*_DE``, ``Land_Wreck_*_TK_DE`` (convoys)
+     - ``StaticObj_Wreck_*_DE``, ``Land_Wreck_*_TK_DE``, ``Land_Wreck_Uaz`` (convoys)
    * - Roadblock wrecks
      - bullhorn
      - ``Land_Wreck_*_DE``, ``Land_wreck_*_DE`` (roadblocks, abandoned vehicles)
@@ -195,6 +202,12 @@ control):
    * - Scientists
      - flask
      - ``StaticObj_FrozenScientist_DE``
+   * - Survivor camps
+     - fire
+     - ``Land_jmc_ce_oven``, the camp fire of the Deer Isle survivor camps
+   * - Submarines, Pinkies van, skeletons
+     - anchor, birthday-cake, frown-o
+     - ``Land_STAG_Submarine*``, ``Land_jmc_van_pinkies``, ``Land_jmc_skeleton_*`` (Deer Isle)
    * - Bonfires, Christmas trees
      - fire, tree
      - ``Bonfire``, ``ChristmasTree``

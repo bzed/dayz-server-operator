@@ -67,9 +67,13 @@ func ModConfig(cfg *config.Config, inst *resolve.Instance) (admin.ModConfig, err
 	return mc, nil
 }
 
-// bicycleClasses are the classes of an instance's bicycles: the shipped ones and its own.
-func bicycleClasses(inst *resolve.Instance) []string {
-	return append(admin.DefaultBicycleClasses(), inst.Admin.BicycleClasses...)
+// vehicleKinds are the classes of an instance's bicycles and helicopters: the shipped ones and its own.
+func vehicleKinds(inst *resolve.Instance) map[string][]string {
+	kinds := admin.DefaultVehicleKinds()
+	for k, classes := range inst.Admin.VehicleKinds {
+		kinds[k] = append(kinds[k], classes...)
+	}
+	return kinds
 }
 
 // watchRules are the watch rules of an instance: its own, plus the shipped rules for the events of the
@@ -100,7 +104,7 @@ func AddHubs(reg *admin.Registry, cfg *config.Config, tree *site.Tree) error {
 	}
 	for _, inst := range all {
 		h := admin.NewHub(inst.Name)
-		h.Allow, h.Deny, h.Bicycles, h.MarkerDir = inst.Admin.AllowClasses, inst.Admin.DenyClasses, bicycleClasses(inst), admin.MarkerDir(inst.Paths.Profiles)
+		h.Allow, h.Deny, h.Kinds, h.MarkerDir = inst.Admin.AllowClasses, inst.Admin.DenyClasses, vehicleKinds(inst), admin.MarkerDir(inst.Paths.Profiles)
 		if sched := inst.Restarts.Schedule; len(sched) > 0 {
 			h.NextRestart = func(after time.Time) time.Time { return site.NextRestart(sched, after) }
 		}

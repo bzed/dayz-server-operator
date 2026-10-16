@@ -50,7 +50,7 @@ func (r *Registry) Add(h *Hub) *Hub {
 	defer r.mu.Unlock()
 	if old, ok := r.hubs[h.Name]; ok {
 		old.mu.Lock()
-		old.Allow, old.Deny, old.Bicycles, old.MarkerDir, old.Styles, old.NextRestart = h.Allow, h.Deny, h.Bicycles, h.MarkerDir, h.Styles, h.NextRestart
+		old.Allow, old.Deny, old.Kinds, old.MarkerDir, old.Styles, old.NextRestart = h.Allow, h.Deny, h.Kinds, h.MarkerDir, h.Styles, h.NextRestart
 		old.mu.Unlock()
 		return old
 	}

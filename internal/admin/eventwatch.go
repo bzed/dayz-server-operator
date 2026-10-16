@@ -22,14 +22,20 @@ func VanillaEventWatch() []WatchRule {
 		{Layer: "Police cars", Icon: "car", Color: "#2f6fb5", Label: "Police car", Classes: []string{
 			"Land_Wreck_sed01_aban1_police*", "Land_Wreck_sed01_aban2_police*", "Land_Wreck_hb01_aban1_police*", "Land_Wreck_hb01_aban2_police*",
 			"Land_Wreck_sed02_aban1_Police*", "Land_Wreck_sed02_aban2_Police*", "Land_Wreck_UAZ_Aban1_Police*", "Land_Wreck_UAZ_Aban2_Police*"}},
-		{Layer: "Ambulances", Icon: "ambulance", Color: "#c0392b", Label: "Ambulance", Classes: []string{"Land_Wreck_S1023_Medic_Beige_DE"}},
+		{Layer: "Ambulances", Icon: "ambulance", Color: "#c0392b", Label: "Ambulance", Classes: []string{"Land_Wreck_S1023_Medic_Beige_DE", "Land_jmc_van_ambulance"}},
 		{Layer: "Water trucks", Icon: "tint", Color: "#2a8aa8", Label: "Water truck", Classes: []string{"Land_Wreck_Truck01_Aban1_Cistern*", "Land_Wreck_Truck01_Aban2_Cistern*"}},
-		{Layer: "Military wrecks", Icon: "truck", Color: "#5b7a3a", Label: "Military convoy", Classes: []string{"StaticObj_Wreck_*_DE", "Land_Wreck_*_TK_DE"}},
+		{Layer: "Military wrecks", Icon: "truck", Color: "#5b7a3a", Label: "Military convoy", Classes: []string{"StaticObj_Wreck_*_DE", "Land_Wreck_*_TK_DE", "Land_Wreck_Uaz"}},
 		{Layer: "Roadblock wrecks", Icon: "bullhorn", Color: "#2f6fb5", Label: "Roadblock / abandoned vehicles", Classes: []string{"Land_Wreck_*_DE", "Land_wreck_*_DE"}},
 		{Layer: "Locked containers", Icon: "lock", Color: "#7a3db8", Label: "Locked container", Classes: []string{"ContainerLockedBase", "Land_Mil_Container*_DE"}},
 		{Layer: "Fishing boats", Icon: "ship", Color: "#2a8aa8", Label: "Fishing boat", Classes: []string{"Land_Boat_Small9_DE"}},
 		{Layer: "Military boats", Icon: "anchor", Color: "#5b7a3a", Label: "Military boat", Classes: []string{"StaticObj_PatrolBoat_Military_DE"}},
 		{Layer: "Scientists", Icon: "flask", Color: "#6a1b9a", Label: "Scientist camp", Classes: []string{"StaticObj_FrozenScientist_DE"}},
+		// Deer Isle (its 6.1 mission): the survivor camps are a camp fire, an oven, around it, which is what the
+		// event's group names as its main object; the others are single objects of events of their own.
+		{Layer: "Survivor camps", Icon: "fire", Color: "#c4501f", Label: "Survivor camp", Classes: []string{"Land_jmc_ce_oven"}},
+		{Layer: "Submarines", Icon: "anchor", Color: "#1f4e79", Label: "Submarine", Classes: []string{"Land_STAG_Submarine*"}},
+		{Layer: "Pinkies van", Icon: "birthday-cake", Color: "#c2336f", Label: "Pinkies van", Classes: []string{"Land_jmc_van_pinkies"}},
+		{Layer: "Skeletons", Icon: "frown-o", Color: "#6b6b6b", Label: "Skeleton", Classes: []string{"Land_jmc_skeleton_*"}},
 		{Layer: "Bonfires", Icon: "fire", Color: "#e67e22", Label: "Bonfire", Classes: []string{"Bonfire"}},
 		{Layer: "Christmas trees", Icon: "tree", Color: "#2e7d32", Label: "Christmas tree", Classes: []string{"ChristmasTree"}},
 		{Layer: "Brick piles", Icon: "cubes", Color: "#a0522d", Label: "Bricks", Classes: []string{"PileOfBricks"}},
