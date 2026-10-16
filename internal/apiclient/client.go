@@ -200,8 +200,8 @@ func (c *Client) Teleport(ctx context.Context, name, steamID string, x, z float6
 }
 
 // Give spawns an item for a player.
-func (c *Client) Give(ctx context.Context, name, steamID, class string, quantity, health float64, target string) (api.ActionResult, error) {
-	body := map[string]any{"type": class, "quantity": quantity, "health": health, "target": target}
+func (c *Client) Give(ctx context.Context, name, steamID, class string, quantity, health float64, target string, attachments bool) (api.ActionResult, error) {
+	body := map[string]any{"type": class, "quantity": quantity, "health": health, "target": target, "attachments": attachments}
 	return c.action(ctx, http.MethodPost, inst(name)+"/players/"+url.PathEscape(steamID)+"/give", body)
 }
 

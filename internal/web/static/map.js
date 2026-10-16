@@ -468,7 +468,8 @@
             { name: 'type', label: 'Class name', required: true, suggest: '/types' },
             { name: 'quantity', label: 'Quantity', type: 'number', step: 'any', min: 0, pair: true },
             { name: 'health', label: 'Health 0 to 1', type: 'number', step: '0.1', min: 0, max: 1, pair: true },
-            { name: 'target', label: 'Into', options: [['inventory', 'inventory'], ['hands', 'hands'], ['ground', 'ground']] }
+            { name: 'target', label: 'Into', options: [['inventory', 'inventory'], ['hands', 'hands'], ['ground', 'ground']] },
+            { name: 'attachments', label: 'Attachments', options: [['', 'none'], ['1', 'with its kit']] }
           ], run: function (v) { act('/players/' + id + '/give', v); } };
         } },
         '-',

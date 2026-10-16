@@ -128,6 +128,7 @@ func newPlayerCmd() *cobra.Command {
 
 	var qty, health float64
 	var target string
+	var attachments bool
 	give := &cobra.Command{
 		Use: "give <instance> <steamid> <class>", Short: "Spawn an item for a player", Args: cobra.ExactArgs(3),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -135,7 +136,7 @@ func newPlayerCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			r, err := c.Give(ctxOf(cmd), args[0], args[1], args[2], qty, health, target)
+			r, err := c.Give(ctxOf(cmd), args[0], args[1], args[2], qty, health, target, attachments)
 			if err != nil {
 				return err
 			}
@@ -144,6 +145,7 @@ func newPlayerCmd() *cobra.Command {
 	}
 	give.Flags().Float64Var(&qty, "qty", 0, "quantity (stack size, rounds, litres), 0 = default")
 	give.Flags().Float64Var(&health, "health", 0, "health 0..1, 0 = default")
+	give.Flags().BoolVar(&attachments, "attachments", false, "with the kit the game's debug spawn gives it (a flashlight with its battery, a weapon with its parts)")
 	give.Flags().StringVar(&target, "target", "inventory", "inventory, hands or ground")
 	cmd.AddCommand(msg, tp, give)
 	return cmd

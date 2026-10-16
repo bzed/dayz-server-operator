@@ -382,6 +382,9 @@ func detail(c admin.Command) string {
 		}
 		return fmt.Sprintf("to %.0f/%.0f", c.X, c.Z)
 	case admin.KindSpawnItem:
+		if c.Attachments {
+			return fmt.Sprintf("%s x%g into %s, with attachments", c.Type, c.Quantity, c.Target)
+		}
 		return fmt.Sprintf("%s x%g into %s", c.Type, c.Quantity, c.Target)
 	case admin.KindVehicleRepair:
 		return "scope " + c.Scope
@@ -443,6 +446,8 @@ type giveBody struct {
 	Quantity float64 `json:"quantity"`
 	Health   float64 `json:"health"`
 	Target   string  `json:"target"`
+	// Attachments: with the kit the item comes with when the game debug-spawns it.
+	Attachments bool `json:"attachments"`
 }
 
 func (s *Server) give(w http.ResponseWriter, r *http.Request, c *call) {
@@ -450,7 +455,7 @@ func (s *Server) give(w http.ResponseWriter, r *http.Request, c *call) {
 	if !decode(w, r, &b) {
 		return
 	}
-	cmd := admin.Command{Kind: admin.KindSpawnItem, SteamID: r.PathValue("steamid"), Type: b.Type, Quantity: b.Quantity, Health: b.Health, Target: b.Target}
+	cmd := admin.Command{Kind: admin.KindSpawnItem, SteamID: r.PathValue("steamid"), Type: b.Type, Quantity: b.Quantity, Health: b.Health, Target: b.Target, Attachments: b.Attachments}
 	s.run(w, r, c, cmd, "spawn_item", cmd.SteamID)
 }
 

@@ -158,13 +158,16 @@ type Command struct {
 	Quantity  float64 `json:"quantity"`
 	Health    float64 `json:"health"`
 	Target    string  `json:"target"`
-	X         float64 `json:"x"`
-	Y         float64 `json:"y"`
-	Z         float64 `json:"z"`
-	HasY      bool    `json:"has_y"`
-	Vehicle   string  `json:"vehicle"`
-	Scope     string  `json:"scope"`
-	Force     bool    `json:"force"`
+	// Attachments asks for the item the way the game's own debug spawn makes it: with the kit it
+	// needs to be used (a flashlight with its battery, a weapon with its parts).
+	Attachments bool    `json:"attachments,omitempty"`
+	X           float64 `json:"x"`
+	Y           float64 `json:"y"`
+	Z           float64 `json:"z"`
+	HasY        bool    `json:"has_y"`
+	Vehicle     string  `json:"vehicle"`
+	Scope       string  `json:"scope"`
+	Force       bool    `json:"force"`
 }
 
 // Result is the mod's answer to a Command.

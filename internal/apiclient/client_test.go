@@ -94,7 +94,7 @@ func TestActions(t *testing.T) {
 		"message":   func() (api.ActionResult, error) { return c.Message(ctx, "alpha", "1", "hi", "important") },
 		"tp":        func() (api.ActionResult, error) { return c.Teleport(ctx, "alpha", "1", 10, 20, "") },
 		"tp-player": func() (api.ActionResult, error) { return c.Teleport(ctx, "alpha", "1", 0, 0, "2") },
-		"give":      func() (api.ActionResult, error) { return c.Give(ctx, "alpha", "1", "AKM", 1, 1, "hands") },
+		"give":      func() (api.ActionResult, error) { return c.Give(ctx, "alpha", "1", "AKM", 1, 1, "hands", true) },
 		"repair":    func() (api.ActionResult, error) { return c.Repair(ctx, "alpha", "v", "") },
 		"delete":    func() (api.ActionResult, error) { return c.DeleteVehicle(ctx, "alpha", "v", true) },
 	} {
@@ -107,7 +107,7 @@ func TestActions(t *testing.T) {
 		t.Fatalf("audit = %+v %v", entries, err)
 	}
 	// A validation error is an Error, not a result.
-	if _, err := c.Give(ctx, "alpha", "1", "bad class", 1, 1, ""); err == nil {
+	if _, err := c.Give(ctx, "alpha", "1", "bad class", 1, 1, "", false); err == nil {
 		t.Fatal("bad class must fail")
 	}
 	_ = srv

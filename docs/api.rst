@@ -71,7 +71,7 @@ All paths start with ``/api/v1``. Responses are JSON.
    * - ``GET /instances/<i>/map/markers[?layer=<name>]``
      - markers you may see
    * - ``GET /instances/<i>/types[?q=<text>&limit=<n>]``
-     - search the item classes the server reported: public (scope 2) items, weapons, magazines and clothing with a model, without map objects (``Land_*``, ``StaticObj_*``, ``bldr_*``), debug and placing helpers, and the classes known to be unfinished or to crash a server. The web interface offers them as you type, and ``spawn_item`` refuses any class that is not in the list
+     - search the item classes the server reported: public (scope 2) items, weapons, magazines and clothing, without the classes that crash a vanilla server or raise script errors when they are created (found with ``scripts/test-spawnable.sh``; run it for a server with mods). The web interface offers them as you type, and ``spawn_item`` refuses any class that is not in the list
    * - ``GET /instances/<i>/stream``
      - server-sent events ``status``, ``players``, ``vehicles``, ``markers``,
        ``events`` and ``result``; the current state first, then every change
@@ -99,10 +99,11 @@ Acting
    * - ``POST /instances/<i>/players/<steamid>/teleport`` ``{"x", "z", "y"?}`` or ``{"to_steam_id"}``
      - ``operator``
      - teleport; without ``y`` the player lands on the surface
-   * - ``POST /instances/<i>/players/<steamid>/give`` ``{"type", "quantity", "health", "target"}``
+   * - ``POST /instances/<i>/players/<steamid>/give`` ``{"type", "quantity", "health", "target", "attachments"}``
      - ``operator``
      - spawn an item (``target``: ``inventory``, ``hands``, ``ground``;
-       ``health`` 0 to 1)
+       ``health`` 0 to 1; ``attachments`` true: the item gets the kit the game's own debug spawn
+       gives it, such as a battery for a flashlight)
    * - ``POST /instances/<i>/vehicles/<id>/repair`` ``{"scope"}``
      - ``operator``
      - ``all`` (repair, refuel and fit missing parts), ``engine``, ``parts``,

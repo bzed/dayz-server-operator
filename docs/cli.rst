@@ -221,7 +221,7 @@ installation (default: the local ``serve.listen``). They need the
      - message one player or everyone
    * - ``dzo player tp <instance> <steamid> (--x <x> --z <z> | --to <steamid>)``
      - teleport a player
-   * - ``dzo player give <instance> <steamid> <class> [--qty <n>] [--health <0..1>] [--target inventory|hands|ground]``
+   * - ``dzo player give <instance> <steamid> <class> [--qty <n>] [--health <0..1>] [--target inventory|hands|ground] [--attachments]``
      - spawn an item for a player
    * - ``dzo vehicle list <instance>``
      - persistent vehicles

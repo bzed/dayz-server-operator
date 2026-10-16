@@ -357,7 +357,7 @@ func actTeleport(r *http.Request, c *apiclient.Client, inst string) (api.ActionR
 }
 
 func actGive(r *http.Request, c *apiclient.Client, inst string) (api.ActionResult, error) {
-	return c.Give(r.Context(), inst, r.PathValue("steamid"), strings.TrimSpace(r.PostFormValue("type")), num(r, "quantity"), num(r, "health"), r.PostFormValue("target"))
+	return c.Give(r.Context(), inst, r.PathValue("steamid"), strings.TrimSpace(r.PostFormValue("type")), num(r, "quantity"), num(r, "health"), r.PostFormValue("target"), r.PostFormValue("attachments") != "")
 }
 
 func actRepair(r *http.Request, c *apiclient.Client, inst string) (api.ActionResult, error) {
