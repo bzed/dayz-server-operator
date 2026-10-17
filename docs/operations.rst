@@ -80,7 +80,10 @@ built-in countdown and shutdown of ``messages.xml`` are never used (see ``messag
 
 dzo talks to the server over its own BattlEye RCon client. The restart itself
 goes through the unit's stop (see :ref:`stopping-the-server`). If RCon does not
-answer, the server is restarted through systemd right away.
+answer, the server is restarted through systemd right away. If a RCon command fails in the middle of the countdown (a timeout, a
+dropped connection), dzo logs it, skips that command and connects again for the next one; a failed
+lock or kick is tried once more on the new connection. The server is stopped at the time asked for
+in any case.
 
 The restart runs as its own systemd unit, so it continues if your SSH session
 ends. When a maintenance restart and an update restart fall together, they are

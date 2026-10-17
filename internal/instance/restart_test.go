@@ -6,6 +6,7 @@ package instance
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -213,5 +214,86 @@ func TestACancelledStopSaysSoAndKeepsTheServerRunning(t *testing.T) {
 	}
 	if !strings.Contains(strings.Join(cmd.cmds, "|"), "The shutdown was cancelled") || strings.Contains(strings.Join(calls(), "\n"), "stop dzo-x.service") {
 		t.Errorf("RCon %q, systemctl %v", cmd.cmds, calls())
+	}
+}
+
+// flakyRCon hands out connections that share one log; the failAt-th command overall fails once, as a
+// connection that times out does, and takes its connection down with it.
+type flakyRCon struct {
+	cmds   []string
+	failAt int
+	dials  int
+}
+
+type flakyConn struct{ f *flakyRCon }
+
+func (c flakyConn) Command(_ context.Context, cmd string) (string, error) {
+	c.f.cmds = append(c.f.cmds, cmd)
+	if len(c.f.cmds) == c.f.failAt {
+		return "", context.DeadlineExceeded
+	}
+	return "", nil
+}
+
+func (f *flakyRCon) dial(context.Context) (Commander, error) {
+	f.dials++
+	return flakyConn{f}, nil
+}
+
+func TestAFailedRConCommandIsSkippedAndTheNextOneReconnects(t *testing.T) {
+	// The commands of a 3 minute countdown with the lock at 2 and the kick at 1 minute before it:
+	// 1 say 2 min, 2 say 1 min, 3 #lock, 4 say locked, 5-12 the seconds, 13 players, 14 #kick -1.
+	for _, tc := range []struct {
+		name    string
+		failAt  int
+		retried string // the command that is sent twice in a row, if any
+		skipped bool   // the first announcement is sent once, the failed attempt, and not again
+	}{
+		{"an announcement", 1, "", true},
+		{"the lock", 3, "#lock", false},
+		{"the kick", 13, "players", false},
+	} {
+		lc, calls := fakeSystemctl(t, true)
+		f := &flakyRCon{failAt: tc.failAt}
+		var slept time.Duration
+		var logged []string
+		r := Restarter{Lifecycle: lc, Dial: f.dial, Sleep: func(d time.Duration) { slept += d },
+			Log: func(format string, a ...any) { logged = append(logged, fmt.Sprintf(format, a...)) }}
+		if err := r.Restart(context.Background(), "x", Announcement{Minutes: 3, Lock: 2, Kick: 1, Text: "UP"}, nil); err != nil {
+			t.Fatalf("%s: %v", tc.name, err)
+		}
+		all := strings.Join(f.cmds, "|")
+		if f.dials != 2 {
+			t.Errorf("%s: dialled %d times, want the first connection and one more", tc.name, f.dials)
+		}
+		if tc.retried != "" && !strings.Contains(all, tc.retried+"|"+tc.retried) {
+			t.Errorf("%s: %q was not tried again: %q", tc.name, tc.retried, f.cmds)
+		}
+		if tc.skipped && strings.Count(all, "say -1 UP in 2 minutes") != 1 {
+			t.Errorf("%s: the failed announcement was sent again: %q", tc.name, f.cmds)
+		}
+		if !strings.Contains(all, "#lock") || !strings.HasSuffix(all, "#kick -1") || !strings.Contains(all, "say -1 UP in 1 second") {
+			t.Errorf("%s: the countdown did not go on after the failure: %q", tc.name, f.cmds)
+		}
+		if slept != 3*time.Minute {
+			t.Errorf("%s: slept %v, want the whole countdown", tc.name, slept)
+		}
+		got := calls()
+		if len(got) < 3 || !strings.Contains(got[len(got)-2], "stop") || !strings.HasSuffix(got[len(got)-1], "start dzo-x.service") {
+			t.Errorf("%s: systemctl calls = %q: stop, then start", tc.name, got)
+		}
+		if len(logged) == 0 || !strings.Contains(strings.Join(logged, "\n"), "context deadline exceeded") {
+			t.Errorf("%s: logged %q", tc.name, logged)
+		}
+	}
+}
+
+func TestACancelledContextStillEndsTheCountdownAfterAFailure(t *testing.T) {
+	lc, _ := fakeSystemctl(t, true)
+	ctx, cancel := context.WithCancel(context.Background())
+	f := &flakyRCon{failAt: 1}
+	r := Restarter{Lifecycle: lc, Dial: f.dial, Sleep: func(time.Duration) { cancel() }}
+	if err := r.Restart(ctx, "x", Announcement{Minutes: 3, Lock: 2, Kick: 1}, nil); !errors.Is(err, context.Canceled) {
+		t.Fatalf("err = %v", err)
 	}
 }

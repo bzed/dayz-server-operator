@@ -168,10 +168,9 @@ func (r Restarter) announceAndStop(ctx context.Context, name string, a Announcem
 	if c, err := r.Dial(ctx); err != nil {
 		r.log("RCon unreachable (%v), stopping without announcement", err)
 	} else {
-		err := r.countdown(ctx, c, a)
-		if cl, ok := c.(io.Closer); ok {
-			_ = cl.Close()
-		}
+		rd := &redialer{dial: r.Dial, c: c}
+		err := r.countdown(ctx, rd, a)
+		rd.Close()
 		if err != nil {
 			return err
 		}
@@ -179,10 +178,58 @@ func (r Restarter) announceAndStop(ctx context.Context, name string, a Announcem
 	return r.Lifecycle.Stop(ctx, name)
 }
 
+// redialer is a Commander that connects again after a command failed (a timeout, a dropped
+// connection): the next command goes out on a new connection.
+type redialer struct {
+	dial func(ctx context.Context) (Commander, error)
+	c    Commander
+}
+
+func (d *redialer) Command(ctx context.Context, cmd string) (string, error) {
+	if d.c == nil {
+		c, err := d.dial(ctx)
+		if err != nil {
+			return "", err
+		}
+		d.c = c
+	}
+	out, err := d.c.Command(ctx, cmd)
+	if err != nil {
+		d.Close()
+	}
+	return out, err
+}
+
+func (d *redialer) Close() {
+	if cl, ok := d.c.(io.Closer); ok {
+		_ = cl.Close()
+	}
+	d.c = nil
+}
+
+// countdown announces, locks and kicks while the time runs down. RCon is a courtesy to the players,
+// so a command that fails (a timeout, a dropped connection) is logged and skipped: the next one goes
+// out on a new connection, and the restart or the stop still happens at the time asked for. The lock
+// and the kick are tried once more on the new connection. A cancelled context ends the countdown.
 func (r Restarter) countdown(ctx context.Context, c Commander, a Announcement) error {
 	text := strings.TrimSpace(a.Text)
 	if text == "" {
 		text = "Server " + a.event()
+	}
+	// try runs f; a failure is logged and skipped, after one more try when again is set.
+	try := func(what string, again bool, f func() error) error {
+		err := f()
+		if err != nil && again && ctx.Err() == nil {
+			r.log("RCon %s failed (%v), connecting again", what, err)
+			err = f()
+		}
+		if cerr := ctx.Err(); cerr != nil {
+			return cerr
+		}
+		if err != nil {
+			r.log("RCon %s failed (%v), skipped", what, err)
+		}
+		return nil
 	}
 	locked := false
 	left := time.Duration(a.Minutes) * time.Minute
@@ -191,24 +238,30 @@ func (r Restarter) countdown(ctx context.Context, c Commander, a Announcement) e
 			return err
 		}
 		left = st.left
-		if st.lock && !locked {
-			if err := Lock(ctx, c); err != nil {
-				return fmt.Errorf("instance: lock: %w", err)
+		lock := func() error {
+			err := Lock(ctx, c)
+			if err == nil {
+				locked = true
 			}
-			locked = true
+			return err
+		}
+		if st.lock && !locked {
+			if err := try("lock", true, lock); err != nil {
+				return err
+			}
 		}
 		if st.say != "" {
-			if err := Announce(ctx, c, st.say); err != nil {
-				return fmt.Errorf("instance: announce: %w", err)
+			if err := try("announcement", false, func() error { return Announce(ctx, c, st.say) }); err != nil {
+				return err
 			}
 		}
 		if st.kick {
 			if !locked {
-				if err := Lock(ctx, c); err != nil {
-					return fmt.Errorf("instance: lock: %w", err)
+				if err := try("lock", true, lock); err != nil {
+					return err
 				}
 			}
-			if err := KickAll(ctx, c, text, 3); err != nil {
+			if err := try("kick", true, func() error { return KickAll(ctx, c, text, 3) }); err != nil {
 				return err
 			}
 		}
