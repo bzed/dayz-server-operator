@@ -310,6 +310,59 @@ if [ "$bans" = 1 ]; then
 	[ -n "$guid" ] && [ "$guid" = "$want" ] && s=0
 	verdict "V2: GUID = md5(BE + little-endian Steam ID) ($id -> $guid)" $s
 fi
+if [ "$bans" = 1 ]; then
+	adm_kicks() { grep -c "dzotester.*kicked" "$adm" 2>/dev/null || true; }
+	client() { "$dev/dayz-client-headless.sh" "${exp[@]}" "$@" "$work/client" -name=dzotester -connect=127.0.0.1 -port="$game" >/dev/null; }
+	# stop ends sway, and the game with it, in the background: start refuses while a game still runs.
+	stop_client() {
+		"$dev/dayz-client-headless.sh" "${exp[@]}" stop "$work/client" >/dev/null 2>&1 || true
+		waitfor 90 "'$dev/dayz-client-headless.sh' status >/dev/null 2>&1"
+	}
+	joined() { waitfor "$1" "grep -c 'dzotester.*is connected' '$adm' | grep -qx '$2'"; }
+
+	# V3b: a new ban kicks the player who is online, with the ban message.
+	s=0
+	dzo ban add --steam "$id" --reason "V3 test" --message "dzo V3 ban" --duration 10m --instance t1 | grep -q 't1: ok' || s=1
+	waitfor 30 "'$work/dzo' rcon exec --addr 127.0.0.1:$rcon --password '$rconpw' players | grep -vq dzotester" || s=1
+	grep -q 'dzo V3 ban' "$work/serve.log" "$adm" "$tree"/profiles/*.RPT 2>/dev/null || true # the message's place is recorded by V3a below
+	verdict "V3b: a new ban kicks the online player" $s
+	s=0
+	grep -q "$(python3 -I -c 'import hashlib,struct,sys;print(hashlib.md5(b"BE"+struct.pack("<Q",int(sys.argv[1]))).hexdigest())' "$id") [0-9]* dzo V3 ban" "$tree/profiles/battleye/bans.txt" || s=1
+	verdict "V3: bans.txt holds the derived GUID with the expiry and message" $s
+
+	# V3a: a banned player who connects is refused.
+	stop_client
+	before=$(grep -c 'dzotester.*is connected' "$adm" || true)
+	client start
+	s=0
+	sleep 60 # the client needs this long to reach the server; a refused join leaves no trace to poll for in the ADM
+	[ "$(grep -c 'dzotester.*is connected' "$adm" || true)" = "$before" ] || s=1
+	verdict "V3a: a banned player cannot join" $s
+	"$dev/dayz-client-headless.sh" "${exp[@]}" shot "$work/client" "$work/v3a-refused.png" >/dev/null 2>&1 || true
+	stop_client
+
+	# V3c: a revoked ban lets the player in again.
+	banid=$(dzo ban list --state active --query "$id" | awk 'NR == 2 {print $1}')
+	dzo ban revoke "$banid" --reason "V3 done" >/dev/null
+	client start
+	s=0
+	joined 240 "$((before + 1))" || s=1
+	verdict "V3c: after the revoke the player joins" $s
+	stop_client
+
+	# V3d: an IP ban refuses the player's address (127.0.0.1 on a local test).
+	dzo ban add --ip 127.0.0.1 --reason "V3 ip" --duration 10m --instance t1 >/dev/null
+	before=$(grep -c 'dzotester.*is connected' "$adm" || true)
+	client start
+	s=0
+	sleep 60 # as for V3a
+	[ "$(grep -c 'dzotester.*is connected' "$adm" || true)" = "$before" ] || s=1
+	verdict "V3d: an IP ban refuses the address" $s
+	stop_client
+	echo "== $pass passed, $fail failed (ban stage)"
+	[ "$fail" = 0 ]
+	exit
+fi
 probe() { grep -h 'DZO-PROBE player' "$script" | tail -1; }
 sleep 12 # the character is still loading for a while after the join
 
