@@ -187,6 +187,8 @@ func TestValidate(t *testing.T) {
 		{"flip no vehicle", Command{Kind: KindVehicleFlip}, "vehicle"},
 		{"delete no vehicle", Command{Kind: KindVehicleDelete}, "vehicle"},
 		{"kind", Command{Kind: "explode"}, "unknown command"},
+		{"quantity below -2", Command{Kind: KindSpawnItem, SteamID: "1", Type: "AKM", Quantity: -3}, "quantity"},
+		{"quantity between", Command{Kind: KindSpawnItem, SteamID: "1", Type: "AKM", Quantity: -1.5}, "quantity"},
 	}
 	for _, tc := range cases {
 		_, err := h.Enqueue(tc.cmd)
@@ -198,6 +200,9 @@ func TestValidate(t *testing.T) {
 		{Kind: KindSpawnItem, SteamID: "1", Type: "AKM"},
 		{Kind: KindSpawnItem, SteamID: "1", Type: "Ammo_556x45", Target: "hands", Quantity: 5, Health: 1},
 		{Kind: KindSpawnItem, Type: "AKM", X: 100, Z: 200, Quantity: 20},
+		{Kind: KindSpawnItem, Type: "Ammo_556x45", X: 100, Z: 200, Quantity: QuantityMax},
+		{Kind: KindSpawnItem, Type: "Ammo_556x45", X: 100, Z: 200, Quantity: QuantityDefault},
+		{Kind: KindSpawnItem, Type: "Ammo_556x45", X: 100, Z: 200, Quantity: 0},
 		{Kind: KindSpawnVehicle, Type: "AKM", X: 100, Z: 200},
 		{Kind: KindVehicleRepair, Vehicle: "v", Scope: "wheels"},
 		{Kind: KindVehicleRepair, Vehicle: "v", Scope: "missing"},

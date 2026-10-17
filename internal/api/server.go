@@ -453,11 +453,19 @@ func (s *Server) teleport(w http.ResponseWriter, r *http.Request, c *call) {
 	s.run(w, r, c, cmd, "teleport", cmd.SteamID)
 }
 
+// quantityOf is the quantity of a spawn body: absent means the game's default.
+func quantityOf(q *float64) float64 {
+	if q == nil {
+		return admin.QuantityDefault
+	}
+	return *q
+}
+
 type giveBody struct {
-	Type     string  `json:"type"`
-	Quantity float64 `json:"quantity"`
-	Health   float64 `json:"health"`
-	Target   string  `json:"target"`
+	Type     string   `json:"type"`
+	Quantity *float64 `json:"quantity"` // absent = admin.QuantityDefault
+	Health   float64  `json:"health"`
+	Target   string   `json:"target"`
 	// Attachments: with the kit the item comes with when the game debug-spawns it.
 	Attachments bool `json:"attachments"`
 }
@@ -467,17 +475,17 @@ func (s *Server) give(w http.ResponseWriter, r *http.Request, c *call) {
 	if !decode(w, r, &b) {
 		return
 	}
-	cmd := admin.Command{Kind: admin.KindSpawnItem, SteamID: r.PathValue("steamid"), Type: b.Type, Quantity: b.Quantity, Health: b.Health, Target: b.Target, Attachments: b.Attachments}
+	cmd := admin.Command{Kind: admin.KindSpawnItem, SteamID: r.PathValue("steamid"), Type: b.Type, Quantity: quantityOf(b.Quantity), Health: b.Health, Target: b.Target, Attachments: b.Attachments}
 	s.run(w, r, c, cmd, "spawn_item", cmd.SteamID)
 }
 
 type spawnBody struct {
-	Type        string  `json:"type"`
-	Quantity    float64 `json:"quantity"`
-	Health      float64 `json:"health"`
-	X           float64 `json:"x"`
-	Z           float64 `json:"z"`
-	Attachments bool    `json:"attachments"`
+	Type        string   `json:"type"`
+	Quantity    *float64 `json:"quantity"` // absent = admin.QuantityDefault
+	Health      float64  `json:"health"`
+	X           float64  `json:"x"`
+	Z           float64  `json:"z"`
+	Attachments bool     `json:"attachments"`
 }
 
 // spawn puts an item on the ground at a position, the same as give with target ground does at a player.
@@ -486,7 +494,7 @@ func (s *Server) spawn(w http.ResponseWriter, r *http.Request, c *call) {
 	if !decode(w, r, &b) {
 		return
 	}
-	cmd := admin.Command{Kind: admin.KindSpawnItem, Type: b.Type, Quantity: b.Quantity, Health: b.Health, X: b.X, Z: b.Z, Attachments: b.Attachments}
+	cmd := admin.Command{Kind: admin.KindSpawnItem, Type: b.Type, Quantity: quantityOf(b.Quantity), Health: b.Health, X: b.X, Z: b.Z, Attachments: b.Attachments}
 	s.run(w, r, c, cmd, "spawn_item", fmt.Sprintf("%.0f/%.0f", b.X, b.Z))
 }
 

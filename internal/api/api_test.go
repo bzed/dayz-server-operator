@@ -375,3 +375,15 @@ func TestStream(t *testing.T) {
 		}
 	}
 }
+
+func TestQuantityOf(t *testing.T) {
+	zero, five := 0.0, 5.0
+	for _, tc := range []struct {
+		in   *float64
+		want float64
+	}{{nil, admin.QuantityDefault}, {&zero, 0}, {&five, 5}} {
+		if got := quantityOf(tc.in); got != tc.want {
+			t.Errorf("quantityOf(%v) = %v, want %v", tc.in, got, tc.want)
+		}
+	}
+}

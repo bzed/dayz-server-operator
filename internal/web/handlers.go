@@ -109,6 +109,7 @@ func (s *Server) vehiclesFragment(w http.ResponseWriter, r *http.Request) {
 type panelView struct {
 	Backend, Instance string
 	Player            admin.Player
+	Others            []admin.Player // the other online players, as teleport targets
 	Err               string
 }
 
@@ -127,6 +128,11 @@ func (s *Server) playerPanel(w http.ResponseWriter, r *http.Request) {
 	for _, p := range players {
 		if p.SteamID == r.PathValue("steamid") {
 			v.Player = p
+		}
+	}
+	for _, p := range players {
+		if p.SteamID != v.Player.SteamID {
+			v.Others = append(v.Others, p)
 		}
 	}
 	if v.Player.SteamID == "" && v.Err == "" {
@@ -358,6 +364,15 @@ func num(r *http.Request, key string) float64 {
 	return f
 }
 
+// quantity reads the quantity of a spawn form: a number, "default" or "max"; an empty field means max.
+func quantity(r *http.Request) (float64, error) {
+	s := strings.TrimSpace(r.PostFormValue("quantity"))
+	if s == "" {
+		s = "max"
+	}
+	return admin.ParseQuantity(s)
+}
+
 func actMessage(r *http.Request, c *apiclient.Client, inst string) (api.ActionResult, error) {
 	return c.Message(r.Context(), inst, r.PathValue("steamid"), r.PostFormValue("text"), r.PostFormValue("style"))
 }
@@ -367,11 +382,19 @@ func actTeleport(r *http.Request, c *apiclient.Client, inst string) (api.ActionR
 }
 
 func actGive(r *http.Request, c *apiclient.Client, inst string) (api.ActionResult, error) {
-	return c.Give(r.Context(), inst, r.PathValue("steamid"), strings.TrimSpace(r.PostFormValue("type")), num(r, "quantity"), num(r, "health"), r.PostFormValue("target"), r.PostFormValue("attachments") != "")
+	q, err := quantity(r)
+	if err != nil {
+		return api.ActionResult{}, err
+	}
+	return c.Give(r.Context(), inst, r.PathValue("steamid"), strings.TrimSpace(r.PostFormValue("type")), q, num(r, "health"), r.PostFormValue("target"), r.PostFormValue("attachments") != "")
 }
 
 func actSpawn(r *http.Request, c *apiclient.Client, inst string) (api.ActionResult, error) {
-	return c.Spawn(r.Context(), inst, strings.TrimSpace(r.PostFormValue("type")), num(r, "quantity"), num(r, "health"), num(r, "x"), num(r, "z"), r.PostFormValue("attachments") != "")
+	q, err := quantity(r)
+	if err != nil {
+		return api.ActionResult{}, err
+	}
+	return c.Spawn(r.Context(), inst, strings.TrimSpace(r.PostFormValue("type")), q, num(r, "health"), num(r, "x"), num(r, "z"), r.PostFormValue("attachments") != "")
 }
 
 func actSpawnVehicle(r *http.Request, c *apiclient.Client, inst string) (api.ActionResult, error) {

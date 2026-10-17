@@ -9,7 +9,13 @@
 // top of Hub.
 package admin
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+	"math"
+	"strconv"
+	"strings"
+)
 
 // ProtocolVersion is the dzo <-> dzo-admin protocol version; the mod sends
 // its own in every sync (DZOADMIN_PROTOCOL_VERSION in the mod).
@@ -135,6 +141,30 @@ type TypesChunk struct {
 	Offset int      `json:"offset"`
 	Total  int      `json:"total"`
 	Names  []string `json:"names"`
+}
+
+// Quantity of a spawn_item command: a number is what the mod passes to SetQuantity (0 makes an item that is
+// empty, or none at all when the class cannot exist empty), more than a stack holds makes more stacks. The two
+// negative values are not numbers.
+const (
+	QuantityDefault = -1 // leave it at what the game makes of a new item
+	QuantityMax     = -2 // one full stack, filled to the class's own GetQuantityMax()
+)
+
+// ParseQuantity reads a quantity given by a person: "default" (also an empty text and "-1"), "max" (also
+// "-2") or a number of 0 or more.
+func ParseQuantity(s string) (float64, error) {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "", "default", "-1":
+		return QuantityDefault, nil
+	case "max", "-2":
+		return QuantityMax, nil
+	}
+	f, err := strconv.ParseFloat(strings.TrimSpace(s), 64)
+	if err != nil || f < 0 || math.IsNaN(f) || math.IsInf(f, 0) {
+		return 0, errors.New("quantity must be a number, default or max")
+	}
+	return f, nil
 }
 
 // Command kinds.

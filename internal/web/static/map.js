@@ -356,6 +356,17 @@
         row.appendChild(lab);
         if (row.children.length === 2) { row = null; }
       } else { f.appendChild(lab); }
+      if (fd.presets) {
+        var ps = mk('div', 'presets');
+        fd.presets.forEach(function (pr) {
+          var pb = mk('button', 'quiet', pr[1]);
+          pb.type = 'button';
+          pb.setAttribute('data-set', pr[0]);
+          pb.setAttribute('data-for', fd.name);
+          ps.appendChild(pb);
+        });
+        lab.appendChild(ps);
+      }
       if (fd.suggest) { suggest(inp, fd.suggest); }
     });
     var btns = mk('div', 'btns');
@@ -466,8 +477,8 @@
         { label: 'Give item…', min: 'operator', view: function () {
           return { title: 'Give to ' + p.name, submit: 'Give', fields: [
             { name: 'type', label: 'Class name', required: true, suggest: '/types' },
-            { name: 'quantity', label: 'Quantity', type: 'number', step: 'any', min: 0, pair: true },
-            { name: 'health', label: 'Health 0 to 1', type: 'number', step: '0.1', min: 0, max: 1, pair: true },
+            { name: 'quantity', label: 'Quantity (number, default or max)', value: 'max', presets: [['default', 'Default'], ['max', 'Max'], ['0', 'Empty'], ['1', '1']] },
+            { name: 'health', label: 'Health 0 to 1', type: 'number', step: '0.1', min: 0, max: 1, value: 1, presets: [['1', '100%'], ['0.75', '75%'], ['0.5', '50%'], ['0.25', '25%']] },
             { name: 'target', label: 'Into', options: [['inventory', 'inventory'], ['hands', 'hands'], ['ground', 'ground']] },
             { name: 'attachments', label: 'Attachments', options: [['', 'none'], ['1', 'with its kit']] }
           ], run: function (v) { act('/players/' + id + '/give', v); } };
@@ -531,8 +542,8 @@
         { label: 'Spawn item here…', min: 'operator', view: function () {
           return { title: 'Spawn at ' + at.x + ' / ' + at.z, submit: 'Spawn', fields: [
             { name: 'type', label: 'Class name', required: true, suggest: '/types' },
-            { name: 'quantity', label: 'Quantity (as many stacks as it needs)', type: 'number', step: 'any', min: 0, pair: true },
-            { name: 'health', label: 'Health 0 to 1', type: 'number', step: '0.1', min: 0, max: 1, pair: true },
+            { name: 'quantity', label: 'Quantity (number, default or max)', value: 'max', presets: [['default', 'Default'], ['max', 'Max'], ['0', 'Empty'], ['1', '1']] },
+            { name: 'health', label: 'Health 0 to 1', type: 'number', step: '0.1', min: 0, max: 1, value: 1, presets: [['1', '100%'], ['0.75', '75%'], ['0.5', '50%'], ['0.25', '25%']] },
             { name: 'attachments', label: 'Attachments', options: [['', 'none'], ['1', 'with its kit']] }
           ], run: function (v) { act('/spawn', { type: v.type, quantity: v.quantity, health: v.health, attachments: v.attachments, x: at.x, z: at.z }); } };
         } },

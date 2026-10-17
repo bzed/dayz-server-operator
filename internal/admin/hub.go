@@ -528,8 +528,8 @@ func (h *Hub) validate(c *Command) error {
 		default:
 			return fmt.Errorf("admin: unknown spawn target %q", c.Target)
 		}
-		if c.Health < 0 || c.Health > 1 || c.Quantity < 0 {
-			return errors.New("admin: health must be 0..1 and quantity not negative")
+		if c.Health < 0 || c.Health > 1 || (c.Quantity < 0 && c.Quantity != QuantityMax && c.Quantity != QuantityDefault) {
+			return errors.New("admin: health must be 0..1 and quantity a number, default or max")
 		}
 	case KindSpawnVehicle:
 		if err := need("type", c.Type); err != nil {

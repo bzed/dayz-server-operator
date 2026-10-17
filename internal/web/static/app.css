@@ -214,3 +214,12 @@ main > .flash.err { margin: 1rem; }
   .hud { min-width: 0; }
 }
 @media (prefers-reduced-motion: reduce) { .dot.on { animation: none; } }
+
+th[data-sort] { cursor: pointer; user-select: none; }
+th[data-sort]:hover { color: var(--fg, inherit); }
+th[aria-sort="ascending"]::after { content: " \25B2"; font-size: .7em; }
+th[aria-sort="descending"]::after { content: " \25BC"; font-size: .7em; }
+
+.presets { display: inline-flex; gap: .25rem; flex-wrap: wrap; }
+.presets button { padding: .15rem .5rem; font-size: .85rem; }
+.ctx .presets { display: flex; margin-top: .25rem; }

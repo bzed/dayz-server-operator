@@ -53,6 +53,11 @@ modded class MissionServer
 			DeleteFile("$profile:dzo_probe/ground");
 			DZOProbeGround();
 		}
+		if (FileExist("$profile:dzo_probe/items"))
+		{
+			DeleteFile("$profile:dzo_probe/items");
+			DZOProbeItems();
+		}
 		array<Man> men = new array<Man>;
 		GetGame().GetPlayers(men);
 		foreach (Man m : men)
@@ -178,6 +183,26 @@ modded class MissionServer
 			qty = qty + ib.GetQuantity();
 		}
 		Print("DZO-PROBE ground Nail stacks=" + stacks + " quantity=" + qty);
+	}
+
+	// DZO-PROBE items <type>=<quantity>/<max> ...: the items lying within 12 m of 7480/7480 and of 7460/7460.
+	void DZOProbeItems()
+	{
+		array<vector> spots = {Vector(7480, 0, 7480), Vector(7460, 0, 7460)};
+		foreach (vector spot : spots)
+		{
+			array<Object> objs = new array<Object>;
+			array<CargoBase> proxies = new array<CargoBase>;
+			GetGame().GetObjectsAtPosition(Vector(spot[0], GetGame().SurfaceY(spot[0], spot[2]), spot[2]), 12, objs, proxies);
+			string list = "";
+			foreach (Object o : objs)
+			{
+				ItemBase ib = ItemBase.Cast(o);
+				if (ib)
+					list = list + ib.GetType() + "=" + ib.GetQuantity() + "/" + ib.GetQuantityMax() + " ";
+			}
+			Print("DZO-PROBE items " + spot[0] + " " + list);
+		}
 	}
 
 	void DZOProbeBoard(PlayerBase p)

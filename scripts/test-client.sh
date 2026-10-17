@@ -125,6 +125,32 @@ case $line in *'stacks=1 '*) s=1 ;; esac
 [ "$s" = 0 ] || echo "$line" >&2
 verdict "spawn item: 500 nails are several stacks that add up" $s
 
+# Quantity: default leaves what the game makes, max is one full stack, a number goes to SetQuantity (0 is
+# empty, and no item at all for a class that cannot exist empty).
+for q in "Canteen default" "Pot max" "WaterBottle 0" "Rag 0" "Nail 5" "Ammo_556x45 3"; do
+	set -- $q
+	"$work/dzo" player spawn t1 "$1" --qty "$2" --x 7460 --z 7460 --config "$work/config.yaml" --token-file "$work/api.token" >/dev/null || echo "spawn $q refused" >&2
+done
+sleep 4
+touch "$tree/profiles/dzo_probe/items"
+sleep 6
+items=$(grep 'DZO-PROBE items 7460' "$script" | tail -1 || true)
+n() { grep -o " $1=[0-9.]*/[0-9]*" <<<"$items" | wc -l || true; }
+has() { grep -q " $1 " <<<"$items "; }
+s=0; has 'Canteen=1000/1000' || s=1
+verdict "spawn item: quantity default leaves a canteen full" $s
+s=0; has 'Pot=2000/2000' || s=1
+verdict "spawn item: quantity max fills a pot" $s
+s=0; has 'WaterBottle=0/1000' || s=1
+verdict "spawn item: quantity 0 makes a water bottle empty" $s
+s=0; [ "$(n Rag)" = 0 ] || s=1
+verdict "spawn item: quantity 0 of a rag is no item at all" $s
+s=0; has 'Nail=5/99' || s=1
+verdict "spawn item: quantity 5 of nails" $s
+s=0; [ "$(n Ammo_556x45)" = 3 ] || s=1
+[ "$s" = 0 ] || echo "$items" >&2
+verdict "spawn item: quantity 3 of ammo with a stack size of 1 is three items" $s
+
 # Central Economy events are found by the class of their object: a plain building object (no script class of its
 # own, like the wrecks the events place) is a marker when a watch rule selects its class, wildcards included.
 touch "$tree/profiles/dzo_probe/event"

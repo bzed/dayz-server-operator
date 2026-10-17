@@ -127,13 +127,18 @@ func newPlayerCmd() *cobra.Command {
 	tp.Flags().Float64Var(&z, "z", 0, "world z (north)")
 	tp.Flags().StringVar(&to, "to", "", "teleport to this player (Steam ID)")
 
-	var qty, health float64
+	var qtyText string
+	var health float64
 	var target string
 	var attachments bool
 	give := &cobra.Command{
 		Use: "give <instance> <steamid> <class>", Short: "Spawn an item for a player", Args: cobra.ExactArgs(3),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			c, err := t.client()
+			if err != nil {
+				return err
+			}
+			qty, err := admin.ParseQuantity(qtyText)
 			if err != nil {
 				return err
 			}
@@ -144,7 +149,7 @@ func newPlayerCmd() *cobra.Command {
 			return printResult(cmd, r)
 		},
 	}
-	give.Flags().Float64Var(&qty, "qty", 0, "quantity (stack size, rounds, litres), 0 = default")
+	give.Flags().StringVar(&qtyText, "qty", "default", "quantity (stack size, rounds, millilitres): a number (0 = empty), default or max (a full stack)")
 	give.Flags().Float64Var(&health, "health", 0, "health 0..1, 0 = default")
 	give.Flags().BoolVar(&attachments, "attachments", false, "with the kit the game's debug spawn gives it (a flashlight with its battery, a weapon with its parts)")
 	give.Flags().StringVar(&target, "target", "inventory", "inventory, hands or ground")
@@ -156,6 +161,10 @@ func newPlayerCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			qty, err := admin.ParseQuantity(qtyText)
+			if err != nil {
+				return err
+			}
 			r, err := c.Spawn(ctxOf(cmd), args[0], args[1], qty, health, sx, sz, attachments)
 			if err != nil {
 				return err
@@ -163,7 +172,7 @@ func newPlayerCmd() *cobra.Command {
 			return printResult(cmd, r)
 		},
 	}
-	spawn.Flags().Float64Var(&qty, "qty", 0, "quantity, 0 = default; more than a stack holds makes more stacks")
+	spawn.Flags().StringVar(&qtyText, "qty", "default", "quantity: a number (0 = empty; more than a stack holds makes more stacks), default or max (a full stack)")
 	spawn.Flags().Float64Var(&health, "health", 0, "health 0..1, 0 = default")
 	spawn.Flags().BoolVar(&attachments, "attachments", false, "with the kit the game's debug spawn gives it")
 	spawn.Flags().Float64Var(&sx, "x", 0, "world x (east)")

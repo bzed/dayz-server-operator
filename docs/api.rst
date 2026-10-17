@@ -107,8 +107,11 @@ Acting
        ``health`` 0 to 1; ``attachments`` true: the item gets the kit the game's own debug spawn
        gives it, such as a battery for a flashlight; when that leaves it bare, the mod fits the parts it
        found in the item configs, cached in ``profiles/dzo/admin/kits.json`` and scanned again when the
-       class list changes or a part no longer fits). A ``quantity`` above what one stack holds makes
-       as many stacks as it needs, at most 50
+       class list changes or a part no longer fits). ``quantity`` is passed to the game's
+       ``SetQuantity``: ``0`` makes the item empty (a class that cannot exist empty is deleted by the game),
+       a number above what one stack holds makes as many stacks as it needs, at most 50. ``-1`` leaves the
+       quantity at what the game makes of a new item (also when ``quantity`` is left out) and ``-2`` fills one
+       stack to the class's maximum; the web forms and ``dzo player`` take ``default`` and ``max`` for them
    * - ``POST /instances/<i>/spawn`` ``{"type", "quantity", "health", "x", "z", "attachments"}``
      - ``operator``
      - spawn an item on the ground at a position, as ``give`` with ``target`` ``ground`` does at a player

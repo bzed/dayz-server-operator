@@ -275,6 +275,23 @@ func TestActions(t *testing.T) {
 	}
 }
 
+func TestQuantityMaxAndInvalid(t *testing.T) {
+	e := newEnv(t, api.RoleAdmin)
+	defer e.answerCommands(true, "")()
+	for _, q := range []string{"max", "MAX", "", " 5 "} {
+		_, body := e.post("/b/main/i/alpha/spawn", url.Values{"type": {"AKM"}, "quantity": {q}, "x": {"1"}, "z": {"2"}}, nil)
+		if !strings.Contains(body, "flash ok") {
+			t.Errorf("quantity %q: %s", q, body)
+		}
+	}
+	for _, q := range []string{"lots", "-3", "NaN", "Inf"} {
+		_, body := e.post("/b/main/i/alpha/players/7656/give", url.Values{"type": {"AKM"}, "quantity": {q}}, nil)
+		if !strings.Contains(body, "quantity must be a number, default or max") {
+			t.Errorf("quantity %q: %s", q, body)
+		}
+	}
+}
+
 func TestActionErrors(t *testing.T) {
 	e := newEnv(t, api.RoleViewer)
 	_, body := e.post("/b/main/i/alpha/message", url.Values{"text": {"x"}}, nil)
