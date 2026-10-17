@@ -24,6 +24,7 @@ import (
 	"github.com/bzed/dayz-server-operator/internal/config"
 	"github.com/bzed/dayz-server-operator/internal/instance"
 	"github.com/bzed/dayz-server-operator/internal/mission"
+	"github.com/bzed/dayz-server-operator/internal/moderation"
 	"github.com/bzed/dayz-server-operator/internal/quadlet"
 	"github.com/bzed/dayz-server-operator/internal/resolve"
 	"github.com/bzed/dayz-server-operator/internal/runfiles"
@@ -161,6 +162,12 @@ func renderInstance(cmd *cobra.Command, cfg *config.Config, inst *resolve.Instan
 	if err := runfiles.Write(rf); err != nil {
 		return err
 	}
+	// Bans hold even when dzo serve is down: bans.txt is rendered from the database at every start.
+	msg, err := moderation.RenderAtStart(cmd.Context(), serve.BanDB(cfg), inst.Name, filepath.Join(inst.Paths.Profiles, "battleye"), time.Now())
+	if err != nil {
+		return fmt.Errorf("rendering bans.txt: %w", err)
+	}
+	_, _ = fmt.Fprintln(cmd.OutOrStdout(), msg)
 	if inst.AdminEnabled() {
 		warnStaleAdminMod(cmd.ErrOrStderr(), tree, inst)
 		// Every render rotates the mod's token (§C13). The mod reads its config once, at

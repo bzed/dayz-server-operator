@@ -21,7 +21,10 @@ import (
 
 	"github.com/bzed/dayz-server-operator/internal/admin"
 	"github.com/bzed/dayz-server-operator/internal/api"
+	"github.com/bzed/dayz-server-operator/internal/config"
+	"github.com/bzed/dayz-server-operator/internal/moderation"
 	"github.com/bzed/dayz-server-operator/internal/resolve"
+	"github.com/bzed/dayz-server-operator/internal/serve"
 	"github.com/bzed/dayz-server-operator/internal/servermods"
 	"github.com/bzed/dayz-server-operator/internal/site"
 )
@@ -373,5 +376,37 @@ func TestCheckModsUsable(t *testing.T) {
 		if err := check(name, d); err == nil || !strings.Contains(err.Error(), "@"+name) || !strings.Contains(err.Error(), "chown -R dayz:dayz") {
 			t.Errorf("%s: err = %v", name, err)
 		}
+	}
+}
+
+func TestRenderWritesBansTxtFromTheDatabase(t *testing.T) {
+	cfg, root, _ := renderSetup(t)
+	out, err := runCmd(t, "instance", "render", "x", "--config", cfg)
+	if err != nil || !strings.Contains(out, "no ban database yet") {
+		t.Fatalf("render without a database: %v\n%s", err, out)
+	}
+	c, err := config.Load(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	st, err := moderation.Open(ctx, serve.BanDB(c))
+	if err != nil {
+		t.Fatal(err)
+	}
+	guid := "0123456789abcdef0123456789abcdef"
+	if _, err := st.CreateBan(ctx, "test", moderation.BanInput{GUIDs: []string{guid}, Reason: "internal", Message: "cheater", Scope: moderation.ScopeGlobal}, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.Close(); err != nil {
+		t.Fatal(err)
+	}
+	out, err = runCmd(t, "instance", "render", "x", "--config", cfg)
+	if err != nil || !strings.Contains(out, "bans.txt written (1 entries)") {
+		t.Fatalf("render: %v\n%s", err, out)
+	}
+	b, err := os.ReadFile(filepath.Join(root, "profiles", "battleye", "bans.txt"))
+	if err != nil || !strings.Contains(string(b), guid+" -1 cheater") {
+		t.Fatalf("bans.txt: %v\n%s", err, b)
 	}
 }

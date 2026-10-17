@@ -35,6 +35,9 @@ func APITokens(cfg *config.Config) string { return filepath.Join(cfg.Paths.Secre
 // AuditLog is the audit log file.
 func AuditLog(cfg *config.Config) string { return filepath.Join(cfg.Paths.DB, "audit.jsonl") }
 
+// BanDB is the moderation database (bans, evidence, sightings).
+func BanDB(cfg *config.Config) string { return filepath.Join(cfg.Paths.DB, "dzo.sqlite") }
+
 // TilesDir is where the built map tile sets live.
 func TilesDir(cfg *config.Config) string { return filepath.Join(cfg.Paths.Cache, "maptiles") }
 
