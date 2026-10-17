@@ -69,6 +69,11 @@ own. Point ``site.yaml`` at it and enable it per instance:
 Run ``dzo mod add dzo-admin --instance deerisle --server`` to install it, then
 start the instance. dzo recognises the mod by the name ``dzo-admin``.
 
+``dzo instance render`` compares the installed copy of dzo-admin with the build in
+``compat.yaml`` next to the packaged mod and prints a warning, with the ``dzo mod update``
+to run, when they differ. A package upgrade does not touch the copies in the instances: an
+older mod can look for its config in another place and then sits idle without a word.
+
 Every time the instance starts, ``dzo instance render`` writes the mod's
 configuration to ``profiles/dzo/admin/config.json`` with a **new token** (the
 file is readable by the owner only and is not part of the site repository). The

@@ -91,7 +91,11 @@ func ReadCompat(path string) (*Compat, error) {
 // servermod modDir (named like its directory). Both a changed and an extra or
 // missing PBO are errors.
 func (c *Compat) Check(modDir string) error {
-	name := filepath.Base(modDir)
+	return c.check(filepath.Base(modDir), modDir)
+}
+
+// check is Check for a servermod whose directory is not named like it (an installed generation).
+func (c *Compat) check(name, modDir string) error {
 	want, ok := c.Servermods[name]
 	if !ok {
 		return nil
@@ -142,4 +146,18 @@ func CheckShipped(modDir string) error {
 		return err
 	}
 	return c.Check(modDir)
+}
+
+// CheckInstalled compares the installed copy of the shipped servermod name (a generation directory
+// of the cache) with the tested set in the compat.yaml next to packagedDir, the directory the mod
+// is imported from. A mod with no neighbouring compat.yaml, or not listed in it, passes.
+func CheckInstalled(name, installedDir, packagedDir string) error {
+	c, err := ReadCompat(filepath.Join(filepath.Dir(packagedDir), CompatFile))
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	return c.check(name, installedDir)
 }

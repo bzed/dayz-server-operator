@@ -134,3 +134,29 @@ func TestWriteCompatNeedsACheckout(t *testing.T) {
 		t.Errorf("want a commit error, got %v", err)
 	}
 }
+
+func TestCheckInstalledFindsAnOldGeneration(t *testing.T) {
+	root, _ := gitFixture(t)
+	out := filepath.Join(t.TempDir(), "dist")
+	buildCompat(t, root, out)
+	packaged := filepath.Join(out, "demo")
+
+	// The installed generation is a copy under another name.
+	installed := filepath.Join(t.TempDir(), "0123abcd")
+	pbo, err := os.ReadFile(filepath.Join(packaged, "addons", "demo.pbo"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	write(t, filepath.Join(installed, "addons", "demo.pbo"), string(pbo))
+	if err := CheckInstalled("demo", installed, packaged); err != nil {
+		t.Fatalf("identical copy: %v", err)
+	}
+	write(t, filepath.Join(installed, "addons", "demo.pbo"), "an older build")
+	if err := CheckInstalled("demo", installed, packaged); err == nil || !strings.Contains(err.Error(), "demo.pbo") {
+		t.Fatalf("old copy: %v", err)
+	}
+	// Not one of ours (no compat.yaml next to it): nothing to compare with.
+	if err := CheckInstalled("demo", installed, filepath.Join(t.TempDir(), "demo")); err != nil {
+		t.Fatalf("no compat.yaml: %v", err)
+	}
+}

@@ -5,6 +5,8 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -19,6 +21,9 @@ import (
 
 	"github.com/bzed/dayz-server-operator/internal/admin"
 	"github.com/bzed/dayz-server-operator/internal/api"
+	"github.com/bzed/dayz-server-operator/internal/resolve"
+	"github.com/bzed/dayz-server-operator/internal/servermods"
+	"github.com/bzed/dayz-server-operator/internal/site"
 )
 
 type syncBuf struct {
@@ -285,5 +290,88 @@ func TestServermodsBuildCommand(t *testing.T) {
 	}
 	if _, err := runCmd(t, "servermods", "build", "--src", filepath.Join(t.TempDir(), "none")); err == nil {
 		t.Fatal("no servermods must fail")
+	}
+}
+
+func TestWarnStaleAdminMod(t *testing.T) {
+	dir := t.TempDir()
+	packaged := filepath.Join(dir, "site", "localmods", "dzo-admin")
+	writeFile(t, filepath.Join(packaged, "addons", "dzoadmin.pbo"), "new build")
+	sum := sha256.Sum256([]byte("new build"))
+	writeFile(t, filepath.Join(dir, "site", "localmods", servermods.CompatFile), "servermods:\n  dzo-admin:\n    commit: x\n    pbos:\n      addons/dzoadmin.pbo: "+hex.EncodeToString(sum[:])+"\n")
+	tree := &site.Tree{Dir: filepath.Join(dir, "site")}
+	installed := filepath.Join(dir, "cache", "local", "dzo-admin", "0123abcd")
+	inst := &resolve.Instance{Name: "x", Mods: []resolve.Mod{{Local: "dzo-admin", Server: true, Dir: installed}}}
+
+	var out strings.Builder
+	writeFile(t, filepath.Join(installed, "addons", "dzoadmin.pbo"), "old build")
+	warnStaleAdminMod(&out, tree, inst)
+	if !strings.Contains(out.String(), "not the build shipped") || !strings.Contains(out.String(), "dzo mod update x") {
+		t.Fatalf("old build: %q", out.String())
+	}
+	out.Reset()
+	writeFile(t, filepath.Join(installed, "addons", "dzoadmin.pbo"), "new build")
+	warnStaleAdminMod(&out, tree, inst)
+	if out.Len() != 0 {
+		t.Fatalf("current build: %q", out.String())
+	}
+	// Not installed yet: nothing to compare.
+	inst.Mods[0].Dir = ""
+	warnStaleAdminMod(&out, tree, inst)
+	if out.Len() != 0 {
+		t.Fatalf("not installed: %q", out.String())
+	}
+}
+
+func TestCheckModsUsable(t *testing.T) {
+	dir := t.TempDir()
+	mod := func(name string, files map[string]string) string {
+		d := filepath.Join(dir, name)
+		if err := os.MkdirAll(d, 0o750); err != nil {
+			t.Fatal(err)
+		}
+		for f, c := range files {
+			writeFile(t, filepath.Join(d, f), c)
+		}
+		return d
+	}
+	check := func(name, d string) error {
+		return checkModsUsable(&resolve.Instance{Mods: []resolve.Mod{{Name: "@" + name, Dir: d}, {Name: "@notinstalled"}}})
+	}
+	for _, tc := range []struct {
+		name    string
+		files   map[string]string
+		wantErr string
+	}{
+		{"ok", map[string]string{"meta.cpp": "x", "addons/a.pbo": "pbo"}, ""},
+		{"ebo", map[string]string{"meta.cpp": "x", "addons/a.EBO": "ebo"}, ""},
+		{"metaonly", map[string]string{"meta.cpp": "x"}, ""},
+		{"nothing", map[string]string{}, "directory is empty"},
+		{"stray", map[string]string{"readme.txt": "x"}, "neither addons/ nor meta.cpp"},
+		{"emptyaddons", map[string]string{"meta.cpp": "x", "addons/.keep": "x"}, "no .pbo or .ebo"},
+		{"zeropbo", map[string]string{"meta.cpp": "x", "addons/a.pbo": ""}, "addons/a.pbo is empty"},
+	} {
+		if err := check(tc.name, mod(tc.name, tc.files)); tc.wantErr == "" && err != nil ||
+			tc.wantErr != "" && (err == nil || !strings.Contains(err.Error(), tc.wantErr) || !strings.Contains(err.Error(), "@"+tc.name)) {
+			t.Errorf("%s: err = %v, want %q", tc.name, err, tc.wantErr)
+		}
+	}
+	if os.Geteuid() == 0 {
+		return // root can read everything
+	}
+	// A generation that root installed: the directory is closed. Or only a file in it.
+	locked := mod("locked", map[string]string{"meta.cpp": "x", "addons/a.pbo": "pbo"})
+	lockedPBO := mod("lockedpbo", map[string]string{"meta.cpp": "x", "addons/a.pbo": "pbo"})
+	if err := os.Chmod(filepath.Join(lockedPBO, "addons", "a.pbo"), 0); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(locked, 0); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(locked, 0o750) })
+	for name, d := range map[string]string{"locked": locked, "lockedpbo": lockedPBO} {
+		if err := check(name, d); err == nil || !strings.Contains(err.Error(), "@"+name) || !strings.Contains(err.Error(), "chown -R dayz:dayz") {
+			t.Errorf("%s: err = %v", name, err)
+		}
 	}
 }

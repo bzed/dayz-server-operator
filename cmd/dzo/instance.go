@@ -5,7 +5,10 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -25,6 +28,7 @@ import (
 	"github.com/bzed/dayz-server-operator/internal/resolve"
 	"github.com/bzed/dayz-server-operator/internal/runfiles"
 	"github.com/bzed/dayz-server-operator/internal/serve"
+	"github.com/bzed/dayz-server-operator/internal/servermods"
 	"github.com/bzed/dayz-server-operator/internal/site"
 )
 
@@ -106,6 +110,9 @@ func renderInstance(cmd *cobra.Command, cfg *config.Config, inst *resolve.Instan
 	if err != nil {
 		return err
 	}
+	if err := checkModsUsable(inst); err != nil {
+		return err
+	}
 	if !dryRun {
 		if err := prepareInstanceDir(cmd, cfg, inst, updatePristine); err != nil {
 			return err
@@ -155,6 +162,7 @@ func renderInstance(cmd *cobra.Command, cfg *config.Config, inst *resolve.Instan
 		return err
 	}
 	if inst.AdminEnabled() {
+		warnStaleAdminMod(cmd.ErrOrStderr(), tree, inst)
 		// Every render rotates the mod's token (§C13). The mod reads its config once, at
 		// start: rotating it under a running server cuts the server off (HTTP 401 until the
 		// next restart), and a changed config would not apply anyway. The render that starts
@@ -174,6 +182,97 @@ func renderInstance(cmd *cobra.Command, cfg *config.Config, inst *resolve.Instan
 		return err
 	}
 	return nil
+}
+
+// checkModsUsable fails when an installed mod, or one of its files, cannot be read by this user, or
+// holds nothing to load (Steam delivers an empty folder now and then). The game server skips such a
+// mod and says nothing, so the instance would run without it: it must not start. The usual cause of
+// an unreadable mod is a `dzo mod` command that was run as root.
+func checkModsUsable(inst *resolve.Instance) error {
+	var bad []string
+	for _, m := range inst.Mods {
+		if m.Dir == "" {
+			continue
+		}
+		if err := modUsable(m.Dir); err != nil {
+			bad = append(bad, fmt.Sprintf("the installed mod %s is not usable: %v\n  directory: %s (if root installed it, run: sudo chown -R dayz:dayz it; if it is empty, run: dzo mod refresh %s --force)",
+				m.Name, err, m.Dir, strings.TrimPrefix(m.Name, "@")))
+		}
+	}
+	if len(bad) > 0 {
+		return errors.New(strings.Join(bad, "\n"))
+	}
+	return nil
+}
+
+// modUsable opens the mod directory and every file in its addons/, and wants some content: a PBO or
+// EBO in addons/ that is not empty. A mod with a meta.cpp and no addons/ is let through (a workshop
+// mod may be that); a directory with neither is an empty download.
+func modUsable(dir string) error {
+	top, err := os.ReadDir(dir)
+	if err != nil {
+		return err
+	}
+	if len(top) == 0 {
+		return errors.New("the directory is empty")
+	}
+	addons := filepath.Join(dir, "addons")
+	entries, err := os.ReadDir(addons)
+	switch {
+	case errors.Is(err, fs.ErrNotExist):
+		if _, err := os.Stat(filepath.Join(dir, "meta.cpp")); err != nil {
+			return errors.New("it has neither addons/ nor meta.cpp (an empty download?)")
+		}
+		return nil
+	case err != nil:
+		return err
+	}
+	n := 0
+	for _, e := range entries {
+		if !e.Type().IsRegular() {
+			continue
+		}
+		f, err := os.Open(filepath.Join(addons, e.Name())) //nolint:gosec // inside the mod's generation in the cache
+		if err != nil {
+			return err
+		}
+		fi, err := f.Stat()
+		_ = f.Close()
+		if err != nil {
+			return err
+		}
+		if fi.Size() == 0 {
+			return fmt.Errorf("addons/%s is empty", e.Name())
+		}
+		if ext := strings.ToLower(filepath.Ext(e.Name())); ext == ".pbo" || ext == ".ebo" {
+			n++
+		}
+	}
+	if n == 0 {
+		return errors.New("addons/ holds no .pbo or .ebo")
+	}
+	return nil
+}
+
+// warnStaleAdminMod warns when the installed dzo-admin is not the build shipped with this dzo: a mod
+// of another build can read its config from another place or speak another protocol, and then sits
+// idle without a word, so the instance never shows "dzo-admin connected". It only warns: an
+// unpackaged mod of the operator's own is none of its business.
+func warnStaleAdminMod(w io.Writer, tree *site.Tree, inst *resolve.Instance) {
+	for _, m := range inst.Mods {
+		if m.Local != resolve.AdminName || m.Dir == "" {
+			continue
+		}
+		src, err := resolve.LocalSource(tree, m.Local)
+		if err != nil || src.Dir == "" {
+			return
+		}
+		if err := servermods.CheckInstalled(m.Local, m.Dir, src.Dir); err != nil {
+			_, _ = fmt.Fprintf(w, "warning: the installed %s is not the build shipped with this dzo, so it may not connect: %v\n"+
+				"  run: dzo mod update %s\n", m.Local, err, inst.Name)
+		}
+		return
+	}
 }
 
 // prepareInstanceDir creates the instance as a btrfs subvolume on its first

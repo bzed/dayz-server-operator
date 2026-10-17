@@ -131,7 +131,12 @@ everything under ``/var/lib/dzo``. To use another location, for example
 Run the setup
 -------------
 
-Run the setup as the service user (it refuses to run as root). It
+Run the setup as the service user (it refuses to run as root). Every dzo command does: except the
+container's health probes, ``version``, ``help`` and the package's build steps, dzo exits when run as
+root. What root creates is owned by root, and the game servers run as the service user and silently
+skip a mod directory they cannot read. ``dzo instance render`` fails, so the server does not start, when an
+installed mod or one of its files cannot be read by the service user, or when the mod holds nothing to load
+(an empty folder from Steam, or an empty or missing ``.pbo``). The setup
 
 * creates the directories under ``paths`` (the secrets directory is private) and
   checks that they are writable, that ``instances`` and ``snapshots`` are on the
