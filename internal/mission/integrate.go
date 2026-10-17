@@ -106,10 +106,8 @@ func Integrate(staging string, cs []Contribution) (IntegrateResult, error) {
 			case replaceFiles[base] != "":
 				target := replaceFiles[base]
 				if target == "db/messages.xml" {
-					// Overlays end up here unchecked; restarts and their countdown are dzo's.
-					if err := site.CheckMessagesXML(f.Data); err != nil {
-						return res, fmt.Errorf("mission: %s: %w", c.Name, err)
-					}
+					// The server messages are dzo's (internal/broadcast); DayZ's own file stays empty.
+					f.Data = []byte(site.EmptyMessagesXML)
 				}
 				if prev := replacedBy[target]; prev != "" {
 					res.Conflicts = append(res.Conflicts, fmt.Sprintf("%s: replaced by %s, which was replaced before by %s (the later one wins)", target, c.Name, prev))

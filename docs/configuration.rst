@@ -170,9 +170,9 @@ instance.yaml
      schedule: ["04:00", "Sat 16:00"]   # restart times; Mon,Thu 04:00 for some weekdays
      announce: {minutes: 30, lock: 7, kick: 3}
    welcome: "Welcome to #name!"    # the default; "" for no welcome message
-   messages:                       # more server messages, written to db/messages.xml
+   messages:                       # more server messages, sent by dzo serve
      - {text: "Homepage: example.org, rules: example.org/rules", on_connect: true, delay: 1}
-     - {text: "Please read the rules: example.org/rules", repeat: 45}
+     - {text: "Please read the rules: example.org/rules", repeat: 45, color: red}
    priority:                       # Steam64 IDs that skip the login queue (priority.txt)
      - "76561198108512982"
    health: {startup_timeout: 45m, interval: 60s, retries: 5}
@@ -245,27 +245,28 @@ Main keys:
    only records it.
 
 ``welcome``
-   The message every player gets when joining. The default is ``Welcome to #name!``; DayZ
-   replaces ``#name`` with the server name (``hostname`` in ``serverDZ.cfg``). Set your own text
-   (``#name`` and ``#port`` work in it, the usual 160 characters apply), or ``""`` for none. Can
-   be set under ``defaults:`` in ``site.yaml``.
+   The message every player gets when joining. The default is ``Welcome to #name!``. Set your own
+   text (``#name``, the instance name, and ``#port``, the game port, work in it; up to 160
+   characters), or ``""`` for none. Can be set under ``defaults:`` in ``site.yaml``.
 
 ``messages``
-   Further messages the server sends on its own, from the mission's ``db/messages.xml``. A
-   message has ``text`` (up to 160 characters), ``on_connect: true`` to send it once to a player
-   who joins (``delay`` minutes later, default immediately) and/or ``repeat`` to send it to
-   everybody every that many minutes. All times are minutes. Good for the homepage and the rules.
-   It can be set under ``defaults:`` in ``site.yaml``; an instance's own list replaces it.
+   Further messages the server sends on its own. A message has ``text`` (up to 160 characters),
+   ``on_connect: true`` to send it once to a player who joins (``delay`` minutes after the player
+   is in the game, default at once) and/or ``repeat`` to send it to everybody every that many
+   minutes, and optionally ``color``: ``blue`` (the default), ``red``, ``green`` or ``yellow``.
+   All times are minutes. Good for the homepage and the rules. It can be set under ``defaults:`` in
+   ``site.yaml``; an instance's own list replaces it.
 
-   dzo always manages this file: the welcome message and ``messages:`` are written to it, and
-   with ``welcome: ""`` and no ``messages:`` it is empty, which disables server messages. The
-   example messages of the pristine mission are never used. Instead of ``messages:`` you can put
-   your own ``instances/<name>/messages.xml`` in the site repository (not together with
-   ``messages:``); it is used as it is, without the welcome message. Neither a ``deadline``
-   (countdown), ``shutdown`` nor ``#tmin`` is accepted, in ``messages:``, in that file, or in a mod
-   integration's or an overlay's ``messages.xml``: restarts and stops are announced by dzo itself, see
-   ``restarts.announce`` and :doc:`operations`. The server reads the file at start, so changes
-   take effect at the next restart.
+   The messages are sent by ``dzo serve`` while the server runs, not by DayZ: the server's own
+   ``messages.xml`` sends nothing on a 1.30 server, so dzo always writes it empty (which also
+   keeps the example messages of the pristine mission, with their shutdown countdown, from
+   running), and an ``instances/<name>/messages.xml`` is refused. With the dzo-admin mod connected
+   (the default, see :doc:`admin-map`) a message goes out as a coloured chat line, to a joining
+   player as soon as the player is in the game. Without the mod it is sent over RCon (``say``):
+   without colour, and to a joining player 45 seconds after the connect, because the character is
+   still loading before. The messages are read when ``dzo serve`` starts and when the site is
+   reloaded. Restarts and stops are announced by dzo itself, see ``restarts.announce`` and
+   :doc:`operations`; there is no countdown in ``messages:``.
 
 ``priority``
    Steam64 IDs (17 digits) of players who skip the login queue when the server is full. dzo writes

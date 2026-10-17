@@ -93,8 +93,8 @@ func TestInstanceRender(t *testing.T) {
 	if !strings.Contains(out, "written: 4") { // init.c, types.xml, cfgweather.xml from the fallback, the generated messages.xml
 		t.Errorf("output = %s", out)
 	}
-	if b, _ := os.ReadFile(filepath.Join(live, "db", "messages.xml")); !strings.Contains(string(b), "<text>Welcome to #name!</text>") {
-		t.Errorf("a render without messages config writes the default welcome: %s", b)
+	if b, _ := os.ReadFile(filepath.Join(live, "db", "messages.xml")); strings.Contains(string(b), "<message>") {
+		t.Errorf("a render writes an empty messages.xml, dzo sends the messages itself: %s", b)
 	}
 	if b, _ := os.ReadFile(filepath.Join(live, "cfgweather.xml")); string(b) != "weather" {
 		t.Errorf("fallback file = %q", b)

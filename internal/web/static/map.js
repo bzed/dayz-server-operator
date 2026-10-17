@@ -449,7 +449,7 @@
         { label: 'Message…', min: 'moderator', view: function () {
           return { title: 'Message ' + p.name, submit: 'Send', fields: [
             { name: 'text', label: 'Text', required: true, maxlength: 400 },
-            { name: 'style', label: 'Shown as', options: [['chat', 'chat'], ['important', 'important'], ['notification', 'on screen']] }
+            { name: 'style', label: 'Shown as', options: [['chat', 'chat'], ['important', 'important (red)'], ['friendly', 'friendly (green)'], ['action', 'action (yellow)'], ['notification', 'on screen']] }
           ], run: function (v) { act('/players/' + id + '/message', v); } };
         } },
         { label: 'Teleport to coordinates…', min: 'operator', view: function () {

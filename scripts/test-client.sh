@@ -178,7 +178,14 @@ map: dayzOffline.chernarusplus
 mission_source: {preset: vanilla-chernarusplus}
 ports: {game: $game, rcon: $((query + 1)), query: $query}
 network: host
+mods:
+  - {local: dzo-admin, server: true}
+welcome: "Welcome to #name, port #port"
+messages:
+  - {text: "Rules: be nice (red)", on_connect: true, color: red}
+  - {text: "Homepage: example.org (green)", on_connect: true, color: green, delay: 0}
 Y
+mkdir -p "$work/site/localmods/dzo-admin/addons"
 cat >"$work/config.yaml" <<Y
 paths: {data: $work/data, cache: $work/cache, site: $work/site, secrets: $work/secrets}
 serve: {installation: t, listen: "127.0.0.1:$api", mod_listen: "127.0.0.1:$mod"}
@@ -224,6 +231,10 @@ waitfor 240 "grep -q 'dzotester.*is connected' '$adm'" || { bad "client joined";
 ok "client joined"
 waitfor 90 "'$work/dzo' player list t1 --config '$work/config.yaml' --token-file '$work/api.token' | grep -q dzotester" || { bad "players: state lists the player"; exit 1; }
 ok "players: state lists the player"
+# The server messages of the instance (welcome and messages:) are sent by dzo serve as soon as the
+# player is in the game. Nothing in the client reports a chat line, so the screenshot is the evidence.
+sleep 4
+"$dev/dayz-client-headless.sh" "${exp[@]}" shot "$work/client" "$work/welcome.png" >/dev/null 2>&1 || true
 id=$(dzo player list t1 | awk '/dzotester/{print $1}')
 probe() { grep -h 'DZO-PROBE player' "$script" | tail -1; }
 sleep 12 # the character is still loading for a while after the join

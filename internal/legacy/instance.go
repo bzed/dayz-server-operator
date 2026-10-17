@@ -240,8 +240,9 @@ func convertInstance(out map[string][]byte, rep *report, b *branch, o Options) {
 	}
 
 	// messages and hooks
-	if msg := b.show("files/messages.xml"); msg != nil {
-		out[path.Join(dir, "messages.xml")] = msg
+	if b.show("files/messages.xml") != nil {
+		// dzo sends the server messages itself; a messages.xml in the instance directory is refused.
+		rep.add(n, "files/messages.xml is not copied: DayZ's messages.xml sends nothing on 1.30; set welcome: and messages: in instance.yaml")
 	}
 	if pre := b.show("files/bin/pre_start.sh"); pre != nil {
 		if hasActiveCommand(pre) {

@@ -206,8 +206,8 @@ func TestConvertOverlaysAndReport(t *testing.T) {
 	if !strings.Contains(res.Report, "2 password value(s) were replaced") {
 		t.Error("the report must say that the passwords were replaced")
 	}
-	if string(res.Files["instances/a/messages.xml"]) != "<messages/>" || res.Files["instances/a/serverDZ.cfg"] == nil {
-		t.Error("serverDZ.cfg and messages.xml are copied")
+	if res.Files["instances/a/messages.xml"] != nil || res.Files["instances/a/serverDZ.cfg"] == nil || !strings.Contains(res.Report, "files/messages.xml is not copied") {
+		t.Error("serverDZ.cfg is copied, messages.xml is not (and the report says so)")
 	}
 	if !strings.Contains(string(res.Files["site.yaml"]), "localhost/dzo-runtime:latest") {
 		t.Error("site.yaml")

@@ -45,7 +45,6 @@ func TestCollectOrderAndSources(t *testing.T) {
 	dir := t.TempDir()
 	modDir := filepath.Join(t.TempDir(), "mod")
 	put(t, filepath.Join(modDir, "info", "events.xml"), "<events/>")
-	put(t, filepath.Join(dir, "instances", "x", "messages.xml"), "<messages/>")
 	put(t, filepath.Join(dir, "integrations", "mods", "1", "integration.yaml"), `mod: 1
 name: One
 aliases: [2]
@@ -268,86 +267,38 @@ func collectMessages(t *testing.T, dir string, msgs []site.Message) ([]byte, err
 	return cs[0].Files[0].Data, nil
 }
 
-func TestCollectDefaultWelcome(t *testing.T) {
-	data, err := collectMessages(t, t.TempDir(), nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(data), "<text>Welcome to #name!</text>") || !strings.Contains(string(data), "<onConnect>1</onConnect>") {
-		t.Errorf("default welcome: %s", data)
-	}
-}
-
-func TestCollectWelcomeOverrideAndOff(t *testing.T) {
-	tr := tree(t, t.TempDir())
-	collect := func(inst *resolve.Instance) string {
-		cs, err := Collect(context.Background(), tr, inst, Options{CacheDir: t.TempDir()})
+func TestCollectMessagesXMLIsAlwaysEmpty(t *testing.T) {
+	custom := "Hello"
+	for _, inst := range []*resolve.Instance{
+		{Name: "x", Map: "empty.m"},
+		{Name: "x", Map: "empty.m", Welcome: &custom, Messages: []site.Message{{Text: "Homepage", Repeat: 30}}},
+	} {
+		data, err := collectMessages(t, t.TempDir(), inst.Messages)
 		if err != nil {
 			t.Fatal(err)
 		}
-		return string(cs[0].Files[0].Data)
-	}
-	custom := "Hello on #name, rules: example.org"
-	got := collect(&resolve.Instance{Name: "x", Map: "empty.m", Welcome: &custom, Messages: []site.Message{{Text: "Homepage", Repeat: 30}}})
-	if !strings.Contains(got, "Hello on #name, rules: example.org") || strings.Contains(got, "Welcome to #name!") {
-		t.Errorf("override replaces the default: %s", got)
-	}
-	if strings.Index(got, "Hello on #name") > strings.Index(got, "Homepage") {
-		t.Errorf("the welcome comes first: %s", got)
-	}
-	off := ""
-	got = collect(&resolve.Instance{Name: "x", Map: "empty.m", Welcome: &off})
-	if strings.Contains(got, "<message>") {
-		t.Errorf(`welcome: "" and no messages disables everything: %s`, got)
-	}
-}
-
-func TestCollectMessagesFromConfig(t *testing.T) {
-	data, err := collectMessages(t, t.TempDir(), []site.Message{{Text: "Welcome to #name", OnConnect: true}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(data), "<text>Welcome to #name</text>") {
-		t.Errorf("%s", data)
-	}
-}
-
-func TestCollectMessagesFileIsKeptAndChecked(t *testing.T) {
-	dir := t.TempDir()
-	put(t, filepath.Join(dir, "instances", "x", "messages.xml"), "<messages><message><repeat>5</repeat><text>hi</text></message></messages>")
-	data, err := collectMessages(t, dir, nil)
-	if err != nil || !strings.Contains(string(data), "<text>hi</text>") || strings.Contains(string(data), "Welcome") {
-		t.Fatalf("hand-written file is used as is, without the default welcome: %v %s", err, data)
-	}
-	for name, body := range map[string]string{
-		"deadline": "<messages><message><deadline>600</deadline><text>x</text></message></messages>",
-		"shutdown": "<messages><message><shutdown>1</shutdown><text>x</text></message></messages>",
-		"tmin":     "<messages><message><repeat>1</repeat><text>#tmin</text></message></messages>",
-	} {
-		d := t.TempDir()
-		put(t, filepath.Join(d, "instances", "x", "messages.xml"), body)
-		if _, err := collectMessages(t, d, nil); err == nil {
-			t.Errorf("%s in messages.xml must fail", name)
+		if string(data) != site.EmptyMessagesXML {
+			t.Errorf("dzo sends the messages itself, the file stays empty: %s", data)
 		}
 	}
 }
 
-func TestCollectMessagesFileAndConfigAreAmbiguous(t *testing.T) {
+func TestCollectMessagesFileIsRefused(t *testing.T) {
 	dir := t.TempDir()
 	put(t, filepath.Join(dir, "instances", "x", "messages.xml"), "<messages/>")
-	_, err := collectMessages(t, dir, []site.Message{{Text: "x", Repeat: 1}})
-	if err == nil || !strings.Contains(err.Error(), "messages.xml") || !strings.Contains(err.Error(), "messages:") {
-		t.Fatalf("both set must be an error naming both: %v", err)
+	_, err := collectMessages(t, dir, nil)
+	if err == nil || !strings.Contains(err.Error(), "messages.xml") || !strings.Contains(err.Error(), "welcome:") {
+		t.Fatalf("a messages.xml of the instance is refused with a pointer to the config: %v", err)
 	}
 }
 
-func TestCollectModMessagesWithCountdownRejected(t *testing.T) {
+func TestCollectModMessagesAreDropped(t *testing.T) {
 	dir := t.TempDir()
 	put(t, filepath.Join(dir, "integrations", "mods", "1", "integration.yaml"), "mod: 1\nname: One\nfiles:\n  messages.xml: {source: local, path: files/m.xml}\n")
 	put(t, filepath.Join(dir, "integrations", "mods", "1", "files", "m.xml"), "<messages><message><shutdown>1</shutdown><deadline>60</deadline><text>x</text></message></messages>")
 	tr := tree(t, dir)
 	inst := &resolve.Instance{Name: "x", Map: "empty.m", Mods: []resolve.Mod{{ID: 1}}}
-	if _, err := Collect(context.Background(), tr, inst, Options{CacheDir: t.TempDir()}); err == nil || !strings.Contains(err.Error(), "mod 1") {
-		t.Fatalf("a mod's countdown must fail the collect: %v", err)
+	if _, err := Collect(context.Background(), tr, inst, Options{CacheDir: t.TempDir()}); err != nil {
+		t.Fatalf("a mod's messages.xml is accepted (and later replaced by the empty one): %v", err)
 	}
 }

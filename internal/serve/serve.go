@@ -147,6 +147,11 @@ func Run(ctx context.Context, cfg *config.Config, o Options) error {
 	if err := AddHubs(reg, cfg, tree); err != nil {
 		return err
 	}
+	msgs, err := startMessengers(ctx, cfg, tree, reg, logf)
+	if err != nil {
+		return err
+	}
+	defer func() { msgs.stop() }()
 	apiSrv := api.New(cfg.Serve.Installation, o.Version, reg, api.NewTokenStore(APITokens(cfg)), admin.NewAudit(AuditLog(cfg)))
 	apiSrv.TilesDir = TilesDir(cfg)
 	// The API serves with write timeouts off: the stream stays open.
@@ -181,6 +186,11 @@ func Run(ctx context.Context, cfg *config.Config, o Options) error {
 			if err != nil {
 				logf("reload failed, keeping the old instances: %v", err)
 				continue
+			}
+			msgs.stop()
+			if msgs, err = startMessengers(ctx, cfg, t, reg, logf); err != nil {
+				logf("server messages not restarted: %v", err)
+				msgs = &messengers{cancel: func() {}}
 			}
 			logf("site reloaded")
 		case err := <-errc:

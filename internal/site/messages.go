@@ -4,9 +4,9 @@
 package site
 
 import (
-	"bytes"
-	"encoding/xml"
 	"fmt"
+	"slices"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 )
@@ -14,15 +14,17 @@ import (
 // MaxMessageLen is the longest message text DayZ accepts.
 const MaxMessageLen = 160
 
-// Message is one entry of the server messages (mission db/messages.xml): sent once to a player
-// OnConnect (Delay minutes after the connect) and/or to everyone every Repeat minutes. The text may
-// use #name (server name) and #port. Countdowns and shutdowns are not offered: dzo's own restart
+// Message is one of the server messages dzo sends while it runs (internal/broadcast): once to a
+// player OnConnect (Delay minutes after the player is in the game) and/or to everyone every Repeat
+// minutes. The text may use #name (the instance name) and #port (the game port). Color is one of
+// MessageColors, blue when empty. Countdowns and shutdowns are not offered: dzo's own restart
 // countdown (restarts.announce) does that over RCon.
 type Message struct {
 	Text      string `yaml:"text"`
 	OnConnect bool   `yaml:"on_connect,omitempty"`
 	Delay     int    `yaml:"delay,omitempty"`
 	Repeat    int    `yaml:"repeat,omitempty"`
+	Color     string `yaml:"color,omitempty"`
 }
 
 // Validate checks one message.
@@ -37,6 +39,8 @@ func (m Message) Validate() error {
 		return fmt.Errorf("text must not contain a newline")
 	case strings.Contains(m.Text, "#tmin"):
 		return fmt.Errorf("#tmin only works in a countdown, which dzo does not use (restarts are announced by restarts.announce)")
+	case m.Color != "" && !slices.Contains(MessageColors, m.Color):
+		return fmt.Errorf("color %q is not one of %s", m.Color, strings.Join(MessageColors, ", "))
 	case m.Delay < 0 || m.Repeat < 0:
 		return fmt.Errorf("delay and repeat must not be negative")
 	case !m.OnConnect && m.Repeat == 0:
@@ -52,7 +56,7 @@ const DefaultWelcome = "Welcome to #name!"
 
 // WelcomeMessage is the message sent to a player who joins, from the welcome setting: nil is
 // DefaultWelcome, an empty string means no welcome, any other text replaces the default. DayZ
-// expands #name to the server name itself.
+// is sent as it is (#name and #port are expanded when it goes out).
 func WelcomeMessage(welcome *string) (Message, bool) {
 	text := DefaultWelcome
 	if welcome != nil {
@@ -86,53 +90,19 @@ func ValidateMessages(ms []Message) error {
 	return nil
 }
 
-// RenderMessagesXML writes the mission's db/messages.xml for the messages. No messages give an
-// empty <messages>, which switches the server messages off. deadline and shutdown are always 0.
-func RenderMessagesXML(ms []Message) ([]byte, error) {
-	if err := ValidateMessages(ms); err != nil {
-		return nil, err
-	}
-	var b bytes.Buffer
-	b.WriteString(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` + "\n<messages>\n")
-	for _, m := range ms {
-		on := 0
-		if m.OnConnect {
-			on = 1
-		}
-		fmt.Fprintf(&b, "\t<message>\n\t\t<delay>%d</delay>\n\t\t<repeat>%d</repeat>\n\t\t<deadline>0</deadline>\n\t\t<onConnect>%d</onConnect>\n\t\t<shutdown>0</shutdown>\n\t\t<text>", m.Delay, m.Repeat, on)
-		if err := xml.EscapeText(&b, []byte(strings.TrimSpace(m.Text))); err != nil {
-			return nil, err
-		}
-		b.WriteString("</text>\n\t</message>\n")
-	}
-	b.WriteString("</messages>\n")
-	return b.Bytes(), nil
+// MessageColors are the colours a message can ask for: blue is the chat's own, the others are
+// the game's red, green and yellow chat lines. Only the dzo-admin mod can colour a message.
+var MessageColors = []string{"blue", "red", "green", "yellow"}
+
+// ExpandMessage replaces #name and #port in a message text, as DayZ does in its own messages.
+func ExpandMessage(text, name string, port int) string {
+	return strings.NewReplacer("#name", name, "#port", strconv.Itoa(port)).Replace(text)
 }
 
-// CheckMessagesXML reports an error when a messages.xml cannot be used with dzo: it does not parse,
-// or a message has a countdown (deadline > 0), a shutdown, or #tmin. Comments are ignored.
-func CheckMessagesXML(data []byte) error {
-	var doc struct {
-		XMLName  xml.Name `xml:"messages"`
-		Messages []struct {
-			Deadline string `xml:"deadline"`
-			Shutdown string `xml:"shutdown"`
-			Text     string `xml:"text"`
-		} `xml:"message"`
-	}
-	if err := xml.Unmarshal(data, &doc); err != nil {
-		return fmt.Errorf("messages.xml: %w", err)
-	}
-	for i, m := range doc.Messages {
-		if d := strings.TrimSpace(m.Deadline); d != "" && d != "0" {
-			return fmt.Errorf("messages.xml: message %d has a deadline (countdown): dzo restarts and counts down itself, see restarts.announce", i+1)
-		}
-		if s := strings.TrimSpace(m.Shutdown); s != "" && s != "0" {
-			return fmt.Errorf("messages.xml: message %d has shutdown set: dzo restarts and stops the server itself", i+1)
-		}
-		if strings.Contains(m.Text, "#tmin") {
-			return fmt.Errorf("messages.xml: message %d uses #tmin, which only works in a countdown", i+1)
-		}
-	}
-	return nil
-}
+// EmptyMessagesXML is the mission's db/messages.xml: no messages. dzo sends the messages itself
+// (internal/broadcast), and an empty file also keeps the example messages (a shutdown countdown)
+// of the pristine mission from running.
+const EmptyMessagesXML = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<messages>
+</messages>
+`

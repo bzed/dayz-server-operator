@@ -136,8 +136,8 @@ func TestIntegrateReplaceReportsConflicts(t *testing.T) {
 	if got := readStaging(t, d, "cfgweather.xml"); !strings.Contains(got, `a="2"`) {
 		t.Errorf("the later contributor wins: %s", got)
 	}
-	if got := readStaging(t, d, "db/messages.xml"); !strings.Contains(got, `a="1"`) {
-		t.Errorf("messages.xml goes to db/: %s", got)
+	if got := readStaging(t, d, "db/messages.xml"); got != site.EmptyMessagesXML {
+		t.Errorf("messages.xml goes to db/ and stays empty: %s", got)
 	}
 	if len(res.Conflicts) != 1 || !strings.Contains(res.Conflicts[0], "mod 2") {
 		t.Errorf("conflicts = %v", res.Conflicts)
@@ -246,25 +246,16 @@ func TestIntegrateStrategiesOnlyApplyAtTheTop(t *testing.T) {
 	}
 }
 
-func TestGeneratedMessagesReplacePristine(t *testing.T) {
+func TestMessagesXMLStaysEmpty(t *testing.T) {
 	d := stagingTree(t)
-	data, err := site.RenderMessagesXML(nil)
-	if err != nil {
+	full := []byte("<messages><message><deadline>60</deadline><shutdown>1</shutdown><text>x</text></message></messages>")
+	if _, err := Integrate(d, []Contribution{
+		{Name: "instance messages.xml", Folder: "custom_instance", Files: []ContribFile{{Name: "messages.xml", Data: []byte(site.EmptyMessagesXML)}}},
+		{Name: "overlay o", Folder: "custom_o", Files: []ContribFile{{Name: "db/messages.xml", Data: full}}},
+	}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Integrate(d, []Contribution{{Name: "instance messages.xml", Folder: "custom_instance", Files: []ContribFile{{Name: "messages.xml", Data: data}}}}); err != nil {
-		t.Fatal(err)
-	}
-	if got := readStaging(t, d, "db/messages.xml"); strings.Contains(got, "<message>") || !strings.Contains(got, "<messages>") {
-		t.Errorf("db/messages.xml = %s", got)
-	}
-}
-
-func TestOverlayMessagesWithCountdownRejected(t *testing.T) {
-	d := stagingTree(t)
-	bad := []byte("<messages><message><deadline>60</deadline><shutdown>1</shutdown><text>x</text></message></messages>")
-	_, err := Integrate(d, []Contribution{{Name: "overlay o", Folder: "custom_o", Files: []ContribFile{{Name: "db/messages.xml", Data: bad}}}})
-	if err == nil || !strings.Contains(err.Error(), "deadline") {
-		t.Errorf("err = %v", err)
+	if got := readStaging(t, d, "db/messages.xml"); got != site.EmptyMessagesXML {
+		t.Errorf("a contributed messages.xml is replaced by the empty one (dzo sends the messages): %s", got)
 	}
 }

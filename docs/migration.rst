@@ -53,7 +53,7 @@ What it converts:
    * - ``files/custom/<dir>``
      - overlays (shared if identical across branches)
    * - ``files/messages.xml``
-     - ``instances/<name>/messages.xml``
+     - not copied; set ``welcome:`` and ``messages:`` in ``instance.yaml`` (dzo sends them itself)
    * - ``files/bin/pre_start.sh`` (trader stock, weather)
      - a ``pre_start`` hook, if it does anything (a script that is commented out is dropped)
 

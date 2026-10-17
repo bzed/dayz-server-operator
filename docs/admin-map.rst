@@ -15,7 +15,7 @@ Everything that changes the game goes through **dzo-admin**, a small server-side
 mod (clients do not need it). It reports players and vehicles and carries out
 admin actions:
 
-* direct messages and broadcasts (in chat, as an important message, or as an
+* direct messages and broadcasts (in chat in blue, red, green or yellow, or as an
   on-screen notification),
 * teleport (to a map position or to another player),
 * spawn items into a player's inventory, hands or on the ground, and items and vehicles at a point of the map,
