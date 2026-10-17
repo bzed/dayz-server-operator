@@ -21,6 +21,7 @@ import (
 type Role string
 
 const (
+	RoleDetector  Role = "detector"
 	RoleViewer    Role = "viewer"
 	RoleModerator Role = "moderator"
 	RoleOperator  Role = "operator"
@@ -29,37 +30,50 @@ const (
 
 // Permissions checked by the handlers.
 const (
-	PermView       = "view"
-	PermMessage    = "player.message"
-	PermBroadcast  = "broadcast"
-	PermTeleport   = "player.teleport"
-	PermSpawn      = "player.spawn_item"
-	PermRepair     = "vehicle.repair"
-	PermDelete     = "vehicle.delete"
-	PermAuditView  = "audit.view"
+	PermView      = "view"
+	PermMessage   = "player.message"
+	PermBroadcast = "broadcast"
+	PermTeleport  = "player.teleport"
+	PermSpawn     = "player.spawn_item"
+	PermRepair    = "vehicle.repair"
+	PermDelete    = "vehicle.delete"
+	PermAuditView = "audit.view"
+
+	PermBanView      = "ban.view"
+	PermBanInstance  = "ban.instance"
+	PermBanLong      = "ban.permanent"
+	PermBanIP        = "ban.ip"
+	PermBanGlobal    = "ban.global"
+	PermBanRevokeAny = "ban.revoke_any"
+	PermEvidenceAdd  = "evidence.add"
+
 	secretPrefix   = "dzo_"
 	secretBytes    = 24
 	defaultMaxDays = 365
 )
 
 var rolePerms = map[Role][]string{
+	RoleDetector:  {PermEvidenceAdd},
 	RoleViewer:    {PermView},
-	RoleModerator: {PermView, PermMessage},
-	RoleOperator:  {PermView, PermMessage, PermBroadcast, PermTeleport, PermSpawn, PermRepair, PermDelete},
-	RoleAdmin:     {PermView, PermMessage, PermBroadcast, PermTeleport, PermSpawn, PermRepair, PermDelete, PermAuditView},
+	RoleModerator: {PermView, PermMessage, PermBanView, PermBanInstance, PermEvidenceAdd},
+	RoleOperator:  {PermView, PermMessage, PermBroadcast, PermTeleport, PermSpawn, PermRepair, PermDelete, PermBanView, PermBanInstance, PermBanLong, PermBanIP, PermEvidenceAdd},
+	RoleAdmin: {PermView, PermMessage, PermBroadcast, PermTeleport, PermSpawn, PermRepair, PermDelete, PermAuditView,
+		PermBanView, PermBanInstance, PermBanLong, PermBanIP, PermBanGlobal, PermBanRevokeAny, PermEvidenceAdd},
 }
 
 // Rank orders roles; a marker is visible to roles of at least its rank.
 func (r Role) Rank() int {
 	switch r {
-	case RoleViewer:
+	case RoleDetector:
 		return 1
-	case RoleModerator:
+	case RoleViewer:
 		return 2
-	case RoleOperator:
+	case RoleModerator:
 		return 3
-	case RoleAdmin:
+	case RoleOperator:
 		return 4
+	case RoleAdmin:
+		return 5
 	}
 	return 0
 }

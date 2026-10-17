@@ -6,6 +6,7 @@ package api
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -96,5 +97,26 @@ func TestRoles(t *testing.T) {
 	}
 	if cleanHeader("a\x00b\n"+strings.Repeat("x", 100)) == "" || len(cleanHeader(strings.Repeat("x", 100))) != 64 {
 		t.Fatal("cleanHeader")
+	}
+}
+
+func TestBanPermissions(t *testing.T) {
+	cases := map[Role][]string{
+		RoleDetector:  {PermEvidenceAdd},
+		RoleViewer:    {PermView},
+		RoleModerator: {PermBanView, PermBanInstance, PermEvidenceAdd},
+		RoleOperator:  {PermBanView, PermBanInstance, PermBanLong, PermBanIP, PermEvidenceAdd},
+		RoleAdmin:     {PermBanView, PermBanInstance, PermBanLong, PermBanIP, PermBanGlobal, PermBanRevokeAny, PermEvidenceAdd},
+	}
+	all := []string{PermView, PermBanView, PermBanInstance, PermBanLong, PermBanIP, PermBanGlobal, PermBanRevokeAny, PermEvidenceAdd}
+	for role, want := range cases {
+		for _, p := range all {
+			if got := role.Can(p); got != slices.Contains(want, p) && !(p == PermView && role != RoleDetector) {
+				t.Errorf("%s.Can(%s) = %t", role, p, got)
+			}
+		}
+	}
+	if RoleDetector.Can(PermView) || !RoleDetector.Valid() || RoleDetector.Rank() >= RoleViewer.Rank() {
+		t.Error("detector: valid, below viewer, sees nothing")
 	}
 }

@@ -92,7 +92,7 @@ func newTokenCmd() *cobra.Command {
 			return err
 		},
 	}
-	create.Flags().StringVar(&role, "role", "viewer", "viewer, moderator, operator or admin")
+	create.Flags().StringVar(&role, "role", "viewer", "detector, viewer, moderator, operator or admin")
 	create.Flags().StringSliceVar(&instances, "instance", nil, "limit the token to these instances (default: all)")
 	create.Flags().BoolVar(&delegate, "delegate", false, "may name the acting user (for the web interface)")
 	create.Flags().DurationVar(&ttl, "ttl", 365*24*time.Hour, "lifetime (at most one year)")
