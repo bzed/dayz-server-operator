@@ -34,4 +34,16 @@ func guidOf(t *testing.T, steam string) string {
 	return g
 }
 
+// eventually polls cond until it holds or 5 s pass. It waits on a condition, not for a fixed time.
+func eventually(t *testing.T, what string, cond func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for !cond() {
+		if time.Now().After(deadline) {
+			t.Fatalf("timed out waiting for %s", what)
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+}
+
 func at(d time.Duration) *time.Time { x := t0.Add(d); return &x }
