@@ -111,7 +111,7 @@ func TestBanPermissions(t *testing.T) {
 	all := []string{PermView, PermBanView, PermBanInstance, PermBanLong, PermBanIP, PermBanGlobal, PermBanRevokeAny, PermEvidenceAdd}
 	for role, want := range cases {
 		for _, p := range all {
-			if got := role.Can(p); got != slices.Contains(want, p) && !(p == PermView && role != RoleDetector) {
+			if got := role.Can(p); got != slices.Contains(want, p) && (p != PermView || role == RoleDetector) {
 				t.Errorf("%s.Can(%s) = %t", role, p, got)
 			}
 		}
