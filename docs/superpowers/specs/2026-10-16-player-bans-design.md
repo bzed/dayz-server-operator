@@ -32,7 +32,7 @@ deliberately narrower: no country or ASN bans, no CIDR ranges, no join policies.
 | # | Decision |
 |---|---|
 | B1 | "Global" means every instance of one dzo installation (one host). |
-| B2 | SQLite (pure Go `modernc.org/sqlite`, no cgo) in `cfg.Paths.DB`, behind a store interface with portable SQL, so that PostgreSQL can follow (D26). Migrations with goose. The new dependency, its Debian package and its licence are checked and justified in the commit that adds it. |
+| B2 | SQLite (pure Go `modernc.org/sqlite`, no cgo) in `cfg.Paths.DB`, behind a store interface with portable SQL, so that PostgreSQL can follow (D26). Migrations are embedded numbered SQL files applied by a small runner (no goose). The new dependency, its Debian package and its licence are checked and justified in the commit that adds it. |
 | B3 | `dzo serve` is the only writer. Web UI, CLI and the detector use the serve API (`apiclient`). One exception: the instance start path opens the database read-only to render `bans.txt`, so bans hold even when serve is down. |
 | B4 | Enforcement: the BattlEye `bans.txt` rendered from the database, plus a live enforcer in serve (a persistent BattlEye session per running instance). The DayZ `ban.txt` only if V4 confirms its format. |
 | B5 | Evidence belongs to a player (Steam ID, GUID or IP), and bans reference evidence items. Revoking a ban keeps its evidence. |
@@ -57,7 +57,7 @@ Run on stable, and on experimental when it is available.
 - **V2, the GUID derivation (client).** The dzo-admin mod gives the player's Steam ID and BattlEye
   the GUID in the same session. Check that `md5("BE" + little-endian uint64(steam_id))` equals the
   GUID, and keep the pair as test data. If it does not match, Steam-ID bans use the GUIDs observed
-  in `identities` plus the live kick, and the design is revisited.
+  in `sightings` plus the live kick, and the design is revisited.
 - **V3, enforcement end to end (client).**
   - (a) A ban in the rendered `bans.txt` before the start: the client is refused, and the message is
     recorded.
@@ -75,8 +75,12 @@ against new DayZ builds.
 ## Data model
 
 ```
-players        steam_id PK, first_seen, last_seen, last_name
-identities     steam_id, kind (guid|ip), value, instance, first_seen, last_seen
+sightings      guid, ip, name, instance, first_seen, last_seen   (PK guid, ip, instance)
+```
+
+A Steam ID maps to its GUID by the derivation that V2 verifies, so sightings need no Steam ID column.
+
+```
 bans           id, reason (internal), message (shown to the player), created_by, created_at,
                expires_at (NULL = permanent), scope (global|instances),
                revoked_by, revoked_at, revoke_reason (NULL while not revoked)
@@ -119,16 +123,14 @@ When it is written:
 2. By serve after every ban change, for every affected instance, followed by RCon `loadBans`.
 3. By serve on a one-minute sweep, so that expired bans leave the file.
 
-Existing hand-written bans are imported once, on the first render for an instance, as bans with
-`created_by = import`. From then on the database is the source of truth. Later hand edits to the file
-are overwritten, and the header says so.
+dzo records the SHA-256 of what it wrote in `profiles/battleye/.dzo-bans.sha256`. When `bans.txt` differs from that (hand edits, or another RCon tool's `addBan`), serve imports its active entries that are not banned yet as instance bans `created_by = import:bans.txt` and renders again. The start path never overwrites a file changed outside dzo, and leaves it to serve. Removing a ban has to go through dzo.
 
 ### The live enforcer
 
 Serve keeps one `battleye.Session` (the existing reconnecting type) per running instance, with all
 goroutines tied to serve's context and waited for on shutdown.
 
-- Connect events give the IP, GUID events the GUID. Both are recorded in `identities`.
+- Connect events give the IP, GUID events the GUID. Both are recorded in `sightings`.
 - On a GUID or IP that has an active ban for this instance: `kick <slot> <message>`, recorded in the
   audit log.
 - The Steam ID comes from the dzo-admin mod's player sync. It is linked to the GUID by slot and name
@@ -148,7 +150,7 @@ All under `/api/v1`, JSON, with body and field size limits, and every change aud
 | `GET /bans` (filters: state active/expired/revoked, instance, query by Steam ID, name, GUID, IP) | `ban.view` |
 | `POST /bans` | `ban.instance` or `ban.global`, see below |
 | `GET /bans/{id}`, `GET /bans/{id}/history` | `ban.view` |
-| `PATCH /bans/{id}` (reason, message, expiry, scope, targets, evidence links) | the same rules as creating it |
+| `PUT /bans/{id}` (the full ban: reason, message, expiry, scope, targets, evidence links) | the same rules as creating it |
 | `POST /bans/{id}/revoke` (with a reason) | the ban's creator (if still allowed to create it), or admin |
 | `GET /evidence`, `GET /evidence/{id}`, `GET /evidence/{id}/file` | `ban.view` |
 | `POST /evidence` (JSON, or multipart for an image) | `evidence.add` |
