@@ -300,6 +300,16 @@ ok "players: state lists the player"
 sleep 4
 "$dev/dayz-client-headless.sh" "${exp[@]}" shot "$work/client" "$work/welcome.png" >/dev/null 2>&1 || true
 id=$(dzo player list t1 | awk '/dzotester/{print $1}')
+if [ "$bans" = 1 ]; then
+	mkdir -p "$work/capture/v2"
+	"$work/dzo" rcon exec --addr "127.0.0.1:$rcon" --password "$rconpw" players >"$work/capture/v2/players.out"
+	guid=$(grep dzotester "$work/capture/v2/players.out" | grep -oE '[0-9a-f]{32}' | head -1)
+	echo "$id $guid" >"$work/capture/v2/pair.txt"
+	want=$(python3 -I -c 'import hashlib,struct,sys;print(hashlib.md5(b"BE"+struct.pack("<Q",int(sys.argv[1]))).hexdigest())' "$id")
+	s=1
+	[ -n "$guid" ] && [ "$guid" = "$want" ] && s=0
+	verdict "V2: GUID = md5(BE + little-endian Steam ID) ($id -> $guid)" $s
+fi
 probe() { grep -h 'DZO-PROBE player' "$script" | tail -1; }
 sleep 12 # the character is still loading for a while after the join
 
