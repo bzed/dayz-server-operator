@@ -290,7 +290,7 @@ func TestModGreetsOnlyPlayersWhoJoinAfterTheMod(t *testing.T) {
 func TestModSaysInTheStyleOfTheColour(t *testing.T) {
 	h := &fakeHub{res: admin.Result{OK: true}}
 	m := &Mod{Hub: h}
-	for color, style := range map[string]string{"": "important", "red": "important", "green": "friendly", "yellow": "action", "blue": "chat"} {
+	for color, style := range map[string]string{"": "important", "red": "important", "green": "friendly", "yellow": "chat", "blue": "blue"} {
 		noError(t, m.Say(context.Background(), &Player{Key: "7656"}, "hi", color))
 		last := h.cmds[len(h.cmds)-1]
 		equal(t, admin.Command{Kind: admin.KindMessage, SteamID: "7656", Text: "hi", Style: style}, last)

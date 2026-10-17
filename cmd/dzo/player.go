@@ -104,7 +104,7 @@ func newPlayerCmd() *cobra.Command {
 			return printResult(cmd, r)
 		},
 	}
-	msg.Flags().StringVar(&style, "style", "chat", "chat (blue), important (red), friendly (green), action (yellow) or notification")
+	msg.Flags().StringVar(&style, "style", "chat", "chat (yellow), important (red), friendly (green), blue or notification")
 
 	var x, z float64
 	var to string

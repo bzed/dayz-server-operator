@@ -215,7 +215,7 @@ installation (default: the local ``serve.listen``). They need the
 
    * - ``dzo player list <instance>``
      - online players
-   * - ``dzo player msg <instance> <steamid|all> <text> [--style chat|important|friendly|action|notification]``
+   * - ``dzo player msg <instance> <steamid|all> <text> [--style chat|important|friendly|blue|notification]``
      - message one player or everyone
    * - ``dzo player tp <instance> <steamid> (--x <x> --z <z> | --to <steamid>)``
      - teleport a player

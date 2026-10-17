@@ -8,6 +8,8 @@
 // so dzo-admin's vehicle crew can be checked. The player is the only thing the probe touches.
 modded class MissionServer
 {
+	protected ref array<Object> m_BareCars;
+
 	override void OnInit()
 	{
 		super.OnInit();
@@ -125,6 +127,10 @@ modded class MissionServer
 			pos[1] = GetGame().SurfaceY(pos[0], pos[2]);
 			Object car = GetGame().CreateObjectEx(types.Get(i), pos, ECE_PLACE_ON_SURFACE | ECE_CREATEPHYSICS);
 			Print("DZO-PROBE bare: " + types.Get(i) + " " + car);
+			// the position query below does not always find every one of them
+			if (!m_BareCars)
+				m_BareCars = new array<Object>;
+			m_BareCars.Insert(car);
 		}
 	}
 
@@ -135,6 +141,14 @@ modded class MissionServer
 		array<CargoBase> proxies = new array<CargoBase>;
 		pos[1] = GetGame().SurfaceY(pos[0], pos[2]);
 		GetGame().GetObjectsAtPosition(pos, 40, objs, proxies);
+		if (tag == "bare" && m_BareCars)
+		{
+			foreach (Object b : m_BareCars)
+			{
+				if (b && objs.Find(b) < 0)
+					objs.Insert(b);
+			}
+		}
 		foreach (Object o : objs)
 		{
 			CarScript car = CarScript.Cast(o);

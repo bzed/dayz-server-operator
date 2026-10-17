@@ -15,7 +15,7 @@
   <h2><i class="fa fa-bullhorn" aria-hidden="true"></i>Broadcast</h2>
   <form hx-post="/b/{{.Backend}}/i/{{.Instance}}/message" hx-target="#flash" hx-on::after-request="this.reset()">
     <input name="text" placeholder="Message to all players" maxlength="400" required size="50">
-    <select name="style"><option value="chat">chat</option><option value="important">important (red)</option><option value="friendly">friendly (green)</option><option value="action">action (yellow)</option><option value="notification">on screen</option></select>
+    <select name="style"><option value="chat">chat (yellow)</option><option value="important">important (red)</option><option value="friendly">friendly (green)</option><option value="notification">on screen</option></select>
     <button><i class="fa fa-paper-plane" aria-hidden="true"></i>Send</button>
   </form>
 </section>

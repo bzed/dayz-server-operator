@@ -493,7 +493,7 @@ func (h *Hub) validate(c *Command) error {
 		switch c.Style {
 		case "":
 			c.Style = "chat"
-		case "chat", "important", "friendly", "action", "notification":
+		case "chat", "blue", "important", "friendly", "action", "notification":
 		default:
 			return fmt.Errorf("admin: unknown message style %q", c.Style)
 		}

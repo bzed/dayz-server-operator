@@ -97,7 +97,7 @@ Acting
      - message to everyone
    * - ``POST /instances/<i>/players/<steamid>/message`` ``{"text", "style"}``
      - ``moderator``
-     - direct message (``style``: ``chat`` (blue), ``important`` (red), ``friendly`` (green), ``action`` (yellow), ``notification``)
+     - direct message (``style``: ``chat`` (yellow), ``important`` (red), ``friendly`` (green), ``blue``, ``notification``)
    * - ``POST /instances/<i>/players/<steamid>/teleport`` ``{"x", "z", "y"?}`` or ``{"to_steam_id"}``
      - ``operator``
      - teleport; without ``y`` the player lands on the surface
