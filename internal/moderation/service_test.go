@@ -181,3 +181,63 @@ func TestOutsideChangesAreImported(t *testing.T) {
 	})
 	eventually(t, "bans.txt rewritten as ours", func() bool { c, _, _ := ChangedOutside(dir); return !c })
 }
+
+func TestKickOnConnectByGUIDAndIP(t *testing.T) {
+	e := newSvc(t, "alpha")
+	g := guidOf(t, steamA)
+	_, _ = e.st.CreateBan(ctx, "a", BanInput{SteamID: steamA, Reason: "x", Message: "cheater", Scope: ScopeGlobal}, t0)
+	_, _ = e.st.CreateBan(ctx, "a", BanInput{IPs: []string{"198.51.100.9"}, Reason: "y", Message: "ip banned", Scope: ScopeGlobal}, t0)
+	r := e.rcon["alpha"]
+	r.events <- battleye.Event{Kind: battleye.EventConnect, PlayerID: 3, PlayerName: "alice", Address: "192.0.2.7:2304"}
+	r.events <- battleye.Event{Kind: battleye.EventGUID, PlayerID: 3, PlayerName: "alice", GUID: g}
+	eventually(t, "the GUID kick", func() bool { return len(r.sent("kick 3 ")) == 1 })
+	if k := r.sent("kick 3 ")[0]; k != "kick 3 cheater" {
+		t.Fatalf("kick %q", k)
+	}
+	r.events <- battleye.Event{Kind: battleye.EventConnect, PlayerID: 4, PlayerName: "mallory", Address: "198.51.100.9:2304"}
+	eventually(t, "the IP kick", func() bool { return len(r.sent("kick 4 ")) == 1 })
+	ids, _ := e.st.Identities(ctx, steamA)
+	if len(ids) != 1 || ids[0].IP != "192.0.2.7" || ids[0].Name != "alice" {
+		t.Fatalf("sighting %+v", ids)
+	}
+	if b, _ := os.ReadFile(e.audit); !strings.Contains(string(b), `"ban.kick"`) {
+		t.Fatal("no audit entry for the kick")
+	}
+}
+
+func TestNoKickWithoutBan(t *testing.T) {
+	e := newSvc(t, "alpha")
+	r := e.rcon["alpha"]
+	g := guidOf(t, steamB)
+	r.events <- battleye.Event{Kind: battleye.EventConnect, PlayerID: 1, PlayerName: "bob", Address: "192.0.2.8:2304"}
+	r.events <- battleye.Event{Kind: battleye.EventGUID, PlayerID: 1, PlayerName: "bob", GUID: g}
+	eventually(t, "the sighting", func() bool { ids, _ := e.st.Identities(ctx, steamB); return len(ids) == 1 })
+	if k := r.sent("kick"); len(k) != 0 {
+		t.Fatalf("kicked %v", k)
+	}
+}
+
+func TestNewBanKicksOnlinePlayer(t *testing.T) {
+	e := newSvc(t, "alpha")
+	r := e.rcon["alpha"]
+	g := guidOf(t, steamA)
+	r.mu.Lock()
+	r.players = "0   192.0.2.7:2304   15   " + g + "(OK) alice\n1   192.0.2.8:2304   15   " + guidOf(t, steamB) + "(OK) bob\n"
+	r.mu.Unlock()
+	b, _ := e.st.CreateBan(ctx, "a", BanInput{SteamID: steamA, Reason: "x", Message: "bye", Scope: ScopeGlobal}, t0)
+	e.svc.Changed(ctx, b, nil)
+	if k := r.sent("kick"); len(k) != 1 || k[0] != "kick 0 bye" {
+		t.Fatalf("kicks %v", k)
+	}
+}
+
+func TestKickMessageIsSanitised(t *testing.T) {
+	e := newSvc(t, "alpha")
+	r := e.rcon["alpha"]
+	_, _ = e.st.CreateBan(ctx, "a", BanInput{IPs: []string{"192.0.2.7"}, Reason: "x", Message: "two\nlines; #kick -1", Scope: ScopeGlobal}, t0)
+	r.events <- battleye.Event{Kind: battleye.EventConnect, PlayerID: 2, PlayerName: "x", Address: "192.0.2.7:2304"}
+	eventually(t, "the kick", func() bool { return len(r.sent("kick 2 ")) == 1 })
+	if k := r.sent("kick 2 ")[0]; k != "kick 2 two lines; #kick -1" {
+		t.Fatalf("kick %q", k)
+	}
+}

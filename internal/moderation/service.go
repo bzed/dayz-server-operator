@@ -6,6 +6,7 @@ package moderation
 import (
 	"context"
 	"fmt"
+	"net"
 	"sort"
 	"sync"
 	"time"
@@ -260,6 +261,103 @@ func (r *running) fail(err error) error {
 	return err
 }
 
-func (s *Service) enforce(ctx context.Context, r *running) { <-ctx.Done() }
+// slot is what the enforcer knows about a connected player.
+type slot struct {
+	name, ip, guid string
+}
 
-func (s *Service) kickBanned(context.Context, *running) error { return nil }
+// enforce follows an instance's BattlEye events until ctx ends.
+func (s *Service) enforce(ctx context.Context, r *running) {
+	slots := map[int]*slot{}
+	events := r.rcon.Events()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case ev, ok := <-events:
+			if !ok {
+				return
+			}
+			s.handle(ctx, r, slots, ev)
+		}
+	}
+}
+
+func (s *Service) handle(ctx context.Context, r *running, slots map[int]*slot, ev battleye.Event) {
+	name := r.inst.Name
+	switch ev.Kind {
+	case battleye.EventConnect:
+		host, _, err := net.SplitHostPort(ev.Address)
+		if err != nil {
+			s.logf("bans: %s: connect without an address: %q", name, ev.Raw)
+			return
+		}
+		slots[ev.PlayerID] = &slot{name: ev.PlayerName, ip: host}
+		s.check(ctx, r, ev.PlayerID, "", host)
+	case battleye.EventGUID, battleye.EventVerifiedGUID:
+		sl := slots[ev.PlayerID]
+		if sl == nil {
+			sl = &slot{name: ev.PlayerName}
+			slots[ev.PlayerID] = sl
+		}
+		sl.guid = ev.GUID
+		if sl.ip != "" {
+			if err := s.store.Seen(ctx, name, ev.GUID, sl.ip, sl.name, s.Now()); err != nil {
+				s.logf("bans: %s: sighting: %v", name, err)
+			}
+		}
+		s.check(ctx, r, ev.PlayerID, ev.GUID, sl.ip)
+	case battleye.EventDisconnect, battleye.EventKick:
+		delete(slots, ev.PlayerID)
+	}
+}
+
+// check kicks a player when a ban covers their GUID or IP.
+func (s *Service) check(ctx context.Context, r *running, id int, guid, ip string) {
+	b, err := s.store.FindActive(ctx, r.inst.Name, guid, ip, s.Now())
+	if err != nil {
+		s.logf("bans: %s: %v", r.inst.Name, err)
+		return
+	}
+	if b != nil {
+		s.kick(ctx, r, id, firstOf(guid, ip), *b)
+	}
+}
+
+func firstOf(v ...string) string {
+	for _, s := range v {
+		if s != "" {
+			return s
+		}
+	}
+	return ""
+}
+
+func (s *Service) kick(ctx context.Context, r *running, id int, target string, b Ban) {
+	_, err := r.rcon.Command(ctx, fmt.Sprintf("kick %d %s", id, BEReason(b.Message)))
+	e := admin.AuditEntry{Actor: "dzo", Source: "bans", Instance: r.inst.Name, Action: "ban.kick", Target: target,
+		Detail: fmt.Sprintf("ban #%d", b.ID), OK: err == nil}
+	if err != nil {
+		e.Result = err.Error()
+		s.logf("bans: %s: kick %d: %v", r.inst.Name, id, err)
+	}
+	_ = s.audit.Log(e) // the kick happened (or not) either way
+}
+
+// kickBanned kicks the online players a ban covers (after a ban change).
+func (s *Service) kickBanned(ctx context.Context, r *running) error {
+	raw, err := r.rcon.Command(ctx, "players")
+	if err != nil {
+		return fmt.Errorf("players: %w", err)
+	}
+	for _, p := range battleye.ParsePlayers(raw) {
+		b, err := s.store.FindActive(ctx, r.inst.Name, p.GUID, p.IP, s.Now())
+		if err != nil {
+			return err
+		}
+		if b != nil {
+			s.kick(ctx, r, p.ID, firstOf(p.GUID, p.IP), *b)
+		}
+	}
+	return nil
+}
