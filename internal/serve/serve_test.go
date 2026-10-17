@@ -245,3 +245,23 @@ func TestAddHubsVehicleKinds(t *testing.T) {
 		t.Fatalf("vehicle kinds %v", got)
 	}
 }
+
+func TestBanInstancesNeedTheRConPassword(t *testing.T) {
+	cfg, tree := fixture(t)
+	insts, err := BanInstances(cfg, tree, t.Logf)
+	if err != nil || len(insts) != 0 {
+		t.Fatalf("without a password file: %+v, %v", insts, err)
+	}
+	pwFile := filepath.Join(cfg.Paths.Secrets, "rcon", "alpha")
+	if err := os.MkdirAll(filepath.Dir(pwFile), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(pwFile, []byte("secret\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	insts, err = BanInstances(cfg, tree, t.Logf)
+	if err != nil || len(insts) != 1 || insts[0].Name != "alpha" || insts[0].RConPass != "secret" ||
+		insts[0].BEDir != filepath.Join(cfg.Paths.Instances, "alpha", "profiles", "battleye") {
+		t.Fatalf("with a password file: %+v, %v", insts, err)
+	}
+}

@@ -12,12 +12,15 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/bzed/dayz-server-operator/internal/admin"
 	"github.com/bzed/dayz-server-operator/internal/api"
 	"github.com/bzed/dayz-server-operator/internal/config"
+	"github.com/bzed/dayz-server-operator/internal/moderation"
 	"github.com/bzed/dayz-server-operator/internal/resolve"
 	"github.com/bzed/dayz-server-operator/internal/site"
 )
@@ -136,6 +139,30 @@ func newServer(h http.Handler) *http.Server {
 	return &http.Server{Handler: h, ReadHeaderTimeout: 10 * time.Second, ReadTimeout: time.Minute, IdleTimeout: 2 * time.Minute}
 }
 
+// BanInstances are the instances whose bans serve enforces. An instance without an RCon password yet
+// (never rendered) is skipped: the start path renders its bans.txt, and serve picks it up after the
+// next site reload.
+func BanInstances(cfg *config.Config, tree *site.Tree, logf func(string, ...any)) ([]moderation.Instance, error) {
+	all, err := resolve.ResolveAll(cfg, tree)
+	if err != nil {
+		return nil, err
+	}
+	var out []moderation.Instance
+	for _, inst := range all {
+		b, err := os.ReadFile(filepath.Join(cfg.Paths.Secrets, "rcon", inst.Name)) //nolint:gosec // dzo's own secrets directory
+		if errors.Is(err, os.ErrNotExist) {
+			logf("bans: %s has no RCon password yet; enforcing after its first render and a reload", inst.Name)
+			continue
+		}
+		if err != nil {
+			return nil, fmt.Errorf("bans: %s: reading the RCon password: %w", inst.Name, err)
+		}
+		out = append(out, moderation.Instance{Name: inst.Name, BEDir: filepath.Join(inst.Paths.Profiles, "battleye"),
+			RConAddr: inst.RConAddr(), RConPass: strings.TrimSpace(string(b))})
+	}
+	return out, nil
+}
+
 // Run serves until ctx is done.
 func Run(ctx context.Context, cfg *config.Config, o Options) error {
 	logf := o.Logf
@@ -158,7 +185,23 @@ func Run(ctx context.Context, cfg *config.Config, o Options) error {
 		return err
 	}
 	defer func() { msgs.stop() }()
-	apiSrv := api.New(cfg.Serve.Installation, o.Version, reg, api.NewTokenStore(APITokens(cfg)), admin.NewAudit(AuditLog(cfg)))
+	audit := admin.NewAudit(AuditLog(cfg))
+	store, err := moderation.Open(ctx, BanDB(cfg))
+	if err != nil {
+		return err
+	}
+	defer func() { _ = store.Close() }() // after the Service has stopped (deferred below, runs first)
+	mctx, mcancel := context.WithCancel(ctx)
+	svc := moderation.NewService(store, audit, logf)
+	svc.Start(mctx)
+	defer func() { mcancel(); svc.Wait() }()
+	if insts, err := BanInstances(cfg, tree, logf); err != nil {
+		logf("bans: %v", err)
+	} else {
+		svc.SetInstances(insts)
+	}
+	apiSrv := api.New(cfg.Serve.Installation, o.Version, reg, api.NewTokenStore(APITokens(cfg)), audit)
+	apiSrv.Moderation = svc
 	apiSrv.TilesDir = TilesDir(cfg)
 	// The API serves with write timeouts off: the stream stays open.
 	apiHTTP, modHTTP := newServer(apiSrv.Handler()), newServer(reg.ModHandler())
@@ -197,6 +240,11 @@ func Run(ctx context.Context, cfg *config.Config, o Options) error {
 			if msgs, err = startMessengers(ctx, cfg, t, reg, logf); err != nil {
 				logf("server messages not restarted: %v", err)
 				msgs = &messengers{cancel: func() {}}
+			}
+			if insts, err := BanInstances(cfg, t, logf); err != nil {
+				logf("bans: %v", err)
+			} else {
+				svc.SetInstances(insts)
 			}
 			reg.LogTokens()
 			logf("site reloaded")
