@@ -53,22 +53,14 @@ type Error struct {
 
 func (e *Error) Error() string { return fmt.Sprintf("api: %d %s", e.Status, e.Message) }
 
-func (c *Client) req(ctx context.Context, method, path string, body any) (*http.Request, error) {
-	var rd io.Reader
-	if body != nil {
-		b, err := json.Marshal(body)
-		if err != nil {
-			return nil, err
-		}
-		rd = bytes.NewReader(b)
-	}
-	r, err := http.NewRequestWithContext(ctx, method, c.Base+path, rd)
+func (c *Client) newReq(ctx context.Context, method, path string, body io.Reader, contentType string) (*http.Request, error) {
+	r, err := http.NewRequestWithContext(ctx, method, c.Base+path, body)
 	if err != nil {
 		return nil, err
 	}
 	r.Header.Set("Authorization", "Bearer "+c.Token)
-	if body != nil {
-		r.Header.Set("Content-Type", "application/json")
+	if contentType != "" {
+		r.Header.Set("Content-Type", contentType)
 	}
 	if c.Actor != "" {
 		r.Header.Set("X-Dzo-Actor", c.Actor)
@@ -77,6 +69,17 @@ func (c *Client) req(ctx context.Context, method, path string, body any) (*http.
 		r.Header.Set("X-Dzo-Source", c.Source)
 	}
 	return r, nil
+}
+
+func (c *Client) req(ctx context.Context, method, path string, body any) (*http.Request, error) {
+	if body == nil {
+		return c.newReq(ctx, method, path, nil, "")
+	}
+	b, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	return c.newReq(ctx, method, path, bytes.NewReader(b), "application/json")
 }
 
 func (c *Client) do(ctx context.Context, method, path string, body any) (int, []byte, error) {
