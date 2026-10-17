@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/spf13/cobra"
 )
 
 func runCmd(t *testing.T, args ...string) (string, error) {
@@ -101,5 +103,44 @@ func TestServerCfgDiffParseError(t *testing.T) {
 	}
 	if _, err := runCmd(t, "servercfg", "diff", badPath, goodPath); err == nil {
 		t.Fatal("expected a parse error")
+	}
+}
+
+func TestMain(m *testing.M) {
+	// The package build runs the tests as root.
+	_ = os.Setenv(allowRootEnv, "1")
+	os.Exit(m.Run())
+}
+
+func TestRefuseRoot(t *testing.T) {
+	root := newRootCmd()
+	find := func(args ...string) *cobra.Command {
+		c, _, err := root.Find(args)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return c
+	}
+	for _, tc := range []struct {
+		args     []string
+		euid     int
+		override string
+		refused  bool
+	}{
+		{[]string{"mod", "update"}, 0, "", true},
+		{[]string{"instance", "render"}, 0, "", true},
+		{[]string{"serve"}, 0, "0", true},
+		{[]string{"mod", "update"}, 1000, "", false},
+		{[]string{"mod", "update"}, 0, "1", false},
+		{[]string{"health", "live"}, 0, "", false},
+		{[]string{"servermods", "build"}, 0, "", false},
+		{[]string{"gen-man"}, 0, "", false},
+		{[]string{"version"}, 0, "", false},
+		{nil, 0, "", false},
+	} {
+		err := refuseRoot(find(tc.args...), tc.euid, tc.override)
+		if (err != nil) != tc.refused {
+			t.Errorf("%v euid %d override %q: err = %v, want refused %v", tc.args, tc.euid, tc.override, err, tc.refused)
+		}
 	}
 }
