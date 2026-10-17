@@ -39,7 +39,10 @@ type Server struct {
 	Audit  *admin.Audit
 	// TilesDir holds the map tile sets (see internal/maptiles); empty serves none.
 	TilesDir string
+	// Moderation serves the ban and evidence routes; nil answers them 503.
+	Moderation Moderation
 
+	now     func() time.Time
 	actions *admin.Limiter
 	targets *admin.Limiter
 }
@@ -48,7 +51,7 @@ type Server struct {
 func New(installation, version string, hubs *admin.Registry, tokens *TokenStore, audit *admin.Audit) *Server {
 	return &Server{
 		Installation: installation, Version: version, Hubs: hubs, Tokens: tokens, Audit: audit,
-		actions: admin.NewLimiter(actionsPerMin, time.Minute), targets: admin.NewLimiter(perTargetPerMin, time.Minute),
+		now: time.Now, actions: admin.NewLimiter(actionsPerMin, time.Minute), targets: admin.NewLimiter(perTargetPerMin, time.Minute),
 	}
 }
 
@@ -137,6 +140,12 @@ func (s *Server) Handler() http.Handler {
 	route("POST "+base+"/instances/{instance}/vehicles/{id}/repair", PermRepair, true, s.repair)
 	route("POST "+base+"/instances/{instance}/vehicles/{id}/flip", PermRepair, true, s.flip)
 	route("DELETE "+base+"/instances/{instance}/vehicles/{id}", PermDelete, true, s.deleteVehicle)
+	route("GET "+base+"/bans", PermBanView, false, s.listBans)
+	route("POST "+base+"/bans", PermBanInstance, false, s.createBan)
+	route("GET "+base+"/bans/{id}", PermBanView, false, s.getBan)
+	route("PUT "+base+"/bans/{id}", PermBanInstance, false, s.updateBan)
+	route("POST "+base+"/bans/{id}/revoke", PermBanInstance, false, s.revokeBan)
+	route("GET "+base+"/bans/{id}/history", PermBanView, false, s.banHistory)
 	return mux
 }
 
