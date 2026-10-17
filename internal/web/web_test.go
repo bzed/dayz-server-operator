@@ -19,6 +19,7 @@ import (
 	"github.com/bzed/dayz-server-operator/internal/admin"
 	"github.com/bzed/dayz-server-operator/internal/api"
 	"github.com/bzed/dayz-server-operator/internal/apiclient"
+	"github.com/bzed/dayz-server-operator/internal/moderation"
 )
 
 type env struct {
@@ -36,9 +37,32 @@ func newEnv(t *testing.T, role api.Role) *env {
 	hubs := admin.NewRegistry(dir)
 	hub := hubs.Add(admin.NewHub("alpha"))
 	apiSrv := api.New("site-a", "v0", hubs, api.NewTokenStore(filepath.Join(dir, "t.json")), admin.NewAudit(filepath.Join(dir, "a.jsonl")))
+	st, err := moderation.Open(context.Background(), filepath.Join(dir, "dzo.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	apiSrv.Moderation = webMod{st}
 	ats := httptest.NewServer(apiSrv.Handler())
 	t.Cleanup(ats.Close)
 	secret, _, err := apiSrv.Tokens.Create("web", role, nil, true, time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A second working backend, with its own bans, for the fan-out of a ban form.
+	otherDir := t.TempDir()
+	otherHubs := admin.NewRegistry(otherDir)
+	otherHubs.Add(admin.NewHub("alpha"))
+	otherAPI := api.New("site-b", "v0", otherHubs, api.NewTokenStore(filepath.Join(otherDir, "t.json")), admin.NewAudit(filepath.Join(otherDir, "a.jsonl")))
+	otherStore, err := moderation.Open(context.Background(), filepath.Join(otherDir, "dzo.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = otherStore.Close() })
+	otherAPI.Moderation = webMod{otherStore}
+	otherTS := httptest.NewServer(otherAPI.Handler())
+	t.Cleanup(otherTS.Close)
+	otherSecret, _, err := otherAPI.Tokens.Create("web", role, nil, true, time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -52,6 +76,7 @@ func newEnv(t *testing.T, role api.Role) *env {
 	_ = os.WriteFile(filepath.Join(docs, "index.html"), []byte("<h1>docs</h1>"), 0o600)
 	srv, err := New([]*Backend{
 		{Name: "main", Client: apiclient.New(ats.URL, secret)},
+		{Name: "other", Client: apiclient.New(otherTS.URL, otherSecret)},
 		{Name: "down", Client: apiclient.New("http://127.0.0.1:1", "x")},
 	}, Options{Version: "v0", Assets: assets, DocsDir: docs, UserHeader: "X-Forwarded-User"})
 	if err != nil {

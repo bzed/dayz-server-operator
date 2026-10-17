@@ -85,7 +85,7 @@ button:hover, .btn:hover { filter: brightness(1.15); }
 /* The icons in text: headings, buttons, links, table cells (not the map's markers). */
 h1 .fa, h2 .fa, h3 .fa, th .fa, td .fa, button .fa, .btn .fa, nav .fa, .maptitle .fa { margin-right: .4em; }
 .brand .fa { margin-right: .3em; }
-button.danger { background: var(--flare); border-color: var(--flare); color: #fff; }
+button.danger, .btn.danger { background: var(--flare); border-color: var(--flare); color: #fff; }
 button.quiet { background: transparent; color: var(--ink); }
 
 .flash { padding: .45rem .75rem; border-radius: var(--r); margin: .4rem 0; border: 1px solid var(--ink); background: var(--surface); border-left-width: 5px; border-left-color: var(--online); }
@@ -223,3 +223,8 @@ th[aria-sort="descending"]::after { content: " \25BC"; font-size: .7em; }
 .presets { display: inline-flex; gap: .25rem; flex-wrap: wrap; }
 .presets button { padding: .15rem .5rem; font-size: .85rem; }
 .ctx .presets { display: flex; margin-top: .25rem; }
+
+/* Bans */
+.banform label { display: block; }
+.evidence img { max-width: 32rem; display: block; }
+.warn { color: var(--flare); }

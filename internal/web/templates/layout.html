@@ -20,6 +20,7 @@
   <a class="brand" href="/"><i class="fa fa-crosshairs" aria-hidden="true"></i>dzo</a>
   <nav>
     {{range .Backends}}<a href="/b/{{.Name}}/audit"><i class="fa fa-history" aria-hidden="true"></i>{{.Name}} audit</a>{{end}}
+    {{range .Backends}}<a href="/b/{{.Name}}/bans"><i class="fa fa-ban" aria-hidden="true"></i>{{.Name}} bans</a>{{end}}
     <a href="/docs/"><i class="fa fa-book" aria-hidden="true"></i>docs</a>
   </nav>
   <span class="ver">{{.Version}}</span>

@@ -25,6 +25,7 @@ import (
 	"strings"
 
 	"github.com/bzed/dayz-server-operator/internal/apiclient"
+	"github.com/bzed/dayz-server-operator/internal/moderation"
 )
 
 //go:embed templates/*.html
@@ -68,7 +69,7 @@ func New(backends []*Backend, opts Options) (*Server, error) {
 	if _, err := rand.Read(raw[:]); err != nil {
 		return nil, err
 	}
-	t, err := template.New("").Funcs(template.FuncMap{"pct": pct, "join": strings.Join}).ParseFS(templateFS, "templates/*.html")
+	t, err := template.New("").Funcs(template.FuncMap{"pct": pct, "join": strings.Join, "expiry": moderation.FormatExpiry}).ParseFS(templateFS, "templates/*.html")
 	if err != nil {
 		return nil, err
 	}
@@ -101,6 +102,13 @@ func (s *Server) Handler() http.Handler {
 
 	const inst = "/b/{backend}/i/{instance}"
 	mux.HandleFunc("GET /b/{backend}/audit", s.audit)
+	mux.HandleFunc("GET /b/{backend}/bans", s.bansPage)
+	mux.HandleFunc("GET /b/{backend}/bans/new", s.banForm)
+	mux.HandleFunc("POST /b/{backend}/bans", s.createBan)
+	mux.HandleFunc("GET /b/{backend}/bans/{id}", s.banPage)
+	mux.HandleFunc("POST /b/{backend}/bans/{id}", s.updateBan)
+	mux.HandleFunc("POST /b/{backend}/bans/{id}/revoke", s.revokeBan)
+	mux.HandleFunc("GET /b/{backend}/evidence/{id}/file", s.evidenceFile)
 	mux.HandleFunc("GET "+inst, s.instance)
 	mux.HandleFunc("GET "+inst+"/players", s.playersFragment)
 	mux.HandleFunc("GET "+inst+"/vehicles", s.vehiclesFragment)
