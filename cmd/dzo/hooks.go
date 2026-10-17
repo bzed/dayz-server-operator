@@ -7,7 +7,9 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -113,9 +115,9 @@ func newInstanceHookCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, inst, err := loadInstance(configPath, args[0])
 			if err != nil {
-				return err
+				return startFailure(cmd, args[1], args[0], err)
 			}
-			return instanceHooks(cmd.Context(), cmd.OutOrStdout(), cfg, inst, args[1], nil, nil)
+			return startFailure(cmd, args[1], args[0], instanceHooks(cmd.Context(), cmd.OutOrStdout(), cfg, inst, args[1], nil, nil))
 		},
 	}
 	configFlag(c, &configPath)
@@ -162,4 +164,32 @@ func addIntegrations(cmd *cobra.Command, in *mission.RenderInput, cfg *config.Co
 		}
 	}
 	return nil
+}
+
+// startFailure makes a failed ExecStartPre step impossible to miss: cobra's one-line "Error:" is all
+// the journal would otherwise show for an instance that silently does not come up. The banner goes to
+// stderr, one journal entry per line; under systemd the lines carry the "<3>" (err) priority so they
+// stand out in journalctl and show in systemctl status. The error itself is returned unchanged.
+func startFailure(cmd *cobra.Command, step, name string, err error) error {
+	if err == nil {
+		return nil
+	}
+	prefix := ""
+	if os.Getenv("JOURNAL_STREAM") != "" {
+		prefix = "<3>"
+	}
+	w := cmd.ErrOrStderr()
+	rule := strings.Repeat("!", 72)
+	lines := []string{
+		rule,
+		fmt.Sprintf("!!! INSTANCE %q WILL NOT START: %s failed", name, step),
+	}
+	for _, l := range strings.Split(strings.TrimSpace(err.Error()), "\n") {
+		lines = append(lines, "!!! "+l)
+	}
+	lines = append(lines, "!!! fix the site repo or config, then start the instance again", rule)
+	for _, l := range lines {
+		_, _ = fmt.Fprintln(w, prefix+l)
+	}
+	return err
 }

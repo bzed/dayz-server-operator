@@ -147,6 +147,11 @@ liveness
    probes the running server. After ``interval`` × ``retries`` without an answer
    (default 5 minutes) the container is killed and systemd restarts it.
 
+When the render or a ``pre_start`` hook fails in ``ExecStartPre``, dzo prints a
+banner of ``!!!`` lines with the instance name and the error to stderr. Under
+systemd the lines have the error priority, so ``journalctl -u <unit>`` and
+``systemctl status`` show them prominently.
+
 Three brakes stop endless restarts:
 
 * the pre-restart dry-run render described above;

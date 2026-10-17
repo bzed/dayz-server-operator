@@ -86,9 +86,9 @@ func newInstanceRenderCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, inst, err := loadInstance(configPath, args[0])
 			if err != nil {
-				return err
+				return startFailure(cmd, "render", args[0], err)
 			}
-			return renderInstance(cmd, cfg, inst, dryRun, updatePristine)
+			return startFailure(cmd, "render", args[0], renderInstance(cmd, cfg, inst, dryRun, updatePristine))
 		},
 	}
 	configFlag(cmd, &configPath)

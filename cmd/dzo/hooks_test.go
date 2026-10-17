@@ -91,6 +91,22 @@ func TestPreStartHookFailureAborts(t *testing.T) {
 	}
 }
 
+func TestStartFailurePrintsABanner(t *testing.T) {
+	cfg, _ := hookSite(t, "")
+	t.Setenv("JOURNAL_STREAM", "8:1234")
+	out, err := runCmd(t, "instance", "render", "x", "--config", cfg)
+	if err == nil {
+		t.Fatal("rendering an instance without a mission must fail")
+	}
+	if !strings.Contains(out, `<3>!!! INSTANCE "x" WILL NOT START: render failed`) {
+		t.Errorf("no prominent banner in the output:\n%s", out)
+	}
+	out, _ = runCmd(t, "instance", "render", "nope", "--config", cfg)
+	if !strings.Contains(out, `INSTANCE "nope" WILL NOT START`) {
+		t.Errorf("an unknown instance gets no banner:\n%s", out)
+	}
+}
+
 // TestRenderMergesIntegrationsAndRunsHooks drives the whole render: a mod integration (CE folder,
 // post_merge hook), an overlay, the instance's post_merge and post_render hooks.
 func TestRenderMergesIntegrationsAndRunsHooks(t *testing.T) {
