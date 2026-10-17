@@ -146,6 +146,11 @@ func (s *Server) Handler() http.Handler {
 	route("PUT "+base+"/bans/{id}", PermBanInstance, false, s.updateBan)
 	route("POST "+base+"/bans/{id}/revoke", PermBanInstance, false, s.revokeBan)
 	route("GET "+base+"/bans/{id}/history", PermBanView, false, s.banHistory)
+	route("GET "+base+"/evidence", PermBanView, false, s.listEvidence)
+	route("POST "+base+"/evidence", PermEvidenceAdd, false, s.addEvidence)
+	route("GET "+base+"/evidence/{id}", PermBanView, false, s.getEvidence)
+	route("GET "+base+"/evidence/{id}/file", PermBanView, false, s.evidenceFile)
+	route("GET "+base+"/players/{steamid}/identities", PermBanView, false, s.identities)
 	return mux
 }
 
