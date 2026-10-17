@@ -1,0 +1,11 @@
+GUID Bans:
+[#] [GUID] [Minutes left] [Reason]
+----------------------------------------
+0  0123456789abcdef0123456789abcdef perm permanent reason with spaces
+1  fedcba9876543210fedcba9876543210 4    timed äöü "quoted" 100%
+2  11111111111111111111111111111111 perm xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+IP Bans:
+[#] [IP Address] [Minutes left] [Reason]
+----------------------------------------------
+3  192.0.2.7       perm ip ban

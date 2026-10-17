@@ -13,17 +13,19 @@
 # skill's scripts (DAYZ_DEV_SCRIPTS, default ~/.claude/skills/dayz-dev/scripts). One game at a time.
 # --no-client runs only the checks that need no player (motorbike, event scan) and starts no game, so it
 # can run while a DayZ client is open.
-# Usage: scripts/test-client.sh [--exp] [--keep] [--no-client]
+# --bans runs the server with BattlEye and captures how its bans.txt behaves (ban spike V1).
+# Usage: scripts/test-client.sh [--exp] [--keep] [--no-client] [--bans]
 set -euo pipefail
 cd "$(dirname "$0")/.."
 dev=${DAYZ_DEV_SCRIPTS:-$HOME/.claude/skills/dayz-dev/scripts}
-exp=() keep=0 noclient=0 product=stable
+exp=() keep=0 noclient=0 bans=0 product=stable
 for a in "$@"; do
 	case $a in
 	--exp) exp=(-e) product=experimental ;;
 	--keep) keep=1 ;;
 	--no-client) noclient=1 ;;
-	*) echo "usage: $0 [--exp] [--keep] [--no-client]" >&2; exit 2 ;;
+	--bans) bans=1 ;;
+	*) echo "usage: $0 [--exp] [--keep] [--no-client] [--bans]" >&2; exit 2 ;;
 	esac
 done
 [ -x "$dev/dayz-client-headless.sh" ] || { echo "dayz-dev scripts not found in $dev (DAYZ_DEV_SCRIPTS)" >&2; exit 2; }
@@ -192,6 +194,20 @@ grep -q '^steamQueryPort' "$cfg" || sed -i '1i steamQueryPort = 0;' "$cfg"
 sed -i "s/^steamQueryPort = .*/steamQueryPort = $query;/" "$cfg"
 grep -q '^BattlEye' "$cfg" || sed -i '1i BattlEye = 0;' "$cfg" # the headless client has no BattlEye
 sed -i 's/^BattlEye = .*/BattlEye = 0;/; s/^password = .*/password = "";/' "$cfg"
+rcon=$((query + 1))
+if [ "$bans" = 1 ]; then
+	# The ban checks need BattlEye: RCon on localhost, an absolute -BEpath, and a client that runs
+	# BattlEye (PROTON_BATTLEYE_RUNTIME, see docs/development.rst).
+	sed -i 's/^BattlEye = .*/BattlEye = 1;/' "$cfg"
+	rconpw=$(head -c12 /dev/urandom | od -An -tx1 | tr -d ' \n')
+	mkdir -p "$tree/profiles/battleye" "$work/secrets/rcon" "$work/data/instances/t1"
+	printf 'RConPassword %s\nRConPort %d\nRConIP 127.0.0.1\n' "$rconpw" "$rcon" >"$tree/profiles/battleye/beserver_x64.cfg"
+	echo "$rconpw" >"$work/secrets/rcon/t1"
+	chmod 600 "$tree/profiles/battleye/beserver_x64.cfg" "$work/secrets/rcon/t1"
+	# dzo serve finds the instance's profiles (and so its bans.txt) under paths.instances.
+	ln -sfn "$tree/profiles" "$work/data/instances/t1/profiles"
+	export PROTON_BATTLEYE_RUNTIME=${PROTON_BATTLEYE_RUNTIME:-$HOME/.local/share/Steam/steamapps/common/Proton BattlEye Runtime}
+fi
 
 # The operator side: a config, a one-instance site, the instance's mod token and an API token.
 mkdir -p "$work/site/instances/t1" "$work/secrets/admin" "$tree/profiles/dzo/admin"
@@ -202,7 +218,7 @@ name: t1
 product: dayz-$product
 map: dayzOffline.chernarusplus
 mission_source: {preset: vanilla-chernarusplus}
-ports: {game: $game, rcon: $((query + 1)), query: $query}
+ports: {game: $game, rcon: $rcon, query: $query}
 network: host
 mods:
   - {local: dzo-admin, server: true}
@@ -224,12 +240,17 @@ chmod 600 "$work/secrets/admin/t1.token" "$tree/profiles/dzo/admin/config.json"
 chmod 600 "$work/api.token"
 dzo() { "$work/dzo" "$@" --config "$work/config.yaml" --token-file "$work/api.token"; }
 
-"$work/dzo" serve --config "$work/config.yaml" >"$work/serve.log" 2>&1 &
-pids+=($!)
+start_serve() {
+	"$work/dzo" serve --config "$work/config.yaml" >"$work/serve.log" 2>&1 &
+	pids+=($!)
+}
+[ "$bans" = 1 ] || start_serve
 ln -sfn "$work/built/dzo-admin" "$tree/@dzo-admin"
 ln -sfn "$work/tbuilt/dzo-client-probe" "$tree/@dzo-client-probe"
+beargs=()
+[ "$bans" = 1 ] && beargs=("-BEpath=$tree/profiles/battleye")
 (cd "$tree" && ulimit -c 0 && exec ./DayZServer -config=serverDZ.cfg -profiles=profiles \
-	"-servermod=@dzo-admin;@dzo-client-probe" -port="$game" -nosplash -nopause -dologs -adminlog) >"$work/server.log" 2>&1 &
+	"-servermod=@dzo-admin;@dzo-client-probe" -port="$game" -nosplash -nopause -dologs -adminlog "${beargs[@]}") >"$work/server.log" 2>&1 &
 server=$!
 pids+=("$server")
 echo "== $product server $srv, game port $game, work dir $work"
@@ -244,6 +265,23 @@ adm=$(ls "$tree"/profiles/*.ADM | tail -1)
 s=0
 grep -E 'SCRIPT +\(E\)' "$script" | grep -qv 'BunkerBroadcast' && s=1
 verdict "scripts compile: no SCRIPT (E) beyond vanilla noise" $s
+
+if [ "$bans" = 1 ]; then
+	waitfor 60 "'$work/dzo' rcon exec --addr 127.0.0.1:$rcon --password '$rconpw' version >/dev/null 2>&1" || { bad "rcon: BattlEye answers"; exit 1; }
+	ok "rcon: BattlEye answers"
+	s=0
+	DZO_LIVE_BE_ADDR=127.0.0.1:$rcon DZO_LIVE_BE_PASSWORD=$rconpw DZO_LIVE_BE_DIR=$tree/profiles/battleye \
+		DZO_LIVE_CAPTURE=$work/capture/v1 go test -count=1 -run TestLiveBans -v ./internal/battleye >"$work/v1.log" 2>&1 || s=1
+	[ "$s" = 0 ] || tail -40 "$work/v1.log" >&2
+	verdict "V1: BattlEye ban file capture" $s
+	echo "== V1 captures in $work/capture/v1 (use --keep)"
+	start_serve
+	if [ "$noclient" = 1 ]; then
+		echo "== $pass passed, $fail failed"
+		[ "$fail" = 0 ]
+		exit
+	fi
+fi
 
 if [ "$noclient" = 1 ]; then
 	server_tests

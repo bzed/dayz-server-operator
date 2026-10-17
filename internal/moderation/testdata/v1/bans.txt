@@ -1,0 +1,4 @@
+0123456789abcdef0123456789abcdef -1 permanent reason with spaces
+fedcba9876543210fedcba9876543210 1792278317 timed äöü "quoted" 100%
+11111111111111111111111111111111 -1 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+192.0.2.7 -1 ip ban

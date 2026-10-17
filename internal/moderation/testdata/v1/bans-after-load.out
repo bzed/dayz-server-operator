@@ -1,0 +1,10 @@
+GUID Bans:
+[#] [GUID] [Minutes left] [Reason]
+----------------------------------------
+0  0123456789abcdef0123456789abcdef perm own permanent
+1  22222222222222222222222222222222 1    own timed
+
+IP Bans:
+[#] [IP Address] [Minutes left] [Reason]
+----------------------------------------------
+2  198.51.100.9    perm own ip
