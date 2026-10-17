@@ -177,6 +177,8 @@ main > .flash.err { margin: 1rem; }
 .mi .fa { font-size: 18px; color: var(--mc); filter: var(--edge-e); }
 /* Without the icon font a vehicle is a white diamond. */
 .vm.dot::before { content: ""; width: 9px; height: 9px; background: var(--edge-light); border: 2px solid var(--edge-dark); transform: rotate(45deg); }
+.vm.covered .fa { color: #f0a020; }
+.vm.covered.dot::before { background: #f0a020; }
 .vm.ruined .fa { opacity: .6; filter: grayscale(1) var(--edge-v); }
 /* Icons Fork Awesome does not have, drawn like its glyphs (the colour of the text): Font Awesome Free 6.7.2, CC BY 4.0. */
 .fa-helicopter::before { content: ""; display: inline-block; width: 1.25em; height: 1em; vertical-align: -.125em; background: currentColor; -webkit-mask: url(/static/icons/helicopter.svg) center / contain no-repeat; mask: url(/static/icons/helicopter.svg) center / contain no-repeat; }

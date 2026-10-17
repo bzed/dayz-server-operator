@@ -23,17 +23,18 @@
 {{define "vehicles"}}
 {{if .Err}}<p class="flash err">{{.Err}}</p>{{else if not .Items}}<p>No vehicles reported.</p>{{else}}
 <div class="scroll"><table>
-  <thead><tr><th>Class</th><th>Kind</th><th>Position</th><th>Health</th><th>Fuel</th><th>Crew</th><th></th></tr></thead>
+  <thead><tr><th>Class</th><th>Kind</th><th>Position</th><th>Health</th><th>Fuel</th><th>Owner</th><th>Crew</th><th></th></tr></thead>
   <tbody>
   {{range .Items}}
     <tr>
-      <td>{{.Type}}{{if .Ruined}} <em>(ruined)</em>{{end}}</td>
+      <td>{{.Type}}{{if .Ruined}} <em>(ruined)</em>{{end}}{{if .Covered}} <em>(covered)</em>{{end}}</td>
       <td>{{if eq .Kind "motorbike"}}<i class="fa fa-motorcycle" aria-hidden="true"></i>{{else if eq .Kind "bicycle"}}<i class="fa fa-bicycle" aria-hidden="true"></i>{{else if eq .Kind "helicopter"}}<i class="fa fa-helicopter" aria-hidden="true"></i>{{else}}<i class="fa fa-car" aria-hidden="true"></i>{{end}}{{.Kind}}</td>
       <td>{{printf "%.0f / %.0f" .X .Z}}</td>
-      <td>{{pct .Health}}</td>
-      <td>{{pct .Fuel}}</td>
+      <td>{{if .Covered}}-{{else}}{{pct .Health}}{{end}}</td>
+      <td>{{if .Covered}}-{{else}}{{pct .Fuel}}{{end}}</td>
+      <td>{{.Owner}}</td>
       <td>{{len .Occupants}}</td>
-      <td><button hx-get="/b/{{$.Backend}}/i/{{$.Instance}}/vehicles/{{.ID}}/panel" hx-target="closest tr" hx-swap="afterend" data-rowpanel><i class="fa fa-cog" aria-hidden="true"></i>Actions</button></td>
+      <td>{{if not .Covered}}<button hx-get="/b/{{$.Backend}}/i/{{$.Instance}}/vehicles/{{.ID}}/panel" hx-target="closest tr" hx-swap="afterend" data-rowpanel><i class="fa fa-cog" aria-hidden="true"></i>Actions</button>{{end}}</td>
     </tr>
   {{end}}
   </tbody>
@@ -74,7 +75,7 @@
 {{end}}
 
 {{define "vpanel"}}
-<tr class="rowpanel"><td colspan="7">
+<tr class="rowpanel"><td colspan="8">
 {{if .Err}}<p class="flash err">{{.Err}}</p><button class="quiet" data-close><i class="fa fa-times" aria-hidden="true"></i>Close</button>{{else}}
 {{$base := printf "/b/%s/i/%s/vehicles/%s" .Backend .Instance .Vehicle.ID}}
 <div class="panel">

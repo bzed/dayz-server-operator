@@ -483,10 +483,16 @@
   function vehicleSpec(v) {
     var id = encodeURIComponent(v.id);
     var crew = (v.occupants || []).length;
+    if (v.covered) {
+      return { title: v.type + ' (covered)', sub: (v.owner ? 'owner ' + v.owner + '\n' : '') + posText(v), items: [
+        { label: 'Zoom to vehicle', run: function () { zoomTo(ll(v)); } },
+        { label: 'Copy position', run: function () { copy(Math.round(v.x) + ' ' + Math.round(v.z)); } }
+      ] };
+    }
     function repair(scope) { return function () { act('/vehicles/' + id + '/repair', { scope: scope }); }; }
     return {
       title: v.type + (v.ruined ? ' (ruined)' : ''),
-      sub: 'health ' + Math.round(v.health * 100) + '%  fuel ' + Math.round(v.fuel * 100) + '%  crew ' + crew + '\n' + posText(v),
+      sub: (v.owner ? 'owner ' + v.owner + '\n' : '') + 'health ' + Math.round(v.health * 100) + '%  fuel ' + Math.round(v.fuel * 100) + '%  crew ' + crew + '\n' + posText(v),
       items: [
         { label: 'Repair everything (refuel, add parts)', min: 'operator', run: repair('all') },
         { label: 'Repair only…', min: 'operator', view: function () {
@@ -634,11 +640,11 @@
   var vehicleNames = { motorbike: 'Motorbike ', bicycle: 'Bicycle ', helicopter: 'Helicopter ' };
   function vehicleIcon(v) {
     var glyph = iconClass(vehicleGlyphs[v.kind] || 'car');
-    var root = mk('div', 'vm ' + v.kind + (glyph ? '' : ' dot') + (v.ruined ? ' ruined' : ''));
+    var root = mk('div', 'vm ' + v.kind + (glyph ? '' : ' dot') + (v.ruined ? ' ruined' : '') + (v.covered ? ' covered' : ''));
     if (glyph) { root.appendChild(mk('i', glyph)); }
     return elIcon('vm-wrap', root);
   }
-  function vehicleLines(v) { return ['health ' + Math.round(v.health * 100) + '%', 'fuel ' + Math.round(v.fuel * 100) + '%', 'crew ' + (v.occupants || []).length]; }
+  function vehicleLines(v) { if (v.covered) { return ['covered'].concat(v.owner ? ['owner ' + v.owner] : []); } return (v.owner ? ['owner ' + v.owner] : []).concat(['health ' + Math.round(v.health * 100) + '%', 'fuel ' + Math.round(v.fuel * 100) + '%', 'crew ' + (v.occupants || []).length]); }
   function onVehicles(list) {
     var seen = {};
     list.forEach(function (v) {

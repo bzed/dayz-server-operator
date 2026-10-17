@@ -27,6 +27,10 @@ reply. Nothing connects into the game server. The mod knows persistent
 vehicles of the car type (``CarScript``, which includes most modded cars) and, on DayZ 1.30,
 motorbikes (``MotorbikeScript``); both can be repaired and deleted. Each vehicle has a kind,
 ``car``, ``motorbike``, ``bicycle`` or ``helicopter``, shown in the vehicle list, with an icon of its own on the map.
+With DayZ Expansion loaded the mod also reports the vehicle's owner (the name on its key chain), and the
+vehicles under an Expansion cover (``*_Cover``, stored by Expansion, not in the world as cars) as
+``covered`` vehicles (drawn in amber instead of white): they are on the map and in the list with their class, place and owner, but have no
+health, fuel or crew and no repair, flip or delete actions. Without Expansion nothing changes.
 Bicycles and the helicopters of mods are cars to the game; dzo gives a car the kind whose class list has its class:
 ``bicycle`` for the DayZBicycle mod (``Old_Bike*``, ``Lady_Bicycle*``, ``MMTArma``, the classes of its event) and
 ``helicopter`` for the helicopters of DayZ Expansion (``ExpansionMh6*``, ``ExpansionMerlin*``, ``ExpansionUh1h*``,

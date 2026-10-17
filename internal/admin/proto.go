@@ -69,6 +69,8 @@ type Vehicle struct {
 	Ruined    Flag     `json:"ruined"`
 	Engine    Flag     `json:"engine"`
 	Occupants []string `json:"occupants"`
+	Owner     string   `json:"owner,omitempty"`   // DayZ Expansion: the name on the key chain
+	Covered   Flag     `json:"covered,omitempty"` // DayZ Expansion: stored under a cover; only class and place are known
 }
 
 // KV is one tooltip entry of a marker.

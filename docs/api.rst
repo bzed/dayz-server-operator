@@ -63,7 +63,7 @@ All paths start with ``/api/v1``. Responses are JSON.
    * - ``GET /instances/<i>/players``
      - online players: Steam ID, name, position, health, ping, vehicle
    * - ``GET /instances/<i>/vehicles``
-     - persistent vehicles: id, kind (``car``, ``motorbike`` or ``bicycle``), class, position, health, fuel, crew
+     - persistent vehicles: id, kind (``car``, ``motorbike`` or ``bicycle``), class, position, health, fuel, crew, and with DayZ Expansion ``owner`` and ``covered``
    * - ``GET /instances/<i>/events``
      - active events (effect areas, markers from mods)
    * - ``GET /instances/<i>/layers``

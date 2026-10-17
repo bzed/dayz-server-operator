@@ -277,13 +277,13 @@ func TestModWireShape(t *testing.T) {
 	}
 	hub, _ := r.Hub("alpha")
 	first := `{"token":"tok","protocol":1,"mod_version":"0.1.0","world":"chernarusplus","seq":0,"hello":1,"has":["players","vehicles"],
-	 "players":[{"steam_id":"1","name":"a","alive":1,"unconscious":0}],"vehicles":[{"id":"v","ruined":0,"engine":1,"occupants":["1"]}],
+	 "players":[{"steam_id":"1","name":"a","alive":1,"unconscious":0}],"vehicles":[{"id":"v","ruined":0,"engine":1,"occupants":["1"]},{"id":"c","type":"Sedan_02","covered":1,"owner":"Rita"}],
 	 "markers":[],"layers":[],"events":[],"types":{"hash":"h","offset":0,"total":1,"names":["AKM"]},"results":[{"id":"x","ok":1,"message":""}]}`
 	if c := send(first); c != 200 {
 		t.Fatalf("first sync: %d", c)
 	}
 	p := hub.Players()
-	if len(p) != 1 || !bool(p[0].Alive) || bool(p[0].Unconscious) || p[0].Vehicle != "v" || !bool(hub.Vehicles()[0].Engine) || !hub.Status().Connected {
+	if len(p) != 1 || !bool(p[0].Alive) || bool(p[0].Unconscious) || p[0].Vehicle != "v" || !bool(hub.Vehicles()[0].Engine) || len(hub.Vehicles()) != 2 || !bool(hub.Vehicles()[1].Covered) || hub.Vehicles()[1].Owner != "Rita" || !hub.Status().Connected {
 		t.Fatalf("state = %+v", p)
 	}
 	// Not due: empty arrays and an empty types object must not wipe state.
@@ -291,7 +291,7 @@ func TestModWireShape(t *testing.T) {
 	if c := send(later); c != 200 {
 		t.Fatalf("second sync: %d", c)
 	}
-	if len(hub.Players()) != 1 || len(hub.Vehicles()) != 1 || len(hub.Types("", 0)) != 1 {
+	if len(hub.Players()) != 1 || len(hub.Vehicles()) != 2 || len(hub.Types("", 0)) != 1 {
 		t.Fatal("a sync that lists no parts must keep the state")
 	}
 	// A listed part with nothing in it does clear the state.

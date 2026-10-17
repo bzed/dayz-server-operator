@@ -10,6 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/bzed/dayz-server-operator/internal/admin"
 	"github.com/bzed/dayz-server-operator/internal/api"
 	"github.com/bzed/dayz-server-operator/internal/apiclient"
 	"github.com/bzed/dayz-server-operator/internal/config"
@@ -187,7 +188,7 @@ func newVehicleCmd() *cobra.Command {
 				return err
 			}
 			for _, v := range vs {
-				_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%s  %-9s %-24s %6.0f %6.0f  health %.2f fuel %.2f crew %d\n", v.ID, v.Kind, v.Type, v.X, v.Z, v.Health, v.Fuel, len(v.Occupants))
+				_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%s  %-9s %-24s %6.0f %6.0f  health %.2f fuel %.2f crew %d%s\n", v.ID, v.Kind, v.Type, v.X, v.Z, v.Health, v.Fuel, len(v.Occupants), vehicleNote(v))
 			}
 			return nil
 		},
@@ -257,4 +258,16 @@ func newVehicleCmd() *cobra.Command {
 	del.Flags().BoolVar(&force, "force", false, "delete even with players inside")
 	cmd.AddCommand(spawn, repair, flip, del)
 	return cmd
+}
+
+// vehicleNote is the owner and cover state a DayZ Expansion server adds to a vehicle line.
+func vehicleNote(v admin.Vehicle) string {
+	s := ""
+	if v.Owner != "" {
+		s += "  owner " + v.Owner
+	}
+	if v.Covered {
+		s += "  (covered)"
+	}
+	return s
 }
