@@ -4,6 +4,7 @@
 package admin
 
 import (
+	"context"
 	"crypto/subtle"
 	"encoding/json"
 	"net"
@@ -26,11 +27,21 @@ type Registry struct {
 	// WriteModConfig at render time and re-read when they change.
 	TokenDir string
 
+	// Logf receives the connection log: mods connecting, reconnecting, getting lost
+	// and being turned away. It never sees a token. Nil logs nothing.
+	Logf func(format string, args ...any)
+
 	mu     sync.Mutex
 	hubs   map[string]*Hub
 	tokens map[string]cachedToken
 	fails  *Limiter
+	logged map[string]time.Time // last time a refusal was logged, per reason and address
+	online map[string]bool      // what CheckLost last saw, per instance
 }
+
+// refusalLogEvery is how often one address gets the same refusal logged: a mod
+// with a wrong token retries every few seconds.
+const refusalLogEvery = time.Minute
 
 type cachedToken struct {
 	value string
@@ -39,7 +50,8 @@ type cachedToken struct {
 
 // NewRegistry returns an empty registry reading tokens from tokenDir.
 func NewRegistry(tokenDir string) *Registry {
-	return &Registry{TokenDir: tokenDir, hubs: map[string]*Hub{}, tokens: map[string]cachedToken{}, fails: NewLimiter(10, time.Minute)}
+	return &Registry{TokenDir: tokenDir, hubs: map[string]*Hub{}, tokens: map[string]cachedToken{}, fails: NewLimiter(10, time.Minute),
+		logged: map[string]time.Time{}, online: map[string]bool{}}
 }
 
 // Add registers a hub. An instance that is already registered keeps its
@@ -122,6 +134,79 @@ func (r *Registry) ModHandler() http.Handler {
 	return mux
 }
 
+func (r *Registry) logf(format string, args ...any) {
+	if r.Logf != nil {
+		r.Logf(format, args...)
+	}
+}
+
+// refuse logs a refusal at most once per refusalLogEvery for the same reason and address.
+func (r *Registry) refuse(reason, host, format string, args ...any) {
+	key := reason + "|" + host
+	r.mu.Lock()
+	last, seen := r.logged[key]
+	if seen && time.Since(last) < refusalLogEvery {
+		r.mu.Unlock()
+		return
+	}
+	r.logged[key] = time.Now()
+	r.mu.Unlock()
+	r.logf("mod endpoint: refused %s: "+format, append([]any{host}, args...)...)
+}
+
+// missingTokens lists the instances without a readable token file: no mod can
+// authenticate for them.
+func (r *Registry) missingTokens() []string {
+	var out []string
+	for _, n := range r.Names() {
+		if r.token(n) == "" {
+			out = append(out, n)
+		}
+	}
+	return out
+}
+
+// LogTokens logs which instances have a token file, so an instance whose mod
+// can never connect shows at start (and after a reload).
+func (r *Registry) LogTokens() {
+	for _, n := range r.Names() {
+		if r.token(n) == "" {
+			r.logf("instance %s: no token file %s, its dzo-admin mod cannot connect (render the instance)", n, filepath.Join(r.TokenDir, n+".token"))
+		} else {
+			r.logf("instance %s: waiting for its dzo-admin mod", n)
+		}
+	}
+}
+
+// CheckLost logs every instance that was connected on the last call and is not now.
+func (r *Registry) CheckLost() {
+	for _, n := range r.Names() {
+		h, _ := r.Hub(n)
+		st := h.Status()
+		r.mu.Lock()
+		was := r.online[n]
+		r.online[n] = st.Connected
+		r.mu.Unlock()
+		if was && !st.Connected {
+			r.logf("instance %s: mod lost, no sync since %s (server stopped, restarting or cannot reach dzo)", n, st.LastSeen.Format(time.RFC3339))
+		}
+	}
+}
+
+// Watch runs CheckLost until ctx is done.
+func (r *Registry) Watch(ctx context.Context) {
+	t := time.NewTicker(5 * time.Second)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			r.CheckLost()
+		}
+	}
+}
+
 func writeReply(w http.ResponseWriter, code int, rep SyncReply) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
@@ -136,23 +221,45 @@ func (r *Registry) sync(w http.ResponseWriter, req *http.Request) {
 	var in SyncRequest
 	body := http.MaxBytesReader(w, req.Body, maxSyncBody)
 	if err := json.NewDecoder(body).Decode(&in); err != nil {
+		r.refuse("bad", host, "unreadable sync body: %v", err)
 		writeReply(w, http.StatusBadRequest, SyncReply{Error: "bad request"})
 		return
 	}
 	if r.fails.Blocked(host) {
+		r.refuse("blocked", host, "too many failed tokens, blocked for a minute")
 		writeReply(w, http.StatusTooManyRequests, SyncReply{Error: "too many failures"})
 		return
 	}
 	hub, ok := r.Authenticate(in.Token)
 	if !ok {
 		r.fails.Allow(host)
+		if missing := r.missingTokens(); len(missing) > 0 {
+			r.refuse("token", host, "token matches no instance (instances without a token file: %s)", strings.Join(missing, ", "))
+		} else {
+			r.refuse("token", host, "token matches no instance (stale mod config.json after a re-render?)")
+		}
 		writeReply(w, http.StatusUnauthorized, SyncReply{Error: "invalid token"})
 		return
 	}
 	if in.Proto != ProtocolVersion {
+		r.refuse("proto", host, "instance %s speaks protocol %d, dzo %d (update the mod or dzo)", hub.Name, in.Proto, ProtocolVersion)
 		writeReply(w, http.StatusOK, SyncReply{Error: "protocol mismatch: dzo speaks version " + itoa(ProtocolVersion), Proto: ProtocolVersion})
 		return
 	}
 	in.Normalise()
-	writeReply(w, http.StatusOK, hub.Sync(in))
+	before := hub.Status()
+	rep := hub.Sync(in)
+	after := hub.Status()
+	switch {
+	case before.Hello == nil:
+		r.logf("instance %s: mod connected from %s (mod %s, protocol %d, world %s)", hub.Name, host, in.ModVersion, in.Proto, in.World)
+	case !before.Connected:
+		r.logf("instance %s: mod reconnected from %s after %s (mod %s, world %s)", hub.Name, host, after.LastSeen.Sub(before.LastSeen).Round(time.Second), in.ModVersion, in.World)
+	case after.Hello != before.Hello:
+		r.logf("instance %s: mod restarted (hello from %s, mod %s, world %s)", hub.Name, host, in.ModVersion, in.World)
+	}
+	r.mu.Lock()
+	r.online[hub.Name] = true
+	r.mu.Unlock()
+	writeReply(w, http.StatusOK, rep)
 }

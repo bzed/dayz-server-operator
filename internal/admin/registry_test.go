@@ -6,6 +6,7 @@ package admin
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -313,5 +314,76 @@ func TestFlag(t *testing.T) {
 	b, _ := json.Marshal(struct{ A Flag }{true})
 	if string(b) != `{"A":true}` {
 		t.Fatalf("marshal = %s", b)
+	}
+}
+
+func logRegistry(t *testing.T) (*Registry, string, *[]string) {
+	t.Helper()
+	r, dir := testRegistry(t)
+	var lines []string
+	r.Logf = func(f string, a ...any) { lines = append(lines, fmt.Sprintf(f, a...)) }
+	return r, dir, &lines
+}
+
+func TestConnectionLog(t *testing.T) {
+	r, dir, lines := logRegistry(t)
+	if err := os.WriteFile(filepath.Join(dir, "alpha.token"), []byte("tok-a\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	hub, _ := r.Hub("alpha")
+	clock := time.Now()
+	hub.now = func() time.Time { return clock }
+
+	r.LogTokens()
+	post(r, SyncRequest{Token: "tok-a", Proto: 1, Hello: true, ModVersion: "0.1.0", World: "enoch"}, "10.0.0.1:1")
+	post(r, SyncRequest{Token: "tok-a", Proto: 1}, "10.0.0.1:1")
+	clock = clock.Add(time.Minute)
+	r.CheckLost()
+	r.CheckLost() // logged once
+	post(r, SyncRequest{Token: "tok-a", Proto: 1}, "10.0.0.1:1")
+	post(r, SyncRequest{Token: "tok-a", Proto: 1, Hello: true}, "10.0.0.1:1")
+
+	out := strings.Join(*lines, "\n")
+	for _, want := range []string{
+		"instance alpha: waiting for its dzo-admin mod",
+		"instance beta: no token file",
+		"instance alpha: mod connected from 10.0.0.1 (mod 0.1.0, protocol 1, world enoch)",
+		"instance alpha: mod lost, no sync since",
+		"instance alpha: mod reconnected from 10.0.0.1 after",
+		"instance alpha: mod restarted",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("log lacks %q:\n%s", want, out)
+		}
+	}
+	if n := strings.Count(out, "mod lost"); n != 1 {
+		t.Errorf("lost logged %d times", n)
+	}
+	if strings.Contains(out, "tok-a") {
+		t.Error("the log leaks a token")
+	}
+}
+
+func TestRefusalsAreLoggedOncePerAddress(t *testing.T) {
+	r, dir, lines := logRegistry(t)
+	if err := os.WriteFile(filepath.Join(dir, "alpha.token"), []byte("tok-a\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 5; i++ {
+		post(r, SyncRequest{Token: "wrong-secret", Proto: 1}, "10.0.0.2:1")
+	}
+	post(r, SyncRequest{Token: "tok-a", Proto: 99}, "10.0.0.2:1")
+	out := strings.Join(*lines, "\n")
+	if n := strings.Count(out, "token matches no instance"); n != 1 {
+		t.Errorf("token refusal logged %d times:\n%s", n, out)
+	}
+	if !strings.Contains(out, "instances without a token file: beta") {
+		t.Errorf("the log does not name the instance without a token file:\n%s", out)
+	}
+	if !strings.Contains(out, "instance alpha speaks protocol 99") {
+		t.Errorf("protocol mismatch not logged:\n%s", out)
+	}
+	if strings.Contains(out, "wrong-secret") {
+		t.Error("the log leaks a token")
 	}
 }

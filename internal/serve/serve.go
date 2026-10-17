@@ -140,6 +140,7 @@ func Run(ctx context.Context, cfg *config.Config, o Options) error {
 		logf = func(string, ...any) {}
 	}
 	reg := admin.NewRegistry(TokenDir(cfg))
+	reg.Logf = logf
 	tree, err := o.Load()
 	if err != nil {
 		return err
@@ -147,6 +148,8 @@ func Run(ctx context.Context, cfg *config.Config, o Options) error {
 	if err := AddHubs(reg, cfg, tree); err != nil {
 		return err
 	}
+	reg.LogTokens()
+	go reg.Watch(ctx)
 	msgs, err := startMessengers(ctx, cfg, tree, reg, logf)
 	if err != nil {
 		return err
@@ -192,6 +195,7 @@ func Run(ctx context.Context, cfg *config.Config, o Options) error {
 				logf("server messages not restarted: %v", err)
 				msgs = &messengers{cancel: func() {}}
 			}
+			reg.LogTokens()
 			logf("site reloaded")
 		case err := <-errc:
 			_ = apiHTTP.Close()

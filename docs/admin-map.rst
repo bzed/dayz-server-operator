@@ -94,6 +94,15 @@ features that do not need it (status, RCon) are unaffected.
 Check that it works: ``dzo player list <instance>`` shows the online players
 once the mod has connected, and the instance page shows "dzo-admin connected".
 
+``dzo serve`` logs the connections (``journalctl --user -u dzo-serve``, or its stderr). At start and
+after a reload it says per instance whether the token file exists. While running it logs ``mod
+connected``, ``mod reconnected``, ``mod restarted`` (the server restarted and sent its hello) and
+``mod lost`` (no sync for 10 seconds), and the refusals, once a minute per address and reason: a
+token that matches no instance (the line names the instances without a token file), a protocol
+mismatch, an unreadable body. Tokens are never logged. An instance that stays silent in this log
+has a mod that does not reach the endpoint at all: check ``endpoint`` in the mod's
+``$profile:dzo/admin/config.json`` and that the instance really runs with the mod.
+
 Map background
 --------------
 
