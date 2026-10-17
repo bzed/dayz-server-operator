@@ -126,6 +126,15 @@ A client with the mod sends two chat lines a minute after the mission started; `
 <instance>`` prints the events, and ``kick <id> <reason>`` over RCon gives the kick line. A local server needs an
 absolute ``-BEpath`` and an ``RConIP`` in ``profiles/battleye/beserver_x64.cfg``.
 
+The ban design (:doc:`moderation`) was verified the same way. ``scripts/test-client.sh --bans`` runs the
+server **with BattlEye** (RCon on localhost, an absolute ``-BEpath``) and checks, in this order:
+V1, what BattlEye writes to ``bans.txt`` (``internal/battleye/livebans_test.go``, gated by
+``DZO_LIVE_BE_ADDR``, ``DZO_LIVE_BE_PASSWORD``, ``DZO_LIVE_BE_DIR`` and ``DZO_LIVE_CAPTURE``, with the
+captures in ``internal/moderation/testdata/v1``); V2, that the GUID of a connected player is
+``md5("BE" + the Steam ID)`` (``testdata/v2``); V3, that a new ban kicks the online player, a banned player
+cannot join, a revoked one can, and an IP ban refuses the address. ``--bans --no-client`` runs only V1 and
+needs no game. It needs the BattlEye client described above.
+
 A quick check without a configured instance: symlink ``dist/servermods/dzo-admin``
 into a tree of each server as ``@dzo-admin``, start it with
 ``-servermod=@dzo-admin`` (a relative path), and compare the script module file

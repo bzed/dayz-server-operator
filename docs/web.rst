@@ -76,14 +76,16 @@ action fails with a clear message.
 
    * - Role
      - May
+   * - ``detector``
+     - only file evidence against players (no web access; for scripts)
    * - ``viewer``
      - see instances, players, vehicles, events and public map markers
    * - ``moderator``
-     - also send direct messages to players
+     - also send direct messages to players, see bans and ban for up to 7 days (:doc:`moderation`)
    * - ``operator``
-     - also broadcast, teleport, spawn items, repair and delete vehicles
+     - also broadcast, teleport, spawn items, repair and delete vehicles, and give long and IP bans
    * - ``admin``
-     - everything, including the audit log and markers that are admin-only
+     - everything, including the audit log, global bans and markers that are admin-only
 
 Pages
 -----
@@ -114,6 +116,14 @@ Live map
    menu key on a focused icon) for the actions on a player, vehicle, event or
    marker; right-click empty ground to teleport a player there, spawn an item there (as many stacks as the quantity needs) or spawn a vehicle there. Menu entries
    you lack the role for are not shown. See :doc:`admin-map`.
+
+Bans
+   One page per installation (``<name> bans`` in the navigation): the list of bans with a state filter and
+   a search by Steam ID, GUID, IP, text or player name; a ban page with its targets, scope, evidence,
+   history, an edit form and revoke. A player's panel has a **Ban…** button that opens the form with the
+   Steam ID, the instance, the GUIDs and IPs the player was seen with (shared addresses are marked) and
+   the evidence filed against them. "Also send to" repeats the ban on other installations. See
+   :doc:`moderation`.
 
 Audit log
    Who did what, when, from where (web, CLI or API), and the result. Needs the

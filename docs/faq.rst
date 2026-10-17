@@ -98,7 +98,7 @@ Why is a player's GUID shown as unverified?
    The BattlEye master never answered in our tests (``Ban check timed out``), so the GUID stays
    unverified (``(?)`` in ``players``). The pattern for the later ``Verified GUID`` line is still a
    guess, because we never saw one. Not verified either: a ``players`` answer with 60 players, and the
-   native DayZ ``ban.txt`` (see moderation).
+   native DayZ ``ban.txt`` (see :doc:`moderation`).
 
 What does BattlEye's bans.txt look like?
    Captured from a real server (``internal/moderation/testdata/v1``): one ban per line,
@@ -106,7 +106,7 @@ What does BattlEye's bans.txt look like?
    Unix time otherwise. The reason is cut to 64 characters, and an IPv6 address is silently not
    banned. A ``//`` comment line is ignored when loaded and not kept by ``writeBans``, which also
    drops expired bans. ``addBan`` writes the file by itself. dzo writes this file itself; see
-   moderation.
+   :doc:`moderation`.
 
 Missions and mod files
 ----------------------

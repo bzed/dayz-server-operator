@@ -147,6 +147,52 @@ Every action, including refused and rate-limited ones, is written to the audit
 log (``${paths.db}/audit.jsonl``) with the actor, the source, the target and the
 result.
 
+Bans and evidence
+-----------------
+
+These routes need the ban database of ``dzo serve`` (``503`` without it) and are described in
+:doc:`moderation`. A restricted token sees and changes only the bans that apply to its instances.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 45 20 35
+
+   * - Request and JSON body
+     - Needs
+     - Does
+   * - ``GET /bans[?state=active|expired|revoked&instance=&q=&limit=]``
+     - ``moderator``
+     - bans, newest first (``q``: Steam ID, GUID, IP, text in the reason or a player name; ``limit`` at most 1000)
+   * - ``POST /bans`` ``{"steam_id", "guids", "ips", "reason", "message", "expires_at", "scope", "instances", "evidence"}``
+     - ``moderator``
+     - create a ban; ``expires_at`` null is permanent. ``201`` with ``{"ban", "sync"}``, where ``sync`` says ``ok`` or
+       ``pending: <why>`` per instance. A moderator gives bans of up to 7 days; longer ones and IPs need
+       ``operator``, ``scope`` ``global`` needs ``admin`` and a token for every instance
+   * - ``GET /bans/<id>``
+     - ``moderator``
+     - one ban
+   * - ``PUT /bans/<id>`` (the full ban, as for ``POST``)
+     - ``moderator``
+     - change a ban; only its creator or an ``admin`` may
+   * - ``POST /bans/<id>/revoke`` ``{"reason"}``
+     - ``moderator``
+     - end a ban now; it stays in the list and the history
+   * - ``GET /bans/<id>/history``
+     - ``moderator``
+     - every change with the actor and the old and new values
+   * - ``GET /evidence?steam_id=&guid=&ip=``
+     - ``moderator``
+     - evidence filed against a player
+   * - ``POST /evidence`` ``{"steam_id" or "guid" or "ip", "instance", "kind", "body"}`` or ``multipart/form-data`` with the same fields and a ``file``
+     - ``detector``
+     - file a log (``kind`` ``log``, ``body`` at most 64 KiB), a note, or an image (PNG, JPEG or WebP, at most 5 MiB; ``body`` is the caption)
+   * - ``GET /evidence/<id>``, ``GET /evidence/<id>/file``
+     - ``moderator``
+     - one item, and its image (always served as an image type, with ``nosniff``)
+   * - ``GET /players/<steamid>/identities``
+     - ``moderator``
+     - the GUIDs and IPs the player was seen with, per instance, and how many other Steam IDs share each IP
+
 Errors
 ------
 

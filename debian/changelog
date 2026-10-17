@@ -4,6 +4,8 @@ dayz-server-operator (0.1.0-1) UNRELEASED; urgency=medium
     user via sysusers.d/tmpfiles.d, subuid/subgid + linger setup in
     postinst. No instance management commands ship yet (Phase 1 is
     still in progress); see IMPLEMENTATION_PLAN.md.
+  * Player bans with evidence (dzo ban, dzo evidence, web UI, API);
+    new dependency modernc.org/sqlite (pure Go, statically linked).
   * The web interface ships a helicopter icon (Font Awesome Free 6.7.2,
     CC BY 4.0) that fonts-fork-awesome lacks; debian/copyright lists it.
 

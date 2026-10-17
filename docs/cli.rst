@@ -234,6 +234,30 @@ installation (default: the local ``serve.listen``). They need the
    * - ``dzo vehicle delete <instance> <id> [--force]``
      - delete a vehicle (``--force``: even with players inside)
 
+Bans and evidence
+-----------------
+
+These talk to a running ``dzo serve`` through the API, like the player commands (``--token-file`` or
+``$DZO_TOKEN``, ``--api``). See :doc:`moderation`.
+
+.. list-table::
+   :widths: 45 55
+
+   * - ``dzo ban add (--steam <id> | --guid <guid> | --ip <addr>) --duration <30m|12h|7d|2w|permanent> (--instance <name> | --global) [--reason <text>] [--message <text>] [--evidence <id>]``
+     - ban a player; the answer says per instance whether the ban is in force or pending
+   * - ``dzo ban list [--state active|expired|revoked] [--instance <name>] [--query <text>] [--limit <n>]``
+     - bans, newest first
+   * - ``dzo ban show <id>``
+     - a ban with its targets, evidence and history
+   * - ``dzo ban edit <id> [--duration ...] [--reason ...] [--message ...] [--add-ip <addr>] [--remove-ip <addr>] ...``
+     - change only the given fields
+   * - ``dzo ban revoke <id> --reason <text>``
+     - unban: end a ban now (it stays in the history)
+   * - ``dzo evidence add (--steam <id> | --guid <guid> | --ip <addr>) --instance <name> (--log <text> | --file <path|-> | --note <text> | --image <file> [--caption <text>])``
+     - file evidence against a player
+   * - ``dzo evidence list (--steam <id> | --guid <guid> | --ip <addr>)``
+     - the evidence filed against a player
+
 Migration and development
 -------------------------
 
