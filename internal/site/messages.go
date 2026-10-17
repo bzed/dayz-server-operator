@@ -16,7 +16,7 @@ const MaxMessageLen = 160
 
 // Message is one of the server messages dzo sends while it runs (internal/broadcast): once to a
 // player OnConnect (Delay minutes after the player is in the game) and/or to everyone every Repeat
-// minutes. The text may use #name (the instance name) and #port (the game port). Color is one of
+// minutes. The text may use #name (the hostname of the serverDZ.cfg, the instance name without one) and #port (the game port). Color is one of
 // MessageColors, red when empty. Countdowns and shutdowns are not offered: dzo's own restart
 // countdown (restarts.announce) does that over RCon.
 type Message struct {
@@ -56,7 +56,7 @@ const DefaultWelcome = "Welcome to #name!"
 
 // WelcomeMessage is the message sent to a player who joins, from the welcome setting: nil is
 // DefaultWelcome, an empty string means no welcome, any other text replaces the default. DayZ
-// is sent as it is (#name and #port are expanded when it goes out).
+// is sent as it is (#name, the server's hostname, and #port are expanded when it goes out).
 func WelcomeMessage(welcome *string) (Message, bool) {
 	text := DefaultWelcome
 	if welcome != nil {

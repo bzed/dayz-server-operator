@@ -67,3 +67,35 @@ func TestStartMessengersWithoutModUsesRCon(t *testing.T) {
 		t.Errorf("the RCon backend needs the instance's password: %v", err)
 	}
 }
+
+func TestServerNameIsTheHostnameOfServerDZCfg(t *testing.T) {
+	site := t.TempDir()
+	write := func(name, body string) {
+		t.Helper()
+		dir := filepath.Join(site, "instances", name)
+		if err := os.MkdirAll(dir, 0o750); err != nil {
+			t.Fatal(err)
+		}
+		if body != "" {
+			if err := os.WriteFile(filepath.Join(dir, "serverDZ.cfg"), []byte(body), 0o600); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	write("a", "// a comment\nhostname = \"My DayZ Server\";  // shown in the browser\nmaxPlayers = 60;\n")
+	write("b", "maxPlayers = 60;\n")
+	write("c", "hostname = \"\";\n")
+	write("d", "this is not a config {{{")
+	write("e", "")
+	for name, want := range map[string]string{
+		"a": "My DayZ Server", // the hostname
+		"b": "b",              // none set: the instance name
+		"c": "c",              // empty
+		"d": "d",              // does not parse
+		"e": "e",              // no file
+	} {
+		if got := serverName(site, name); got != want {
+			t.Errorf("serverName(%s) = %q, want %q", name, got, want)
+		}
+	}
+}

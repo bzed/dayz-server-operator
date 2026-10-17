@@ -5,6 +5,9 @@ package serve
 
 import (
 	"context"
+	"os"
+	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/bzed/dayz-server-operator/internal/admin"
@@ -13,6 +16,7 @@ import (
 	"github.com/bzed/dayz-server-operator/internal/config"
 	"github.com/bzed/dayz-server-operator/internal/resolve"
 	"github.com/bzed/dayz-server-operator/internal/runfiles"
+	"github.com/bzed/dayz-server-operator/internal/servercfg"
 	"github.com/bzed/dayz-server-operator/internal/site"
 )
 
@@ -23,6 +27,23 @@ func instanceMessages(inst *resolve.Instance) []site.Message {
 		ms = append(ms, w)
 	}
 	return append(ms, inst.Messages...)
+}
+
+// serverName is what #name stands for in a message, as it does in DayZ's own messages: the hostname of the
+// instance's serverDZ.cfg in the site, the instance name when there is none to read.
+func serverName(siteDir, instance string) string {
+	b, err := os.ReadFile(filepath.Join(siteDir, "instances", instance, "serverDZ.cfg")) //nolint:gosec // the site checkout
+	if err != nil {
+		return instance
+	}
+	f, err := servercfg.Parse(b)
+	if err != nil {
+		return instance
+	}
+	if e, ok := f.Get("hostname"); ok && !e.IsArray && !e.IsClass && strings.TrimSpace(e.Scalar.Value) != "" {
+		return e.Scalar.Value
+	}
+	return instance
 }
 
 // messengers are the running broadcasts of the instances.
@@ -70,8 +91,9 @@ func startMessengers(ctx context.Context, cfg *config.Config, tree *site.Tree, r
 			backend = &broadcast.RCon{Session: s}
 		}
 		name := inst.Name
+		host := serverName(cfg.Paths.Site, inst.Name)
 		m := &broadcast.Messenger{
-			Backend: backend, Messages: msgs, Name: name, Port: inst.Ports.Game,
+			Backend: backend, Messages: msgs, Name: host, Port: inst.Ports.Game,
 			Log: func(format string, a ...any) { logf("messages of %s: "+format, append([]any{name}, a...)...) },
 		}
 		ms.wg.Add(1)

@@ -246,7 +246,7 @@ Main keys:
 
 ``welcome``
    The message every player gets when joining. The default is ``Welcome to #name!``. Set your own
-   text (``#name``, the instance name, and ``#port``, the game port, work in it; up to 160
+   text (``#name``, the ``hostname`` of the instance's ``serverDZ.cfg`` (the instance name when it sets none), and ``#port``, the game port, work in it; up to 160
    characters), or ``""`` for none. Can be set under ``defaults:`` in ``site.yaml``.
 
 ``messages``

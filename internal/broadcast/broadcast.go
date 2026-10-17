@@ -38,7 +38,7 @@ type Messenger struct {
 	Messages []site.Message
 	// Unit is what delay and repeat count in (a minute by default); tests make it short.
 	Unit time.Duration
-	// Name and Port replace #name and #port in the texts.
+	// Name (the server's hostname) and Port replace #name and #port in the texts.
 	Name string
 	Port int
 	// Log reports a message that could not be sent.
