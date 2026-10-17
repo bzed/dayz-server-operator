@@ -18,8 +18,9 @@ type Hub interface {
 	Submit(ctx context.Context, cmd admin.Command) (admin.Result, error)
 }
 
-// Styles maps a message colour to the mod's message style.
-var Styles = map[string]string{"": "chat", "blue": "chat", "red": "important", "green": "friendly", "yellow": "action"}
+// Styles maps a message colour to the mod's message style. No colour is red: the blue of the
+// chat is hard to read.
+var Styles = map[string]string{"": "important", "blue": "chat", "red": "important", "green": "friendly", "yellow": "action"}
 
 // Mod sends the messages through the dzo-admin mod, which knows who is in the game: a player has
 // joined when the mod lists the player, and the message goes out in the colour asked for.

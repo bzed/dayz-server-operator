@@ -172,7 +172,7 @@ instance.yaml
    welcome: "Welcome to #name!"    # the default; "" for no welcome message
    messages:                       # more server messages, sent by dzo serve
      - {text: "Homepage: example.org, rules: example.org/rules", on_connect: true, delay: 1}
-     - {text: "Please read the rules: example.org/rules", repeat: 45, color: red}
+     - {text: "Please read the rules: example.org/rules", repeat: 45, color: green}
    priority:                       # Steam64 IDs that skip the login queue (priority.txt)
      - "76561198108512982"
    health: {startup_timeout: 45m, interval: 60s, retries: 5}
@@ -253,7 +253,7 @@ Main keys:
    Further messages the server sends on its own. A message has ``text`` (up to 160 characters),
    ``on_connect: true`` to send it once to a player who joins (``delay`` minutes after the player
    is in the game, default at once) and/or ``repeat`` to send it to everybody every that many
-   minutes, and optionally ``color``: ``blue`` (the default), ``red``, ``green`` or ``yellow``.
+   minutes, and optionally ``color``: ``red`` (the default), ``green``, ``yellow`` or ``blue`` (the chat's own colour, hard to read).
    All times are minutes. Good for the homepage and the rules. It can be set under ``defaults:`` in
    ``site.yaml``; an instance's own list replaces it.
 

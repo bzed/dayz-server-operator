@@ -17,7 +17,7 @@ const MaxMessageLen = 160
 // Message is one of the server messages dzo sends while it runs (internal/broadcast): once to a
 // player OnConnect (Delay minutes after the player is in the game) and/or to everyone every Repeat
 // minutes. The text may use #name (the instance name) and #port (the game port). Color is one of
-// MessageColors, blue when empty. Countdowns and shutdowns are not offered: dzo's own restart
+// MessageColors, red when empty. Countdowns and shutdowns are not offered: dzo's own restart
 // countdown (restarts.announce) does that over RCon.
 type Message struct {
 	Text      string `yaml:"text"`
@@ -90,9 +90,9 @@ func ValidateMessages(ms []Message) error {
 	return nil
 }
 
-// MessageColors are the colours a message can ask for: blue is the chat's own, the others are
-// the game's red, green and yellow chat lines. Only the dzo-admin mod can colour a message.
-var MessageColors = []string{"blue", "red", "green", "yellow"}
+// MessageColors are the colours a message can ask for: the game's red (the default, blue is hard
+// to read), green, yellow and the chat's own blue. Only the dzo-admin mod can colour a message.
+var MessageColors = []string{"red", "green", "yellow", "blue"}
 
 // ExpandMessage replaces #name and #port in a message text, as DayZ does in its own messages.
 func ExpandMessage(text, name string, port int) string {

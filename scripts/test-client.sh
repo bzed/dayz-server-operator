@@ -180,9 +180,9 @@ ports: {game: $game, rcon: $((query + 1)), query: $query}
 network: host
 mods:
   - {local: dzo-admin, server: true}
-welcome: "Welcome to #name, port #port"
+welcome: "Welcome to #name, port #port (default colour)"
 messages:
-  - {text: "Rules: be nice (red)", on_connect: true, color: red}
+  - {text: "Rules: be nice (yellow)", on_connect: true, color: yellow}
   - {text: "Homepage: example.org (green)", on_connect: true, color: green, delay: 0}
 Y
 mkdir -p "$work/site/localmods/dzo-admin/addons"
