@@ -47,6 +47,13 @@ const (
 	PermBanRevokeAny = "ban.revoke_any"
 	PermEvidenceAdd  = "evidence.add"
 
+	// IP addresses are personal data (GDPR). The address a player is connected from is operational
+	// (support, abuse, bans) and is shown to operators; the history of addresses, and any address in a
+	// ban or in evidence, needs a permission of its own. Matching players by address (ban hits, "shared
+	// with N other players") works with neither.
+	PermPlayerIP  = "player.ip"
+	PermIPHistory = "ip.history"
+
 	secretPrefix   = "dzo_"
 	secretBytes    = 24
 	defaultMaxDays = 365
@@ -56,9 +63,9 @@ var rolePerms = map[Role][]string{
 	RoleDetector:  {PermEvidenceAdd},
 	RoleViewer:    {PermView},
 	RoleModerator: {PermView, PermMessage, PermBanView, PermBanInstance, PermEvidenceAdd},
-	RoleOperator:  {PermView, PermMessage, PermBroadcast, PermTeleport, PermSpawn, PermRepair, PermDelete, PermBanView, PermBanInstance, PermBanLong, PermBanIP, PermEvidenceAdd},
+	RoleOperator:  {PermView, PermMessage, PermBroadcast, PermTeleport, PermSpawn, PermRepair, PermDelete, PermBanView, PermBanInstance, PermBanLong, PermBanIP, PermEvidenceAdd, PermPlayerIP},
 	RoleAdmin: {PermView, PermMessage, PermBroadcast, PermTeleport, PermSpawn, PermRepair, PermDelete, PermAuditView,
-		PermBanView, PermBanInstance, PermBanLong, PermBanIP, PermBanGlobal, PermBanRevokeAny, PermEvidenceAdd},
+		PermBanView, PermBanInstance, PermBanLong, PermBanIP, PermBanGlobal, PermBanRevokeAny, PermEvidenceAdd, PermPlayerIP, PermIPHistory},
 }
 
 // Rank orders roles; a marker is visible to roles of at least its rank.

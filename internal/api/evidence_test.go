@@ -103,7 +103,7 @@ func TestIdentitiesRoute(t *testing.T) {
 	e, m := newBanEnv(t)
 	g, _ := moderation.DeriveGUID(steamA)
 	_ = m.st.Seen(context.Background(), "alpha", g, "192.0.2.7", "alice", banNow)
-	code, b := e.do("GET", "/api/v1/players/"+steamA+"/identities", e.token(RoleModerator, nil, false), "")
+	code, b := e.do("GET", "/api/v1/players/"+steamA+"/identities", e.token(RoleAdmin, nil, false), "")
 	if code != 200 || !strings.Contains(string(b), `"192.0.2.7"`) || !strings.Contains(string(b), `"shared_with":0`) {
 		t.Fatalf("identities: %d %s", code, b)
 	}

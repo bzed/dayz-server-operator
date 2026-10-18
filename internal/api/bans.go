@@ -96,7 +96,7 @@ func (s *Server) banRights(c *call, in moderation.BanInput) (code int, err error
 	if (in.ExpiresAt == nil || in.ExpiresAt.Sub(s.now()) > shortBan) && !role.Can(PermBanLong) {
 		return http.StatusForbidden, fmt.Errorf("bans longer than 7 days need the operator role")
 	}
-	if len(in.IPs) > 0 && !role.Can(PermBanIP) {
+	if len(in.IPs)+len(in.IPRefs) > 0 && !role.Can(PermBanIP) {
 		return http.StatusForbidden, fmt.Errorf("IP bans need the operator role")
 	}
 	return 0, nil
@@ -105,7 +105,10 @@ func (s *Server) banRights(c *call, in moderation.BanInput) (code int, err error
 func targetsOf(b moderation.Ban) string {
 	var v []string
 	for _, t := range b.Targets {
-		if !t.Derived {
+		switch {
+		case t.Kind == moderation.TargetIP:
+			v = append(v, "ip") // an address stays out of the audit log, which outlives any retention of sightings
+		case !t.Derived:
 			v = append(v, t.Value)
 		}
 	}
@@ -135,7 +138,7 @@ func (s *Server) listBans(w http.ResponseWriter, r *http.Request, c *call) {
 			out = append(out, b)
 		}
 	}
-	writeJSON(w, 200, out)
+	writeJSON(w, 200, maskBans(c, out))
 }
 
 // loadBan reads the {id} ban, answering 404 for one the caller may not see.
@@ -161,7 +164,7 @@ func (s *Server) loadBan(w http.ResponseWriter, r *http.Request, c *call) (*mode
 
 func (s *Server) getBan(w http.ResponseWriter, r *http.Request, c *call) {
 	if _, b, ok := s.loadBan(w, r, c); ok {
-		writeJSON(w, 200, b)
+		writeJSON(w, 200, maskBan(c, b))
 	}
 }
 
@@ -175,7 +178,7 @@ func (s *Server) banHistory(w http.ResponseWriter, r *http.Request, c *call) {
 		storeFail(w, err)
 		return
 	}
-	writeJSON(w, 200, h)
+	writeJSON(w, 200, maskHistory(c, h))
 }
 
 func (s *Server) createBan(w http.ResponseWriter, r *http.Request, c *call) {
@@ -197,7 +200,7 @@ func (s *Server) createBan(w http.ResponseWriter, r *http.Request, c *call) {
 		return
 	}
 	s.logBan(c, "ban.create", b, true, fmt.Sprintf("ban #%d %s until %s: %s", b.ID, b.Scope, moderation.FormatExpiry(b.ExpiresAt), b.Reason))
-	writeJSON(w, http.StatusCreated, BanResult{Ban: b, Sync: s.Moderation.Changed(r.Context(), b, nil)})
+	writeJSON(w, http.StatusCreated, BanResult{Ban: maskBan(c, b), Sync: s.Moderation.Changed(r.Context(), b, nil)})
 }
 
 // mayChange: the ban's creator (who must still be allowed to make it) or whoever may revoke any ban.
@@ -234,7 +237,7 @@ func (s *Server) updateBan(w http.ResponseWriter, r *http.Request, c *call) {
 		return
 	}
 	s.logBan(c, "ban.edit", b, true, fmt.Sprintf("ban #%d", b.ID))
-	writeJSON(w, 200, BanResult{Ban: b, Sync: s.Moderation.Changed(r.Context(), b, &old)})
+	writeJSON(w, 200, BanResult{Ban: maskBan(c, b), Sync: s.Moderation.Changed(r.Context(), b, &old)})
 }
 
 func (s *Server) revokeBan(w http.ResponseWriter, r *http.Request, c *call) {
@@ -256,5 +259,5 @@ func (s *Server) revokeBan(w http.ResponseWriter, r *http.Request, c *call) {
 		return
 	}
 	s.logBan(c, "ban.revoke", b, true, fmt.Sprintf("ban #%d: %s", b.ID, body.Reason))
-	writeJSON(w, 200, BanResult{Ban: b, Sync: s.Moderation.Changed(r.Context(), b, &old)})
+	writeJSON(w, 200, BanResult{Ban: maskBan(c, b), Sync: s.Moderation.Changed(r.Context(), b, &old)})
 }

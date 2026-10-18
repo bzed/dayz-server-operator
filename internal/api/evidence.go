@@ -33,7 +33,7 @@ func (s *Server) listEvidence(w http.ResponseWriter, r *http.Request, c *call) {
 	out := []moderation.Evidence{}
 	for _, e := range list {
 		if c.who.Allowed(e.Instance) {
-			out = append(out, e)
+			out = append(out, maskEvidence(c, e))
 		}
 	}
 	writeJSON(w, 200, out)
@@ -88,8 +88,16 @@ func (s *Server) addEvidence(w http.ResponseWriter, r *http.Request, c *call) {
 		return
 	}
 	_ = s.Audit.Log(admin.AuditEntry{Actor: c.actor, Source: c.src, Instance: e.Instance, Action: "evidence.add",
-		Target: firstNonEmpty(e.SteamID, e.GUID, e.IP), Detail: fmt.Sprintf("evidence #%d %s", e.ID, e.Kind), OK: true}) // stored either way
-	writeJSON(w, http.StatusCreated, e)
+		Target: firstNonEmpty(e.SteamID, e.GUID, ipLabel(e.IP)), Detail: fmt.Sprintf("evidence #%d %s", e.ID, e.Kind), OK: true}) // stored either way
+	writeJSON(w, http.StatusCreated, maskEvidence(c, e))
+}
+
+// ipLabel names an address for the audit log without writing it there.
+func ipLabel(ip string) string {
+	if ip == "" {
+		return ""
+	}
+	return "ip"
 }
 
 func firstNonEmpty(v ...string) string {
@@ -124,7 +132,7 @@ func (s *Server) loadEvidence(w http.ResponseWriter, r *http.Request, c *call) (
 
 func (s *Server) getEvidence(w http.ResponseWriter, r *http.Request, c *call) {
 	if _, e, ok := s.loadEvidence(w, r, c); ok {
-		writeJSON(w, 200, e)
+		writeJSON(w, 200, maskEvidence(c, e))
 	}
 }
 
@@ -167,6 +175,9 @@ func (s *Server) identities(w http.ResponseWriter, r *http.Request, c *call) {
 	out := []moderation.Sighting{}
 	for _, x := range list {
 		if c.who.Allowed(x.Instance) {
+			if !seesIPs(c) {
+				x.IP = ""
+			}
 			out = append(out, x)
 		}
 	}
