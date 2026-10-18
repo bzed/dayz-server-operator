@@ -8,12 +8,14 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 
 	"github.com/bzed/dayz-server-operator/internal/admin"
 	"github.com/bzed/dayz-server-operator/internal/api"
 	"github.com/bzed/dayz-server-operator/internal/apiclient"
+	"github.com/bzed/dayz-server-operator/internal/geoip"
 )
 
 type backendView struct {
@@ -145,11 +147,13 @@ type playerInfoView struct {
 	Name, SteamID string
 	Ping          int
 	IP            string // the address of the current connection, for those who may see it
+	Geo           geoip.Info
 	Err           string
 }
 
-// playerInfo is the connection info shown over a player's name: the Steam ID, the ping and, with the
-// player.ip permission, the address the player is connected from. It is loaded on demand. The history of
+// playerInfo is the connection info shown over a player's name: the Steam ID, the ping, where the player is
+// (the country; with the player.ip permission also the city, location and provider) and, with the same
+// permission, the address the player is connected from. It is loaded on demand. The history of
 // addresses is not shown here.
 func (s *Server) playerInfo(w http.ResponseWriter, r *http.Request) {
 	_, c, inst, ok := s.target(w, r)
@@ -168,6 +172,7 @@ func (s *Server) playerInfo(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if v.Err == "" {
+		v.Geo, _ = c.Geo(r.Context(), inst, id)                           // without a GeoIP database there is nothing to show
 		if conn, err := c.Connection(r.Context(), inst, id); err == nil { // without player.ip there is no address
 			v.IP = conn.IP
 		}
@@ -461,4 +466,15 @@ func actFlip(r *http.Request, c *apiclient.Client, inst string) (api.ActionResul
 
 func actDelete(r *http.Request, c *apiclient.Client, inst string) (api.ActionResult, error) {
 	return c.DeleteVehicle(r.Context(), inst, r.PathValue("id"), r.PostFormValue("force") == "1")
+}
+
+// flag serves the flag of a country, <flags_dir>/<code>.svg. Only a two-letter code is looked up.
+func (s *Server) flag(w http.ResponseWriter, r *http.Request) {
+	code := strings.ToLower(strings.TrimSuffix(r.PathValue("code"), ".svg"))
+	if s.opts.FlagsDir == "" || len(code) != 2 || code[0] < 'a' || code[0] > 'z' || code[1] < 'a' || code[1] > 'z' {
+		http.NotFound(w, r)
+		return
+	}
+	w.Header().Set("Cache-Control", "public, max-age=86400")
+	http.ServeFileFS(w, r, os.DirFS(s.opts.FlagsDir), code+".svg") //nolint:gosec // G703: code is two ASCII letters (checked above) and the file system is rooted at the flags directory
 }

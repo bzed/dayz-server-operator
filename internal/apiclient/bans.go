@@ -15,6 +15,7 @@ import (
 	"strconv"
 
 	"github.com/bzed/dayz-server-operator/internal/api"
+	"github.com/bzed/dayz-server-operator/internal/geoip"
 	"github.com/bzed/dayz-server-operator/internal/moderation"
 )
 
@@ -157,6 +158,12 @@ func (c *Client) EvidenceFile(ctx context.Context, id int64) (*http.Response, er
 // Identities returns where a Steam ID's GUID was seen, with how many others share each IP.
 func (c *Client) Identities(ctx context.Context, steamID string) (out []moderation.Sighting, err error) {
 	return out, c.get(ctx, "/api/v1/players/"+url.PathEscape(steamID)+"/identities", &out)
+}
+
+// Geo returns where a player is connecting from: the country, and with the player.ip permission the city,
+// location and autonomous system. It is empty when the server has no GeoIP database or does not know the address.
+func (c *Client) Geo(ctx context.Context, name, steamID string) (out geoip.Info, err error) {
+	return out, c.get(ctx, "/api/v1/instances/"+url.PathEscape(name)+"/players/"+url.PathEscape(steamID)+"/geo", &out)
 }
 
 // Connection returns the address a player is connected from on an instance (the player.ip permission).

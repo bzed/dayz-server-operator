@@ -20,6 +20,7 @@ import (
 	"github.com/bzed/dayz-server-operator/internal/admin"
 	"github.com/bzed/dayz-server-operator/internal/api"
 	"github.com/bzed/dayz-server-operator/internal/config"
+	"github.com/bzed/dayz-server-operator/internal/geoip"
 	"github.com/bzed/dayz-server-operator/internal/moderation"
 	"github.com/bzed/dayz-server-operator/internal/resolve"
 	"github.com/bzed/dayz-server-operator/internal/site"
@@ -204,6 +205,8 @@ func Run(ctx context.Context, cfg *config.Config, o Options) error {
 	apiSrv := api.New(cfg.Serve.Installation, o.Version, reg, api.NewTokenStore(APITokens(cfg)), audit)
 	apiSrv.Moderation = svc
 	apiSrv.TilesDir = TilesDir(cfg)
+	apiSrv.GeoIP = geoip.Open(cfg.Serve.GeoIPDir, cfg.Serve.GeoIPLegacyDir)
+	defer apiSrv.GeoIP.Close()
 	// The API serves with write timeouts off: the stream stays open.
 	apiHTTP, modHTTP := newServer(apiSrv.Handler()), newServer(reg.ModHandler())
 	modHTTP.WriteTimeout = time.Minute

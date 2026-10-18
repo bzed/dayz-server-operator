@@ -15,6 +15,15 @@ dayz-server-operator (0.1.0-1) UNRELEASED; urgency=medium
     opaque references instead. New config keys serve.ip_retention_days
     (default 90) and serve.vacuum_days (default 7); the ban database
     schema gains migration 0002.
+  * Country flags in the player list; the player info shows the country,
+    and with player.ip the city, approximate location and autonomous
+    system. GeoLite2 .mmdb files (geoipupdate, /var/lib/GeoIP) give all of
+    it, the legacy GeoIP.dat/GeoIPv6.dat of geoip-database (/usr/share/GeoIP)
+    the country only and are the fallback. New dependency
+    github.com/oschwald/geoip2-golang/v2 (ISC); new Depends:
+    geoip-database, iso-flags-svg; new config keys serve.geoip_dir,
+    serve.geoip_legacy_dir and web.flags_dir; new API route
+    .../players/{steamid}/geo and a country field in the player list.
   * servermods.lock pins the servermod commits and PBO hashes; CI checks it.
   * The web interface ships a helicopter icon (Font Awesome Free 6.7.2,
     CC BY 4.0) that fonts-fork-awesome lacks; debian/copyright lists it.

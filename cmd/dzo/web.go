@@ -58,7 +58,7 @@ func newWebCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			srv, err := web.New(backends, web.Options{Version: version.String(), Assets: cfg.Web.Assets, DocsDir: cfg.Web.DocsDir, UserHeader: cfg.Web.UserHeader})
+			srv, err := web.New(backends, web.Options{Version: version.String(), Assets: cfg.Web.Assets, DocsDir: cfg.Web.DocsDir, FlagsDir: cfg.Web.FlagsDir, UserHeader: cfg.Web.UserHeader})
 			if err != nil {
 				return err
 			}

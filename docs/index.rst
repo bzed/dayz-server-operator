@@ -55,6 +55,7 @@ Where to start
    :caption: Web interface
 
    web
+   geoip
    moderation
    api
    admin-map

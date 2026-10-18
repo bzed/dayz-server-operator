@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/bzed/dayz-server-operator/internal/admin"
+	"github.com/bzed/dayz-server-operator/internal/geoip"
 )
 
 // APIVersion is the version of the /api/v1 contract (additive changes keep
@@ -41,6 +42,8 @@ type Server struct {
 	TilesDir string
 	// Moderation serves the ban and evidence routes; nil answers them 503.
 	Moderation Moderation
+	// GeoIP locates the players' addresses (flags and the connection info); nil shows none.
+	GeoIP *geoip.DB
 
 	now     func() time.Time
 	actions *admin.Limiter
@@ -117,7 +120,7 @@ func (s *Server) Handler() http.Handler {
 	route("GET "+base+"/audit", PermAuditView, false, s.audit)
 	route("GET "+base+"/tiles/{map}/{rest...}", PermView, false, s.tile)
 	route("GET "+base+"/instances/{instance}", PermView, true, func(w http.ResponseWriter, _ *http.Request, c *call) { writeJSON(w, 200, c.hub.Status()) })
-	route("GET "+base+"/instances/{instance}/players", PermView, true, func(w http.ResponseWriter, _ *http.Request, c *call) { writeJSON(w, 200, c.hub.Players()) })
+	route("GET "+base+"/instances/{instance}/players", PermView, true, s.players)
 	route("GET "+base+"/instances/{instance}/vehicles", PermView, true, func(w http.ResponseWriter, _ *http.Request, c *call) { writeJSON(w, 200, c.hub.Vehicles()) })
 	route("GET "+base+"/instances/{instance}/events", PermView, true, func(w http.ResponseWriter, _ *http.Request, c *call) { writeJSON(w, 200, c.hub.Events()) })
 	route("GET "+base+"/instances/{instance}/layers", PermView, true, func(w http.ResponseWriter, _ *http.Request, c *call) {
@@ -133,6 +136,7 @@ func (s *Server) Handler() http.Handler {
 
 	route("POST "+base+"/instances/{instance}/message", PermBroadcast, true, s.message)
 	route("POST "+base+"/instances/{instance}/players/{steamid}/message", PermMessage, true, s.message)
+	route("GET "+base+"/instances/{instance}/players/{steamid}/geo", PermView, true, s.geo)
 	route("GET "+base+"/instances/{instance}/players/{steamid}/connection", PermPlayerIP, true, s.connection)
 	route("POST "+base+"/instances/{instance}/players/{steamid}/kick", PermKick, true, s.kick)
 	route("POST "+base+"/instances/{instance}/players/{steamid}/kill", PermKill, true, s.playerAction(admin.KindPlayerKill, "player.kill"))

@@ -94,6 +94,12 @@ type Serve struct {
 	// 90; 0: for ever). VacuumDays is how often the ban database file is rebuilt (unset: 7; 0: never).
 	IPRetentionDays *int `yaml:"ip_retention_days"`
 	VacuumDays      *int `yaml:"vacuum_days"`
+	// GeoIPDir holds the GeoLite2 databases geoipupdate keeps (GeoLite2-City, -Country and -ASN, .mmdb); with
+	// them the player list shows flags and the player info the city, location and provider. GeoIPLegacyDir
+	// holds GeoIP.dat and GeoIPv6.dat of Debian's geoip-database, which know the country only and are the
+	// fallback.
+	GeoIPDir       string `yaml:"geoip_dir"`
+	GeoIPLegacyDir string `yaml:"geoip_legacy_dir"`
 }
 
 const day = 24 * time.Hour
@@ -137,6 +143,9 @@ type Web struct {
 	Assets string `yaml:"assets"`
 	// DocsDir is the built documentation, served under /docs/.
 	DocsDir string `yaml:"docs_dir"`
+	// FlagsDir holds the country flags as <code>.svg in the 4:3 shape (Debian's iso-flags-svg); without
+	// them the player list shows the country code.
+	FlagsDir string `yaml:"flags_dir"`
 	// UserHeader names the request header an authenticating reverse proxy
 	// sets to the signed-in user (e.g. X-Forwarded-User). The web interface
 	// has no login of its own yet: it reports this user to the audit log, and
@@ -208,8 +217,8 @@ func defaultsTemplated() *Config {
 			DB:        "${data}/db",
 			Site:      "${data}/site",
 		},
-		Serve:    Serve{Installation: "default", Listen: "127.0.0.1:8080", ModListen: "127.0.0.1:2400"},
-		Web:      Web{Listen: "127.0.0.1:8081", Assets: "/usr/share/javascript", DocsDir: "/usr/share/doc/dzo/html"},
+		Serve:    Serve{Installation: "default", Listen: "127.0.0.1:8080", ModListen: "127.0.0.1:2400", GeoIPDir: "/var/lib/GeoIP", GeoIPLegacyDir: "/usr/share/GeoIP"},
+		Web:      Web{Listen: "127.0.0.1:8081", Assets: "/usr/share/javascript", DocsDir: "/usr/share/doc/dzo/html", FlagsDir: "/usr/share/iso-flags-svg/country-4x3"},
 		Exporter: Exporter{Listen: ":9464"},
 		Products: map[string]Product{
 			"dayz-stable": {

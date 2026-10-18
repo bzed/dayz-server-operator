@@ -48,6 +48,8 @@ type Options struct {
 	Assets string
 	// DocsDir is the built Sphinx site, served under /docs/ when set.
 	DocsDir string
+	// FlagsDir holds the country flags, <code>.svg (Debian's iso-flags-svg country-4x3); empty serves none.
+	FlagsDir string
 	// UserHeader is the header an authenticating proxy puts the user in.
 	UserHeader string
 }
@@ -69,7 +71,7 @@ func New(backends []*Backend, opts Options) (*Server, error) {
 	if _, err := rand.Read(raw[:]); err != nil {
 		return nil, err
 	}
-	t, err := template.New("").Funcs(template.FuncMap{"pct": pct, "join": strings.Join, "expiry": moderation.FormatExpiry}).ParseFS(templateFS, "templates/*.html")
+	t, err := template.New("").Funcs(template.FuncMap{"pct": pct, "deref": func(f *float64) float64 { return *f }, "join": strings.Join, "expiry": moderation.FormatExpiry}).ParseFS(templateFS, "templates/*.html")
 	if err != nil {
 		return nil, err
 	}
@@ -98,6 +100,7 @@ func (s *Server) Handler() http.Handler {
 	if s.opts.DocsDir != "" {
 		mux.Handle("GET /docs/", http.StripPrefix("/docs/", http.FileServer(http.Dir(s.opts.DocsDir))))
 	}
+	mux.HandleFunc("GET /flags/{code}", s.flag)
 	mux.HandleFunc("GET /{$}", s.dashboard)
 
 	const inst = "/b/{backend}/i/{instance}"

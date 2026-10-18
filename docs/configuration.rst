@@ -56,6 +56,8 @@ Operator configuration
      allow_insecure_http: false    # plain HTTP on a non-local address
      ip_retention_days: 90         # keep the address of a player sighting this long unless a ban uses it (0: for ever)
      vacuum_days: 7                # rebuild the ban database file this often (0: never)
+     geoip_dir: /var/lib/GeoIP     # GeoLite2 *.mmdb of geoipupdate, see the GeoIP page
+     geoip_legacy_dir: /usr/share/GeoIP  # GeoIP.dat and GeoIPv6.dat of geoip-database (country only)
 
    web:                            # `dzo web`, see the web interface page
      enabled: null                 # unit: null = once backends or web.token exist, true or false to force
@@ -63,6 +65,7 @@ Operator configuration
      user_header: X-Forwarded-User # set by your authenticating reverse proxy
      assets: /usr/share/javascript # htmx and Leaflet (Debian packages)
      docs_dir: /usr/share/doc/dzo/html
+     flags_dir: /usr/share/iso-flags-svg/country-4x3  # country flags (iso-flags-svg)
      backends:                     # default: this host's own API
        - {name: main, url: "http://127.0.0.1:8080", token_file: /var/lib/dzo/secrets/web.token}
 

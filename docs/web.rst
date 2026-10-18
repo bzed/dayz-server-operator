@@ -103,7 +103,9 @@ Instance
    in the panel to the ban form with the player filled in. Hovering over a player's name (or tapping its
    ``i`` button on a phone) shows the Steam ID, the ping and, with the ``player.ip`` permission
    (operators and admins), the address the player is connected from now. The history of addresses is not
-   shown there; it needs ``ip.history`` (:doc:`moderation`). The empty space before the name is reserved for a country flag, and the
+   shown there; it needs ``ip.history`` (:doc:`moderation`). The country flag before a name and the
+   country in that info come from the GeoIP databases (:doc:`geoip`); with ``player.ip`` the info also shows the city,
+   the approximate location and the provider. The
    panel's ``Profile`` button is disabled until the player profile page exists. The player table has no Steam ID column; the
    panel shows it. On a phone the table shows only the name, the health and the actions.
 
@@ -147,5 +149,5 @@ Not available yet
 
 These are planned and are not part of the web interface today: users with
 passwords and TOTP, single sign-on, the player database (history, sessions,
-Steam profiles, GeoIP), kicks and bans, restart timers and scheduled
+Steam profiles), kicks and bans, restart timers and scheduled
 broadcasts, and editors for server configuration.

@@ -8,7 +8,7 @@
   {{range .Items}}
     <tr>
       <td class="who" hx-get="/b/{{$.Backend}}/i/{{$.Instance}}/players/{{.SteamID}}/info" hx-trigger="mouseenter once, focusin once" hx-target="find .pop" hx-swap="innerHTML">
-        <span class="flag" aria-hidden="true"></span>{{.Name}}{{if not .Alive}} <em>(dead)</em>{{else if .Unconscious}} <em>(unconscious)</em>{{end}}{{if .Vehicle}} <em>(in vehicle)</em>{{end}}
+        <span class="flag">{{if .Country}}<img src="/flags/{{.Country}}.svg" alt="{{.Country}}" title="{{.Country}}" loading="lazy">{{end}}</span>{{.Name}}{{if not .Alive}} <em>(dead)</em>{{else if .Unconscious}} <em>(unconscious)</em>{{end}}{{if .Vehicle}} <em>(in vehicle)</em>{{end}}
         <button type="button" class="info quiet" aria-label="Connection info for {{.Name}}" aria-expanded="false" data-info><i class="fa fa-info-circle" aria-hidden="true"></i></button>
         <div class="pop" role="status"></div>
       </td>
@@ -30,6 +30,12 @@
   <dt>Steam ID</dt><dd>{{.SteamID}}</dd>
   {{if .Ping}}<dt>Ping</dt><dd>{{.Ping}}</dd>{{end}}
   {{if .IP}}<dt>Address</dt><dd>{{.IP}}</dd>{{end}}
+  {{with .Geo}}
+  {{if .Country}}<dt>Country</dt><dd><span class="flag"><img src="/flags/{{.Country}}.svg" alt="" loading="lazy"></span>{{if .CountryName}}{{.CountryName}} ({{.Country}}){{else}}{{.Country}}{{end}}</dd>{{end}}
+  {{if .City}}<dt>City</dt><dd>{{.City}}</dd>{{end}}
+  {{if and .Lat .Lon}}<dt>Location</dt><dd>{{printf "%.2f, %.2f" (deref .Lat) (deref .Lon)}} <em>(approximate)</em></dd>{{end}}
+  {{if .ASN}}<dt>Provider</dt><dd>AS{{.ASN}}{{if .ASOrg}} {{.ASOrg}}{{end}}</dd>{{end}}
+  {{end}}
 </dl>
 {{end}}
 {{end}}

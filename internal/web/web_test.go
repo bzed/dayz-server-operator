@@ -19,6 +19,8 @@ import (
 	"github.com/bzed/dayz-server-operator/internal/admin"
 	"github.com/bzed/dayz-server-operator/internal/api"
 	"github.com/bzed/dayz-server-operator/internal/apiclient"
+	"github.com/bzed/dayz-server-operator/internal/geoip"
+	"github.com/bzed/dayz-server-operator/internal/geoip/geoiptest"
 	"github.com/bzed/dayz-server-operator/internal/moderation"
 )
 
@@ -73,12 +75,18 @@ func newEnv(t *testing.T, role api.Role) *env {
 		}
 	}
 	_ = os.WriteFile(filepath.Join(assets, "htmx", "htmx.min.js"), []byte("//htmx"), 0o600)
+	flags := filepath.Join(dir, "flags")
+	if err := os.MkdirAll(flags, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	_ = os.WriteFile(filepath.Join(flags, "de.svg"), []byte("<svg/>"), 0o600)
+	apiSrv.GeoIP = geoiptest.Legacy(t, map[string]string{"198.51.100.0/24": "DE"})
 	_ = os.WriteFile(filepath.Join(docs, "index.html"), []byte("<h1>docs</h1>"), 0o600)
 	srv, err := New([]*Backend{
 		{Name: "main", Client: apiclient.New(ats.URL, secret)},
 		{Name: "other", Client: apiclient.New(otherTS.URL, otherSecret)},
 		{Name: "down", Client: apiclient.New("http://127.0.0.1:1", "x")},
-	}, Options{Version: "v0", Assets: assets, DocsDir: docs, UserHeader: "X-Forwarded-User"})
+	}, Options{Version: "v0", Assets: assets, DocsDir: docs, FlagsDir: flags, UserHeader: "X-Forwarded-User"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -544,5 +552,74 @@ func TestPlayerPanelHasHealFixGearAndKillWithConfirmation(t *testing.T) {
 		if !strings.Contains(body, want) {
 			t.Errorf("panel lacks %s: %s", want, body)
 		}
+	}
+}
+
+func seenFrom(t *testing.T, e *env, ip string) {
+	t.Helper()
+	guid, _ := moderation.DeriveGUID(webSteam)
+	if err := e.api.Moderation.(webMod).st.Seen(context.Background(), "alpha", guid, ip, "alice", time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	e.hub.Sync(admin.SyncRequest{Proto: 1, Players: []admin.Player{{SteamID: webSteam, Name: "alice", Alive: true}, {SteamID: "7656", Name: "bob", Alive: true}}})
+}
+
+func TestPlayerListShowsTheFlag(t *testing.T) {
+	e := newEnv(t, api.RoleViewer)
+	seenFrom(t, e, "198.51.100.7")
+	_, body, _ := e.get("/b/main/i/alpha/players")
+	if !strings.Contains(body, `<span class="flag"><img src="/flags/DE.svg" alt="DE"`) {
+		t.Fatalf("no flag: %s", body)
+	}
+	if strings.Count(body, "<img") != 1 {
+		t.Fatalf("a player without a country got a flag: %s", body)
+	}
+}
+
+func TestPlayerInfoShowsCountryButCityAndProviderNeedThePlayerIP(t *testing.T) {
+	e := newEnv(t, api.RoleOperator)
+	seenFrom(t, e, "198.51.100.7")
+	_, body, _ := e.get("/b/main/i/alpha/players/" + webSteam + "/info")
+	if !strings.Contains(body, "<dt>Country</dt>") || !strings.Contains(body, "/flags/DE.svg") || !strings.Contains(body, "</span>DE</dd>") {
+		t.Fatalf("no country: %s", body)
+	}
+	// The legacy database holds no city, location or provider, so none are shown.
+	for _, no := range []string{"<dt>City</dt>", "<dt>Location</dt>", "<dt>Provider</dt>"} {
+		if strings.Contains(body, no) {
+			t.Errorf("%s with a country-only database: %s", no, body)
+		}
+	}
+}
+
+func TestInfoRowsForCityLocationAndProvider(t *testing.T) {
+	e := newEnv(t, api.RoleOperator)
+	lat, lon := 48.137, 11.575
+	var out strings.Builder
+	err := e.srv.tmpl.ExecuteTemplate(&out, "playerinfo", playerInfoView{Name: "<x>", SteamID: webSteam,
+		Geo: geoip.Info{Country: "DE", CountryName: "Germany", City: "München", Lat: &lat, Lon: &lon, ASN: 6805, ASOrg: "Telefonica <Germany>"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := out.String()
+	for _, want := range []string{"Germany (DE)", "<dd>München</dd>", "48.14, 11.57", "approximate", "AS6805 Telefonica &lt;Germany&gt;", "&lt;x&gt;"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("no %q: %s", want, body)
+		}
+	}
+}
+
+func TestFlagsAreServedOnlyForTwoLetterCodes(t *testing.T) {
+	e := newEnv(t, api.RoleViewer)
+	if code, body, h := e.get("/flags/DE.svg"); code != 200 || body != "<svg/>" || !strings.Contains(h.Get("Cache-Control"), "max-age") {
+		t.Fatalf("de: %d %q %v", code, body, h)
+	}
+	for _, p := range []string{"/flags/xx.svg", "/flags/d1.svg", "/flags/deu.svg", "/flags/%2e%2e%2fa"} {
+		if code, _, _ := e.get(p); code != 404 && code != 400 && code != 301 {
+			t.Errorf("%s: %d", p, code)
+		}
+	}
+	e.srv.opts.FlagsDir = ""
+	if code, _, _ := e.get("/flags/de.svg"); code != 404 {
+		t.Fatalf("no flags dir: %d", code)
 	}
 }

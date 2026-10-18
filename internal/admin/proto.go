@@ -59,6 +59,9 @@ type Player struct {
 	// Vehicle is the id of the vehicle the player sits in, derived from the
 	// vehicles' occupant lists.
 	Vehicle string `json:"vehicle,omitempty"`
+	// Country is the ISO country code of the address the player connected from, for the flag. The API
+	// fills it in (internal/geoip); the mod does not send it.
+	Country string `json:"country,omitempty"`
 }
 
 // Vehicle is one persistent vehicle.
