@@ -112,3 +112,16 @@ func TestEvidenceImageProxy(t *testing.T) {
 }
 
 func itoa(i int64) string { return strconv.FormatInt(i, 10) }
+
+func TestBanFormRefusesAMessageBattlEyeWouldCut(t *testing.T) {
+	e := newEnv(t, api.RoleAdmin)
+	form := url.Values{"steam_id": {webSteam}, "reason": {"a long internal reason"}, "message": {strings.Repeat("ä", 33)},
+		"duration": {"7d"}, "scope": {"global"}}
+	_, body := e.postForm("/b/main/bans", form, true)
+	if !strings.Contains(body, "BattlEye shows at most 64") {
+		t.Fatalf("no explanation for the player message: %s", body)
+	}
+	if _, list, _ := e.get("/b/main/bans?state=active"); strings.Contains(list, "ban #1") || strings.Contains(list, webSteam) {
+		t.Fatalf("the ban was created anyway: %s", list)
+	}
+}
