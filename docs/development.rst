@@ -83,6 +83,12 @@ DayZ Tools, no armake2) into ``dist/servermods/<mod>/addons/*.pbo`` and writes
 clients, so nothing is signed and no key is needed. The scripts go in as plain
 text and ``config.cpp`` is not rapified; the server reads both.
 
+``servermods.lock`` in the repository pins the submodule commit and the sha256 of every PBO. CI (the
+``servermods`` job, ``make servermods-check``) builds the mods on GitHub and fails when they differ from the
+lock, which also catches a build that is not reproducible. After a change of a servermod, run
+``make servermods-lock`` and commit the lock file with the new submodule commit. The mod's commit must
+be pushed to its own repository first, or CI cannot check it out.
+
 While 1.30 is experimental, a servermod has to load on **both** 1.29 (stable,
 Steam app 223350) and 1.30 (experimental, app 1042420, "DayZ Server Exp"). One
 PBO serves both; version-specific code belongs behind ``#ifdef DAYZ_1_29`` with

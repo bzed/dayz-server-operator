@@ -1,0 +1,10 @@
+# SPDX-FileCopyrightText: 2026 Bernd Zeimetz <bernd@bzed.de>
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+# The servermods dzo builds: the commit of each and the sha256 of every PBO built from it.
+# CI refuses a build that differs. Update it with `make servermods-lock` after a servermod changed.
+servermods:
+    dzo-admin:
+        commit: 5f499c8795713cc15900d7eb86e1d3d2276c46f1
+        pbos:
+            addons/dzoadmin.pbo: b0fd9a3f2c3f6465e45db5358153e94ea4882c1a8fde45d42c990451af644b7b

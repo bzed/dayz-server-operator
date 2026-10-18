@@ -20,7 +20,7 @@ COVERAGE_MIN := 85
 GO           ?= go
 
 .PHONY: all cheatsheet docs build build-static test test-race cover coverage-check cover-html lint vet fmt fmt-check \
-        licenses reuse vulncheck check deb clean tidy generate servermods test-findfile test-client
+        licenses reuse vulncheck check deb clean tidy generate servermods servermods-check servermods-lock test-findfile test-client
 
 all: lint reuse test build
 
@@ -129,6 +129,14 @@ test-client:
 ## (reproducible; needs the submodules: git submodule update --init).
 servermods: build
 	$(BIN_DIR)/$(BINARY) servermods build --src servermods --out $(DIST_DIR)/servermods
+
+## servermods-check: build the servermods and fail when the commits or PBO hashes differ from servermods.lock (CI runs it).
+servermods-check: build
+	$(BIN_DIR)/$(BINARY) servermods build --src servermods --out $(DIST_DIR)/servermods --lock servermods.lock
+
+## servermods-lock: rewrite servermods.lock from a build; commit it together with the servermod change.
+servermods-lock: build
+	$(BIN_DIR)/$(BINARY) servermods build --src servermods --out $(DIST_DIR)/servermods --lock servermods.lock --update-lock
 
 ## deb: build the Debian package (requires debhelper, dpkg-dev; see debian/).
 deb:

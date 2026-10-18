@@ -46,27 +46,37 @@ func gitCommit(ctx context.Context, dir string) (string, error) {
 	return strings.TrimSpace(string(out)), nil
 }
 
-// WriteCompat writes outRoot/compat.yaml for the results of Build, with the
-// commit of every servermod checkout below srcRoot. Like the PBOs it is
-// reproducible: nothing in it depends on the time or the machine.
-func WriteCompat(ctx context.Context, srcRoot, outRoot, dzoVersion, serverBuild string, res []Result) error {
-	c := Compat{DZO: dzoVersion, ServerBuild: serverBuild, Servermods: map[string]ModCompat{}}
+// compatOf returns the commit and PBO hashes of the servermods of a build, by mod.
+func compatOf(ctx context.Context, srcRoot, outRoot string, res []Result) (map[string]ModCompat, error) {
+	mods := map[string]ModCompat{}
 	for _, r := range res {
-		m, ok := c.Servermods[r.Mod]
+		m, ok := mods[r.Mod]
 		if !ok {
 			commit, err := gitCommit(ctx, filepath.Join(srcRoot, r.Mod))
 			if err != nil {
-				return err
+				return nil, err
 			}
 			m = ModCompat{Commit: commit, PBOs: map[string]string{}}
 		}
 		rel, err := filepath.Rel(filepath.Join(outRoot, r.Mod), r.PBO)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		m.PBOs[filepath.ToSlash(rel)] = r.SHA256
-		c.Servermods[r.Mod] = m
+		mods[r.Mod] = m
 	}
+	return mods, nil
+}
+
+// WriteCompat writes outRoot/compat.yaml for the results of Build, with the
+// commit of every servermod checkout below srcRoot. Like the PBOs it is
+// reproducible: nothing in it depends on the time or the machine.
+func WriteCompat(ctx context.Context, srcRoot, outRoot, dzoVersion, serverBuild string, res []Result) error {
+	mods, err := compatOf(ctx, srcRoot, outRoot, res)
+	if err != nil {
+		return err
+	}
+	c := Compat{DZO: dzoVersion, ServerBuild: serverBuild, Servermods: mods}
 	b, err := yaml.Marshal(c)
 	if err != nil {
 		return err
