@@ -438,3 +438,22 @@ func TestMapTiles(t *testing.T) {
 		}
 	}
 }
+
+// The player panel acts on the player; banning is a link to the ban site's form, not fields in the panel.
+func TestPlayerPanelLinksToTheBanSite(t *testing.T) {
+	e := newEnv(t, api.RoleAdmin)
+	_, body, _ := e.get("/b/main/i/alpha/players/7656/panel")
+	if !strings.Contains(body, `href="/b/main/bans/new?steam_id=7656&amp;instance=alpha"`) {
+		t.Fatalf("no link to the ban form: %s", body)
+	}
+	for _, field := range []string{`name="reason"`, `name="duration"`, `name="scope"`} {
+		if strings.Contains(body, field) {
+			t.Errorf("the panel has the ban field %s", field)
+		}
+	}
+	for _, group := range []string{"Tell", "Move", "Remove", "Give"} {
+		if !strings.Contains(body, `class="gname">`+group) {
+			t.Errorf("no %q group", group)
+		}
+	}
+}

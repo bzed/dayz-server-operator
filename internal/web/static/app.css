@@ -228,3 +228,22 @@ th[aria-sort="descending"]::after { content: " \25BC"; font-size: .7em; }
 .banform label { display: block; }
 .evidence img { max-width: 32rem; display: block; }
 .warn { color: var(--flare); }
+
+/* Player panel. The panel is one cell spanning the row: it must not inherit the right aligned, unwrapped
+   look of the button column, or its forms run off the page. */
+.rowpanel td { text-align: left; white-space: normal; padding-right: 0; }
+.playerpanel { max-width: 100%; }
+.playerpanel h3 { display: flex; align-items: baseline; gap: .5rem; flex-wrap: wrap; }
+.playerpanel h3 button { margin-left: auto; }
+.playerpanel .grp { display: grid; grid-template-columns: 5.5rem minmax(0, 1fr); align-items: center; gap: .25rem .75rem; padding: .4rem 0; border-top: 1px solid var(--line); }
+.playerpanel .grp form { display: flex; flex-wrap: wrap; align-items: center; gap: .25rem; min-width: 0; }
+.playerpanel .grp form input[size] { max-width: 100%; }
+.playerpanel .gname { font: 600 1.05rem/1.2 var(--display); color: var(--muted); }
+.playerpanel details.give { display: block; }
+.playerpanel details.give summary { cursor: pointer; }
+.playerpanel details.give[open] summary { margin-bottom: .4rem; }
+@media (max-width: 700px) { .playerpanel .grp { grid-template-columns: 1fr; } }
+.playerpanel details.give summary { display: grid; grid-template-columns: 5.5rem minmax(0, 1fr); gap: .75rem; list-style: none; }
+.playerpanel details.give summary::-webkit-details-marker { display: none; }
+.playerpanel details.give summary::after { content: "Item…"; grid-column: 2; grid-row: 1; justify-self: start; }
+.playerpanel details.give summary .gname { grid-column: 1; grid-row: 1; }

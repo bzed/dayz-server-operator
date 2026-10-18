@@ -46,32 +46,40 @@
 <tr class="rowpanel"><td colspan="6">
 {{if .Err}}<p class="flash err">{{.Err}}</p><button class="quiet" data-close><i class="fa fa-times" aria-hidden="true"></i>Close</button>{{else}}
 {{$base := printf "/b/%s/i/%s/players/%s" .Backend .Instance .Player.SteamID}}
-<div class="panel">
+<div class="panel playerpanel">
   <h3><i class="fa fa-user" aria-hidden="true"></i>{{.Player.Name}} <small>{{.Player.SteamID}}</small> <button class="quiet" data-close><i class="fa fa-times" aria-hidden="true"></i>Close</button></h3>
   <div id="panel-flash"></div>
-  <form hx-post="{{$base}}/message" hx-target="#panel-flash" hx-on::after-request="this.reset()">
-    <input name="text" placeholder="Direct message" maxlength="400" required size="40">
-    <button><i class="fa fa-comment" aria-hidden="true"></i>Message</button>
-  </form>
-  <form hx-post="{{$base}}/teleport" hx-target="#panel-flash">
-    <input name="x" type="number" step="any" placeholder="x (east)" size="8">
-    <input name="z" type="number" step="any" placeholder="z (north)" size="8">
-    or to player <select name="to"><option value="">-</option>{{range .Others}}<option value="{{.SteamID}}">{{.Name}}</option>{{end}}</select>
-    <button><i class="fa fa-location-arrow" aria-hidden="true"></i>Teleport</button>
-  </form>
-  <form hx-post="{{$base}}/give" hx-target="#panel-flash">
-    <input name="type" list="types" placeholder="Class name" required size="26" autocomplete="off"
-           hx-get="/b/{{.Backend}}/i/{{.Instance}}/types" hx-trigger="input changed delay:300ms" hx-target="#types" hx-swap="innerHTML">
-    <datalist id="types"></datalist>
-    <input name="quantity" value="max" placeholder="number, default or max" title="A number (0 = empty), default (as the game makes it) or max (a full stack)" pattern="\s*([Mm][Aa][Xx]|[Dd][Ee][Ff][Aa][Uu][Ll][Tt]|-[12]|[0-9]+(\.[0-9]+)?)\s*" size="10">
-    <span class="presets"><button type="button" class="quiet" data-set="default" data-for="quantity">Default</button><button type="button" class="quiet" data-set="max" data-for="quantity">Max</button><button type="button" class="quiet" data-set="0" data-for="quantity">Empty</button><button type="button" class="quiet" data-set="1" data-for="quantity">1</button></span>
-    <input name="health" type="number" step="0.1" min="0" max="1" value="1" placeholder="health 0-1" size="8">
-    <span class="presets"><button type="button" class="quiet" data-set="1" data-for="health">100%</button><button type="button" class="quiet" data-set="0.75" data-for="health">75%</button><button type="button" class="quiet" data-set="0.5" data-for="health">50%</button><button type="button" class="quiet" data-set="0.25" data-for="health">25%</button></span>
-    <select name="target"><option value="inventory">inventory</option><option value="hands">hands</option><option value="ground">ground</option></select>
-    <label><input type="checkbox" name="attachments" value="1"> with attachments</label>
-    <button><i class="fa fa-gift" aria-hidden="true"></i>Give</button>
-  </form>
-  <a class="btn danger" href="/b/{{.Backend}}/bans/new?steam_id={{.Player.SteamID}}&amp;instance={{.Instance}}"><i class="fa fa-ban" aria-hidden="true"></i>Ban…</a>
+  <div class="grp"><span class="gname">Tell</span>
+    <form hx-post="{{$base}}/message" hx-target="#panel-flash" hx-on::after-request="this.reset()">
+      <input name="text" placeholder="Direct message" maxlength="400" required size="40">
+      <button><i class="fa fa-comment" aria-hidden="true"></i>Message</button>
+    </form>
+  </div>
+  <div class="grp"><span class="gname">Move</span>
+    <form hx-post="{{$base}}/teleport" hx-target="#panel-flash">
+      <input name="x" type="number" step="any" placeholder="x (east)" size="8">
+      <input name="z" type="number" step="any" placeholder="z (north)" size="8">
+      or to player <select name="to"><option value="">-</option>{{range .Others}}<option value="{{.SteamID}}">{{.Name}}</option>{{end}}</select>
+      <button><i class="fa fa-location-arrow" aria-hidden="true"></i>Teleport</button>
+    </form>
+  </div>
+  <div class="grp"><span class="gname">Remove</span>
+    <span><a class="btn danger" href="/b/{{.Backend}}/bans/new?steam_id={{.Player.SteamID}}&amp;instance={{.Instance}}"><i class="fa fa-ban" aria-hidden="true"></i>Ban…</a></span>
+  </div>
+  <details class="grp give"><summary><span class="gname">Give</span></summary>
+    <form hx-post="{{$base}}/give" hx-target="#panel-flash">
+      <input name="type" list="types" placeholder="Class name" required size="26" autocomplete="off"
+             hx-get="/b/{{.Backend}}/i/{{.Instance}}/types" hx-trigger="input changed delay:300ms" hx-target="#types" hx-swap="innerHTML">
+      <datalist id="types"></datalist>
+      <input name="quantity" value="max" placeholder="number, default or max" title="A number (0 = empty), default (as the game makes it) or max (a full stack)" pattern="\s*([Mm][Aa][Xx]|[Dd][Ee][Ff][Aa][Uu][Ll][Tt]|-[12]|[0-9]+(\.[0-9]+)?)\s*" size="10">
+      <span class="presets"><button type="button" class="quiet" data-set="default" data-for="quantity">Default</button><button type="button" class="quiet" data-set="max" data-for="quantity">Max</button><button type="button" class="quiet" data-set="0" data-for="quantity">Empty</button><button type="button" class="quiet" data-set="1" data-for="quantity">1</button></span>
+      <input name="health" type="number" step="0.1" min="0" max="1" value="1" placeholder="health 0-1" size="8">
+      <span class="presets"><button type="button" class="quiet" data-set="1" data-for="health">100%</button><button type="button" class="quiet" data-set="0.75" data-for="health">75%</button><button type="button" class="quiet" data-set="0.5" data-for="health">50%</button><button type="button" class="quiet" data-set="0.25" data-for="health">25%</button></span>
+      <select name="target"><option value="inventory">inventory</option><option value="hands">hands</option><option value="ground">ground</option></select>
+      <label><input type="checkbox" name="attachments" value="1"> with attachments</label>
+      <button><i class="fa fa-gift" aria-hidden="true"></i>Give</button>
+    </form>
+  </details>
 </div>
 {{end}}
 </td></tr>
