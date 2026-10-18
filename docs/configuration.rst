@@ -190,6 +190,7 @@ instance.yaml
      env: {}
      mounts: ["/var/lib/GeoIP:/var/lib/GeoIP:ro"]
      memory: null                  # e.g. 24G
+     core_dumps: false             # true lets a crashing server write a core file
    hooks:
      pre_start: ["hooks/traderstocks.sh"]
    admin:                          # dzo-admin mod, see the admin map page
@@ -229,6 +230,13 @@ Main keys:
 ``network``
    ``host`` (default) uses the host's network directly. ``publish`` gives the
    container its own network namespace and publishes only the game ports.
+
+``container.core_dumps``
+   ``false`` (default) sets ``Ulimit=core=0`` on the container. A DayZ server that
+   crashes (or dies on shutdown) would otherwise write a core file of its whole memory,
+   several GB, and that disk load stalls every other server on the host for many seconds.
+   Set ``true`` only to debug a crash, and mind the disk space. The unit is rewritten at
+   the next render; a running server keeps its limit until it is restarted.
 
 ``mods``
    Workshop ids. ``server: true`` loads the mod with ``-servermod``. The list

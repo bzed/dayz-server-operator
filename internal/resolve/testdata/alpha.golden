@@ -117,6 +117,7 @@ HealthStartupInterval=30s
 HealthStartupRetries=60
 HealthStartupSuccess=1
 Notify=healthy
+Ulimit=core=0
 StopTimeout=120
 
 [Service]

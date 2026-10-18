@@ -96,6 +96,9 @@ type ContainerSpec struct {
 
 	Memory string // e.g. "24G"; empty omits Memory
 	CPUs   string // e.g. "4"; empty omits CPUs
+	// CoreDumps lets a crashing server write a core file. Off by default: a core of a
+	// multi-GB server stalls the disk, and with it every other server on the host.
+	CoreDumps bool
 
 	StopTimeout time.Duration // 0 omits StopTimeout
 
@@ -229,6 +232,9 @@ func RenderContainer(spec ContainerSpec) (string, error) {
 			kv.set("Notify", "healthy")
 		}
 
+		if !spec.CoreDumps {
+			kv.set("Ulimit", "core=0")
+		}
 		if spec.Memory != "" {
 			kv.set("PodmanArgs", "--memory="+spec.Memory)
 		}

@@ -582,6 +582,7 @@ func buildQuadlet(inst *Instance) quadlet.ContainerSpec {
 	if inst.Container.Memory != nil {
 		spec.Memory = *inst.Container.Memory
 	}
+	spec.CoreDumps = inst.Container.CoreDumps
 	if inst.Container.CPUs != nil {
 		spec.CPUs = *inst.Container.CPUs
 	}

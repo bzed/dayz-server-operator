@@ -164,7 +164,7 @@ func TestTimelineLocksSevenAndKicksThreeMinutesBeforeTheRestart(t *testing.T) {
 		got = append(got, what+"@"+st.left.String())
 	}
 	// The announcements count down to the kick: 27 minutes left at the start, 3 minutes before the restart.
-	want := "say@30m0s say@23m0s say@18m0s say@13m0s say@8m0s say@7m0s lock@7m0s say@6m0s say@5m0s say@4m0s " +
+	want := "say@30m0s say@23m0s say@18m0s say@13m0s say@12m0s say@11m0s say@10m0s say@9m0s say@8m0s say@7m0s lock@7m0s say@6m0s say@5m0s say@4m0s " +
 		"say@3m30s say@3m15s say@3m10s say@3m5s say@3m4s say@3m3s say@3m2s say@3m1s kick@3m0s"
 	if strings.Join(got, " ") != want {
 		t.Errorf("timeline:\n got %s\nwant %s", strings.Join(got, " "), want)
@@ -295,5 +295,23 @@ func TestACancelledContextStillEndsTheCountdownAfterAFailure(t *testing.T) {
 	r := Restarter{Lifecycle: lc, Dial: f.dial, Sleep: func(time.Duration) { cancel() }}
 	if err := r.Restart(ctx, "x", Announcement{Minutes: 3, Lock: 2, Kick: 1}, nil); !errors.Is(err, context.Canceled) {
 		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestTimelineAnnouncesEveryMinuteInTheLastTenMinutesBeforeTheKick(t *testing.T) {
+	var left []time.Duration
+	for _, st := range (Announcement{Minutes: 30, Lock: 7, Kick: 3}).timeline() {
+		if strings.HasPrefix(st.say, "Server restart in ") && strings.HasSuffix(st.say, " minutes") || strings.HasSuffix(st.say, "1 minute") {
+			left = append(left, st.left-3*time.Minute)
+		}
+	}
+	for m := 10; m >= 1; m-- {
+		found := false
+		for _, l := range left {
+			found = found || l == time.Duration(m)*time.Minute
+		}
+		if !found {
+			t.Errorf("no announcement %d minutes before the kick, got %v", m, left)
+		}
 	}
 }

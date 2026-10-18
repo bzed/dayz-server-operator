@@ -36,11 +36,12 @@ func (a Announcement) event() string {
 }
 
 // Announcements are made at these times left until the kick, plus one at the start of the
-// countdown. This is the rhythm of the legacy dayz_restart: every ten minutes, then every five,
-// then every minute, and in the last minute every few seconds.
+// countdown: sparse until ten minutes are left, then every minute, and in the last minute every
+// few seconds. The ten minutes are counted down to the kick, not to the restart.
 var announceMarks = []time.Duration{
-	30 * time.Minute, 20 * time.Minute, 15 * time.Minute, 10 * time.Minute, 5 * time.Minute,
-	4 * time.Minute, 3 * time.Minute, 2 * time.Minute, time.Minute,
+	30 * time.Minute, 20 * time.Minute, 15 * time.Minute,
+	10 * time.Minute, 9 * time.Minute, 8 * time.Minute, 7 * time.Minute, 6 * time.Minute,
+	5 * time.Minute, 4 * time.Minute, 3 * time.Minute, 2 * time.Minute, time.Minute,
 	30 * time.Second, 15 * time.Second, 10 * time.Second, 5 * time.Second,
 	4 * time.Second, 3 * time.Second, 2 * time.Second, time.Second,
 }

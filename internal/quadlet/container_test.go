@@ -264,3 +264,22 @@ func TestRenderContainerPublishHostAddress(t *testing.T) {
 		}
 	}
 }
+
+func TestRenderContainerCoreDumps(t *testing.T) {
+	spec := ContainerSpec{Name: "dzo-deerisle", Image: "localhost/dzo-runtime:latest", Network: NetworkHost}
+	out, err := RenderContainer(spec)
+	if err != nil {
+		t.Fatalf("RenderContainer: %v", err)
+	}
+	if !strings.Contains(out, "Ulimit=core=0\n") {
+		t.Errorf("a crashing server must not dump core by default:\n%s", out)
+	}
+	spec.CoreDumps = true
+	out, err = RenderContainer(spec)
+	if err != nil {
+		t.Fatalf("RenderContainer: %v", err)
+	}
+	if strings.Contains(out, "Ulimit=") {
+		t.Errorf("CoreDumps must leave the core limit alone:\n%s", out)
+	}
+}

@@ -288,6 +288,8 @@ type ContainerConfig struct {
 	LogzDir string            `yaml:"logz_dir,omitempty"`
 	CPUs    *string           `yaml:"cpus,omitempty"`
 	Memory  *string           `yaml:"memory,omitempty"`
+	// CoreDumps lets a crashing server write a core file (default false, see quadlet.ContainerSpec).
+	CoreDumps bool `yaml:"core_dumps,omitempty"`
 }
 
 // LogRule is one profile log series: the files whose path (slash separated, relative to

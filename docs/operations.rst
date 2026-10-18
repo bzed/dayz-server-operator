@@ -69,8 +69,8 @@ A graceful restart runs on a timeline. Every number is minutes before the restar
    the players are kicked (3). The countdown ends here; the service is stopped
    when the restart time is reached.
 
-The countdown follows the rhythm of the old ``dayz_restart``: the first message
-when it starts, then at 20, 15, 10, 5, 4, 3, 2 and 1 minutes left, and in the
+The countdown: the first message when it starts, then at 20 and 15 minutes
+left, every minute from 10 minutes left on, and in the
 last minute at 30, 15, 10, 5, 4, 3, 2 and 1 seconds, all counted down to the
 kick. With 30/7/3 the first message reads "in 27 minutes". Each message is
 ``<text> in <time>``; the lock is announced as well. The kick tries up to three
