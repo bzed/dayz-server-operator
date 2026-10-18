@@ -55,6 +55,19 @@
     }
   });
 
+  // Buttons that open or close a <dialog> (data-dialog="<id>", data-dialog-close). The dialog is modal,
+  // so the page behind it cannot be used and Esc closes it.
+  document.addEventListener('click', function (e) {
+    var open = e.target.closest('[data-dialog]');
+    if (open) {
+      var d = document.getElementById(open.getAttribute('data-dialog'));
+      if (d && d.showModal) d.showModal();
+      return;
+    }
+    var close = e.target.closest('[data-dialog-close]');
+    if (close) close.closest('dialog').close();
+  });
+
   // A preset button (data-set="max" data-for="quantity") fills the form field of that name.
   document.addEventListener('click', function (e) {
     var b = e.target.closest('[data-set]');

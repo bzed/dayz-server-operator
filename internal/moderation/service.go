@@ -6,6 +6,7 @@ package moderation
 import (
 	"cmp"
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"sort"
@@ -394,4 +395,35 @@ func (s *Service) kickBanned(ctx context.Context, r *running) error {
 		}
 	}
 	return nil
+}
+
+// ErrNotOnline is returned by Kick for a player who is not on the instance.
+var ErrNotOnline = errors.New("moderation: the player is not online")
+
+// Kick removes an online player from an instance. The reason is what the player is shown (BattlEye keeps
+// 64 bytes of it).
+func (s *Service) Kick(ctx context.Context, instance, steamID, reason string) error {
+	guid, err := DeriveGUID(steamID)
+	if err != nil {
+		return err
+	}
+	s.mu.Lock()
+	r := s.insts[instance]
+	s.mu.Unlock()
+	if r == nil {
+		return fmt.Errorf("moderation: no BattlEye connection to instance %q", instance)
+	}
+	raw, err := r.rcon.Command(ctx, "players")
+	if err != nil {
+		return fmt.Errorf("players: %w", err)
+	}
+	for _, p := range battleye.ParsePlayers(raw) {
+		if p.GUID == guid {
+			if _, err := r.rcon.Command(ctx, fmt.Sprintf("kick %d %s", p.ID, BEReason(reason))); err != nil {
+				return fmt.Errorf("kick: %w", err)
+			}
+			return nil
+		}
+	}
+	return ErrNotOnline
 }

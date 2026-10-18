@@ -148,3 +148,30 @@ func TestReadingTheAddressHistoryIsAudited(t *testing.T) {
 		t.Fatalf("audit: %+v", got)
 	}
 }
+
+func TestKickNeedsThePermissionAndAShortReason(t *testing.T) {
+	e, m := newBanEnv(t)
+	path := "/api/v1/instances/alpha/players/" + steamA + "/kick"
+	if code, _ := e.do("POST", path, e.token(RoleViewer, nil, false), `{"reason":"afk"}`); code != 403 {
+		t.Fatalf("viewer: %d", code)
+	}
+	if code, b := e.do("POST", path, e.token(RoleModerator, nil, false), strings.Repeat("x", 0)+`{"reason":""}`); code != 400 {
+		t.Fatalf("no reason: %d %s", code, b)
+	}
+	long := `{"reason":"` + strings.Repeat("r", moderation.MaxMessage+1) + `"}`
+	if code, b := e.do("POST", path, e.token(RoleModerator, nil, false), long); code != 400 || !strings.Contains(string(b), "64") {
+		t.Fatalf("long reason: %d %s", code, b)
+	}
+	code, b := e.do("POST", path, e.token(RoleModerator, nil, true), `{"reason":"afk"}`, "X-Dzo-Actor", "alice")
+	if code != 200 || len(m.kicks) != 1 || m.kicks[0] != "alpha "+steamA+" afk" {
+		t.Fatalf("kick: %d %s %v", code, b, m.kicks)
+	}
+	got, _ := e.srv.Audit.Tail("alpha", 5)
+	if len(got) == 0 || got[0].Action != "player.kick" || got[0].Target != steamA || !strings.Contains(got[0].Detail, "afk") {
+		t.Fatalf("audit: %+v", got)
+	}
+	m.kickErr = moderation.ErrNotOnline
+	if code, _ := e.do("POST", path, e.token(RoleModerator, nil, false), `{"reason":"afk"}`); code != 404 {
+		t.Fatalf("not online: %d", code)
+	}
+}

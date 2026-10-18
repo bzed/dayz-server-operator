@@ -291,3 +291,8 @@ func (c *Client) Tile(ctx context.Context, name, rest string) (*http.Response, e
 	}
 	return c.HTTP.Do(r)
 }
+
+// Kick removes an online player; the reason is shown to them (at most 64 bytes).
+func (c *Client) Kick(ctx context.Context, name, steamID, reason string) (api.ActionResult, error) {
+	return c.action(ctx, http.MethodPost, inst(name)+"/players/"+url.PathEscape(steamID)+"/kick", api.KickBody{Reason: reason})
+}

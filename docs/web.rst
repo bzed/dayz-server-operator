@@ -81,7 +81,7 @@ action fails with a clear message.
    * - ``viewer``
      - see instances, players, vehicles, events and public map markers
    * - ``moderator``
-     - also send direct messages to players, see bans and ban for up to 7 days (:doc:`moderation`)
+     - also send direct messages to players, kick them, see bans and ban for up to 7 days (:doc:`moderation`)
    * - ``operator``
      - also broadcast, teleport, spawn items, repair and delete vehicles, give long and IP bans, and see the address a player is connected from
    * - ``admin``
@@ -96,7 +96,7 @@ Dashboard
 
 Instance
    Broadcast message, the player list (refreshed every 5 seconds) with a panel of
-   actions per player (message, teleport to coordinates or to another player,
+   actions per player (message, teleport to coordinates or to another player, kick with a reason,
    give item with a search over the server's item classes), and the vehicle list
    with repair (everything, or only body, parts, wheels, fuel or missing parts), flip and delete. The
    actions open directly under the player or vehicle they apply to. Banning is a link

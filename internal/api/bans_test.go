@@ -24,6 +24,19 @@ type fakeMod struct {
 	st *moderation.Store
 	mu sync.Mutex
 	n  int
+
+	kicks   []string
+	kickErr error
+}
+
+func (f *fakeMod) Kick(_ context.Context, instance, steamID, reason string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.kickErr != nil {
+		return f.kickErr
+	}
+	f.kicks = append(f.kicks, instance+" "+steamID+" "+reason)
+	return nil
 }
 
 func (f *fakeMod) Store() *moderation.Store { return f.st }

@@ -270,3 +270,23 @@ func TestNegativeRetentionKeepsAddresses(t *testing.T) {
 		t.Fatalf("the address was dropped: %+v", ids)
 	}
 }
+
+func TestKickRemovesOnePlayerWithTheirMessage(t *testing.T) {
+	e := newSvc(t, "alpha")
+	r := e.rcon["alpha"]
+	r.mu.Lock()
+	r.players = "0   192.0.2.7:2304   15   " + guidOf(t, steamA) + "(OK) alice\n1   192.0.2.8:2304   15   " + guidOf(t, steamB) + "(OK) bob\n"
+	r.mu.Unlock()
+	if err := e.svc.Kick(ctx, "alpha", steamB, "AFK for\nhours; #kick 0"); err != nil {
+		t.Fatal(err)
+	}
+	if got := r.sent("kick"); len(got) != 1 || got[0] != "kick 1 AFK for hours; #kick 0" {
+		t.Fatalf("kick commands: %q", got)
+	}
+	if err := e.svc.Kick(ctx, "alpha", "76561198000000003", "x"); !errors.Is(err, ErrNotOnline) {
+		t.Fatalf("a player who is not online: %v", err)
+	}
+	if err := e.svc.Kick(ctx, "nosuch", steamA, "x"); err == nil || errors.Is(err, ErrNotOnline) {
+		t.Fatalf("an unknown instance: %v", err)
+	}
+}

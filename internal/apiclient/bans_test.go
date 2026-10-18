@@ -19,6 +19,12 @@ import (
 type okMod struct{ st *moderation.Store }
 
 func (m okMod) Store() *moderation.Store { return m.st }
+func (m okMod) Kick(_ context.Context, instance, steamID, reason string) error {
+	if steamID == "76561198000000099" {
+		return moderation.ErrNotOnline
+	}
+	return nil
+}
 func (m okMod) Changed(context.Context, moderation.Ban, *moderation.Ban) map[string]string {
 	return map[string]string{"alpha": "ok"}
 }

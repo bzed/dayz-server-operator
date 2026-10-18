@@ -217,6 +217,8 @@ installation (default: the local ``serve.listen``). They need the
      - online players
    * - ``dzo player msg <instance> <steamid|all> <text> [--style chat|important|friendly|blue|notification]``
      - message one player or everyone
+   * - ``dzo player kick <instance> <steamid> <reason...>``
+     - kick a player; the reason (at most 64 bytes) is shown to them
    * - ``dzo player tp <instance> <steamid> (--x <x> --z <z> | --to <steamid>)``
      - teleport a player
    * - ``dzo player give <instance> <steamid> <class> [--qty <n>|default|max] [--health <0..1>] [--target inventory|hands|ground] [--attachments]``

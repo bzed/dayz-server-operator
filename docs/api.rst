@@ -98,6 +98,12 @@ Acting
    * - ``POST /instances/<i>/players/<steamid>/message`` ``{"text", "style"}``
      - ``moderator``
      - direct message (``style``: ``chat`` (yellow), ``important`` (red), ``friendly`` (green), ``blue``, ``notification``)
+   * - ``POST /instances/<i>/players/<steamid>/kick`` ``{"reason"}``
+     - ``moderator``
+     - kick an online player through BattlEye; the reason is shown to them (1 to 64 bytes). ``404`` if they are not online
+   * - ``GET /instances/<i>/players/<steamid>/connection``
+     - ``operator``
+     - the address the player is connected from (``player.ip``)
    * - ``POST /instances/<i>/players/<steamid>/teleport`` ``{"x", "z", "y"?}`` or ``{"to_steam_id"}``
      - ``operator``
      - teleport; without ``y`` the player lands on the surface

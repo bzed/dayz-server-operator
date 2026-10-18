@@ -78,7 +78,17 @@
     </form>
   </div>
   <div class="grp"><span class="gname">Remove</span>
-    <span><a class="btn danger" href="/b/{{.Backend}}/bans/new?steam_id={{.Player.SteamID}}&amp;instance={{.Instance}}"><i class="fa fa-ban" aria-hidden="true"></i>Ban…</a></span>
+    <span>
+      <button type="button" data-dialog="kick-{{.Player.SteamID}}"><i class="fa fa-sign-out" aria-hidden="true"></i>Kick…</button>
+      <a class="btn danger" href="/b/{{.Backend}}/bans/new?steam_id={{.Player.SteamID}}&amp;instance={{.Instance}}"><i class="fa fa-ban" aria-hidden="true"></i>Ban…</a>
+    </span>
+    <dialog id="kick-{{.Player.SteamID}}" aria-labelledby="kick-title-{{.Player.SteamID}}">
+      <form hx-post="{{$base}}/kick" hx-target="#panel-flash" hx-on::after-request="this.closest('dialog').close()">
+        <h3 id="kick-title-{{.Player.SteamID}}">Kick {{.Player.Name}}</h3>
+        <label>Reason, shown to the player <input name="reason" required maxlength="64" size="40" autocomplete="off"></label>
+        <div class="btns"><button type="button" class="quiet" data-dialog-close>Cancel</button><button><i class="fa fa-sign-out" aria-hidden="true"></i>Kick</button></div>
+      </form>
+    </dialog>
   </div>
   <details class="grp give"><summary><span class="gname">Give</span></summary>
     <form hx-post="{{$base}}/give" hx-target="#panel-flash">

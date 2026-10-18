@@ -435,6 +435,10 @@ func actSpawnVehicle(r *http.Request, c *apiclient.Client, inst string) (api.Act
 	return c.SpawnVehicle(r.Context(), inst, strings.TrimSpace(r.PostFormValue("type")), num(r, "x"), num(r, "z"))
 }
 
+func actKick(r *http.Request, c *apiclient.Client, inst string) (api.ActionResult, error) {
+	return c.Kick(r.Context(), inst, r.PathValue("steamid"), strings.TrimSpace(r.PostFormValue("reason")))
+}
+
 func actRepair(r *http.Request, c *apiclient.Client, inst string) (api.ActionResult, error) {
 	return c.Repair(r.Context(), inst, r.PathValue("id"), r.PostFormValue("scope"))
 }

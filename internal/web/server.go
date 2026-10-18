@@ -126,6 +126,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST "+inst+"/players/{steamid}/give", s.act(actGive))
 	mux.HandleFunc("POST "+inst+"/spawn", s.act(actSpawn))
 	mux.HandleFunc("POST "+inst+"/spawn-vehicle", s.act(actSpawnVehicle))
+	mux.HandleFunc("POST "+inst+"/players/{steamid}/kick", s.act(actKick))
 	mux.HandleFunc("POST "+inst+"/vehicles/{id}/repair", s.act(actRepair))
 	mux.HandleFunc("POST "+inst+"/vehicles/{id}/flip", s.act(actFlip))
 	mux.HandleFunc("POST "+inst+"/vehicles/{id}/delete", s.act(actDelete))

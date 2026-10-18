@@ -19,6 +19,12 @@ import (
 type cliMod struct{ st *moderation.Store }
 
 func (m cliMod) Store() *moderation.Store { return m.st }
+func (m cliMod) Kick(_ context.Context, instance, steamID, reason string) error {
+	if steamID == "76561198000000099" {
+		return moderation.ErrNotOnline
+	}
+	return nil
+}
 func (m cliMod) Changed(context.Context, moderation.Ban, *moderation.Ban) map[string]string {
 	return map[string]string{"alpha": "ok"}
 }
@@ -77,5 +83,27 @@ func TestHiddenAddressesAreNamedNotShown(t *testing.T) {
 	b := moderation.Ban{Targets: []moderation.Target{{Kind: moderation.TargetSteam, Value: "76561198000000001"}, {Kind: moderation.TargetIP, Ref: "t3"}, {Kind: moderation.TargetIP, Value: "192.0.2.7"}}}
 	if got := targetList(b); got != "76561198000000001,ip (hidden),192.0.2.7" {
 		t.Fatalf("targetList = %q", got)
+	}
+}
+
+func TestPlayerKickCommand(t *testing.T) {
+	dir := t.TempDir()
+	hubs := admin.NewRegistry(dir)
+	hubs.Add(admin.NewHub("alpha"))
+	srv := api.New("s", "v", hubs, api.NewTokenStore(filepath.Join(dir, "t.json")), admin.NewAudit(filepath.Join(dir, "a.jsonl")))
+	st, _ := moderation.Open(context.Background(), filepath.Join(dir, "dzo.sqlite"))
+	defer func() { _ = st.Close() }()
+	srv.Moderation = cliMod{st}
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
+	secret, _, _ := srv.Tokens.Create("cli", api.RoleModerator, nil, true, time.Hour)
+	tokenFile := filepath.Join(dir, "token")
+	writeFile(t, tokenFile, secret+"\n")
+	common := []string{"--api", ts.URL, "--token-file", tokenFile}
+	if out, err := runCmd(t, append([]string{"player", "kick", "alpha", "76561198000000001", "AFK", "too", "long"}, common...)...); err != nil {
+		t.Fatalf("kick: %v\n%s", err, out)
+	}
+	if _, err := runCmd(t, append([]string{"player", "kick", "alpha", "76561198000000099", "AFK"}, common...)...); err == nil || !strings.Contains(err.Error(), "not online") {
+		t.Fatalf("a player who is not online: %v", err)
 	}
 }

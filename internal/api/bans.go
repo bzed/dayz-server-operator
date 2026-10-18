@@ -26,6 +26,8 @@ type Moderation interface {
 	// Changed syncs the instances a ban (and its previous version) applies to and returns "ok" or
 	// "pending: <why>" per instance.
 	Changed(ctx context.Context, b moderation.Ban, prev *moderation.Ban) map[string]string
+	// Kick removes an online player from an instance; moderation.ErrNotOnline when they are not there.
+	Kick(ctx context.Context, instance, steamID, reason string) error
 }
 
 // BanResult answers a ban change: the ban and the sync state per instance.
@@ -260,4 +262,49 @@ func (s *Server) revokeBan(w http.ResponseWriter, r *http.Request, c *call) {
 	}
 	s.logBan(c, "ban.revoke", b, true, fmt.Sprintf("ban #%d: %s", b.ID, body.Reason))
 	writeJSON(w, 200, BanResult{Ban: maskBan(c, b), Sync: s.Moderation.Changed(r.Context(), b, &old)})
+}
+
+// KickBody is the body of POST /instances/{instance}/players/{steamid}/kick.
+type KickBody struct {
+	Reason string `json:"reason"`
+}
+
+// kick removes a player; the reason is shown to them, so it is as short as a ban message.
+func (s *Server) kick(w http.ResponseWriter, r *http.Request, c *call) {
+	if s.Moderation == nil {
+		fail(w, http.StatusServiceUnavailable, "kicking is not available: this dzo serve has no BattlEye connection")
+		return
+	}
+	var b KickBody
+	if !decode(w, r, &b) {
+		return
+	}
+	reason := strings.TrimSpace(b.Reason)
+	switch {
+	case reason == "":
+		fail(w, http.StatusBadRequest, "a kick needs a reason, which the player is shown")
+		return
+	case len(reason) > moderation.MaxMessage:
+		fail(w, http.StatusBadRequest, "the reason is %d bytes, BattlEye shows at most %d", len(reason), moderation.MaxMessage)
+		return
+	}
+	id := r.PathValue("steamid")
+	entry := admin.AuditEntry{Actor: c.actor, Source: c.src, Instance: c.hub.Name, Action: "player.kick", Target: id, Detail: reason}
+	err := s.Moderation.Kick(r.Context(), c.hub.Name, id, reason)
+	entry.OK = err == nil
+	if err != nil {
+		entry.Result = err.Error()
+	}
+	_ = s.Audit.Log(entry) // the kick happened, or not, either way
+	var inv *moderation.InvalidError
+	switch {
+	case err == nil:
+		writeJSON(w, 200, ActionResult{OK: true})
+	case errors.Is(err, moderation.ErrNotOnline):
+		fail(w, http.StatusNotFound, "the player is not online")
+	case errors.As(err, &inv):
+		fail(w, http.StatusBadRequest, "%s", inv.Msg)
+	default:
+		fail(w, http.StatusBadGateway, "the kick failed: %v", err)
+	}
 }

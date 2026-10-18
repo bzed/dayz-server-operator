@@ -107,6 +107,21 @@ func newPlayerCmd() *cobra.Command {
 	}
 	msg.Flags().StringVar(&style, "style", "chat", "chat (yellow), important (red), friendly (green), blue or notification")
 
+	kick := &cobra.Command{
+		Use: "kick <instance> <steamid> <reason...>", Short: "Kick a player; the reason (at most 64 bytes) is shown to them", Args: cobra.MinimumNArgs(3),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			c, err := t.client()
+			if err != nil {
+				return err
+			}
+			r, err := c.Kick(ctxOf(cmd), args[0], args[1], strings.Join(args[2:], " "))
+			if err != nil {
+				return err
+			}
+			return printResult(cmd, r)
+		},
+	}
+
 	var x, z float64
 	var to string
 	tp := &cobra.Command{
@@ -177,7 +192,7 @@ func newPlayerCmd() *cobra.Command {
 	spawn.Flags().BoolVar(&attachments, "attachments", false, "with the kit the game's debug spawn gives it")
 	spawn.Flags().Float64Var(&sx, "x", 0, "world x (east)")
 	spawn.Flags().Float64Var(&sz, "z", 0, "world z (north)")
-	cmd.AddCommand(msg, tp, give, spawn)
+	cmd.AddCommand(msg, kick, tp, give, spawn)
 	return cmd
 }
 

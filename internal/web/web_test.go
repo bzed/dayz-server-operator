@@ -446,7 +446,7 @@ func TestPlayerPanelLinksToTheBanSite(t *testing.T) {
 	if !strings.Contains(body, `href="/b/main/bans/new?steam_id=7656&amp;instance=alpha"`) {
 		t.Fatalf("no link to the ban form: %s", body)
 	}
-	for _, field := range []string{`name="reason"`, `name="duration"`, `name="scope"`} {
+	for _, field := range []string{`name="duration"`, `name="scope"`, `name="message"`} { // the kick dialog has its own reason
 		if strings.Contains(body, field) {
 			t.Errorf("the panel has the ban field %s", field)
 		}
@@ -512,5 +512,23 @@ func TestPlayerTableHasNoSteamIDColumn(t *testing.T) {
 	_, body, _ := e.get("/b/main/i/alpha/players")
 	if strings.Contains(body, "Steam ID") || strings.Contains(body, "<td>7656</td>") {
 		t.Fatalf("the table shows the Steam ID: %s", body)
+	}
+}
+
+func TestKickDialogAndAction(t *testing.T) {
+	e := newEnv(t, api.RoleModerator)
+	_, body, _ := e.get("/b/main/i/alpha/players/7656/panel")
+	for _, want := range []string{`data-dialog="kick-7656"`, `<dialog id="kick-7656"`, `hx-post="/b/main/i/alpha/players/7656/kick"`, `name="reason" required maxlength="64"`} {
+		if !strings.Contains(body, want) {
+			t.Errorf("panel lacks %s", want)
+		}
+	}
+	kicked = nil
+	_, out := e.post("/b/main/i/alpha/players/7656/kick", url.Values{"reason": {" afk "}}, nil)
+	if !strings.Contains(out, "done") || len(kicked) != 1 || kicked[0] != "alpha 7656 afk" {
+		t.Fatalf("kick: %s %v", out, kicked)
+	}
+	if _, out := e.post("/b/main/i/alpha/players/7656/kick", url.Values{"reason": {strings.Repeat("r", 65)}}, nil); !strings.Contains(out, "64") {
+		t.Fatalf("long reason: %s", out)
 	}
 }

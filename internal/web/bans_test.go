@@ -22,6 +22,13 @@ const webSteam = "76561198000000001"
 type webMod struct{ st *moderation.Store }
 
 func (m webMod) Store() *moderation.Store { return m.st }
+func (m webMod) Kick(_ context.Context, instance, steamID, reason string) error {
+	kicked = append(kicked, instance+" "+steamID+" "+reason)
+	return nil
+}
+
+// kicked records what the web tests asked to kick (the tests of this package do not run in parallel).
+var kicked []string
 func (m webMod) Changed(context.Context, moderation.Ban, *moderation.Ban) map[string]string {
 	return map[string]string{"alpha": "ok"}
 }

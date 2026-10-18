@@ -134,6 +134,7 @@ func (s *Server) Handler() http.Handler {
 	route("POST "+base+"/instances/{instance}/message", PermBroadcast, true, s.message)
 	route("POST "+base+"/instances/{instance}/players/{steamid}/message", PermMessage, true, s.message)
 	route("GET "+base+"/instances/{instance}/players/{steamid}/connection", PermPlayerIP, true, s.connection)
+	route("POST "+base+"/instances/{instance}/players/{steamid}/kick", PermKick, true, s.kick)
 	route("POST "+base+"/instances/{instance}/players/{steamid}/teleport", PermTeleport, true, s.teleport)
 	route("POST "+base+"/instances/{instance}/players/{steamid}/give", PermSpawn, true, s.give)
 	route("POST "+base+"/instances/{instance}/spawn", PermSpawn, true, s.spawn)
