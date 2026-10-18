@@ -3,7 +3,7 @@
 {{define "bans"}}{{template "head" .}}
 {{with .Data}}
 <h1><i class="fa fa-ban" aria-hidden="true"></i>Bans <small>{{.Backend}}</small></h1>
-<form method="get" class="filters">
+<form method="get" class="filters bar">
   <select name="state">
     <option value="" {{if eq .State ""}}selected{{end}}>all</option>
     <option value="active" {{if eq .State "active"}}selected{{end}}>active</option>
@@ -15,14 +15,14 @@
   <a class="btn" href="/b/{{.Backend}}/bans/new"><i class="fa fa-plus" aria-hidden="true"></i>New ban</a>
 </form>
 {{if .Err}}<p class="flash err">{{.Err}}</p>{{else if not .Bans}}<p>No bans.</p>{{else}}
-<table>
+<div class="scroll"><table class="bans">
   <thead><tr><th>#</th><th>State</th><th>Expires</th><th>Scope</th><th>Targets</th><th>Reason</th><th>By</th></tr></thead>
   <tbody>
   {{$now := .Now}}{{$be := .Backend}}
   {{range .Bans}}
     <tr>
       <td><a href="/b/{{$be}}/bans/{{.ID}}">{{.ID}}</a></td>
-      <td>{{.State $now}}</td>
+      <td><span class="chip {{.State $now}}">{{.State $now}}</span></td>
       <td>{{expiry .ExpiresAt}}</td>
       <td>{{if eq .Scope "global"}}global{{else}}{{join .Instances ", "}}{{end}}</td>
       <td>{{range .Targets}}{{if not .Derived}}{{if and (eq .Kind "ip") (not .Value)}}<em>address hidden</em>{{else}}<code>{{.Value}}</code>{{end}} {{end}}{{end}}</td>
@@ -31,7 +31,7 @@
     </tr>
   {{end}}
   </tbody>
-</table>
+</table></div>
 {{end}}
 {{end}}
 {{template "foot" .}}{{end}}
@@ -53,10 +53,11 @@
     </select>
     <input name="duration_custom" placeholder="e.g. 3d or 12h" size="10">
   </label>
-  <fieldset><legend>Scope</legend>
-    {{if .CanGlobal}}<label><input type="radio" name="scope" value="global"> every instance</label>{{end}}
-    <label><input type="radio" name="scope" value="instances" checked> these instances:</label>
-    {{$sel := .Instance}}{{range .Instances}}<label><input type="checkbox" name="instances" value="{{.Instance}}" {{if eq .Instance $sel}}checked{{end}}> {{.Instance}}</label>{{end}}
+  <fieldset class="scope"><legend>Where does the ban apply?</legend>
+    {{if .Instance}}<label><input type="radio" name="scope_choice" value="this" checked> Only {{.Instance}}<input type="hidden" name="this_instance" value="{{.Instance}}"></label>{{end}}
+    {{if .CanGlobal}}<label><input type="radio" name="scope_choice" value="global"> Every instance of this installation</label>{{end}}
+    <label><input type="radio" name="scope_choice" value="chosen" {{if not .Instance}}checked{{end}}> Chosen instances:</label>
+    <span class="choices">{{range .Instances}}<label><input type="checkbox" name="instances" value="{{.Instance}}"> {{.Instance}}</label>{{end}}</span>
   </fieldset>
   {{if .Identities}}<fieldset><legend>Addresses (not banned unless ticked)</legend>
     {{range .Identities}}<label><input type="checkbox" name="ip_refs" value="{{.Ref}}" {{if not $.Data.CanIP}}disabled{{end}}> {{if .IP}}{{.IP}}{{else}}Address{{end}} ({{.Name}} on {{.Instance}}, last {{.LastSeen.Format "2006-01-02"}}){{if .SharedWith}} <strong class="warn">shared with {{.SharedWith}} other player{{if gt .SharedWith 1}}s{{end}}</strong>{{end}}</label>{{end}}
@@ -81,8 +82,8 @@
 <h1><i class="fa fa-ban" aria-hidden="true"></i>Ban #{{.Ban.ID}} <small>{{.Backend}}</small></h1>
 {{if .Err}}<p class="flash err">{{.Err}}</p>{{else}}
 {{$b := .Ban}}
-<dl>
-  <dt>State</dt><dd>{{$b.State $.Data.Now}}</dd>
+<dl class="facts">
+  <dt>State</dt><dd><span class="chip {{$b.State $.Data.Now}}">{{$b.State $.Data.Now}}</span></dd>
   <dt>Reason</dt><dd>{{$b.Reason}}</dd>
   <dt>Message</dt><dd>{{$b.Message}}</dd>
   <dt>Expires</dt><dd>{{expiry $b.ExpiresAt}}</dd>
@@ -112,11 +113,27 @@
 </form>
 </section>
 {{end}}
-{{if .Evidence}}<section><h2>Evidence</h2>
-{{range .Evidence}}<div class="evidence"><strong>#{{.ID}} {{.Kind}}</strong> from {{.Source}} on {{.Instance}}, {{.CreatedAt.Format "2006-01-02 15:04"}}
-  {{if eq .Kind "image"}}<img src="/b/{{$.Data.Backend}}/evidence/{{.ID}}/file" alt="evidence {{.ID}}" loading="lazy">{{end}}
-  {{if .Body}}<pre>{{.Body}}</pre>{{end}}</div>{{end}}
-</section>{{end}}
+<section class="evidence"><h2>Evidence</h2>
+{{$be := .Backend}}{{$bid := $b.ID}}{{$open := not $b.RevokedAt}}
+{{range .Evidence}}<div class="item"><strong>#{{.ID}} {{.Kind}}</strong> from {{.Source}} on {{.Instance}}, {{.CreatedAt.Format "2006-01-02 15:04"}}
+  {{if $open}}<button class="quiet" hx-post="/b/{{$be}}/bans/{{$bid}}/evidence/{{.ID}}/unlink" hx-target="#flash" hx-confirm="Unlink evidence #{{.ID}} from this ban? It stays filed against the player."><i class="fa fa-chain-broken" aria-hidden="true"></i>Unlink</button>{{end}}
+  {{if eq .Kind "image"}}<img src="/b/{{$be}}/evidence/{{.ID}}/file" alt="evidence {{.ID}}" loading="lazy">{{end}}
+  {{if .Body}}<pre>{{.Body}}</pre>{{end}}</div>
+{{else}}<p>No evidence is linked to this ban.</p>{{end}}
+{{if $open}}
+{{if .Unlinked}}<form hx-post="/b/{{$be}}/bans/{{$bid}}/evidence/link" hx-target="#flash"><fieldset><legend>Other evidence filed against this player</legend>
+  {{range .Unlinked}}<label><input type="checkbox" name="evidence" value="{{.ID}}"> #{{.ID}} {{.Kind}} from {{.Source}} on {{.Instance}}, {{.CreatedAt.Format "2006-01-02 15:04"}}{{if .Body}}: {{printf "%.60s" .Body}}{{end}}</label>{{end}}
+  <button><i class="fa fa-link" aria-hidden="true"></i>Link to this ban</button></fieldset></form>{{end}}
+<form hx-post="/b/{{$be}}/bans/{{$bid}}/evidence" hx-target="#flash" hx-encoding="multipart/form-data" enctype="multipart/form-data" class="evform">
+  <fieldset><legend>Add evidence</legend>
+  <label>Kind <select name="kind"><option value="note">Note</option><option value="log">Log lines</option><option value="image">Screenshot</option></select></label>
+  <label>On instance <select name="instance">{{range .Instance}}<option>{{.}}</option>{{end}}</select></label>
+  <label>Text, or the caption of a screenshot <textarea name="body" rows="4" maxlength="65536"></textarea></label>
+  <label>Screenshot (PNG, JPEG or WebP, up to 5 MiB) <input type="file" name="file" accept="image/png,image/jpeg,image/webp"></label>
+  <button><i class="fa fa-plus" aria-hidden="true"></i>Add evidence</button></fieldset>
+</form>
+{{end}}
+</section>
 <section><h2>History</h2>
 <table><thead><tr><th>When</th><th>Who</th><th>What</th></tr></thead><tbody>
 {{range .History}}<tr><td>{{.At.Format "2006-01-02 15:04"}}</td><td>{{.Actor}}</td><td>{{.Action}}</td></tr>{{end}}

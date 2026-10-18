@@ -4,8 +4,10 @@
 package web
 
 import (
+	"bytes"
 	"context"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -176,4 +178,93 @@ func between(s, a, b string) string {
 	}
 	s = s[i+len(a):]
 	return s[:strings.Index(s, b)]
+}
+
+func TestBanFormDefaultsToThisInstanceOnly(t *testing.T) {
+	e := newEnv(t, api.RoleAdmin)
+	_, body, _ := e.get("/b/main/bans/new?steam_id=" + webSteam + "&instance=alpha")
+	if !strings.Contains(body, `name="scope_choice" value="this" checked`) || !strings.Contains(body, `name="this_instance" value="alpha"`) ||
+		!strings.Contains(body, `name="scope_choice" value="global"`) || !strings.Contains(body, `name="scope_choice" value="chosen"`) {
+		t.Fatalf("scope choices: %s", body)
+	}
+	form := url.Values{"steam_id": {webSteam}, "reason": {"x"}, "duration": {"7d"}, "scope_choice": {"this"}, "this_instance": {"alpha"}}
+	e.postForm("/b/main/bans", form, true)
+	b, err := e.srv.backend("main").Client.Ban(context.Background(), 1)
+	if err != nil || b.Scope != moderation.ScopeInstances || len(b.Instances) != 1 || b.Instances[0] != "alpha" {
+		t.Fatalf("ban for this instance: %+v %v", b, err)
+	}
+	form.Set("scope_choice", "global")
+	e.postForm("/b/main/bans", form, true)
+	if b, _ := e.srv.backend("main").Client.Ban(context.Background(), 2); b.Scope != moderation.ScopeGlobal {
+		t.Fatalf("global ban: %+v", b)
+	}
+	// Without an instance in the link there is no "this instance" choice.
+	_, body, _ = e.get("/b/main/bans/new?steam_id=" + webSteam)
+	if strings.Contains(body, `value="this"`) || !strings.Contains(body, `name="scope_choice" value="chosen" checked`) {
+		t.Fatalf("form without an instance: %s", body)
+	}
+}
+
+func TestBanPageManagesEvidence(t *testing.T) {
+	e := newEnv(t, api.RoleAdmin)
+	e.postForm("/b/main/bans", url.Values{"steam_id": {webSteam}, "reason": {"x"}, "duration": {"7d"}, "scope_choice": {"this"}, "this_instance": {"alpha"}}, true)
+	_, page, _ := e.get("/b/main/bans/1")
+	if !strings.Contains(page, `hx-post="/b/main/bans/1/evidence"`) || !strings.Contains(page, `enctype="multipart/form-data"`) {
+		t.Fatalf("no evidence form: %s", page)
+	}
+	// A note.
+	code, out := e.postMultipart("/b/main/bans/1/evidence", map[string]string{"kind": "note", "instance": "alpha", "body": "chat spam <b>"}, nil)
+	if code != 200 || !strings.Contains(out, "added") {
+		t.Fatalf("note: %d %s", code, out)
+	}
+	// An image.
+	png := append([]byte("\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR"), make([]byte, 64)...)
+	if code, out := e.postMultipart("/b/main/bans/1/evidence", map[string]string{"kind": "image", "instance": "alpha", "body": "the shot"}, png); code != 200 || !strings.Contains(out, "added") {
+		t.Fatalf("image: %d %s", code, out)
+	}
+	_, page, _ = e.get("/b/main/bans/1")
+	if !strings.Contains(page, "chat spam &lt;b&gt;") || !strings.Contains(page, `<img src="/b/main/evidence/2/file"`) || !strings.Contains(page, `hx-post="/b/main/bans/1/evidence/1/unlink"`) {
+		t.Fatalf("evidence not shown: %s", page)
+	}
+	if code, out := e.postForm("/b/main/bans/1/evidence/1/unlink", url.Values{}, true); code != 200 || !strings.Contains(out, "unlinked") {
+		t.Fatalf("unlink: %d %s", code, out)
+	}
+	_, page, _ = e.get("/b/main/bans/1")
+	if strings.Contains(page, `evidence/1/unlink`) || !strings.Contains(page, `hx-post="/b/main/bans/1/evidence/link"`) || !strings.Contains(page, `name="evidence" value="1"`) {
+		t.Fatalf("after unlink the note is offered to link again: %s", page)
+	}
+	if code, out := e.postForm("/b/main/bans/1/evidence/link", url.Values{"evidence": {"1"}}, true); code != 200 || !strings.Contains(out, "linked") {
+		t.Fatalf("link: %d %s", code, out)
+	}
+	_, page, _ = e.get("/b/main/bans/1")
+	if !strings.Contains(page, `evidence/1/unlink`) {
+		t.Fatalf("not linked again: %s", page)
+	}
+	if code, _ := e.postForm("/b/main/bans/1/evidence/1/unlink", url.Values{}, false); code != 403 {
+		t.Fatalf("unlink without a CSRF token: %d", code)
+	}
+}
+
+func (e *env) postMultipart(path string, fields map[string]string, file []byte) (int, string) {
+	e.t.Helper()
+	var buf bytes.Buffer
+	mw := multipart.NewWriter(&buf)
+	for k, v := range fields {
+		_ = mw.WriteField(k, v)
+	}
+	if file != nil {
+		fw, _ := mw.CreateFormFile("file", "shot.png")
+		_, _ = fw.Write(file)
+	}
+	_ = mw.Close()
+	req, _ := http.NewRequest("POST", e.web.URL+path, &buf)
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+	req.Header.Set("X-CSRF-Token", e.srv.csrf)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		e.t.Fatal(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	b, _ := io.ReadAll(resp.Body)
+	return resp.StatusCode, string(b)
 }
