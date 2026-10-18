@@ -45,7 +45,7 @@
   <label>Steam ID <input name="steam_id" value="{{.SteamID}}" size="20" pattern="7656119[0-9]{10}"></label>
   <label>or BattlEye GUID <input name="guid" size="34" pattern="[0-9a-f]{32}"></label>
   <label>Reason (for admins) <input name="reason" required maxlength="1000" size="50"></label>
-  <label>Message (shown to the player) <input name="message" maxlength="200" size="50" placeholder="You are banned from this server"></label>
+  <label>Message (shown to the player, max 64 bytes) <input name="message" maxlength="64" size="50" placeholder="You are banned from this server"></label>
   <label>Duration
     <select name="duration">
       <option value="1h">1 hour</option><option value="1d">1 day</option><option value="7d" selected>7 days</option>
@@ -99,7 +99,7 @@
   {{range .IPs}}<label><input type="checkbox" name="ips" value="{{.}}" checked> IP {{.}}</label>{{end}}
   {{range .Evidence}}<input type="hidden" name="evidence" value="{{.}}">{{end}}{{end}}
   <label>Reason <input name="reason" value="{{$b.Reason}}" required maxlength="1000" size="50"></label>
-  <label>Message <input name="message" value="{{$b.Message}}" maxlength="200" size="50"></label>
+  <label>Message <input name="message" value="{{$b.Message}}" maxlength="64" size="50"></label>
   <label>Duration <select name="duration"><option value="keep" selected>keep ({{expiry $b.ExpiresAt}})</option><option value="1d">1 day from now</option><option value="7d">7 days from now</option><option value="30d">30 days from now</option><option value="permanent">permanent</option><option value="custom">custom…</option></select>
     <input name="duration_custom" placeholder="e.g. 3d" size="8"></label>
   <input type="hidden" name="scope" value="{{$b.Scope}}">{{range $b.Instances}}<input type="hidden" name="instances" value="{{.}}">{{end}}

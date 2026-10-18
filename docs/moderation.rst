@@ -22,8 +22,9 @@ A ban covers one person through several **targets**:
 
 A ban lasts ``30m``, ``12h``, ``7d``, ``2w`` or ``permanent`` (at most ten years, longer means permanent).
 It has a **reason**, which only admins see (at most 1000 characters), and a **message** that the player
-is shown (default: ``You are banned from this server``). BattlEye keeps at most 64 characters of the
-message, and dzo cuts it there.
+is shown (default: ``You are banned from this server``). BattlEye keeps at most 64 bytes of the message,
+so dzo refuses a longer one instead of cutting it silently. Put the details, the log lines and the
+screenshots in the reason and the evidence: those stay in the database and are never sent to the player.
 
 **Scope**: ``instances`` lists the instances a ban applies to, ``global`` means every instance of this
 installation. A ban can be edited (reason, message, expiry, scope, targets, linked evidence) and revoked.

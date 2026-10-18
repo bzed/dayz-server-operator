@@ -55,7 +55,7 @@ type Target struct {
 // Limits of the free-text fields.
 const (
 	MaxReason      = 1000
-	MaxMessage     = 200
+	MaxMessage     = beReasonMax // bytes: what BattlEye keeps of the message shown to the player
 	DefaultMessage = "You are banned from this server"
 	maxInstanceLen = 64
 )
@@ -137,8 +137,8 @@ func (in BanInput) normalise(now time.Time) (BanInput, []Target, error) {
 		return in, nil, invalid("a ban needs a reason")
 	case utf8.RuneCountInString(in.Reason) > MaxReason:
 		return in, nil, invalid("the reason is longer than %d characters", MaxReason)
-	case utf8.RuneCountInString(in.Message) > MaxMessage:
-		return in, nil, invalid("the message is longer than %d characters", MaxMessage)
+	case len(in.Message) > MaxMessage:
+		return in, nil, invalid("the message is %d bytes, BattlEye shows at most %d; put the details in the reason", len(in.Message), MaxMessage)
 	case in.ExpiresAt != nil && !in.ExpiresAt.After(now):
 		return in, nil, invalid("the expiry %s is not in the future", FormatExpiry(in.ExpiresAt))
 	}

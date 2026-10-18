@@ -33,7 +33,7 @@ func (f *banFlags) register(cmd *cobra.Command) {
 	cmd.Flags().StringVar(&f.steam, "steam", "", "Steam64 ID (its BattlEye GUID is banned too)")
 	cmd.Flags().StringSliceVar(&f.guids, "guid", nil, "BattlEye GUID (repeatable)")
 	cmd.Flags().StringVar(&f.reason, "reason", "", "why (kept for admins)")
-	cmd.Flags().StringVar(&f.message, "message", "", "what the player is shown (default: "+moderation.DefaultMessage+")")
+	cmd.Flags().StringVar(&f.message, "message", "", "what the player is shown, at most 64 bytes (default: "+moderation.DefaultMessage+")")
 	cmd.Flags().StringVar(&f.duration, "duration", "", "30m, 12h, 7d, 2w or permanent")
 	cmd.Flags().StringSliceVar(&f.instances, "instance", nil, "instance the ban applies to (repeatable)")
 	cmd.Flags().BoolVar(&f.global, "global", false, "apply to every instance of the installation")

@@ -182,3 +182,22 @@ func TestOpenReadOnly(t *testing.T) {
 		t.Fatalf("missing database: %v", err)
 	}
 }
+
+// BattlEye keeps 64 bytes of the message, so a longer one is refused instead of being cut silently.
+func TestMessageLimitIsBattlEyesByteLimit(t *testing.T) {
+	s, _ := newStore(t)
+	ok := BanInput{SteamID: steamA, Reason: strings.Repeat("long internal reason ", 20), Message: strings.Repeat("m", 64), Scope: ScopeGlobal}
+	b, err := s.CreateBan(ctx, "a", ok, t0)
+	if err != nil {
+		t.Fatalf("64 bytes with a long reason: %v", err)
+	}
+	if b.Reason != strings.TrimSpace(ok.Reason) || BEReason(b.Message) != b.Message {
+		t.Errorf("reason %q or message %q was changed", b.Reason, b.Message)
+	}
+	// 33 two-byte runes are 66 bytes: few characters, too many bytes.
+	_, err = s.CreateBan(ctx, "a", BanInput{SteamID: steamB, Reason: "x", Message: strings.Repeat("ä", 33), Scope: ScopeGlobal}, t0)
+	var inv *InvalidError
+	if !errors.As(err, &inv) || !strings.Contains(err.Error(), "64") {
+		t.Errorf("66 bytes: want an InvalidError naming 64, got %v", err)
+	}
+}
