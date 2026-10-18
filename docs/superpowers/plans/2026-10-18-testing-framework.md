@@ -9,11 +9,11 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 **Goal:** Make the test suite stricter and easier to read: testify assertions everywhere, lint rules that keep the test conventions from AGENTS.md enforced instead of hoped for, goroutine-leak checks, fuzzing of the untrusted-input parsers, and browser end-to-end tests of the web UI that run locally as part of `make check`.
 
-**Architecture:** testify (`require`/`assert`) replaces raw `t.Fatal*`/`t.Error*` package by package; once all packages are migrated, golangci-lint rules (`testifylint`, `thelper`, `usetesting`, `forbidigo`) lock the conventions in, and `go test -shuffle=on` flushes out order dependencies. `go.uber.org/goleak` checks that every package with background goroutines stops them. Native Go fuzz targets cover the BattlEye, A2S, `serverDZ.cfg` and quantity parsers; their seeds run in every `go test`, the fuzzing itself in `make fuzz`. Browser tests use chromedp against the installed Chrome/Chromium, live in `internal/web` behind the `e2e` build tag, reuse the existing `newEnv` fake backends, and run through `make e2e`. `make check` becomes "CI plus fuzz plus e2e": stricter locally than CI, which cannot run a browser.
+**Architecture:** testify (`require`/`assert`) replaces raw `t.Fatal*`/`t.Error*` package by package; once all packages are migrated, golangci-lint rules (`testifylint`, `thelper`, `usetesting`, `forbidigo`) lock the conventions in, and `go test -shuffle=on` flushes out order dependencies. `go.uber.org/goleak` checks that every package with background goroutines stops them. Native Go fuzz targets cover the BattlEye, A2S, `serverDZ.cfg` and quantity parsers; their seeds run in every `go test`, the fuzzing itself in `make fuzz`. Browser tests use chromedp against the installed Chrome/Chromium, live in `internal/web` behind the `e2e` build tag, reuse the existing `newEnv` fake backends, and run through `make e2e`. Everything runs in GitHub CI too: a `fuzz` job, and an `e2e` job in a `debian:trixie` container with Debian's `chromium`, `libjs-htmx` and `libjs-leaflet` (the versions a dzo installation actually serves), plus a non-blocking `debian:forky` run that warns early about the next htmx (4.0 beta in forky/sid). `make check` keeps mirroring CI, so it runs fuzz and e2e as well.
 
 **Tech Stack:** Go 1.27, `github.com/stretchr/testify` (latest v1), `go.uber.org/goleak` (latest v1), `github.com/chromedp/chromedp` (latest), golangci-lint v2.14.0, Chrome/Chromium, Debian `libjs-htmx` and `libjs-leaflet`.
 
-**Spec:** the request of 2026-10-18 (no separate spec): "a better testing framework, including selenium or better options for e2e testing; consider switching to testify; the e2e tool won't run in GitHub CI, but keeping our test requirements stricter is good."
+**Spec:** the request of 2026-10-18 (no separate spec): "a better testing framework, including selenium or better options for e2e testing; consider switching to testify; keeping our test requirements stricter is good", amended the same day: "we can run everything in the GitHub CI if it's supported to run GUI tests there". It is: the runners need no display for headless Chrome, and the job brings its own Debian browser.
 
 ### Decision: chromedp, not Selenium or Playwright
 
@@ -34,7 +34,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 - Tests write only under `t.TempDir()` — this includes the browser's user-data directory.
 - e2e tests: build tag `e2e`, file names `e2e*_test.go`, test names `TestE2E*`, package `web`. Under the tag a missing browser or missing JS assets fail the test (never skip); without the tag they do not compile into `go test ./...`.
 - e2e environment: `DZO_E2E_CHROME` (browser binary; default: chromedp's lookup, which finds `google-chrome` and `chromium`), `DZO_E2E_ASSETS` (default `/usr/share/javascript`, must hold `htmx/htmx.min.js`, `leaflet/leaflet.js`, `leaflet/leaflet.css`).
-- CI (`.github/workflows/ci.yml`) is not changed except where lint/vet need the `e2e` tag to compile the e2e files (they do via `.golangci.yml` and the `vet` target, no workflow edit).
+- CI (`.github/workflows/ci.yml`) gains two jobs, `fuzz` (Task 7) and `e2e` (Task 8), both required for the `deb` job (`needs:`), except the `debian:forky` e2e matrix entry, which is `continue-on-error: true`. New third-party actions: none; reuse the SHA-pinned `checkout`, `setup-go` and `upload-artifact` already in the file. `make check` stays the local mirror of CI.
+- The e2e job runs Chromium with its sandbox on, as an unprivileged user; `--no-sandbox` is not an option the harness offers.
 - Commit prefixes: `test:` for test-only changes, `build:` for Makefile/lint config, `web:` / `fix:` for product code fixed because a new check found a bug. Docs change in the same commit as the behaviour they describe.
 
 ## Review Focus
@@ -54,6 +55,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 | `docs/development.rst` | new "Testing" section: conventions, `make e2e`, `make fuzz`, environment variables |
 | `AGENTS.md` | `make check` table gains `fuzz` and `e2e` rows; coverage section points at the conventions |
 | `Makefile` | `-shuffle=on` on `test`/`test-race`; `vet` with `-tags e2e`; new `fuzz`, `e2e` targets; `check` runs both |
+| `.github/workflows/ci.yml` | new `fuzz` and `e2e` jobs; `deb` needs them |
 | `.golangci.yml` | `run.build-tags: [e2e]`; enables `testifylint`, `thelper`, `usetesting`, `forbidigo` with test-only scope |
 | `REUSE.toml` | entry for `**/testdata/fuzz/**` (generated corpus files cannot carry headers) |
 | `**/*_test.go` | migrated to testify, `t.Context()`, no sleeps |
@@ -182,7 +184,7 @@ Expected: no output.
 
 **Files:**
 - Create: `internal/battleye/fuzz_test.go`, `internal/a2s/fuzz_test.go`, `internal/servercfg/fuzz_test.go`, `internal/admin/fuzz_test.go`
-- Modify: `Makefile` (new `fuzz` target, `check` depends on it), `REUSE.toml`, `AGENTS.md`, `docs/development.rst`
+- Modify: `Makefile` (new `fuzz` target, `check` depends on it), `.github/workflows/ci.yml` (new `fuzz` job), `REUSE.toml`, `AGENTS.md`, `docs/development.rst`
 
 **Interfaces:**
 - Consumes: `battleye.DecodeLoginResponse(packet []byte) (bool, error)`, `battleye.DecodeCommandResponse(packet []byte) (seq byte, multipart *MultipartInfo, payload []byte, err error)`, `battleye.DecodeServerMessage(packet []byte) (seq byte, message []byte, err error)`, `battleye.ParsePlayers(raw string) []PlayerInfo`, `battleye.ParseEvent(payload string) Event`, `a2s.ParseInfoResponse(body []byte) (InfoResponse, error)`, `servercfg.Parse(data []byte) (*File, error)` with `(*File).Bytes() []byte`, `admin.ParseQuantity(s string) (float64, error)`.
@@ -200,8 +202,9 @@ Expected: no output.
 | `FuzzParseQuantity` | `err == nil` ⇒ result is not NaN/Inf and is `>= 0` or one of `QuantityDefault`, `QuantityMax` |
 
 - [ ] **Step 2: Run each briefly** — `go test ./internal/servercfg -run '^$' -fuzz '^FuzzServercfgParse$' -fuzztime 30s` and likewise per target. A crash is a real bug: keep the generated `testdata/fuzz/<Target>/<file>` as the regression test and fix the parser in a separate `fix:` commit.
-- [ ] **Step 3: `make fuzz`** — a target that runs every fuzz target for `$(FUZZTIME)`, one `go test -run '^$$' -fuzz '^<Name>$$' -fuzztime $(FUZZTIME) <pkg>` per target (Go fuzzes one target per invocation); `check` gains `fuzz`. Add the `REUSE.toml` annotation for `**/testdata/fuzz/**` (AGPL-3.0-or-later, same copyright line). AGENTS.md table: row `| fuzzing | make fuzz | 10 s per target, local only; the seeds also run in make test |`. docs: how to run one target longer and what to commit after a crash.
-- [ ] **Step 4: Verify** — `make fuzz` passes; `make reuse`; `make check`.
+- [ ] **Step 3: `make fuzz`** — a target that runs every fuzz target for `$(FUZZTIME)`, one `go test -run '^$$' -fuzz '^<Name>$$' -fuzztime $(FUZZTIME) <pkg>` per target (Go fuzzes one target per invocation); `check` gains `fuzz`. Add the `REUSE.toml` annotation for `**/testdata/fuzz/**` (AGPL-3.0-or-later, same copyright line). AGENTS.md table: row `| fuzzing | make fuzz | 10 s per target; the seeds also run in make test |`. docs: how to run one target longer and what to commit after a crash.
+- [ ] **Step 3a: CI job** — `fuzz` on `ubuntu-latest`: checkout, setup-go (same pinned SHAs as the `test` job), `make fuzz`; on failure upload `**/testdata/fuzz/**` with the pinned `upload-artifact` so the crashing input can be committed. Add `fuzz` to the `needs:` of `deb`.
+- [ ] **Step 4: Verify** — `make fuzz` passes; `make reuse`; `make check`; push the branch and the `fuzz` job is green.
 - [ ] **Step 5: Commit** — `git commit -m "test: fuzz the BattlEye, A2S, serverDZ.cfg and quantity parsers"`
 
 ---
@@ -210,7 +213,7 @@ Expected: no output.
 
 **Files:**
 - Create: `internal/web/e2e_test.go`, `internal/web/e2e_pages_test.go`
-- Modify: `go.mod`, `go.sum`, `Makefile` (`e2e`, `vet`, `check`), `AGENTS.md`, `docs/development.rst`
+- Modify: `go.mod`, `go.sum`, `Makefile` (`e2e`, `vet`, `check`), `.github/workflows/ci.yml` (new `e2e` job), `AGENTS.md`, `docs/development.rst`
 - Modify (fix): `internal/web/templates/instance.html`, `internal/web/templates/fragments.html`, `internal/web/static/rows.js`, and `internal/web/web_test.go` if it asserts on `hx-on`
 
 **Interfaces:**
@@ -247,7 +250,9 @@ func TestE2EPlayerNameIsText(t *testing.T) {
 - [ ] **Step 4: Make targets** — `e2e: ; $(GO) test -tags e2e -count=1 -race -run '^TestE2E' ./internal/web/`; `vet: ; $(GO) vet ./... && $(GO) vet -tags e2e ./internal/web/`; `check` gains `e2e` after `test-race`. Run `make e2e`. Expected: `TestE2EPagesLoadWithoutErrors` fails on `/b/main/i/alpha` with CSP reports for `hx-on` (Review Focus 1); any other console/CSP failure is a real bug too.
 - [ ] **Step 4a: Fix the `hx-on` handlers** — remove all three `hx-on::after-request="this.reset()"`, mark those forms `data-reset`, and in `static/rows.js` add one `htmx:afterRequest` listener that calls `reset()` on `e.detail.elt` when it is a `form[data-reset]` and `e.detail.successful`. `make e2e` passes. Own commit, before the harness commit: `web: reset the message forms from rows.js; the CSP blocks hx-on`.
 - [ ] **Step 5: Verify the harness fails loudly** — `DZO_E2E_CHROME=/nonexistent make e2e` fails with the Chrome message; `DZO_E2E_ASSETS=/nonexistent make e2e` fails with the assets message; `make test` still does not compile the e2e files (`go list -f '{{.TestGoFiles}}' ./internal/web` has no `e2e_*`).
-- [ ] **Step 6: Docs** — AGENTS.md table: row `| browser e2e | make e2e | local only (CI has no browser here); needs Chrome/Chromium and libjs-htmx + libjs-leaflet, see docs/development.rst |`, and a sentence above the table: "`make check` runs more than CI: fuzzing and the browser tests. Both must pass before pushing." `docs/development.rst`: the e2e section (why chromedp, the two env vars, how to watch a run with `chromedp.Flag("headless", false)` when debugging, never committed).
+- [ ] **Step 5a: CI job** — `e2e` on `ubuntu-latest` with `container: image: debian:${{ matrix.suite }}`, matrix `suite: [trixie, forky]`, `continue-on-error: ${{ matrix.suite == 'forky' }}`, container `options: --security-opt seccomp=unconfined` (Docker's default seccomp profile blocks the user namespaces Chromium's sandbox needs). Steps, following the `deb` job: apt-get `git ca-certificates make chromium libjs-htmx libjs-leaflet`; checkout; setup-go; `useradd -m tester`, `chown -R tester` the workspace, and run `runuser -u tester -- env PATH="$PATH" HOME=/home/tester make e2e` (Chromium refuses to sandbox as root). Add `e2e` to the `needs:` of `deb` (the forky entry cannot block it because of `continue-on-error`). If Chromium still reports "No usable sandbox" in the container, stop and report back instead of adding `--no-sandbox`.
+- [ ] **Step 6: Docs** — AGENTS.md table: row `| browser e2e | make e2e | needs Chrome/Chromium and libjs-htmx + libjs-leaflet locally (CI brings its own in a trixie container), see docs/development.rst |`. `docs/development.rst`: the e2e section (why chromedp, the two env vars, the CI job and the non-blocking forky run, how to watch a run with `chromedp.Flag("headless", false)` when debugging, never committed).
+- [ ] **Step 6a: Verify in CI** — push the branch; the trixie `e2e` job is green. A red forky job is expected information, not a blocker; note its failure in the task report.
 - [ ] **Step 7: Commit** — `git commit -m "test: browser e2e tests for the web UI with chromedp"`, justifying chromedp (MIT; deps cdproto, sysutil, gobwas/ws MIT, go-json-experiment/json BSD-3; uses the installed browser, no driver or download).
 
 ---
