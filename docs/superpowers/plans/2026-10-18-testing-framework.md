@@ -36,6 +36,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 - e2e environment: `DZO_E2E_CHROME` (browser binary; default: chromedp's lookup, which finds `google-chrome` and `chromium`), `DZO_E2E_ASSETS` (default `/usr/share/javascript`, must hold `htmx/htmx.min.js`, `leaflet/leaflet.js`, `leaflet/leaflet.css`).
 - CI (`.github/workflows/ci.yml`) gains two jobs, `fuzz` (Task 7) and `e2e` (Task 8), both required for the `deb` job (`needs:`), except the `debian:forky` e2e matrix entry, which is `continue-on-error: true`. New third-party actions: none; reuse the SHA-pinned `checkout`, `setup-go` and `upload-artifact` already in the file. `make check` stays the local mirror of CI.
 - The e2e job runs Chromium with its sandbox on, as an unprivileged user; `--no-sandbox` is not an option the harness offers.
+- **A real DayZ server never runs in CI**, and nothing in CI or `make check` may need one (Steam, the DayZ server/client, sway, one game at a time). CI and `make check` use the fakes (`newEnv`, `boottest`'s `DZO_FAKE_SERVER`). The real-server tier is `make test-client` (`scripts/test-client.sh`), run by hand; Task 12 adds the browser to it and the AGENTS.md rule for when it is required.
 - Commit prefixes: `test:` for test-only changes, `build:` for Makefile/lint config, `web:` / `fix:` for product code fixed because a new check found a bug. Docs change in the same commit as the behaviour they describe.
 
 ## Review Focus
@@ -63,6 +64,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 | `*/fuzz_test.go` (battleye, a2s, servercfg, admin) | fuzz targets |
 | `internal/web/e2e_test.go` | harness: browser, real assets, console/CSP collector, dialog handling |
 | `internal/web/e2e_pages_test.go`, `e2e_actions_test.go`, `e2e_map_test.go`, `e2e_bans_test.go` | scenarios |
+| `internal/web/live_test.go` | `//go:build e2e && live`: the browser against a real `dzo serve` started by `scripts/test-client.sh` |
+| `scripts/test-client.sh` | runs `live_test.go` as one of its checks |
 
 ---
 
@@ -219,9 +222,9 @@ Expected: no output.
 **Interfaces:**
 - Consumes: `newEnv(t *testing.T, role api.Role) *env` and its fields `web *httptest.Server`, `hub *admin.Hub`, `assets string`.
 - Produces (all in `e2e_test.go`, `//go:build e2e`):
-  - `func useRealAssets(t *testing.T, e *env)` — copies `htmx/htmx.min.js`, `leaflet/leaflet.js`, `leaflet/leaflet.css` (and `leaflet/images/*` if present) from `$DZO_E2E_ASSETS` (default `/usr/share/javascript`) into `e.assets`, overwriting the stub; `require.FileExists` with the message "install libjs-htmx and libjs-leaflet or set DZO_E2E_ASSETS".
+  - `func useRealAssets(t *testing.T, dst string)` — copies `htmx/htmx.min.js`, `leaflet/leaflet.js`, `leaflet/leaflet.css` (and `leaflet/images/*` if present) from `$DZO_E2E_ASSETS` (default `/usr/share/javascript`) into `dst` (callers pass `e.assets`, overwriting the stub; Task 12 passes a `t.TempDir()`); `require.FileExists` with the message "install libjs-htmx and libjs-leaflet or set DZO_E2E_ASSETS".
   - `type browser struct { ctx context.Context; dialogs chan<- bool }` — `dialogs` receives the answer for the next `window.confirm` (true = accept).
-  - `func newBrowser(t *testing.T, e *env) *browser` — headless exec allocator from `chromedp.DefaultExecAllocatorOptions` plus `chromedp.UserDataDir(t.TempDir())` and `chromedp.ExecPath($DZO_E2E_CHROME)` when set; context bounded by `context.WithTimeout(t.Context(), 30*time.Second)`, cancelled in `t.Cleanup`. Enables the `log` domain and listens for `runtime.EventExceptionThrown`, `runtime.EventConsoleAPICalled` of type `error`, and `log.EventEntryAdded` of level `error` (this is where CSP violations arrive), collected under a mutex; a `t.Cleanup` asserts the collection is empty, listing each entry. `page.EventJavascriptDialogOpening` is answered from `dialogs` (no pending answer = dismiss, and the test fails with "unexpected dialog: <message>"). A failing first `chromedp.Run` fails with "no Chrome/Chromium found; install one or set DZO_E2E_CHROME".
+  - `func newBrowser(t *testing.T) *browser` — no `*env`, so Task 12 can use it against a real backend; headless exec allocator from `chromedp.DefaultExecAllocatorOptions` plus `chromedp.UserDataDir(t.TempDir())` and `chromedp.ExecPath($DZO_E2E_CHROME)` when set; context bounded by `context.WithTimeout(t.Context(), 30*time.Second)`, cancelled in `t.Cleanup`. Enables the `log` domain and listens for `runtime.EventExceptionThrown`, `runtime.EventConsoleAPICalled` of type `error`, and `log.EventEntryAdded` of level `error` (this is where CSP violations arrive), collected under a mutex; a `t.Cleanup` asserts the collection is empty, listing each entry. `page.EventJavascriptDialogOpening` is answered from `dialogs` (no pending answer = dismiss, and the test fails with "unexpected dialog: <message>"). A failing first `chromedp.Run` fails with "no Chrome/Chromium found; install one or set DZO_E2E_CHROME".
   - `func (b *browser) run(t *testing.T, actions ...chromedp.Action)` — `require.NoError(t, chromedp.Run(b.ctx, actions...))`.
   - `func (e *env) url(path string) string` — `e.web.URL + path`.
 
@@ -230,8 +233,8 @@ Expected: no output.
 ```go
 func TestE2EPagesLoadWithoutErrors(t *testing.T) {
 	e := newEnv(t, api.RoleAdmin)
-	useRealAssets(t, e)
-	b := newBrowser(t, e)
+	useRealAssets(t, e.assets)
+	b := newBrowser(t)
 	for _, p := range []string{"/", "/b/main/i/alpha", "/b/main/i/alpha/map", "/b/main/audit", "/b/main/bans", "/b/main/bans/new"} {
 		b.run(t, chromedp.Navigate(e.url(p)), chromedp.WaitReady("body"))
 	}
@@ -298,3 +301,27 @@ func TestE2EPlayerNameIsText(t *testing.T) {
 - [ ] **Step 2: Run** — `make e2e`. Expected: PASS, or a real bug fixed in a separate `web:` commit.
 - [ ] **Step 3: Final check** — `make check` passes; `make docs` passes.
 - [ ] **Step 4: Commit** — `git commit -m "test: e2e for the ban form and revoking"`
+
+---
+
+### Task 12: the browser against a real DayZ server (local only)
+
+CI cannot start DayZ, so everything above runs against fakes. This task closes the gap where the fakes could lie: `scripts/test-client.sh` already runs a real server with dzo-admin, a real `dzo serve` and (unless `--no-client`) the headless DayZ client. It now also drives the web UI over that stack with the Task 8 harness.
+
+**Files:**
+- Create: `internal/web/live_test.go` (`//go:build e2e && live`)
+- Modify: `scripts/test-client.sh`, `AGENTS.md`, `docs/development.rst`
+
+**Interfaces:**
+- Consumes: `useRealAssets(t *testing.T, dst string)`, `newBrowser(t *testing.T) *browser`, `(*browser).run` (Task 8); `web.New`, `web.Backend`, `apiclient.New(url, token string)`.
+- Produces: tests `TestLive*`, configured by `DZO_LIVE_API` (base URL of the running `dzo serve` API), `DZO_LIVE_TOKEN_FILE` (an admin API token), `DZO_LIVE_INSTANCE` (`t1`), `DZO_LIVE_PLAYER` (the client's player name, `dzotester`; empty with `--no-client`). Without `DZO_LIVE_API` the tests fail (the `live` tag is an explicit opt-in, as with `e2e`).
+
+- [ ] **Step 1: Write the tests** — each builds `web.New([]*web.Backend{{Name: "live", Client: apiclient.New(api, token)}}, web.Options{Assets: <TempDir with useRealAssets>})` behind an `httptest.Server`, then:
+  - `TestLiveVehiclesAndMap` — the instance page lists the four vehicles `server_tests` spawned near x 7400 (types `Offroad_02|Hatchback_02|CivilianSedan|OffroadHatchback`); the map page shows the `Police cars` layer markers the watch rule produces; repairing the first of those vehicles from its panel shows a success flash with the real mod's result text. No console/CSP errors (the harness collector).
+  - `TestLivePlayer` (skipped with a clear message when `DZO_LIVE_PLAYER` is empty, i.e. `--no-client`) — the player row for `DZO_LIVE_PLAYER` appears via htmx polling; the info popup shows a country or "unknown" without an error; a direct message from the player panel shows the delivered flash; the player's map marker exists.
+- [ ] **Step 2: Hook it into `test-client.sh`** — a function `web_tests` at the end of `server_tests` (so it runs with and without the client):
+  `DZO_LIVE_API="http://127.0.0.1:$api" DZO_LIVE_TOKEN_FILE="$work/api.token" DZO_LIVE_INSTANCE=t1 DZO_LIVE_PLAYER="$player" go test -tags 'e2e live' -count=1 -run '^TestLive' ./internal/web/`, recorded with `verdict "web UI against the real server" $?`, with `player=dzotester` in client mode and empty with `--no-client`.
+- [ ] **Step 3: Run it** — `make test-client ARGS=--no-client` (no game needed), then `make test-client` and `make test-client ARGS=--exp` on a machine with Steam, the server and the client. Expected: the new verdict passes in all three, along with the existing 15 checks.
+- [ ] **Step 4: Feed findings back into the fakes** — anything the live run catches that the CI tests did not (a field the real mod sends differently, an error text, timing) gets a fake-backed regression test in `web_test.go` / `e2e_*_test.go` or the `admin` tests, in the same commit as the fix. The live tier finds the bug; CI keeps it fixed.
+- [ ] **Step 5: AGENTS.md** — under "Before pushing", after the conditional list: "Changes to `servermods/`, `internal/admin` (the mod protocol), or the player/vehicle actions in `internal/api` and `internal/web`: also run `make test-client` (stable, and `ARGS=--exp` for the next DayZ build) and say in the commit message that it passed. CI cannot run DayZ, so this is the only check against the real game." `docs/development.rst`: the live tier and its environment variables.
+- [ ] **Step 6: Verify and commit** — `make check` still passes without any DayZ (the `live` files need both tags, so neither `make test` nor `make e2e` compiles them; check with `go list -tags e2e -f '{{.TestGoFiles}}' ./internal/web` showing no `live_test.go`). `git commit -m "test: the web UI against a real DayZ server in test-client.sh"`
