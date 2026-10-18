@@ -193,6 +193,7 @@ func Run(ctx context.Context, cfg *config.Config, o Options) error {
 	defer func() { _ = store.Close() }() // after the Service has stopped (deferred below, runs first)
 	mctx, mcancel := context.WithCancel(ctx)
 	svc := moderation.NewService(store, audit, logf)
+	svc.AddressRetention, svc.VacuumEvery = cfg.Serve.IPRetention(), cfg.Serve.VacuumEvery()
 	svc.Start(mctx)
 	defer func() { mcancel(); svc.Wait() }()
 	if insts, err := BanInstances(cfg, tree, logf); err != nil {

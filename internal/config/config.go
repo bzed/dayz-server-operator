@@ -15,6 +15,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -89,7 +90,30 @@ type Serve struct {
 	ModListen    string `yaml:"mod_listen"` // /mod/v1/sync, for the game servers
 	// AllowInsecureHTTP permits plain HTTP on a non-loopback address.
 	AllowInsecureHTTP bool `yaml:"allow_insecure_http"`
+	// IPRetentionDays is how long the address of a player sighting is kept unless a ban uses it (unset:
+	// 90; 0: for ever). VacuumDays is how often the ban database file is rebuilt (unset: 7; 0: never).
+	IPRetentionDays *int `yaml:"ip_retention_days"`
+	VacuumDays      *int `yaml:"vacuum_days"`
 }
+
+const day = 24 * time.Hour
+
+// days turns a setting in days into a duration: unset is def, 0 is off (negative).
+func days(v *int, def int) time.Duration {
+	switch {
+	case v == nil:
+		return time.Duration(def) * day
+	case *v == 0:
+		return -1
+	}
+	return time.Duration(*v) * day
+}
+
+// IPRetention is how long a sighting keeps its address; negative means for ever.
+func (s Serve) IPRetention() time.Duration { return days(s.IPRetentionDays, 90) }
+
+// VacuumEvery is how often the ban database is vacuumed; negative means never.
+func (s Serve) VacuumEvery() time.Duration { return days(s.VacuumDays, 7) }
 
 // Backend is one installation the web interface talks to.
 type Backend struct {
@@ -317,6 +341,11 @@ func (c *Config) Validate() error {
 		}
 	}
 
+	for name, v := range map[string]*int{"serve.ip_retention_days": c.Serve.IPRetentionDays, "serve.vacuum_days": c.Serve.VacuumDays} {
+		if v != nil && *v < 0 {
+			errs = append(errs, fmt.Sprintf("%s: must be 0 (off) or a number of days", name))
+		}
+	}
 	for _, l := range []struct {
 		name, addr string
 		insecure   bool

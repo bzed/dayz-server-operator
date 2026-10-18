@@ -74,9 +74,9 @@ the audit log. They may be stored hashed in the future; the references keep that
 history of a player's addresses is recorded in the audit log (``ip.history``, without the addresses).
 
 **Retention.** dzo keeps who was seen, under which name, on which instance and when, for good. It keeps the
-address of a sighting for 90 days, then drops it, unless a ban uses that address. The rows of one player on
+address of a sighting for 90 days (``serve.ip_retention_days``, 0 keeps them for ever), then drops it, unless a ban uses that address. The rows of one player on
 one instance that lose their address merge into one that keeps the newest name and the whole period.
-``dzo serve`` does this every minute with the other upkeep. It also vacuums the database file once a week
+``dzo serve`` does this every minute with the other upkeep. It also vacuums the database file once a week (``serve.vacuum_days``, 0 turns it off)
 to give back the space of deleted rows. The references (``ref``) are ids from a sequence, so they never
 change and are never reused, vacuum or not.
 

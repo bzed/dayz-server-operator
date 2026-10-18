@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestDefaultIsValid(t *testing.T) {
@@ -286,5 +287,25 @@ func TestBinaryDefaultAndValidation(t *testing.T) {
 	}
 	if _, err := Parse([]byte("binary: dzo\n")); err == nil {
 		t.Error("a relative binary must be rejected")
+	}
+}
+
+func TestServeBanUpkeep(t *testing.T) {
+	c, err := Parse([]byte("{}\n"))
+	if err != nil || c.Serve.IPRetention() != 90*24*time.Hour || c.Serve.VacuumEvery() != 7*24*time.Hour {
+		t.Fatalf("defaults: %v %v %v", c.Serve.IPRetention(), c.Serve.VacuumEvery(), err)
+	}
+	c, err = Parse([]byte("serve: {ip_retention_days: 30, vacuum_days: 1}\n"))
+	if err != nil || c.Serve.IPRetention() != 30*24*time.Hour || c.Serve.VacuumEvery() != 24*time.Hour {
+		t.Fatalf("set: %v %v %v", c.Serve.IPRetention(), c.Serve.VacuumEvery(), err)
+	}
+	c, err = Parse([]byte("serve: {ip_retention_days: 0, vacuum_days: 0}\n"))
+	if err != nil || c.Serve.IPRetention() >= 0 || c.Serve.VacuumEvery() >= 0 {
+		t.Fatalf("0 turns the upkeep off (a negative duration): %v %v %v", c.Serve.IPRetention(), c.Serve.VacuumEvery(), err)
+	}
+	for _, yml := range []string{"serve: {ip_retention_days: -1}", "serve: {vacuum_days: -5}"} {
+		if _, err := Parse([]byte(yml)); err == nil {
+			t.Errorf("%s must be refused", yml)
+		}
 	}
 }

@@ -223,6 +223,9 @@ func (s *Service) maintain(ctx context.Context) {
 		}
 	}
 	every := cmp.Or(s.VacuumEvery, DefaultVacuumEvery)
+	if every < 0 {
+		return
+	}
 	if due, err := s.store.VacuumDue(ctx, now, every); err != nil {
 		s.logf("bans: %v", err)
 	} else if due {

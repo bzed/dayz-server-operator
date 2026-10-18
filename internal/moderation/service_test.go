@@ -290,3 +290,13 @@ func TestKickRemovesOnePlayerWithTheirMessage(t *testing.T) {
 		t.Fatalf("an unknown instance: %v", err)
 	}
 }
+
+func TestNegativeVacuumEveryNeverVacuums(t *testing.T) {
+	e := newSvc(t)
+	e.svc.VacuumEvery = -1
+	e.tick <- t0
+	e.tick <- t0 // the second tick is taken only after the first sweep finished
+	if due, _ := e.st.VacuumDue(ctx, t0, 7*24*time.Hour); !due {
+		t.Fatal("the database was vacuumed although that is turned off")
+	}
+}
