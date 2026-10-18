@@ -535,7 +535,7 @@ func getBan(ctx context.Context, q querier, id int64) (Ban, error) {
 		return Ban{}, err
 	}
 	// steam first, then guid, then ip: the order people read them in.
-	rows, err = q.QueryContext(ctx, `SELECT kind, value, derived, rowid FROM ban_targets WHERE ban_id = ?
+	rows, err = q.QueryContext(ctx, `SELECT kind, value, derived, id FROM ban_targets WHERE ban_id = ?
 		ORDER BY CASE kind WHEN 'steam' THEN 0 WHEN 'guid' THEN 1 ELSE 2 END, derived DESC, value`, id)
 	if err != nil {
 		return Ban{}, err

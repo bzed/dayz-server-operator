@@ -48,8 +48,9 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 - Matching by address needs no display: ban forms and the API use opaque references (`ref`, `ip_refs`);
   the list shows "shared with N other players". Addresses stay out of the audit log. The references are
   what lets the store keep hashes instead of addresses later.
-- Not done yet, proposed: retention. Sightings older than 90 days are deleted by the minute sweep, with the
-  period configurable; ban targets stay as long as the ban does. Access to the history should be audited.
+- Retention (done): the address of a sighting is dropped after 90 days unless a ban uses it, and the player
+  row stays for good. Reading the history is audited. The database is vacuumed weekly. References are ids
+  from an AUTOINCREMENT sequence (migration 0002), so a vacuum cannot move them.
 
 ## Look
 

@@ -4,6 +4,7 @@
 package moderation
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"net"
@@ -43,6 +44,10 @@ type Service struct {
 	Tick <-chan time.Time
 	// Now is the clock (default time.Now).
 	Now func() time.Time
+	// AddressRetention is how long the address of a sighting is kept unless a ban uses it (default 90
+	// days; negative keeps them all). VacuumEvery is how often the database file is rebuilt (default 7 days).
+	AddressRetention time.Duration
+	VacuumEvery      time.Duration
 
 	store *Store
 	audit *admin.Audit
@@ -200,7 +205,36 @@ func (s *Service) Changed(ctx context.Context, b Ban, prev *Ban) map[string]stri
 	return out
 }
 
+// Retention defaults.
+const (
+	DefaultAddressRetention = 90 * 24 * time.Hour
+	DefaultVacuumEvery      = 7 * 24 * time.Hour
+)
+
+// maintain drops the addresses past their retention and vacuums the database when it is due.
+func (s *Service) maintain(ctx context.Context) {
+	now := s.Now()
+	if keep := cmp.Or(s.AddressRetention, DefaultAddressRetention); keep > 0 {
+		if n, err := s.store.PurgeAddresses(ctx, now.Add(-keep)); err != nil {
+			s.logf("bans: dropping old addresses: %v", err)
+		} else if n > 0 {
+			s.logf("bans: dropped %d addresses older than %s", n, keep)
+		}
+	}
+	every := cmp.Or(s.VacuumEvery, DefaultVacuumEvery)
+	if due, err := s.store.VacuumDue(ctx, now, every); err != nil {
+		s.logf("bans: %v", err)
+	} else if due {
+		if err := s.store.Vacuum(ctx); err != nil {
+			s.logf("bans: %v", err)
+		} else if err := s.store.MarkVacuumed(ctx, now); err != nil {
+			s.logf("bans: %v", err)
+		}
+	}
+}
+
 func (s *Service) sweep(ctx context.Context) {
+	s.maintain(ctx)
 	for _, r := range s.running() {
 		cctx, cancel := context.WithTimeout(ctx, 4*syncTimeout)
 		if err := s.syncOne(cctx, r); err != nil {

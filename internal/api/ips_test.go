@@ -134,3 +134,17 @@ func TestAuditTargetsNameNoAddress(t *testing.T) {
 		t.Fatal("ipLabel")
 	}
 }
+
+func TestReadingTheAddressHistoryIsAudited(t *testing.T) {
+	e, m := newBanEnv(t)
+	seenAlice(t, m, "192.0.2.7")
+	e.do("GET", "/api/v1/players/"+steamA+"/identities", e.token(RoleOperator, nil, false), "")
+	if got, _ := e.srv.Audit.Tail("", 10); len(got) != 0 {
+		t.Fatalf("a read without addresses was audited: %+v", got)
+	}
+	e.do("GET", "/api/v1/players/"+steamA+"/identities", e.token(RoleAdmin, nil, false), "")
+	got, _ := e.srv.Audit.Tail("", 10)
+	if len(got) != 1 || got[0].Action != "ip.history" || got[0].Target != steamA || strings.Contains(got[0].Detail+got[0].Result, "192.0.2.7") {
+		t.Fatalf("audit: %+v", got)
+	}
+}

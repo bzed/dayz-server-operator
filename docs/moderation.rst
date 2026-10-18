@@ -70,7 +70,15 @@ seen with as "Address (name on instance, last seen), shared with N other players
 The API gives each such address an opaque reference (``ref``, and ``ip_refs`` when a ban is made or edited)
 instead of the address, and a reference only works for the player being banned or the ban being edited. Without
 ``ip.history`` a ban shows "address hidden", and editing it keeps its addresses. Addresses are never written to
-the audit log. They may be stored hashed in the future; the references keep that possible.
+the audit log. They may be stored hashed in the future; the references keep that possible. Reading the
+history of a player's addresses is recorded in the audit log (``ip.history``, without the addresses).
+
+**Retention.** dzo keeps who was seen, under which name, on which instance and when, for good. It keeps the
+address of a sighting for 90 days, then drops it, unless a ban uses that address. The rows of one player on
+one instance that lose their address merge into one that keeps the newest name and the whole period.
+``dzo serve`` does this every minute with the other upkeep. It also vacuums the database file once a week
+to give back the space of deleted rows. The references (``ref``) are ids from a sequence, so they never
+change and are never reused, vacuum or not.
 
 How bans are enforced
 ---------------------

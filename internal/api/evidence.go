@@ -172,6 +172,9 @@ func (s *Server) identities(w http.ResponseWriter, r *http.Request, c *call) {
 		storeFail(w, err)
 		return
 	}
+	if seesIPs(c) { // an address history is personal data: who read it is recorded, without the addresses
+		_ = s.Audit.Log(admin.AuditEntry{Actor: c.actor, Source: c.src, Action: "ip.history", Target: r.PathValue("steamid"), OK: true}) // the read goes on if the line cannot be written
+	}
 	out := []moderation.Sighting{}
 	for _, x := range list {
 		if c.who.Allowed(x.Instance) {

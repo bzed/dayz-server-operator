@@ -241,3 +241,32 @@ func TestKickMessageIsSanitised(t *testing.T) {
 		t.Fatalf("kick %q", k)
 	}
 }
+
+func TestSweepDropsOldAddressesAndVacuumsWeekly(t *testing.T) {
+	e := newSvc(t)
+	ga := guidOf(t, steamA)
+	_ = e.st.Seen(ctx, "alpha", ga, "192.0.2.1", "alice", t0.Add(-100*24*time.Hour))
+	_ = e.st.Seen(ctx, "alpha", ga, "192.0.2.2", "alice", t0.Add(-1*time.Hour))
+	e.tick <- t0
+	eventually(t, "old address dropped", func() bool {
+		ids, _ := e.st.Identities(ctx, steamA)
+		return len(ids) == 2 && ids[1].IP == ""
+	})
+	eventually(t, "vacuum recorded", func() bool { due, _ := e.st.VacuumDue(ctx, t0, 7*24*time.Hour); return !due })
+	// A week later the vacuum is due again.
+	e.setNow(t0.Add(7 * 24 * time.Hour))
+	e.tick <- t0
+	eventually(t, "vacuum repeated", func() bool { due, _ := e.st.VacuumDue(ctx, t0.Add(7*24*time.Hour), 7*24*time.Hour); return !due })
+}
+
+func TestNegativeRetentionKeepsAddresses(t *testing.T) {
+	e := newSvc(t)
+	e.svc.AddressRetention = -1
+	_ = e.st.Seen(ctx, "alpha", guidOf(t, steamA), "192.0.2.1", "alice", t0.Add(-1000*24*time.Hour))
+	e.tick <- t0
+	e.tick <- t0 // the second tick is taken only after the first sweep finished
+	ids, _ := e.st.Identities(ctx, steamA)
+	if len(ids) != 1 || ids[0].IP == "" {
+		t.Fatalf("the address was dropped: %+v", ids)
+	}
+}

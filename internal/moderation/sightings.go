@@ -58,7 +58,7 @@ func (s *Store) Identities(ctx context.Context, steamID string) ([]Sighting, err
 	if err != nil {
 		return nil, err
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT s.rowid, s.guid, s.ip, s.name, s.instance, s.first_seen, s.last_seen,
+	rows, err := s.db.QueryContext(ctx, `SELECT s.id, s.guid, s.ip, s.name, s.instance, s.first_seen, s.last_seen,
 			(SELECT COUNT(DISTINCT o.guid) FROM sightings o WHERE o.ip = s.ip AND o.guid <> s.guid)
 		FROM sightings s WHERE s.guid = ? ORDER BY s.last_seen DESC`, g)
 	if err != nil {
@@ -68,10 +68,12 @@ func (s *Store) Identities(ctx context.Context, steamID string) ([]Sighting, err
 	for rows.Next() {
 		var x Sighting
 		var first, last, rowid int64
-		if err := rows.Scan(&rowid, &x.GUID, &x.IP, &x.Name, &x.Instance, &first, &last, &x.SharedWith); err != nil {
+		var ip sql.NullString
+		if err := rows.Scan(&rowid, &x.GUID, &ip, &x.Name, &x.Instance, &first, &last, &x.SharedWith); err != nil {
 			_ = rows.Close()
 			return nil, fmt.Errorf("moderation: identities: %w", err)
 		}
+		x.IP = ip.String
 		x.Ref = "s" + strconv.FormatInt(rowid, 10)
 		x.FirstSeen, x.LastSeen = time.Unix(first, 0).UTC(), time.Unix(last, 0).UTC()
 		out = append(out, x)
@@ -87,7 +89,7 @@ func (s *Store) CurrentIP(ctx context.Context, instance, steamID string) (ip str
 		return "", time.Time{}, err
 	}
 	var last int64
-	err = s.db.QueryRowContext(ctx, `SELECT ip, last_seen FROM sightings WHERE guid = ? AND instance = ? ORDER BY last_seen DESC LIMIT 1`, g, instance).Scan(&ip, &last)
+	err = s.db.QueryRowContext(ctx, `SELECT ip, last_seen FROM sightings WHERE guid = ? AND instance = ? AND ip IS NOT NULL ORDER BY last_seen DESC LIMIT 1`, g, instance).Scan(&ip, &last)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", time.Time{}, nil
 	}
@@ -117,9 +119,9 @@ func resolveIPRefs(ctx context.Context, q querier, in BanInput, banID int64) (Ba
 		var ip string
 		switch ref[0] {
 		case 's':
-			err = q.QueryRowContext(ctx, `SELECT ip FROM sightings WHERE rowid = ? AND guid IN (`+placeholders(len(guids))+`)`, append([]any{id}, anys(guids)...)...).Scan(&ip)
+			err = q.QueryRowContext(ctx, `SELECT ip FROM sightings WHERE id = ? AND ip IS NOT NULL AND guid IN (`+placeholders(len(guids))+`)`, append([]any{id}, anys(guids)...)...).Scan(&ip)
 		case 't':
-			err = q.QueryRowContext(ctx, `SELECT value FROM ban_targets WHERE rowid = ? AND ban_id = ? AND kind = 'ip'`, id, banID).Scan(&ip)
+			err = q.QueryRowContext(ctx, `SELECT value FROM ban_targets WHERE id = ? AND ban_id = ? AND kind = 'ip'`, id, banID).Scan(&ip)
 		default:
 			return in, invalid("unknown address reference %q", ref)
 		}
@@ -150,4 +152,72 @@ func anys(v []string) []any {
 		out[i] = s
 	}
 	return out
+}
+
+// PurgeAddresses drops the address of every sighting last seen before cutoff, except addresses that a ban
+// uses. The sighting itself (who, under which name, where, when) stays, and the rows of one player on one
+// instance that lose their address merge into one. It returns how many addresses were dropped.
+func (s *Store) PurgeAddresses(ctx context.Context, cutoff time.Time) (int64, error) {
+	var n int64
+	err := s.tx(ctx, func(tx *sql.Tx) error {
+		res, err := tx.ExecContext(ctx, `UPDATE sightings SET ip = NULL WHERE ip IS NOT NULL AND last_seen < ?
+			AND ip NOT IN (SELECT value FROM ban_targets WHERE kind = 'ip')`, cutoff.Unix())
+		if err != nil {
+			return err
+		}
+		if n, err = res.RowsAffected(); err != nil || n == 0 {
+			return err
+		}
+		// Per player and instance the newest row keeps the name and takes the whole period.
+		keeper := `(SELECT o.id FROM sightings o WHERE o.ip IS NULL AND o.guid = %s.guid AND o.instance = %s.instance ORDER BY o.last_seen DESC, o.id DESC LIMIT 1)`
+		if _, err := tx.ExecContext(ctx, `UPDATE sightings SET
+				first_seen = (SELECT MIN(o.first_seen) FROM sightings o WHERE o.ip IS NULL AND o.guid = sightings.guid AND o.instance = sightings.instance),
+				last_seen = (SELECT MAX(o.last_seen) FROM sightings o WHERE o.ip IS NULL AND o.guid = sightings.guid AND o.instance = sightings.instance)
+			WHERE ip IS NULL AND id = `+fmt.Sprintf(keeper, "sightings", "sightings")); err != nil {
+			return err
+		}
+		_, err = tx.ExecContext(ctx, `DELETE FROM sightings WHERE ip IS NULL AND id <> `+fmt.Sprintf(keeper, "sightings", "sightings"))
+		return err
+	})
+	if err != nil {
+		return 0, fmt.Errorf("moderation: purge addresses: %w", err)
+	}
+	return n, nil
+}
+
+// Vacuum rebuilds the database file, giving back the space of deleted rows.
+func (s *Store) Vacuum(ctx context.Context) error {
+	if _, err := s.db.ExecContext(ctx, `VACUUM`); err != nil {
+		return fmt.Errorf("moderation: vacuum: %w", err)
+	}
+	return nil
+}
+
+const metaVacuumed = "vacuumed_at"
+
+// VacuumDue reports whether the last vacuum is at least every ago (or there was none).
+func (s *Store) VacuumDue(ctx context.Context, now time.Time, every time.Duration) (bool, error) {
+	var v string
+	err := s.db.QueryRowContext(ctx, `SELECT value FROM meta WHERE key = ?`, metaVacuumed).Scan(&v)
+	if errors.Is(err, sql.ErrNoRows) {
+		return true, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("moderation: vacuum due: %w", err)
+	}
+	at, err := strconv.ParseInt(v, 10, 64)
+	if err != nil {
+		return true, nil // an unreadable mark is as good as none
+	}
+	return !now.Before(time.Unix(at, 0).Add(every)), nil
+}
+
+// MarkVacuumed records that a vacuum ran at now.
+func (s *Store) MarkVacuumed(ctx context.Context, now time.Time) error {
+	_, err := s.db.ExecContext(ctx, `INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value`,
+		metaVacuumed, strconv.FormatInt(now.Unix(), 10))
+	if err != nil {
+		return fmt.Errorf("moderation: vacuum mark: %w", err)
+	}
+	return nil
 }
