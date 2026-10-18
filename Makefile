@@ -90,7 +90,7 @@ vulncheck:
 	$(GO) run golang.org/x/vuln/cmd/govulncheck@v1.7.0 ./...
 
 ## check: everything to run before pushing (mirrors CI; see AGENTS.md).
-check: fmt-check vet lint reuse vulncheck test-race coverage-check
+check: fmt-check vet lint reuse licenses vulncheck test-race coverage-check
 
 ## vet: run go vet.
 vet:
@@ -112,10 +112,13 @@ fmt-check:
 ## licenses: check dependency licences against the AGPL-compatible allow-list (D15).
 ## The main module itself is excluded: it is intentionally AGPL-3.0-or-later,
 ## and go-licenses otherwise reports that as a disallowed dependency license.
+## modernc.org/mathutil is ignored: its LICENSE is the BSD-3-Clause text, but go-licenses
+## cannot classify it (checked by hand against the file in module v1.7.1; a new
+## version needs the same look).
 licenses:
 	go run github.com/google/go-licenses@v1.6.0 check ./... \
 		--allowed_licenses="MIT,BSD-2-Clause,BSD-3-Clause,Apache-2.0,ISC,0BSD" \
-		--ignore $(MODULE)
+		--ignore $(MODULE) --ignore modernc.org/mathutil
 
 ## test-findfile: boot an experimental server with CF-Test and the FindFile probe servermod (needs the Steam server and CF-Test)
 test-findfile:

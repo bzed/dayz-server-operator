@@ -19,6 +19,7 @@ fails them is wasted:
 | vet | `make vet` | |
 | lint | `make lint` | golangci-lint **v2.14.0**, the version CI pins; v1 cannot read `.golangci.yml` |
 | licences | `make reuse` | every new file needs an SPDX header (or a `REUSE.toml` entry) |
+| dependency licences | `make licenses` | go-licenses against the AGPL-compatible allow-list; run it after any `go.mod` change, a new dependency can pull in a library it cannot classify |
 | vulnerabilities | `make vulncheck` | `govulncheck ./...` |
 | tests | `make test-race` | race detector; `make cover` is the quick variant |
 | coverage | `make coverage-check` | **total coverage must stay at or above 85%** |
