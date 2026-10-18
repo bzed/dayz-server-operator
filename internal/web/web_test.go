@@ -496,3 +496,11 @@ func TestPlayerPanelHasAProfileButtonThatDoesNothingYet(t *testing.T) {
 		t.Fatalf("no disabled profile button: %s", body)
 	}
 }
+
+func TestPlayerTableHasNoSteamIDColumn(t *testing.T) {
+	e := newEnv(t, api.RoleAdmin)
+	_, body, _ := e.get("/b/main/i/alpha/players")
+	if strings.Contains(body, "Steam ID") || strings.Contains(body, "<td>7656</td>") {
+		t.Fatalf("the table shows the Steam ID: %s", body)
+	}
+}

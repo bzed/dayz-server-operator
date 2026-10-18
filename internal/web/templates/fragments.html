@@ -3,7 +3,7 @@
 {{define "players"}}
 {{if .Err}}<p class="flash err">{{.Err}}</p>{{else if not .Items}}<p>Nobody online.</p>{{else}}
 <div class="scroll"><table class="players">
-  <thead><tr><th data-sort="text">Name</th><th data-sort="text">Steam ID</th><th data-sort="num">Position</th><th data-sort="num">Health</th><th data-sort="num">Ping</th><th></th></tr></thead>
+  <thead><tr><th data-sort="text">Name</th><th data-sort="num">Position</th><th data-sort="num">Health</th><th data-sort="num">Ping</th><th></th></tr></thead>
   <tbody>
   {{range .Items}}
     <tr>
@@ -12,7 +12,6 @@
         <button type="button" class="info quiet" aria-label="Connection info for {{.Name}}" aria-expanded="false" data-info><i class="fa fa-info-circle" aria-hidden="true"></i></button>
         <div class="pop" role="status"></div>
       </td>
-      <td>{{.SteamID}}</td>
       <td>{{printf "%.0f / %.0f" .X .Z}}</td>
       <td>{{printf "%.0f" .Health}}</td>
       <td>{{.Ping}}</td>
@@ -55,7 +54,7 @@
 {{end}}
 
 {{define "panel"}}
-<tr class="rowpanel"><td colspan="6">
+<tr class="rowpanel"><td colspan="5">
 {{if .Err}}<p class="flash err">{{.Err}}</p><button class="quiet" data-close><i class="fa fa-times" aria-hidden="true"></i>Close</button>{{else}}
 {{$base := printf "/b/%s/i/%s/players/%s" .Backend .Instance .Player.SteamID}}
 <div class="panel playerpanel">

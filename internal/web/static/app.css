@@ -273,9 +273,8 @@ button.profile[disabled] { opacity: .5; cursor: not-allowed; }
   body.map header nav { order: 0; flex-basis: auto; flex-wrap: nowrap; overflow-x: auto; }
   main { padding-inline: .75rem; }
 }
-/* On a phone the player table keeps the name, the health and the Actions button; the rest is in the panel. */
+/* On a phone the player table keeps the name, the health and the Actions button. */
 @media (max-width: 700px) {
   table.players th:nth-child(2), table.players td:nth-child(2),
-  table.players th:nth-child(3), table.players td:nth-child(3),
-  table.players th:nth-child(5), table.players td:nth-child(5) { display: none; }
+  table.players th:nth-child(4), table.players td:nth-child(4) { display: none; }
 }
