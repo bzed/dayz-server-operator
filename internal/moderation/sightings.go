@@ -169,14 +169,14 @@ func (s *Store) PurgeAddresses(ctx context.Context, cutoff time.Time) (int64, er
 			return err
 		}
 		// Per player and instance the newest row keeps the name and takes the whole period.
-		keeper := `(SELECT o.id FROM sightings o WHERE o.ip IS NULL AND o.guid = %s.guid AND o.instance = %s.instance ORDER BY o.last_seen DESC, o.id DESC LIMIT 1)`
 		if _, err := tx.ExecContext(ctx, `UPDATE sightings SET
 				first_seen = (SELECT MIN(o.first_seen) FROM sightings o WHERE o.ip IS NULL AND o.guid = sightings.guid AND o.instance = sightings.instance),
 				last_seen = (SELECT MAX(o.last_seen) FROM sightings o WHERE o.ip IS NULL AND o.guid = sightings.guid AND o.instance = sightings.instance)
-			WHERE ip IS NULL AND id = `+fmt.Sprintf(keeper, "sightings", "sightings")); err != nil {
+			WHERE ip IS NULL AND id = (SELECT o.id FROM sightings o WHERE o.ip IS NULL AND o.guid = sightings.guid AND o.instance = sightings.instance ORDER BY o.last_seen DESC, o.id DESC LIMIT 1)`); err != nil {
 			return err
 		}
-		_, err = tx.ExecContext(ctx, `DELETE FROM sightings WHERE ip IS NULL AND id <> `+fmt.Sprintf(keeper, "sightings", "sightings"))
+		_, err = tx.ExecContext(ctx, `DELETE FROM sightings WHERE ip IS NULL
+			AND id <> (SELECT o.id FROM sightings o WHERE o.ip IS NULL AND o.guid = sightings.guid AND o.instance = sightings.instance ORDER BY o.last_seen DESC, o.id DESC LIMIT 1)`)
 		return err
 	})
 	if err != nil {
