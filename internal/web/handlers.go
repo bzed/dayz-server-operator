@@ -439,6 +439,18 @@ func actKick(r *http.Request, c *apiclient.Client, inst string) (api.ActionResul
 	return c.Kick(r.Context(), inst, r.PathValue("steamid"), strings.TrimSpace(r.PostFormValue("reason")))
 }
 
+func actHeal(r *http.Request, c *apiclient.Client, inst string) (api.ActionResult, error) {
+	return c.Heal(r.Context(), inst, r.PathValue("steamid"))
+}
+
+func actFixGear(r *http.Request, c *apiclient.Client, inst string) (api.ActionResult, error) {
+	return c.FixGear(r.Context(), inst, r.PathValue("steamid"))
+}
+
+func actKill(r *http.Request, c *apiclient.Client, inst string) (api.ActionResult, error) {
+	return c.Kill(r.Context(), inst, r.PathValue("steamid"))
+}
+
 func actRepair(r *http.Request, c *apiclient.Client, inst string) (api.ActionResult, error) {
 	return c.Repair(r.Context(), inst, r.PathValue("id"), r.PostFormValue("scope"))
 }

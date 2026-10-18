@@ -77,9 +77,16 @@
       <button><i class="fa fa-location-arrow" aria-hidden="true"></i>Teleport</button>
     </form>
   </div>
+  <div class="grp"><span class="gname">Help</span>
+    <span>
+      <button hx-post="{{$base}}/heal" hx-target="#panel-flash" title="Health, blood, shock, bones, bleeding and diseases"><i class="fa fa-medkit" aria-hidden="true"></i>Heal</button>
+      <button hx-post="{{$base}}/fixgear" hx-target="#panel-flash" title="Repair everything the player carries and wears"><i class="fa fa-wrench" aria-hidden="true"></i>Fix gear</button>
+    </span>
+  </div>
   <div class="grp"><span class="gname">Remove</span>
     <span>
       <button type="button" data-dialog="kick-{{.Player.SteamID}}"><i class="fa fa-sign-out" aria-hidden="true"></i>Kick…</button>
+      <button class="danger" hx-post="{{$base}}/kill" hx-target="#panel-flash" hx-confirm="Kill {{.Player.Name}}? This cannot be undone."><i class="fa fa-skull" aria-hidden="true"></i>Kill</button>
       <a class="btn danger" href="/b/{{.Backend}}/bans/new?steam_id={{.Player.SteamID}}&amp;instance={{.Instance}}"><i class="fa fa-ban" aria-hidden="true"></i>Ban…</a>
     </span>
     <dialog id="kick-{{.Player.SteamID}}" aria-labelledby="kick-title-{{.Player.SteamID}}">

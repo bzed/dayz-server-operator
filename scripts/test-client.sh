@@ -435,5 +435,39 @@ waitfor 30 "'$work/dzo' vehicle list t1 --config '$work/config.yaml' --token-fil
 verdict "vehicle state: the car has crew 1" $s
 
 server_tests
+# Heal, fix gear and kill, last: a dead player cannot be used for anything after.
+# pfield reads a number of the probe's latest player line; waitpf waits (30 s) for "<field> <test> <value>".
+id=$(dzo player list t1 | awk '/dzotester/{print $1}') # server_tests reuses the variable
+pfield() { probe | sed -n "s/.* $1=\([0-9]*\).*/\1/p"; }
+waitpf() { local i; for i in $(seq 1 15); do [ "$(pfield "$1")" ] && [ "$(pfield "$1")" "$2" "$3" ] && return 0; sleep 2; done; return 1; }
+touch "$tree/profiles/dzo_probe/hurt"
+s=1
+waitpf hp -lt 50 && s=0
+verdict "probe: the player is hurt (hp $(pfield hp))" $s
+s=1
+[ "$(pfield gear)" -le 15 ] 2>/dev/null && s=0
+verdict "probe: the gear is worn out (worst item at $(pfield gear)%)" $s
+s=0
+dzo player heal t1 "$id" | grep -q ok || s=1
+waitpf hp -gt 90 || s=1
+waitpf blood -gt 4000 || s=1
+verdict "player heal restores health (hp $(pfield hp), blood $(pfield blood))" $s
+s=0
+dzo player fixgear t1 "$id" | grep -q ok || s=1
+waitpf gear -eq 100 || s=1
+verdict "player fixgear repairs everything (worst item at $(pfield gear)%)" $s
+s=1
+out=$(dzo player kill t1 "$id" 2>&1 || true)
+case $out in *--yes*) s=0 ;; esac
+verdict "player kill asks for --yes" $s
+s=0
+dzo player kill t1 "$id" --yes | grep -q ok || s=1
+waitpf alive -eq 0 || s=1
+verdict "player kill kills the player" $s
+s=1
+out=$(dzo player heal t1 "$id" 2>&1 || true)
+case $out in *dead*) s=0 ;; esac
+verdict "player heal is refused for a dead player" $s
+
 echo "== $pass passed, $fail failed"
 [ "$fail" = 0 ]

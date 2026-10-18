@@ -201,6 +201,9 @@ func TestActions(t *testing.T) {
 		{"POST", "/api/v1/instances/alpha/vehicles/v1/repair", `{"scope":"wheels"}`},
 		{"POST", "/api/v1/instances/alpha/vehicles/v1/repair", ``},
 		{"POST", "/api/v1/instances/alpha/vehicles/v1/flip", ``},
+		{"POST", "/api/v1/instances/alpha/players/7656/heal", ``},
+		{"POST", "/api/v1/instances/alpha/players/7656/fixgear", ``},
+		{"POST", "/api/v1/instances/alpha/players/7656/kill", ``},
 		{"DELETE", "/api/v1/instances/alpha/vehicles/v1?force=1", ``},
 	}
 	for _, tc := range cases {
@@ -265,7 +268,7 @@ func TestPermissions(t *testing.T) {
 	if c, _ := e.do("POST", "/api/v1/instances/alpha/players/7656/message", mod, `{"text":"hi"}`); c != 200 {
 		t.Fatalf("moderator message: %d", c)
 	}
-	for _, p := range []string{"/message", "/players/7656/teleport", "/players/7656/give", "/spawn", "/spawn-vehicle", "/vehicles/v1/repair"} {
+	for _, p := range []string{"/message", "/players/7656/teleport", "/players/7656/give", "/players/7656/kill", "/players/7656/heal", "/players/7656/fixgear", "/spawn", "/spawn-vehicle", "/vehicles/v1/repair"} {
 		if c, _ := e.do("POST", "/api/v1/instances/alpha"+p, mod, `{"text":"x"}`); c != 403 {
 			t.Fatalf("moderator %s: %d", p, c)
 		}

@@ -497,6 +497,8 @@ func (h *Hub) validate(c *Command) error {
 		default:
 			return fmt.Errorf("admin: unknown message style %q", c.Style)
 		}
+	case KindPlayerKill, KindPlayerHeal, KindPlayerFixGear:
+		return need("steam_id", c.SteamID)
 	case KindTeleport:
 		if err := need("steam_id", c.SteamID); err != nil {
 			return err

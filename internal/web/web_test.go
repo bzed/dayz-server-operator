@@ -276,6 +276,9 @@ func TestActions(t *testing.T) {
 		"/b/main/i/alpha/message":                 {"text": {"hi"}, "style": {"chat"}},
 		"/b/main/i/alpha/players/7656/message":    {"text": {"hello"}},
 		"/b/main/i/alpha/players/7656/teleport":   {"x": {"10"}, "z": {"20"}},
+		"/b/main/i/alpha/players/7656/heal":       {},
+		"/b/main/i/alpha/players/7656/fixgear":    {},
+		"/b/main/i/alpha/players/7656/kill":       {},
 		"/b/main/i/alpha/players/7656/give":       {"type": {"AKM"}, "quantity": {"1"}, "health": {"0.5"}, "target": {"hands"}},
 		"/b/main/i/alpha/spawn":                   {"type": {"AKM"}, "quantity": {"20"}, "x": {"10"}, "z": {"20"}},
 		"/b/main/i/alpha/spawn-vehicle":           {"type": {"AKM"}, "x": {"10"}, "z": {"20"}},
@@ -530,5 +533,16 @@ func TestKickDialogAndAction(t *testing.T) {
 	}
 	if _, out := e.post("/b/main/i/alpha/players/7656/kick", url.Values{"reason": {strings.Repeat("r", 65)}}, nil); !strings.Contains(out, "64") {
 		t.Fatalf("long reason: %s", out)
+	}
+}
+
+func TestPlayerPanelHasHealFixGearAndKillWithConfirmation(t *testing.T) {
+	e := newEnv(t, api.RoleAdmin)
+	_, body, _ := e.get("/b/main/i/alpha/players/7656/panel")
+	for _, want := range []string{`hx-post="/b/main/i/alpha/players/7656/heal"`, `hx-post="/b/main/i/alpha/players/7656/fixgear"`,
+		`hx-post="/b/main/i/alpha/players/7656/kill"`, `hx-confirm="Kill &lt;b&gt;alice&lt;/b&gt;?`} {
+		if !strings.Contains(body, want) {
+			t.Errorf("panel lacks %s: %s", want, body)
+		}
 	}
 }

@@ -4,6 +4,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strings"
@@ -122,6 +123,34 @@ func newPlayerCmd() *cobra.Command {
 		},
 	}
 
+	simple := func(use, short string, f func(*apiclient.Client, context.Context, string, string) (api.ActionResult, error), confirm bool) *cobra.Command {
+		var yes bool
+		c := &cobra.Command{
+			Use: use + " <instance> <steamid>", Short: short, Args: cobra.ExactArgs(2),
+			RunE: func(cmd *cobra.Command, args []string) error {
+				if confirm && !yes {
+					return fmt.Errorf("%s needs --yes: it cannot be undone", use)
+				}
+				c, err := t.client()
+				if err != nil {
+					return err
+				}
+				r, err := f(c, ctxOf(cmd), args[0], args[1])
+				if err != nil {
+					return err
+				}
+				return printResult(cmd, r)
+			},
+		}
+		if confirm {
+			c.Flags().BoolVar(&yes, "yes", false, "confirm")
+		}
+		return c
+	}
+	heal := simple("heal", "Heal a player: health, blood, shock, bones, bleeding and diseases", (*apiclient.Client).Heal, false)
+	fixgear := simple("fixgear", "Repair everything a player carries and wears", (*apiclient.Client).FixGear, false)
+	kill := simple("kill", "Kill a player", (*apiclient.Client).Kill, true)
+
 	var x, z float64
 	var to string
 	tp := &cobra.Command{
@@ -192,7 +221,7 @@ func newPlayerCmd() *cobra.Command {
 	spawn.Flags().BoolVar(&attachments, "attachments", false, "with the kit the game's debug spawn gives it")
 	spawn.Flags().Float64Var(&sx, "x", 0, "world x (east)")
 	spawn.Flags().Float64Var(&sz, "z", 0, "world z (north)")
-	cmd.AddCommand(msg, kick, tp, give, spawn)
+	cmd.AddCommand(msg, kick, heal, fixgear, kill, tp, give, spawn)
 	return cmd
 }
 

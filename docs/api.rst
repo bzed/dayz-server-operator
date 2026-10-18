@@ -104,6 +104,9 @@ Acting
    * - ``GET /instances/<i>/players/<steamid>/connection``
      - ``operator``
      - the address the player is connected from (``player.ip``)
+   * - ``POST /instances/<i>/players/<steamid>/heal``, ``.../fixgear``, ``.../kill``
+     - ``operator``
+     - heal the player, repair everything they carry and wear, or kill them (no body). Each fails for a player who is not online, and heal and fix gear for a dead one
    * - ``POST /instances/<i>/players/<steamid>/teleport`` ``{"x", "z", "y"?}`` or ``{"to_steam_id"}``
      - ``operator``
      - teleport; without ``y`` the player lands on the surface

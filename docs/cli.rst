@@ -219,6 +219,10 @@ installation (default: the local ``serve.listen``). They need the
      - message one player or everyone
    * - ``dzo player kick <instance> <steamid> <reason...>``
      - kick a player; the reason (at most 64 bytes) is shown to them
+   * - ``dzo player heal <instance> <steamid>``, ``dzo player fixgear <instance> <steamid>``
+     - heal a player; repair everything they carry and wear
+   * - ``dzo player kill <instance> <steamid> --yes``
+     - kill a player (needs ``--yes``: it cannot be undone)
    * - ``dzo player tp <instance> <steamid> (--x <x> --z <z> | --to <steamid>)``
      - teleport a player
    * - ``dzo player give <instance> <steamid> <class> [--qty <n>|default|max] [--health <0..1>] [--target inventory|hands|ground] [--attachments]``

@@ -135,6 +135,9 @@ func (s *Server) Handler() http.Handler {
 	route("POST "+base+"/instances/{instance}/players/{steamid}/message", PermMessage, true, s.message)
 	route("GET "+base+"/instances/{instance}/players/{steamid}/connection", PermPlayerIP, true, s.connection)
 	route("POST "+base+"/instances/{instance}/players/{steamid}/kick", PermKick, true, s.kick)
+	route("POST "+base+"/instances/{instance}/players/{steamid}/kill", PermKill, true, s.playerAction(admin.KindPlayerKill, "player.kill"))
+	route("POST "+base+"/instances/{instance}/players/{steamid}/heal", PermHeal, true, s.playerAction(admin.KindPlayerHeal, "player.heal"))
+	route("POST "+base+"/instances/{instance}/players/{steamid}/fixgear", PermFixGear, true, s.playerAction(admin.KindPlayerFixGear, "player.fixgear"))
 	route("POST "+base+"/instances/{instance}/players/{steamid}/teleport", PermTeleport, true, s.teleport)
 	route("POST "+base+"/instances/{instance}/players/{steamid}/give", PermSpawn, true, s.give)
 	route("POST "+base+"/instances/{instance}/spawn", PermSpawn, true, s.spawn)
@@ -448,6 +451,14 @@ func (s *Server) message(w http.ResponseWriter, r *http.Request, c *call) {
 		target = "all"
 	}
 	s.run(w, r, c, admin.Command{Kind: admin.KindMessage, SteamID: id, Text: b.Text, Style: b.Style}, "message", target)
+}
+
+// playerAction runs a command that needs only the player: kill, heal and fix gear.
+func (s *Server) playerAction(kind, action string) handler {
+	return func(w http.ResponseWriter, r *http.Request, c *call) {
+		id := r.PathValue("steamid")
+		s.run(w, r, c, admin.Command{Kind: kind, SteamID: id}, action, id)
+	}
 }
 
 type teleportBody struct {

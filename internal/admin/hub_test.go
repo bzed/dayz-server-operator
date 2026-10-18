@@ -171,6 +171,9 @@ func TestValidate(t *testing.T) {
 		{"style", Command{Kind: KindMessage, Text: "x", Style: "loud"}, "style"},
 		{"tp nothing", Command{Kind: KindTeleport, SteamID: "1"}, "position"},
 		{"tp no player", Command{Kind: KindTeleport, X: 1}, "steam_id"},
+		{"kill no player", Command{Kind: KindPlayerKill}, "steam_id"},
+		{"heal no player", Command{Kind: KindPlayerHeal}, "steam_id"},
+		{"fix gear no player", Command{Kind: KindPlayerFixGear}, "steam_id"},
 		{"spawn bad class", Command{Kind: KindSpawnItem, SteamID: "1", Type: "a b"}, "valid class"},
 		{"spawn denied", Command{Kind: KindSpawnItem, SteamID: "1", Type: "Land_Wall"}, "denied"},
 		{"spawn not allowed", Command{Kind: KindSpawnItem, SteamID: "1", Type: "M4A1"}, "allow list"},
@@ -208,6 +211,9 @@ func TestValidate(t *testing.T) {
 		{Kind: KindVehicleRepair, Vehicle: "v", Scope: "missing"},
 		{Kind: KindVehicleFlip, Vehicle: "v"},
 		{Kind: KindTeleport, SteamID: "1", ToSteamID: "2"},
+		{Kind: KindPlayerKill, SteamID: "1"},
+		{Kind: KindPlayerHeal, SteamID: "1"},
+		{Kind: KindPlayerFixGear, SteamID: "1"},
 	} {
 		if _, err := h.Enqueue(ok); err != nil {
 			t.Errorf("%+v: %v", ok, err)

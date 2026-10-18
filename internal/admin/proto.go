@@ -171,6 +171,9 @@ func ParseQuantity(s string) (float64, error) {
 const (
 	KindMessage       = "message"
 	KindTeleport      = "teleport"
+	KindPlayerKill    = "player_kill"
+	KindPlayerHeal    = "player_heal"
+	KindPlayerFixGear = "player_fixgear"
 	KindSpawnItem     = "spawn_item"
 	KindSpawnVehicle  = "spawn_vehicle"
 	KindVehicleRepair = "vehicle_repair"

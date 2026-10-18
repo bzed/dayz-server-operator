@@ -18,6 +18,8 @@ admin actions:
 * direct messages and broadcasts (in chat in yellow, red or green, or as an
   on-screen notification),
 * teleport (to a map position or to another player),
+* heal a player (every damage zone, blood, shock, broken bones, bleeding, diseases, stamina and
+  unconsciousness; food and water stay as they are), repair everything a player carries and wears, or kill them,
 * spawn items into a player's inventory, hands or on the ground, and items and vehicles at a point of the map,
 * repair vehicles (including refuelling and fitting missing parts), flip them upright, or delete them.
 

@@ -4,7 +4,8 @@
 // Test aid for scripts/test-client.sh, never for production. Every 3 s it logs what each connected
 // player has, as one line
 //   DZO-PROBE player <name> items=<count> chemlight=<count> hands=<type> kit=<Type:Part+Part; of the items that carry attachments> transport=<0|1> crew=<vehicle>/<seat0>
-// and a file $profile:dzo_probe/board puts the first player into the driver seat of a new Offroad_02,
+// followed by hp=<health> blood=<blood> gear=<health of the worst item in percent> alive=<0|1>, a file
+// $profile:dzo_probe/hurt injures the first player (health, blood, every item they carry), and a file $profile:dzo_probe/board puts the first player into the driver seat of a new Offroad_02,
 // so dzo-admin's vehicle crew can be checked. The player is the only thing the probe touches.
 modded class MissionServer
 {
@@ -72,6 +73,26 @@ modded class MissionServer
 			}
 			array<EntityAI> items = new array<EntityAI>;
 			p.GetInventory().EnumerateInventory(InventoryTraversalType.PREORDER, items);
+			if (FileExist("$profile:dzo_probe/hurt"))
+			{
+				DeleteFile("$profile:dzo_probe/hurt");
+				p.SetHealth("", "Health", 40);
+				p.SetHealth("", "Blood", 3000);
+				foreach (EntityAI hurt : items)
+				{
+					if (hurt.GetMaxHealth("", "") > 0)
+						hurt.SetHealth("", "", hurt.GetMaxHealth("", "") * 0.1);
+				}
+			}
+			int worst = 100;
+			foreach (EntityAI gear : items)
+			{
+				if (gear.GetMaxHealth("", "") > 0 && !gear.IsInherited(Man))
+					worst = Math.Min(worst, Math.Round(gear.GetHealth01("", "") * 100));
+			}
+			int alive = 0;
+			if (p.IsAlive())
+				alive = 1;
 			int light = 0;
 			foreach (EntityAI e : items)
 			{
@@ -103,7 +124,7 @@ modded class MissionServer
 					driver = h.GetIdentity().GetName();
 				crew = t.GetType() + "/" + driver;
 			}
-			Print("DZO-PROBE player " + p.GetIdentity().GetName() + " items=" + items.Count() + " chemlight=" + light + " hands=" + hands + " kit=" + kit + " transport=" + p.IsInTransport() + " crew=" + crew);
+			Print("DZO-PROBE player " + p.GetIdentity().GetName() + " items=" + items.Count() + " chemlight=" + light + " hands=" + hands + " kit=" + kit + " transport=" + p.IsInTransport() + " crew=" + crew + " hp=" + Math.Round(p.GetHealth("", "Health")) + " blood=" + Math.Round(p.GetHealth("", "Blood")) + " gear=" + worst + " alive=" + alive);
 		}
 	}
 

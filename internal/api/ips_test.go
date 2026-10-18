@@ -175,3 +175,14 @@ func TestKickNeedsThePermissionAndAShortReason(t *testing.T) {
 		t.Fatalf("not online: %d", code)
 	}
 }
+
+func TestPlayerActionPermissions(t *testing.T) {
+	for role, want := range map[Role][4]bool{ // kick, kill, heal, fix gear
+		RoleDetector: {false, false, false, false}, RoleViewer: {false, false, false, false},
+		RoleModerator: {true, false, false, false}, RoleOperator: {true, true, true, true}, RoleAdmin: {true, true, true, true},
+	} {
+		if got := [4]bool{role.Can(PermKick), role.Can(PermKill), role.Can(PermHeal), role.Can(PermFixGear)}; got != want {
+			t.Errorf("%s: kick, kill, heal, fixgear = %v, want %v", role, got, want)
+		}
+	}
+}

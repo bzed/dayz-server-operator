@@ -106,4 +106,7 @@ func TestPlayerKickCommand(t *testing.T) {
 	if _, err := runCmd(t, append([]string{"player", "kick", "alpha", "76561198000000099", "AFK"}, common...)...); err == nil || !strings.Contains(err.Error(), "not online") {
 		t.Fatalf("a player who is not online: %v", err)
 	}
+	if _, err := runCmd(t, append([]string{"player", "kill", "alpha", "76561198000000001"}, common...)...); err == nil || !strings.Contains(err.Error(), "--yes") {
+		t.Fatalf("kill without --yes: %v", err)
+	}
 }

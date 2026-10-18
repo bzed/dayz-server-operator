@@ -296,3 +296,22 @@ func (c *Client) Tile(ctx context.Context, name, rest string) (*http.Response, e
 func (c *Client) Kick(ctx context.Context, name, steamID, reason string) (api.ActionResult, error) {
 	return c.action(ctx, http.MethodPost, inst(name)+"/players/"+url.PathEscape(steamID)+"/kick", api.KickBody{Reason: reason})
 }
+
+func (c *Client) playerAction(ctx context.Context, name, steamID, what string) (api.ActionResult, error) {
+	return c.action(ctx, http.MethodPost, inst(name)+"/players/"+url.PathEscape(steamID)+"/"+what, nil)
+}
+
+// Heal restores a player's health, blood, shock and bones and cures them.
+func (c *Client) Heal(ctx context.Context, name, steamID string) (api.ActionResult, error) {
+	return c.playerAction(ctx, name, steamID, "heal")
+}
+
+// FixGear repairs everything a player carries and wears.
+func (c *Client) FixGear(ctx context.Context, name, steamID string) (api.ActionResult, error) {
+	return c.playerAction(ctx, name, steamID, "fixgear")
+}
+
+// Kill kills a player.
+func (c *Client) Kill(ctx context.Context, name, steamID string) (api.ActionResult, error) {
+	return c.playerAction(ctx, name, steamID, "kill")
+}
