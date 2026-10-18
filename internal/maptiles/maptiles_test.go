@@ -36,6 +36,12 @@ func truth(x, z, x0, z0, w, h float64) (r, g uint8) {
 
 func synth(t *testing.T, flipX, flipY bool, x0, z0 float64) string {
 	t.Helper()
+	return synthExt(t, flipX, flipY, x0, z0, "paa")
+}
+
+// synthExt is synth with the extension the materials name their texture by.
+func synthExt(t *testing.T, flipX, flipY bool, x0, z0 float64, ext string) string {
+	t.Helper()
 	const cols, rows = 2, 2
 	w, h := float64(cols*step), float64(rows*step)
 	a := 1.0 / tpx
@@ -76,9 +82,9 @@ func synth(t *testing.T, flipX, flipY bool, x0, z0 float64) string {
 			}
 			add(fmt.Sprintf(`layers\S_%03d_%03d_lco.paa`, c, r), pb.Bytes())
 			add(fmt.Sprintf(`layers\P_%03d-%03d_L01.rvmat`, c, r), []byte(fmt.Sprintf(
-				"class Stage0 { texture=\"x\\layers\\s_%03d_%03d_lco.paa\"; texGen=3; };\n"+
+				"class Stage0 { texture=\"x\\layers\\s_%03d_%03d_lco.%s\"; texGen=3; };\n"+
 					"class TexGen3 { uvSource=\"worldPos\"; class uvTransform { aside[]={%v,0,0}; up[]={0,0,%v}; dir[]={0,%v,0}; pos[]={%v,%v,0}; }; };\n",
-				c, r, ua, a, vd, p0, p1)))
+				c, r, ext, ua, a, vd, p0, p1)))
 		}
 	}
 	p := filepath.Join(t.TempDir(), "data.pbo")
@@ -142,6 +148,16 @@ func TestBuildPlacesPixelsInAnyOrientation(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// Some mods ship materials that still name the source image
+// (ccs\legacy\...\s_010_000_lco.png) although the PBO holds the .paa.
+func TestBuildAcceptsMaterialsNamingSourceImages(t *testing.T) {
+	for _, ext := range []string{"png", "tga"} {
+		if _, err := Build(context.Background(), synthExt(t, false, false, 0, 0, ext), t.TempDir(), Options{}); err != nil {
+			t.Errorf("%s: %v", ext, err)
+		}
 	}
 }
 

@@ -86,7 +86,7 @@ type Options struct {
 var (
 	sRe   = regexp.MustCompile(`(?i)^layers[\\/]s_(\d+)_(\d+)_lco\.paa$`)
 	pRe   = regexp.MustCompile(`(?i)^layers[\\/]p_(\d+)-(\d+)_.*\.rvmat$`)
-	texRe = regexp.MustCompile(`(?i)[\\/]s_(\d+)_(\d+)_lco\.paa$`)
+	texRe = regexp.MustCompile(`(?i)[\\/]s_(\d+)_(\d+)_lco\.(?:paa|png|tga)$`)
 )
 
 type tile struct {
