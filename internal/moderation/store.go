@@ -46,9 +46,13 @@ const (
 )
 
 // Target is one identifier a ban covers. Derived marks the GUID computed from the Steam ID.
+//
+// Value of an IP target is empty where the reader may not see addresses; Ref then names it (opaque, only
+// good for the ban it belongs to), so that the ban can still be edited.
 type Target struct {
 	Kind    TargetKind `json:"kind"`
-	Value   string     `json:"value"`
+	Value   string     `json:"value,omitempty"`
+	Ref     string     `json:"ref,omitempty"`
 	Derived bool       `json:"derived,omitempty"`
 }
 
@@ -108,8 +112,10 @@ func (b Ban) Input() BanInput {
 			in.SteamID = t.Value
 		case t.Kind == TargetGUID && !t.Derived:
 			in.GUIDs = append(in.GUIDs, t.Value)
-		case t.Kind == TargetIP:
+		case t.Kind == TargetIP && t.Value != "":
 			in.IPs = append(in.IPs, t.Value)
+		case t.Kind == TargetIP:
+			in.IPRefs = append(in.IPRefs, t.Ref)
 		}
 	}
 	return in
@@ -117,9 +123,12 @@ func (b Ban) Input() BanInput {
 
 // BanInput is what a caller sets when creating or editing a ban.
 type BanInput struct {
-	SteamID   string     `json:"steam_id,omitempty"`
-	GUIDs     []string   `json:"guids,omitempty"`
-	IPs       []string   `json:"ips,omitempty"`
+	SteamID string   `json:"steam_id,omitempty"`
+	GUIDs   []string `json:"guids,omitempty"`
+	IPs     []string `json:"ips,omitempty"`
+	// IPRefs name addresses without giving them: a Sighting.Ref of the player being banned, or the Ref of
+	// an IP target of the ban being edited. They are resolved to IPs when the ban is stored.
+	IPRefs    []string   `json:"ip_refs,omitempty"`
 	Reason    string     `json:"reason"`
 	Message   string     `json:"message,omitempty"`
 	ExpiresAt *time.Time `json:"expires_at,omitempty"`
@@ -343,6 +352,10 @@ func timeOrNil(v sql.NullInt64) *time.Time {
 
 // CreateBan stores a new ban and its history entry.
 func (s *Store) CreateBan(ctx context.Context, actor string, in BanInput, now time.Time) (Ban, error) {
+	in, err := resolveIPRefs(ctx, s.db, in, 0)
+	if err != nil {
+		return Ban{}, err
+	}
 	in, targets, err := in.normalise(now)
 	if err != nil {
 		return Ban{}, err
@@ -380,6 +393,9 @@ func (s *Store) UpdateBan(ctx context.Context, id int64, actor string, in BanInp
 		}
 		if old.RevokedAt != nil {
 			return invalid("ban %d is revoked and cannot be edited", id)
+		}
+		if in, err = resolveIPRefs(ctx, tx, in, id); err != nil {
+			return err
 		}
 		in, targets, err := in.normalise(now)
 		if err != nil {
@@ -519,7 +535,7 @@ func getBan(ctx context.Context, q querier, id int64) (Ban, error) {
 		return Ban{}, err
 	}
 	// steam first, then guid, then ip: the order people read them in.
-	rows, err = q.QueryContext(ctx, `SELECT kind, value, derived FROM ban_targets WHERE ban_id = ?
+	rows, err = q.QueryContext(ctx, `SELECT kind, value, derived, rowid FROM ban_targets WHERE ban_id = ?
 		ORDER BY CASE kind WHEN 'steam' THEN 0 WHEN 'guid' THEN 1 ELSE 2 END, derived DESC, value`, id)
 	if err != nil {
 		return Ban{}, err
@@ -527,11 +543,15 @@ func getBan(ctx context.Context, q querier, id int64) (Ban, error) {
 	for rows.Next() {
 		var t Target
 		var kind string
-		if err := rows.Scan(&kind, &t.Value, &t.Derived); err != nil {
+		var rowid int64
+		if err := rows.Scan(&kind, &t.Value, &t.Derived, &rowid); err != nil {
 			_ = rows.Close()
 			return Ban{}, err
 		}
 		t.Kind = TargetKind(kind)
+		if t.Kind == TargetIP {
+			t.Ref = "t" + strconv.FormatInt(rowid, 10)
+		}
 		b.Targets = append(b.Targets, t)
 	}
 	if err := closeRows(rows); err != nil {
