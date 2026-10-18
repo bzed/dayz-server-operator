@@ -99,7 +99,12 @@ Instance
    actions per player (message, teleport to coordinates or to another player,
    give item with a search over the server's item classes), and the vehicle list
    with repair (everything, or only body, parts, wheels, fuel or missing parts), flip and delete. The
-   actions open directly under the player or vehicle they apply to.
+   actions open directly under the player or vehicle they apply to. Banning is a link
+   in the panel to the ban form with the player filled in. Hovering over a player's name (or tapping its
+   ``i`` button on a phone) shows the ping and, with the ``ban.view`` permission, the addresses the
+   player connected from. The empty space before the name is reserved for a country flag, and the
+   panel's ``Profile`` button is disabled until the player profile page exists. On a phone the player
+   table shows only the name, the health and the actions.
 
 Live map
    Players, vehicles, active events and marker layers on a map that updates as

@@ -247,3 +247,35 @@ th[aria-sort="descending"]::after { content: " \25BC"; font-size: .7em; }
 .playerpanel details.give summary::-webkit-details-marker { display: none; }
 .playerpanel details.give summary::after { content: "Item…"; grid-column: 2; grid-row: 1; justify-self: start; }
 .playerpanel details.give summary .gname { grid-column: 1; grid-row: 1; }
+
+/* Player name cell: a slot for a country flag (a 4:3 flag icon later), the name, and the connection info.
+   The slot is always there so that names line up before and after flags are added. */
+td.who { position: relative; white-space: nowrap; }
+.flag { display: inline-block; width: 1.6em; height: 1.2em; margin-right: .5em; vertical-align: -.2em; }
+button.info { padding: 0 .35rem; min-height: 1.6rem; margin: 0 0 0 .25rem; border-color: transparent; color: var(--muted); }
+button.info .fa { margin: 0; }
+.pop { display: none; position: fixed; z-index: 50; max-width: min(24rem, calc(100vw - 16px)); padding: .5rem .8rem; background: var(--surface); border: 1px solid var(--ink); border-radius: var(--r); white-space: normal; text-align: left; font-size: .95rem; }
+.pop ul { margin: .3rem 0 0; padding-left: 1.1rem; }
+.pop p { margin: .2rem 0 0; }
+.pop:empty { display: none !important; }
+td.who:hover .pop, td.who:focus-within .pop, td.who.open .pop { display: block; }
+button.profile[disabled] { opacity: .5; cursor: not-allowed; }
+
+/* Phones: a taller header, and a navigation that wraps instead of running off the screen. */
+@media (max-width: 700px) {
+  :root { --hdr: 3.75rem; }
+  header { height: auto; min-height: var(--hdr); flex-wrap: wrap; padding: .6rem 1rem; row-gap: .25rem; }
+  header nav { order: 3; flex-basis: 100%; flex-wrap: wrap; gap: .25rem 1rem; }
+  header nav a { display: inline-flex; align-items: center; min-height: 2.2rem; }
+  .brand { font-size: 1.8rem; }
+  .ver { margin-left: auto; }
+  body.map header { flex-wrap: nowrap; }
+  body.map header nav { order: 0; flex-basis: auto; flex-wrap: nowrap; overflow-x: auto; }
+  main { padding-inline: .75rem; }
+}
+/* On a phone the player table keeps the name, the health and the Actions button; the rest is in the panel. */
+@media (max-width: 700px) {
+  table.players th:nth-child(2), table.players td:nth-child(2),
+  table.players th:nth-child(3), table.players td:nth-child(3),
+  table.players th:nth-child(5), table.players td:nth-child(5) { display: none; }
+}

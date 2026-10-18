@@ -2,12 +2,16 @@
 {{/* SPDX-License-Identifier: AGPL-3.0-or-later */}}
 {{define "players"}}
 {{if .Err}}<p class="flash err">{{.Err}}</p>{{else if not .Items}}<p>Nobody online.</p>{{else}}
-<div class="scroll"><table>
+<div class="scroll"><table class="players">
   <thead><tr><th data-sort="text">Name</th><th data-sort="text">Steam ID</th><th data-sort="num">Position</th><th data-sort="num">Health</th><th data-sort="num">Ping</th><th></th></tr></thead>
   <tbody>
   {{range .Items}}
     <tr>
-      <td>{{.Name}}{{if not .Alive}} <em>(dead)</em>{{else if .Unconscious}} <em>(unconscious)</em>{{end}}{{if .Vehicle}} <em>(in vehicle)</em>{{end}}</td>
+      <td class="who" hx-get="/b/{{$.Backend}}/i/{{$.Instance}}/players/{{.SteamID}}/info" hx-trigger="mouseenter once, focusin once" hx-target="find .pop" hx-swap="innerHTML">
+        <span class="flag" aria-hidden="true"></span>{{.Name}}{{if not .Alive}} <em>(dead)</em>{{else if .Unconscious}} <em>(unconscious)</em>{{end}}{{if .Vehicle}} <em>(in vehicle)</em>{{end}}
+        <button type="button" class="info quiet" aria-label="Connection info for {{.Name}}" aria-expanded="false" data-info><i class="fa fa-info-circle" aria-hidden="true"></i></button>
+        <div class="pop" role="status"></div>
+      </td>
       <td>{{.SteamID}}</td>
       <td>{{printf "%.0f / %.0f" .X .Z}}</td>
       <td>{{printf "%.0f" .Health}}</td>
@@ -17,6 +21,14 @@
   {{end}}
   </tbody>
 </table></div>
+{{end}}
+{{end}}
+
+{{define "playerinfo"}}
+{{if .Err}}<p>{{.Err}}</p>{{else}}
+<strong>{{.Name}}</strong>{{if .Ping}} <span class="mute">ping {{.Ping}}</span>{{end}}
+{{if .Seen}}<ul>{{range .Seen}}<li><code>{{.IP}}</code> as {{.Name}} on {{.Instance}}, last {{.LastSeen.Format "2006-01-02 15:04"}}{{if .SharedWith}} <strong class="warn">shared with {{.SharedWith}} other player{{if gt .SharedWith 1}}s{{end}}</strong>{{end}}</li>{{end}}</ul>
+{{else}}<p>No connections recorded.</p>{{end}}
 {{end}}
 {{end}}
 
@@ -47,7 +59,7 @@
 {{if .Err}}<p class="flash err">{{.Err}}</p><button class="quiet" data-close><i class="fa fa-times" aria-hidden="true"></i>Close</button>{{else}}
 {{$base := printf "/b/%s/i/%s/players/%s" .Backend .Instance .Player.SteamID}}
 <div class="panel playerpanel">
-  <h3><i class="fa fa-user" aria-hidden="true"></i>{{.Player.Name}} <small>{{.Player.SteamID}}</small> <button class="quiet" data-close><i class="fa fa-times" aria-hidden="true"></i>Close</button></h3>
+  <h3><i class="fa fa-user" aria-hidden="true"></i>{{.Player.Name}} <small>{{.Player.SteamID}}</small> <button class="profile" disabled title="The player profile is not available yet"><i class="fa fa-id-card" aria-hidden="true"></i>Profile</button> <button class="quiet" data-close><i class="fa fa-times" aria-hidden="true"></i>Close</button></h3>
   <div id="panel-flash"></div>
   <div class="grp"><span class="gname">Tell</span>
     <form hx-post="{{$base}}/message" hx-target="#panel-flash" hx-on::after-request="this.reset()">

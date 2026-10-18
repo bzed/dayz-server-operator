@@ -457,3 +457,42 @@ func TestPlayerPanelLinksToTheBanSite(t *testing.T) {
 		}
 	}
 }
+
+// The name cell keeps room for a country flag and offers the connection info.
+func TestPlayerRowHasFlagSlotAndInfoButton(t *testing.T) {
+	e := newEnv(t, api.RoleAdmin)
+	_, body, _ := e.get("/b/main/i/alpha/players")
+	for _, want := range []string{`class="flag"`, `data-info`, `class="pop"`, `/players/7656/info`} {
+		if !strings.Contains(body, want) {
+			t.Errorf("player table lacks %s: %s", want, body)
+		}
+	}
+}
+
+func TestPlayerInfoListsWhereThePlayerConnectedFrom(t *testing.T) {
+	e := newEnv(t, api.RoleAdmin)
+	guid, _ := moderation.DeriveGUID(webSteam)
+	st := e.api.Moderation.(webMod).st
+	if err := st.Seen(context.Background(), "alpha", guid, "192.0.2.7", "Alice <i>", time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	_, body, _ := e.get("/b/main/i/alpha/players/" + webSteam + "/info")
+	if !strings.Contains(body, "192.0.2.7") || !strings.Contains(body, "Alice &lt;i&gt;") || strings.Contains(body, "<i>") {
+		t.Fatalf("info: %s", body)
+	}
+	_, body, _ = e.get("/b/main/i/alpha/players/76561198000000099/info")
+	if !strings.Contains(body, "No connections recorded") {
+		t.Fatalf("unknown player: %s", body)
+	}
+	if code, _, _ := e.get("/b/nope/i/alpha/players/" + webSteam + "/info"); code != 404 {
+		t.Fatalf("unknown backend: %d", code)
+	}
+}
+
+func TestPlayerPanelHasAProfileButtonThatDoesNothingYet(t *testing.T) {
+	e := newEnv(t, api.RoleAdmin)
+	_, body, _ := e.get("/b/main/i/alpha/players/7656/panel")
+	if !strings.Contains(body, `class="profile" disabled`) {
+		t.Fatalf("no disabled profile button: %s", body)
+	}
+}

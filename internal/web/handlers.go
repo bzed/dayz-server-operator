@@ -14,6 +14,7 @@ import (
 	"github.com/bzed/dayz-server-operator/internal/admin"
 	"github.com/bzed/dayz-server-operator/internal/api"
 	"github.com/bzed/dayz-server-operator/internal/apiclient"
+	"github.com/bzed/dayz-server-operator/internal/moderation"
 )
 
 type backendView struct {
@@ -139,6 +140,42 @@ func (s *Server) playerPanel(w http.ResponseWriter, r *http.Request) {
 		v.Err = "player is not online"
 	}
 	s.render(w, "panel", v)
+}
+
+type playerInfoView struct {
+	Name string
+	Ping int
+	Seen []moderation.Sighting
+	Err  string
+}
+
+// playerInfo is the connection info shown over a player's name: the live ping and where the player
+// connected from. It is loaded on demand, and the history needs the ban.view permission.
+func (s *Server) playerInfo(w http.ResponseWriter, r *http.Request) {
+	_, c, inst, ok := s.target(w, r)
+	if !ok {
+		return
+	}
+	id := r.PathValue("steamid")
+	var v playerInfoView
+	players, err := c.Players(r.Context(), inst)
+	if err != nil {
+		v.Err = err.Error()
+	}
+	for _, p := range players {
+		if p.SteamID == id {
+			v.Name, v.Ping = p.Name, p.Ping
+		}
+	}
+	if v.Name == "" {
+		v.Name = id
+	}
+	if v.Err == "" {
+		if seen, err := c.Identities(r.Context(), id); err == nil { // without ban.view there is only the live part
+			v.Seen = seen
+		}
+	}
+	s.render(w, "playerinfo", v)
 }
 
 type vpanelView struct {

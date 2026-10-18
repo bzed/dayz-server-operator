@@ -7,11 +7,45 @@
   'use strict';
   document.addEventListener('htmx:beforeRequest', function (e) {
     var el = e.detail.elt;
-    if (el.hasAttribute('data-poll') && document.querySelector('.rowpanel')) {
+    if (el.hasAttribute('data-poll') && document.querySelector('.rowpanel, td.who.open')) {
       e.preventDefault();
     } else if (el.hasAttribute('data-rowpanel')) {
       document.querySelectorAll('.rowpanel').forEach(function (r) { r.remove(); });
     }
+  });
+  // The connection info over a name shows on hover and focus, and on a tap of its i button (touch
+  // screens have no hover). It is placed under the name with fixed positioning, so that the scrolling
+  // table does not clip it.
+  function placePop(cell) {
+    var pop = cell.querySelector('.pop');
+    if (!pop) return;
+    var r = cell.getBoundingClientRect();
+    pop.style.left = Math.max(8, Math.min(r.left, window.innerWidth - pop.offsetWidth - 8)) + 'px';
+    pop.style.top = (r.bottom + 2) + 'px';
+  }
+  document.addEventListener('mouseover', function (e) {
+    var c = e.target.closest && e.target.closest('td.who');
+    if (c) placePop(c);
+  });
+  document.addEventListener('click', function (e) {
+    var b = e.target.closest('[data-info]');
+    var open = document.querySelector('td.who.open');
+    if (open && (!b || b.closest('td.who') !== open)) {
+      open.classList.remove('open');
+      open.querySelector('[data-info]').setAttribute('aria-expanded', 'false');
+    }
+    if (!b) return;
+    var cell = b.closest('td.who');
+    var on = cell.classList.toggle('open');
+    b.setAttribute('aria-expanded', on ? 'true' : 'false');
+    if (on) {
+      if (!cell.querySelector('.pop').childElementCount) htmx.trigger(cell, 'focusin');
+      placePop(cell);
+    }
+  });
+  document.addEventListener('keydown', function (e) {
+    var open = e.key === 'Escape' && document.querySelector('td.who.open');
+    if (open) open.classList.remove('open');
   });
   document.addEventListener('click', function (e) {
     var b = e.target.closest('[data-close]');
