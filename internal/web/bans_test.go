@@ -29,6 +29,7 @@ func (m webMod) Kick(_ context.Context, instance, steamID, reason string) error 
 
 // kicked records what the web tests asked to kick (the tests of this package do not run in parallel).
 var kicked []string
+
 func (m webMod) Changed(context.Context, moderation.Ban, *moderation.Ban) map[string]string {
 	return map[string]string{"alpha": "ok"}
 }
