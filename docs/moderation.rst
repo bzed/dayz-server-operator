@@ -109,8 +109,15 @@ Changes outside dzo
    path never overwrites a file changed outside dzo. **Remove bans through dzo**: a line deleted from
    ``bans.txt`` by hand comes back at the next render.
 
+A new or rebuilt server
+   The database is the source of truth, not ``bans.txt``. Copy ``dzo.sqlite`` (and the ``evidence``
+   directory next to it) to the new installation, and every start of an instance renders ``bans.txt`` from it,
+   so the new server knows all active bans before the first player connects. Nothing needs to be exported from
+   the old server's ``bans.txt``.
+
 DayZ's own ``ban.txt``
-   Not used. dzo bans through BattlEye only.
+   Not used. BattlEye enforces by GUID and by IP and is kept in sync from the database as described above,
+   so a second list that the game server reads would only be one more place to get out of step.
 
 Who may do what
 ---------------
