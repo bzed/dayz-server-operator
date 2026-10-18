@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/bzed/dayz-server-operator/internal/api"
 	"github.com/bzed/dayz-server-operator/internal/moderation"
@@ -124,4 +125,47 @@ func TestBanFormRefusesAMessageBattlEyeWouldCut(t *testing.T) {
 	if _, list, _ := e.get("/b/main/bans?state=active"); strings.Contains(list, "ban #1") || strings.Contains(list, webSteam) {
 		t.Fatalf("the ban was created anyway: %s", list)
 	}
+}
+
+func TestBanFormOffersAddressesWithoutShowingThem(t *testing.T) {
+	e := newEnv(t, api.RoleOperator)
+	guid, _ := moderation.DeriveGUID(webSteam)
+	st := e.api.Moderation.(webMod).st
+	_ = st.Seen(context.Background(), "alpha", guid, "192.0.2.7", "alice", time.Now())
+	_ = st.Seen(context.Background(), "alpha", "ea4796e1d71203969fbaad87e2195978", "192.0.2.7", "bob", time.Now())
+	_, body, _ := e.get("/b/main/bans/new?steam_id=" + webSteam + "&instance=alpha")
+	if strings.Contains(body, "192.0.2.7") || !strings.Contains(body, `name="ip_refs"`) || !strings.Contains(body, "shared with 1 other player") {
+		t.Fatalf("form: %s", body)
+	}
+	_, ids, _ := e.get("/b/main/bans/new?steam_id=" + webSteam)
+	ref := between(ids, `name="ip_refs" value="`, `"`)
+	form := url.Values{"steam_id": {webSteam}, "reason": {"evading"}, "duration": {"7d"}, "scope": {"instances"}, "instances": {"alpha"}, "ip_refs": {ref}}
+	if _, out := e.postForm("/b/main/bans", form, true); !strings.Contains(out, "ban #1") {
+		t.Fatalf("create: %s", out)
+	}
+	_, page, _ := e.get("/b/main/bans/1")
+	if strings.Contains(page, "192.0.2.7") || !strings.Contains(page, "address hidden") || !strings.Contains(page, `name="ip_refs"`) {
+		t.Fatalf("ban page: %s", page)
+	}
+	if _, list, _ := e.get("/b/main/bans"); strings.Contains(list, "192.0.2.7") {
+		t.Fatalf("list: %s", list)
+	}
+}
+
+func TestBanFormShowsAddressesWithTheHistoryPermission(t *testing.T) {
+	e := newEnv(t, api.RoleAdmin)
+	guid, _ := moderation.DeriveGUID(webSteam)
+	_ = e.api.Moderation.(webMod).st.Seen(context.Background(), "alpha", guid, "192.0.2.7", "alice", time.Now())
+	if _, body, _ := e.get("/b/main/bans/new?steam_id=" + webSteam); !strings.Contains(body, "192.0.2.7") {
+		t.Fatalf("form: %s", body)
+	}
+}
+
+func between(s, a, b string) string {
+	i := strings.Index(s, a)
+	if i < 0 {
+		return ""
+	}
+	s = s[i+len(a):]
+	return s[:strings.Index(s, b)]
 }

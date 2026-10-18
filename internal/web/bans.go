@@ -87,7 +87,7 @@ func (s *Server) banForm(w http.ResponseWriter, r *http.Request) {
 func formInput(r *http.Request, keep *time.Time) (moderation.BanInput, error) {
 	f := r.PostForm
 	in := moderation.BanInput{SteamID: strings.TrimSpace(f.Get("steam_id")), Reason: f.Get("reason"), Message: f.Get("message"),
-		Scope: moderation.Scope(f.Get("scope")), IPs: f["ips"]}
+		Scope: moderation.Scope(f.Get("scope")), IPs: f["ips"], IPRefs: f["ip_refs"]}
 	if g := strings.TrimSpace(f.Get("guid")); g != "" {
 		in.GUIDs = []string{g}
 	}

@@ -25,7 +25,7 @@
       <td>{{.State $now}}</td>
       <td>{{expiry .ExpiresAt}}</td>
       <td>{{if eq .Scope "global"}}global{{else}}{{join .Instances ", "}}{{end}}</td>
-      <td>{{range .Targets}}{{if not .Derived}}<code>{{.Value}}</code> {{end}}{{end}}</td>
+      <td>{{range .Targets}}{{if not .Derived}}{{if and (eq .Kind "ip") (not .Value)}}<em>address hidden</em>{{else}}<code>{{.Value}}</code>{{end}} {{end}}{{end}}</td>
       <td>{{.Reason}}</td>
       <td>{{.CreatedBy}}</td>
     </tr>
@@ -58,8 +58,8 @@
     <label><input type="radio" name="scope" value="instances" checked> these instances:</label>
     {{$sel := .Instance}}{{range .Instances}}<label><input type="checkbox" name="instances" value="{{.Instance}}" {{if eq .Instance $sel}}checked{{end}}> {{.Instance}}</label>{{end}}
   </fieldset>
-  {{if .Identities}}<fieldset><legend>IP addresses (not banned unless ticked)</legend>
-    {{range .Identities}}<label><input type="checkbox" name="ips" value="{{.IP}}" {{if not $.Data.CanIP}}disabled{{end}}> {{.IP}} ({{.Name}} on {{.Instance}}, last {{.LastSeen.Format "2006-01-02"}}){{if .SharedWith}} <strong class="warn">shared with {{.SharedWith}} other player{{if gt .SharedWith 1}}s{{end}}</strong>{{end}}</label>{{end}}
+  {{if .Identities}}<fieldset><legend>Addresses (not banned unless ticked)</legend>
+    {{range .Identities}}<label><input type="checkbox" name="ip_refs" value="{{.Ref}}" {{if not $.Data.CanIP}}disabled{{end}}> {{if .IP}}{{.IP}}{{else}}Address{{end}} ({{.Name}} on {{.Instance}}, last {{.LastSeen.Format "2006-01-02"}}){{if .SharedWith}} <strong class="warn">shared with {{.SharedWith}} other player{{if gt .SharedWith 1}}s{{end}}</strong>{{end}}</label>{{end}}
   </fieldset>{{end}}
   {{if .Evidence}}<fieldset><legend>Evidence to link</legend>
     {{range .Evidence}}<label class="evidence"><input type="checkbox" name="evidence" value="{{.ID}}" checked> #{{.ID}} {{.Kind}} from {{.Source}} on {{.Instance}}, {{.CreatedAt.Format "2006-01-02 15:04"}}
@@ -87,7 +87,7 @@
   <dt>Message</dt><dd>{{$b.Message}}</dd>
   <dt>Expires</dt><dd>{{expiry $b.ExpiresAt}}</dd>
   <dt>Scope</dt><dd>{{if eq $b.Scope "global"}}every instance{{else}}{{join $b.Instances ", "}}{{end}}</dd>
-  <dt>Targets</dt><dd>{{range $b.Targets}}<code>{{.Kind}} {{.Value}}</code>{{if .Derived}} (from the Steam ID){{end}}<br>{{end}}</dd>
+  <dt>Targets</dt><dd>{{range $b.Targets}}{{if and (eq .Kind "ip") (not .Value)}}<em>ip, address hidden</em>{{else}}<code>{{.Kind}} {{.Value}}</code>{{end}}{{if .Derived}} (from the Steam ID){{end}}<br>{{end}}</dd>
   <dt>Created</dt><dd>{{$b.CreatedAt.Format "2006-01-02 15:04"}} by {{$b.CreatedBy}}</dd>
   {{if $b.RevokedAt}}<dt>Revoked</dt><dd>{{$b.RevokedAt.Format "2006-01-02 15:04"}} by {{$b.RevokedBy}}: {{$b.RevokeReason}}</dd>{{end}}
 </dl>
@@ -97,6 +97,7 @@
 <form hx-post="/b/{{.Backend}}/bans/{{$b.ID}}" hx-target="#flash">
   {{with $b.Input}}<input type="hidden" name="steam_id" value="{{.SteamID}}">{{range .GUIDs}}<input type="hidden" name="guid" value="{{.}}">{{end}}
   {{range .IPs}}<label><input type="checkbox" name="ips" value="{{.}}" checked> IP {{.}}</label>{{end}}
+  {{range .IPRefs}}<label><input type="checkbox" name="ip_refs" value="{{.}}" checked> IP address (hidden)</label>{{end}}
   {{range .Evidence}}<input type="hidden" name="evidence" value="{{.}}">{{end}}{{end}}
   <label>Reason <input name="reason" value="{{$b.Reason}}" required maxlength="1000" size="50"></label>
   <label>Message <input name="message" value="{{$b.Message}}" maxlength="64" size="50"></label>

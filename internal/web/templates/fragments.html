@@ -25,9 +25,12 @@
 
 {{define "playerinfo"}}
 {{if .Err}}<p>{{.Err}}</p>{{else}}
-<strong>{{.Name}}</strong>{{if .Ping}} <span class="mute">ping {{.Ping}}</span>{{end}}
-{{if .Seen}}<ul>{{range .Seen}}<li><code>{{.IP}}</code> as {{.Name}} on {{.Instance}}, last {{.LastSeen.Format "2006-01-02 15:04"}}{{if .SharedWith}} <strong class="warn">shared with {{.SharedWith}} other player{{if gt .SharedWith 1}}s{{end}}</strong>{{end}}</li>{{end}}</ul>
-{{else}}<p>No connections recorded.</p>{{end}}
+<strong>{{.Name}}</strong>
+<dl>
+  <dt>Steam ID</dt><dd>{{.SteamID}}</dd>
+  {{if .Ping}}<dt>Ping</dt><dd>{{.Ping}}</dd>{{end}}
+  {{if .IP}}<dt>Address</dt><dd>{{.IP}}</dd>{{end}}
+</dl>
 {{end}}
 {{end}}
 

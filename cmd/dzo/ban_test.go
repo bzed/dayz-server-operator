@@ -72,3 +72,10 @@ func TestBanCommands(t *testing.T) {
 		t.Fatalf("add without --duration succeeded: %s", out)
 	}
 }
+
+func TestHiddenAddressesAreNamedNotShown(t *testing.T) {
+	b := moderation.Ban{Targets: []moderation.Target{{Kind: moderation.TargetSteam, Value: "76561198000000001"}, {Kind: moderation.TargetIP, Ref: "t3"}, {Kind: moderation.TargetIP, Value: "192.0.2.7"}}}
+	if got := targetList(b); got != "76561198000000001,ip (hidden),192.0.2.7" {
+		t.Fatalf("targetList = %q", got)
+	}
+}

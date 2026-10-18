@@ -4,6 +4,7 @@
 package main
 
 import (
+	"cmp"
 	"fmt"
 	"io"
 	"os"
@@ -63,11 +64,19 @@ func printSync(w io.Writer, sync map[string]string) {
 	}
 }
 
+// targetValue is what a target is called on screen: an address the token may not see is "ip (hidden)".
+func targetValue(t moderation.Target) string {
+	if t.Kind == moderation.TargetIP && t.Value == "" {
+		return "ip (hidden)"
+	}
+	return t.Value
+}
+
 func targetList(b moderation.Ban) string {
 	var v []string
 	for _, t := range b.Targets {
 		if !t.Derived {
-			v = append(v, t.Value)
+			v = append(v, targetValue(t))
 		}
 	}
 	return strings.Join(v, ",")
@@ -181,7 +190,7 @@ func newBanCmd() *cobra.Command {
 				if tg.Derived {
 					d = " (from the Steam ID)"
 				}
-				_, _ = fmt.Fprintf(w, "target:   %s %s%s\n", tg.Kind, tg.Value, d)
+				_, _ = fmt.Fprintf(w, "target:   %s %s%s\n", tg.Kind, cmp.Or(tg.Value, "(hidden)"), d)
 			}
 			for _, e := range b.Evidence {
 				_, _ = fmt.Fprintf(w, "evidence: #%d\n", e)

@@ -158,3 +158,8 @@ func (c *Client) EvidenceFile(ctx context.Context, id int64) (*http.Response, er
 func (c *Client) Identities(ctx context.Context, steamID string) (out []moderation.Sighting, err error) {
 	return out, c.get(ctx, "/api/v1/players/"+url.PathEscape(steamID)+"/identities", &out)
 }
+
+// Connection returns the address a player is connected from on an instance (the player.ip permission).
+func (c *Client) Connection(ctx context.Context, name, steamID string) (out api.Connection, err error) {
+	return out, c.get(ctx, "/api/v1/instances/"+url.PathEscape(name)+"/players/"+url.PathEscape(steamID)+"/connection", &out)
+}

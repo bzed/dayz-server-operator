@@ -83,9 +83,9 @@ action fails with a clear message.
    * - ``moderator``
      - also send direct messages to players, see bans and ban for up to 7 days (:doc:`moderation`)
    * - ``operator``
-     - also broadcast, teleport, spawn items, repair and delete vehicles, and give long and IP bans
+     - also broadcast, teleport, spawn items, repair and delete vehicles, give long and IP bans, and see the address a player is connected from
    * - ``admin``
-     - everything, including the audit log, global bans and markers that are admin-only
+     - everything, including the audit log, global bans, the history of IP addresses and markers that are admin-only
 
 Pages
 -----
@@ -101,8 +101,9 @@ Instance
    with repair (everything, or only body, parts, wheels, fuel or missing parts), flip and delete. The
    actions open directly under the player or vehicle they apply to. Banning is a link
    in the panel to the ban form with the player filled in. Hovering over a player's name (or tapping its
-   ``i`` button on a phone) shows the ping and, with the ``ban.view`` permission, the addresses the
-   player connected from. The empty space before the name is reserved for a country flag, and the
+   ``i`` button on a phone) shows the Steam ID, the ping and, with the ``player.ip`` permission
+   (operators and admins), the address the player is connected from now. The history of addresses is not
+   shown there; it needs ``ip.history`` (:doc:`moderation`). The empty space before the name is reserved for a country flag, and the
    panel's ``Profile`` button is disabled until the player profile page exists. The player table has no Steam ID column; the
    panel shows it. On a phone the table shows only the name, the health and the actions.
 
@@ -126,7 +127,8 @@ Bans
    One page per installation (``<name> bans`` in the navigation): the list of bans with a state filter and
    a search by Steam ID, GUID, IP, text or player name; a ban page with its targets, scope, evidence,
    history, an edit form and revoke. A player's panel has a **Ban…** button that opens the form with the
-   Steam ID, the instance, the GUIDs and IPs the player was seen with (shared addresses are marked) and
+   Steam ID, the instance, the addresses the player was seen with (shown only with ``ip.history``, otherwise as
+   "Address", with shared ones marked) and
    the evidence filed against them. "Also send to" repeats the ban on other installations. See
    :doc:`moderation`.
 

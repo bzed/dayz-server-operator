@@ -469,23 +469,33 @@ func TestPlayerRowHasFlagSlotAndInfoButton(t *testing.T) {
 	}
 }
 
-func TestPlayerInfoListsWhereThePlayerConnectedFrom(t *testing.T) {
-	e := newEnv(t, api.RoleAdmin)
+func TestPlayerInfoShowsTheSteamIDAndOnlyTheCurrentAddress(t *testing.T) {
+	e := newEnv(t, api.RoleOperator)
 	guid, _ := moderation.DeriveGUID(webSteam)
 	st := e.api.Moderation.(webMod).st
-	if err := st.Seen(context.Background(), "alpha", guid, "192.0.2.7", "Alice <i>", time.Now()); err != nil {
-		t.Fatal(err)
+	for i, ip := range []string{"192.0.2.7", "198.51.100.1"} {
+		if err := st.Seen(context.Background(), "alpha", guid, ip, "Alice <i>", time.Now().Add(time.Duration(i)*time.Hour)); err != nil {
+			t.Fatal(err)
+		}
 	}
+	e.hub.Sync(admin.SyncRequest{Proto: 1, Players: []admin.Player{{SteamID: webSteam, Name: "Alice <i>", Alive: true}}})
 	_, body, _ := e.get("/b/main/i/alpha/players/" + webSteam + "/info")
-	if !strings.Contains(body, "192.0.2.7") || !strings.Contains(body, "Alice &lt;i&gt;") || strings.Contains(body, "<i>") {
+	if !strings.Contains(body, webSteam) || !strings.Contains(body, "198.51.100.1") || strings.Contains(body, "192.0.2.7") || strings.Contains(body, "<i>") {
 		t.Fatalf("info: %s", body)
-	}
-	_, body, _ = e.get("/b/main/i/alpha/players/76561198000000099/info")
-	if !strings.Contains(body, "No connections recorded") {
-		t.Fatalf("unknown player: %s", body)
 	}
 	if code, _, _ := e.get("/b/nope/i/alpha/players/" + webSteam + "/info"); code != 404 {
 		t.Fatalf("unknown backend: %d", code)
+	}
+}
+
+func TestPlayerInfoWithoutThePlayerIPPermissionHasNoAddress(t *testing.T) {
+	e := newEnv(t, api.RoleModerator)
+	guid, _ := moderation.DeriveGUID(webSteam)
+	_ = e.api.Moderation.(webMod).st.Seen(context.Background(), "alpha", guid, "192.0.2.7", "alice", time.Now())
+	e.hub.Sync(admin.SyncRequest{Proto: 1, Players: []admin.Player{{SteamID: webSteam, Name: "alice", Alive: true}}})
+	_, body, _ := e.get("/b/main/i/alpha/players/" + webSteam + "/info")
+	if strings.Contains(body, "192.0.2.7") || !strings.Contains(body, webSteam) {
+		t.Fatalf("info: %s", body)
 	}
 }
 

@@ -37,6 +37,20 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 - **Permissions**: `player.kick` (moderator and up), `player.kill`, `player.heal`, `player.fixgear`
   (operator and up). Kick and kill are audited like every action.
 
+## IP addresses and GDPR
+
+- The popup over a player's name shows the Steam ID, the ping and, with `player.ip`, the current address.
+  It never shows the history.
+- `player.ip` (operator, admin): the address of the current connection, and later the data derived from
+  it (ISP, country), since support and abuse handling need it.
+- `ip.history` (admin only): the history of addresses, and any address stored in a ban, its history or
+  evidence. `ban.ip` still decides who may ban an address.
+- Matching by address needs no display: ban forms and the API use opaque references (`ref`, `ip_refs`);
+  the list shows "shared with N other players". Addresses stay out of the audit log. The references are
+  what lets the store keep hashes instead of addresses later.
+- Not done yet, proposed: retention. Sightings older than 90 days are deleted by the minute sweep, with the
+  period configurable; ban targets stay as long as the ban does. Access to the history should be audited.
+
 ## Look
 
 The existing language stays: survey paper, wet asphalt, Barlow Condensed for names and headings, flare red only

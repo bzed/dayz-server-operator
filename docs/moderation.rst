@@ -41,6 +41,37 @@ dzo never bans an IP address by itself. Mobile networks put many players behind 
 is a blunt tool. The ban form lists the addresses a player was seen with, and warns when other players
 were seen with the same address ("shared with N other players"). Add an IP only when you have a reason.
 
+IP addresses and privacy
+------------------------
+
+An IP address is personal data. dzo keeps what it needs to ban and to support players, and shows an address
+only to those who need it:
+
+.. list-table::
+   :header-rows: 1
+
+   * - Data
+     - Permission
+     - Roles
+   * - The address a player is connected from now (the player's info popup, ``GET
+       /instances/{instance}/players/{steamid}/connection``)
+     - ``player.ip``
+     - operator, admin
+   * - The history of addresses a player was seen with, and any address stored in a ban, in its history
+       or in evidence
+     - ``ip.history``
+     - admin
+   * - Banning an address
+     - ``ban.ip``
+     - operator, admin
+
+Players are still matched by address without showing it: the ban form lists the addresses a player was
+seen with as "Address (name on instance, last seen), shared with N other players", and ticking one bans it.
+The API gives each such address an opaque reference (``ref``, and ``ip_refs`` when a ban is made or edited)
+instead of the address, and a reference only works for the player being banned or the ban being edited. Without
+``ip.history`` a ban shows "address hidden", and editing it keeps its addresses. Addresses are never written to
+the audit log. They may be stored hashed in the future; the references keep that possible.
+
 How bans are enforced
 ---------------------
 
