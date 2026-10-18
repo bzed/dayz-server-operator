@@ -6,6 +6,16 @@ dayz-server-operator (0.1.0-1) UNRELEASED; urgency=medium
     still in progress); see IMPLEMENTATION_PLAN.md.
   * Player bans with evidence (dzo ban, dzo evidence, web UI, API);
     new dependency modernc.org/sqlite (pure Go, statically linked).
+  * Player actions: kick with a reason (BattlEye), heal, fix gear and kill
+    (dzo-admin 0.2.0, which changes the packaged PBO), in the API, the CLI
+    and the web player panel. New permissions player.kick, player.kill,
+    player.heal, player.fixgear.
+  * IP addresses are personal data: player.ip (operator) shows the current
+    address, ip.history (admin) the stored ones; bans and evidence carry
+    opaque references instead. New config keys serve.ip_retention_days
+    (default 90) and serve.vacuum_days (default 7); the ban database
+    schema gains migration 0002.
+  * servermods.lock pins the servermod commits and PBO hashes; CI checks it.
   * The web interface ships a helicopter icon (Font Awesome Free 6.7.2,
     CC BY 4.0) that fonts-fork-awesome lacks; debian/copyright lists it.
 
