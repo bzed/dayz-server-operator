@@ -26,3 +26,7 @@ Captured with `scripts/test-client.sh --bans --no-client --keep` (BattlEye on, R
   (`bans-after-expiry.out`), and `writeBans` drops it (`bans.txt.after-expiry`).
 - **Q8 addBan writes the file.** The file already holds the new bans right after `addBan`, without
   `writeBans` (`bans-file-after-add.txt`).
+- **Q9 Refused join.** A banned player is kicked at the join with the BattlEye dialog "You were kicked off
+  the game. BattlEye (Admin Ban (<reason>))", where `<reason>` is the (64 character) message of the
+  `bans.txt` line. A revoke lets the player join again without a restart, and an IPv4 ban refuses the
+  address the same way (V3a, V3c, V3d of `scripts/test-client.sh --bans`).
