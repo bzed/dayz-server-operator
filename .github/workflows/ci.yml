@@ -173,6 +173,13 @@ jobs:
           # Running as root here (the container's default user) is why
           # there's no `sudo` in either apt-get invocation in this job.
           apt-get install -y --no-install-recommends build-essential debhelper lintian python3-sphinx dh-sequence-sphinxdoc
+      - name: Snapshot version
+        # <latest release>+git<commits>.<sha>: newer than the release, older than the next one.
+        # A no-op at the commit of a release tag, so the release package has the changelog's version.
+        # The Docs workflow publishes this very package in the apt repository.
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          scripts/debian-snapshot.sh
       - name: dpkg-buildpackage
         run: dpkg-buildpackage -us -uc -b
       - name: lintian

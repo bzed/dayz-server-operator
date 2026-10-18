@@ -42,14 +42,14 @@ Modules are vendored, so builds work offline.
 The apt repository
 ~~~~~~~~~~~~~~~~~~
 
-The ``Docs`` workflow (``.github/workflows/docs.yml``) builds the package in a
-trixie container, runs ``scripts/build-apt-repo.sh`` (reprepro, configured in
+The ``Docs`` workflow (``.github/workflows/docs.yml``) starts when CI has passed
+on ``main``, takes the package the ``deb`` job of that CI run built (the
+``dzo-deb`` artifact), runs ``scripts/build-apt-repo.sh`` (reprepro, configured in
 ``apt/conf/distributions``) and publishes the result under ``/apt/`` next to the
 documentation. The repository holds the latest build of ``main`` only.
 
 Versions: the top entry of ``debian/changelog`` is always the latest release; the
-upcoming one is added when it is cut. For a build of ``main``,
-``scripts/debian-snapshot.sh`` adds a changelog entry
+upcoming one is added when it is cut. In CI, ``scripts/debian-snapshot.sh`` adds a changelog entry
 ``<version at the top of debian/changelog>+git<commits since the last tag>.<sha>``
 before the build. ``+`` sorts after that release
 and before the next one (``0.1.0-1+git5.abc`` is older than ``0.1.0-2`` and
