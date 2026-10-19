@@ -324,6 +324,29 @@ func newVehicleCmd() *cobra.Command {
 	return cmd
 }
 
+// newFlagCmd is `dzo flag`: actions on the territory flags of the map.
+func newFlagCmd() *cobra.Command {
+	var t apiTarget
+	cmd := &cobra.Command{Use: "flag", Short: "Territory flags through dzo-admin (needs `dzo serve`)"}
+	t.flags(cmd)
+	raise := &cobra.Command{
+		Use: "raise <instance> <id>", Short: "Raise a territory flag to the top of its pole and fill its timer (the id is the marker id on the Flags layer)", Args: cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			c, err := t.client()
+			if err != nil {
+				return err
+			}
+			r, err := c.RaiseFlag(ctxOf(cmd), args[0], args[1])
+			if err != nil {
+				return err
+			}
+			return printResult(cmd, r)
+		},
+	}
+	cmd.AddCommand(raise)
+	return cmd
+}
+
 // vehicleNote is the owner and cover state a DayZ Expansion server adds to a vehicle line.
 func vehicleNote(v admin.Vehicle) string {
 	s := ""

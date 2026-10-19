@@ -21,7 +21,8 @@ admin actions:
 * heal a player (every damage zone, blood, shock, broken bones, bleeding, diseases, stamina and
   unconsciousness; food and water stay as they are), repair everything a player carries and wears, or kill them,
 * spawn items into a player's inventory, hands or on the ground, and items and vehicles at a point of the map,
-* repair vehicles (including refuelling and fitting missing parts), flip them upright, or delete them.
+* repair vehicles (including refuelling and fitting missing parts), flip them upright, or delete them,
+* raise a territory flag (fills its timer).
 
 The mod connects *out* to dzo: about once a second it posts what changed and the
 results of finished actions to ``dzo serve``, and gets the next actions in the
@@ -258,6 +259,11 @@ With DayZ Expansion loaded, a flag that is an Expansion territory also gets a th
 territory's size (``TerritorySize`` of the Expansion territory settings) on the **Territories**
 layer; hovering over the circle shows the name of the territory, and the flag's tooltip names it
 too. Without Expansion there is no Territories layer.
+
+Operators (and admins) can right-click a flag and choose **Raise flag (fills the timer)**: the flag
+goes to the top of its pole and its timer is filled to the full 40 days, as if a player had raised a new flag
+(``dzo flag raise``, ``POST /instances/<i>/flags/<id>/raise`` in the API, permission ``flag.raise``).
+The flag's id is the id of its marker; it is stable over restarts of the server.
 
 Both layers are visible to the roles ``operator`` and ``admin`` only, since they show where the
 bases are; they appear in ``/map/markers`` and ``/layers`` of the API for those roles and carry

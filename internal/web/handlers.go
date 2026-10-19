@@ -475,6 +475,10 @@ func actFlip(r *http.Request, c *apiclient.Client, inst string) (api.ActionResul
 	return c.Flip(r.Context(), inst, r.PathValue("id"))
 }
 
+func actRaise(r *http.Request, c *apiclient.Client, inst string) (api.ActionResult, error) {
+	return c.RaiseFlag(r.Context(), inst, r.PathValue("id"))
+}
+
 func actDelete(r *http.Request, c *apiclient.Client, inst string) (api.ActionResult, error) {
 	return c.DeleteVehicle(r.Context(), inst, r.PathValue("id"), r.PostFormValue("force") == "1")
 }

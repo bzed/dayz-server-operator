@@ -38,6 +38,8 @@ dayz-server-operator (0.1.0-1) UNRELEASED; urgency=medium
     announcer role when an instance runs dzo-admin).
   * Map: territory flags (flag icon, time until the flag goes down) and,
     with DayZ Expansion, territory circles with the territory name, for
-    operators; dzo-admin 0.4.0 (the packaged PBO changes).
+    operators; dzo-admin 0.4.0 (the packaged PBO changes). Operators can
+    raise a flag from the map (new permission flag.raise, dzo flag raise,
+    POST /instances/<i>/flags/<id>/raise).
 
  -- Bernd Zeimetz <bernd@bzed.de>  Sat, 26 Sep 2026 15:00:00 +0000

@@ -73,6 +73,7 @@ func newRootCmd() *cobra.Command {
 		newTokenCmd(),
 		newPlayerCmd(), newBanCmd(), newEvidenceCmd(),
 		newVehicleCmd(),
+		newFlagCmd(),
 		newServermodsCmd(),
 		newMapCmd(),
 		newSetupCmd(),

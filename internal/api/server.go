@@ -151,6 +151,7 @@ func (s *Server) Handler() http.Handler {
 	route("POST "+base+"/instances/{instance}/spawn-vehicle", PermSpawn, true, s.spawnVehicle)
 	route("POST "+base+"/instances/{instance}/vehicles/{id}/repair", PermRepair, true, s.repair)
 	route("POST "+base+"/instances/{instance}/vehicles/{id}/flip", PermRepair, true, s.flip)
+	route("POST "+base+"/instances/{instance}/flags/{id}/raise", PermRaise, true, s.raiseFlag)
 	route("DELETE "+base+"/instances/{instance}/vehicles/{id}", PermDelete, true, s.deleteVehicle)
 	route("GET "+base+"/bans", PermBanView, false, s.listBans)
 	route("POST "+base+"/bans", PermBanInstance, false, s.createBan)
@@ -602,6 +603,12 @@ func (s *Server) repair(w http.ResponseWriter, r *http.Request, c *call) {
 func (s *Server) flip(w http.ResponseWriter, r *http.Request, c *call) {
 	cmd := admin.Command{Kind: admin.KindVehicleFlip, Vehicle: r.PathValue("id")}
 	s.run(w, r, c, cmd, "vehicle_flip", cmd.Vehicle)
+}
+
+// raiseFlag raises a territory flag to the top of its pole and fills its refresher time.
+func (s *Server) raiseFlag(w http.ResponseWriter, r *http.Request, c *call) {
+	cmd := admin.Command{Kind: admin.KindFlagRaise, Flag: r.PathValue("id")}
+	s.run(w, r, c, cmd, "flag_raise", cmd.Flag)
 }
 
 func (s *Server) deleteVehicle(w http.ResponseWriter, r *http.Request, c *call) {

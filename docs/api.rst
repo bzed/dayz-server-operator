@@ -138,6 +138,9 @@ Acting
    * - ``POST /instances/<i>/vehicles/<id>/flip``
      - ``operator``
      - stand the vehicle upright on its wheels
+   * - ``POST /instances/<i>/flags/<id>/raise``
+     - ``operator``
+     - raise a territory flag to the top of its pole and fill its timer (the 40 days a freshly raised flag has); ``<id>`` is the id of its marker on the ``Flags`` layer
    * - ``DELETE /instances/<i>/vehicles/<id>[?force=1]``
      - ``operator``
      - delete a vehicle (``force``: even with crew inside)

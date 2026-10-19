@@ -157,6 +157,7 @@ func TestPlayerAndVehicleCommands(t *testing.T) {
 		{"player", "give", "alpha", "7656", "AKM", "--qty", "1", "--target", "hands"},
 		{"vehicle", "repair", "alpha", "v1", "--scope", "wheels"},
 		{"vehicle", "flip", "alpha", "v1"},
+		{"flag", "raise", "alpha", "f1"},
 		{"vehicle", "delete", "alpha", "v1", "--force"},
 	} {
 		if out, err := run(args...); err != nil || !strings.Contains(out, "ok") {

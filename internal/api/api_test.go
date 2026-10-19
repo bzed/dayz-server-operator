@@ -202,6 +202,7 @@ func TestActions(t *testing.T) {
 		{"POST", "/api/v1/instances/alpha/vehicles/v1/repair", `{"scope":"wheels"}`},
 		{"POST", "/api/v1/instances/alpha/vehicles/v1/repair", ``},
 		{"POST", "/api/v1/instances/alpha/vehicles/v1/flip", ``},
+		{"POST", "/api/v1/instances/alpha/flags/f1/raise", ``},
 		{"POST", "/api/v1/instances/alpha/players/7656/heal", ``},
 		{"POST", "/api/v1/instances/alpha/players/7656/fixgear", ``},
 		{"POST", "/api/v1/instances/alpha/players/7656/kill", ``},
@@ -475,5 +476,17 @@ func TestFlagMarkersAreOperatorOnly(t *testing.T) {
 		if got := count(role, "layers"); got != want {
 			t.Errorf("%s: %d layers, want %d", role, got, want)
 		}
+	}
+}
+
+// Raising a flag needs the flag.raise permission: moderators have it not, operators do.
+func TestRaiseFlagNeedsOperator(t *testing.T) {
+	e := newEnv(t)
+	defer e.modAnswers("")()
+	if c, _ := e.do("POST", "/api/v1/instances/alpha/flags/f1/raise", e.token(RoleModerator, nil, false), ""); c != 403 {
+		t.Fatalf("moderator: %d", c)
+	}
+	if c, b := e.do("POST", "/api/v1/instances/alpha/flags/f1/raise", e.token(RoleOperator, nil, false), ""); c != 200 {
+		t.Fatalf("operator: %d %s", c, b)
 	}
 }

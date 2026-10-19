@@ -182,6 +182,7 @@ const (
 	KindVehicleRepair = "vehicle_repair"
 	KindVehicleFlip   = "vehicle_flip"
 	KindVehicleDelete = "vehicle_delete"
+	KindFlagRaise     = "flag_raise"
 )
 
 // Command is one action for the mod. All fields are always serialised (the
@@ -210,8 +211,10 @@ type Command struct {
 	Z           float64 `json:"z"`
 	HasY        bool    `json:"has_y"`
 	Vehicle     string  `json:"vehicle"`
-	Scope       string  `json:"scope"`
-	Force       bool    `json:"force"`
+	// Flag is the id of the territory flag (the id of its marker on the Flags layer) of flag_raise.
+	Flag  string `json:"flag,omitempty"`
+	Scope string `json:"scope"`
+	Force bool   `json:"force"`
 }
 
 // Result is the mod's answer to a Command.

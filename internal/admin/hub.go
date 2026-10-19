@@ -589,6 +589,8 @@ func (h *Hub) validate(c *Command) error {
 		}
 	case KindVehicleFlip, KindVehicleDelete:
 		return need("vehicle", c.Vehicle)
+	case KindFlagRaise:
+		return need("flag", c.Flag)
 	default:
 		return fmt.Errorf("admin: unknown command kind %q", c.Kind)
 	}

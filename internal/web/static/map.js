@@ -769,7 +769,15 @@
       var title = m.label || m.id;
       bindTip(shape, title, lines);
       // A territory is big and often under other things: it has the tooltip, and a click on it goes to the map.
-      if (m.source !== 'territory') { onMenu(shape, function () { return plainSpec(title, lines.concat(posText(m)), m, m.shape === 'circle' ? m.radius : 0); }); }
+      if (m.source !== 'territory') {
+        onMenu(shape, function () {
+          var spec = plainSpec(title, lines.concat(posText(m)), m, m.shape === 'circle' ? m.radius : 0);
+          if (m.source === 'flags') {
+            spec.items.unshift({ label: 'Raise flag (fills the timer)', min: 'operator', run: function () { act('/flags/' + encodeURIComponent(m.id) + '/raise', {}); } }, '-');
+          }
+          return spec;
+        });
+      }
       shape.addTo(group);
     });
   }

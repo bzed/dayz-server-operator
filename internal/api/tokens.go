@@ -44,6 +44,7 @@ const (
 	PermSpawn     = "player.spawn_item"
 	PermRepair    = "vehicle.repair"
 	PermDelete    = "vehicle.delete"
+	PermRaise     = "flag.raise"
 	PermAuditView = "audit.view"
 
 	PermBanView      = "ban.view"
@@ -71,8 +72,8 @@ var rolePerms = map[Role][]string{
 	RoleViewer:    {PermView},
 	RoleAnnouncer: {PermView, PermBroadcast},
 	RoleModerator: {PermView, PermMessage, PermKick, PermBanView, PermBanInstance, PermEvidenceAdd},
-	RoleOperator:  {PermView, PermMessage, PermKick, PermKill, PermHeal, PermFixGear, PermBroadcast, PermTeleport, PermSpawn, PermRepair, PermDelete, PermBanView, PermBanInstance, PermBanLong, PermBanIP, PermEvidenceAdd, PermPlayerIP},
-	RoleAdmin: {PermView, PermMessage, PermKick, PermKill, PermHeal, PermFixGear, PermBroadcast, PermTeleport, PermSpawn, PermRepair, PermDelete, PermAuditView,
+	RoleOperator:  {PermView, PermMessage, PermKick, PermKill, PermHeal, PermFixGear, PermBroadcast, PermTeleport, PermSpawn, PermRepair, PermDelete, PermRaise, PermBanView, PermBanInstance, PermBanLong, PermBanIP, PermEvidenceAdd, PermPlayerIP},
+	RoleAdmin: {PermView, PermMessage, PermKick, PermKill, PermHeal, PermFixGear, PermBroadcast, PermTeleport, PermSpawn, PermRepair, PermDelete, PermRaise, PermAuditView,
 		PermBanView, PermBanInstance, PermBanLong, PermBanIP, PermBanGlobal, PermBanRevokeAny, PermEvidenceAdd, PermPlayerIP, PermIPHistory},
 }
 

@@ -234,6 +234,11 @@ func (c *Client) Flip(ctx context.Context, name, vehicle string) (api.ActionResu
 	return c.action(ctx, http.MethodPost, inst(name)+"/vehicles/"+url.PathEscape(vehicle)+"/flip", nil)
 }
 
+// RaiseFlag raises a territory flag and fills its refresher time.
+func (c *Client) RaiseFlag(ctx context.Context, name, flag string) (api.ActionResult, error) {
+	return c.action(ctx, http.MethodPost, inst(name)+"/flags/"+url.PathEscape(flag)+"/raise", nil)
+}
+
 // DeleteVehicle deletes a vehicle; force also removes it with crew inside.
 func (c *Client) DeleteVehicle(ctx context.Context, name, vehicle string, force bool) (api.ActionResult, error) {
 	path := inst(name) + "/vehicles/" + url.PathEscape(vehicle)

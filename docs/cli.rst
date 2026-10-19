@@ -242,6 +242,8 @@ installation (default: the local ``serve.listen``). They need the
      - stand a vehicle upright on its wheels
    * - ``dzo vehicle delete <instance> <id> [--force]``
      - delete a vehicle (``--force``: even with players inside)
+   * - ``dzo flag raise <instance> <id>``
+     - raise a territory flag and fill its timer; the id is the id of its marker on the ``Flags`` layer (``/map/markers``)
 
 Bans and evidence
 -----------------

@@ -239,7 +239,7 @@ func TestMapAndAudit(t *testing.T) {
 		t.Fatalf("map.js: %d", c)
 	}
 	// Flags show the time they have left, Expansion territories are drawn thin.
-	for _, want := range []string{"function ttlText", "goes down in", "goes down now", "m.source === 'territory'"} {
+	for _, want := range []string{"function ttlText", "Raise flag", "/raise", "goes down in", "goes down now", "m.source === 'territory'"} {
 		if _, js, _ := e.get("/static/map.js"); !strings.Contains(js, want) {
 			t.Errorf("map.js lacks %q", want)
 		}
@@ -298,6 +298,7 @@ func TestActions(t *testing.T) {
 		"/b/main/i/alpha/spawn-vehicle":           {"type": {"AKM"}, "x": {"10"}, "z": {"20"}},
 		"/b/main/i/alpha/vehicles/1.2.3.4/repair": {"scope": {"missing"}},
 		"/b/main/i/alpha/vehicles/1.2.3.4/flip":   {},
+		"/b/main/i/alpha/flags/f1.2/raise":        {},
 		"/b/main/i/alpha/vehicles/1.2.3.4/delete": {"force": {"1"}},
 	} {
 		code, body := e.post(path, form, map[string]string{"X-Forwarded-User": "alice@example.invalid"})
