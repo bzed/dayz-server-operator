@@ -151,22 +151,23 @@ jobs:
         suite: [trixie, forky]
     container:
       image: debian:${{ matrix.suite }}
-      # Docker's default seccomp profile blocks the user namespaces Chromium's sandbox needs.
-      options: --security-opt seccomp=unconfined
+      # Docker's default seccomp profile and the runner's AppArmor policy block the user namespaces Chromium's sandbox needs.
+      options: --security-opt seccomp=unconfined --security-opt apparmor=unconfined
     steps:
       - name: Install the browser and the JavaScript assets
         run: |
           apt-get update
-          apt-get install -y --no-install-recommends git ca-certificates make chromium libjs-htmx libjs-leaflet fonts-fork-awesome
+          apt-get install -y --no-install-recommends git ca-certificates make gcc libc6-dev chromium libjs-htmx libjs-leaflet fonts-fork-awesome
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
-      - name: make e2e (as an unprivileged user: Chromium refuses to sandbox as root)
+      - name: make e2e (as an unprivileged user, Chromium refuses to sandbox as root)
         run: |
           useradd -m tester
-          chown -R tester "$GITHUB_WORKSPACE" "$RUNNER_TOOL_CACHE" "$RUNNER_TEMP" 2>/dev/null || true
-          runuser -u tester -- env PATH="$PATH" HOME=/home/tester GOFLAGS=-buildvcs=false make e2e
+          chown -R tester "$GITHUB_WORKSPACE"
+          runuser -u tester -- env PATH="$PATH" HOME=/home/tester GOFLAGS=-buildvcs=false \
+            GOCACHE=/home/tester/.cache/go-build GOMODCACHE=/home/tester/go/pkg/mod make e2e
 
   build:
     name: Build binaries
