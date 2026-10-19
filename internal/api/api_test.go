@@ -362,7 +362,7 @@ func TestQuantityOf(t *testing.T) {
 		want float64
 	}{{nil, admin.QuantityDefault}, {&zero, 0}, {&five, 5}} {
 		got := quantityOf(tc.in)
-		assert.Equal(t, tc.want, got)
+		assert.InDelta(t, tc.want, got, 1e-9)
 	}
 }
 
@@ -389,11 +389,11 @@ func TestMessageRConStyleUsesSay(t *testing.T) {
 	}
 	op := e.token(RoleOperator, nil, false)
 	// no mod connected: rcon does not need it
-	c, b := e.do("POST", "/api/v1/instances/alpha/message", op, `{"text":"hello","style":"rcon"}`)
+	c, _ := e.do("POST", "/api/v1/instances/alpha/message", op, `{"text":"hello","style":"rcon"}`)
 	require.Equal(t, 200, c)
 	require.Len(t, got, 1)
 	require.Equal(t, "alpha||hello", got[0])
-	_, b = e.do("GET", "/api/v1/audit?instance=alpha", e.token(RoleAdmin, nil, false), "")
+	_, b := e.do("GET", "/api/v1/audit?instance=alpha", e.token(RoleAdmin, nil, false), "")
 	assert.Contains(t, string(b), `"target":"all"`)
 	e.srv.Say = func(context.Context, string, string, string) error { return errors.New("boom") }
 	c, _ = e.do("POST", "/api/v1/instances/alpha/message", op, `{"text":"hello","style":"rcon"}`)

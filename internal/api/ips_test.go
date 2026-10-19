@@ -140,10 +140,10 @@ func TestKickNeedsThePermissionAndAShortReason(t *testing.T) {
 	path := "/api/v1/instances/alpha/players/" + steamA + "/kick"
 	code, _ := e.do("POST", path, e.token(RoleViewer, nil, false), `{"reason":"afk"}`)
 	require.Equal(t, 403, code)
-	code, b := e.do("POST", path, e.token(RoleModerator, nil, false), strings.Repeat("x", 0)+`{"reason":""}`)
+	code, _ = e.do("POST", path, e.token(RoleModerator, nil, false), strings.Repeat("x", 0)+`{"reason":""}`)
 	require.Equal(t, 400, code)
 	long := `{"reason":"` + strings.Repeat("r", moderation.MaxMessage+1) + `"}`
-	code, b = e.do("POST", path, e.token(RoleModerator, nil, false), long)
+	code, b := e.do("POST", path, e.token(RoleModerator, nil, false), long)
 	require.Equal(t, 400, code, "long reason: %d %s", code, b)
 	require.Contains(t, string(b), "64", "long reason: %d %s", code, b)
 	code, b = e.do("POST", path, e.token(RoleModerator, nil, true), `{"reason":"afk"}`, "X-Dzo-Actor", "alice")

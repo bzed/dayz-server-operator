@@ -27,6 +27,6 @@ func TestGenMan(t *testing.T) {
 	assert.Contains(t, string(top), ".SH COMMANDS", "dzo.1 does not list the commands")
 	assert.Contains(t, string(top), "dzo\\-start(1)", "dzo.1 does not list the commands")
 	_, err = os.Stat(filepath.Join(dir, "dzo-gen-man.1"))
-	assert.Error(t, err, "the hidden command has no man page")
+	require.Error(t, err, "the hidden command has no man page")
 	assert.Equal(t, "\\&.dot\n\\&'quote\na\\-b\\ec", roff(".dot\n'quote\na-b\\c"), "roff")
 }

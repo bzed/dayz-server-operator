@@ -36,6 +36,7 @@ func rels(as []Action) string {
 }
 
 func profile(t testing.TB) string {
+	t.Helper()
 	root := t.TempDir()
 	put(t, root, "DayZServer_x64_1.RPT", "old", 5*time.Hour)
 	put(t, root, "DayZServer_x64_2.RPT", "new", 1*time.Hour)

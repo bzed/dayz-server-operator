@@ -74,13 +74,13 @@ func TestCompatRefusesADifferentBuild(t *testing.T) {
 	err := os.WriteFile(pbo, append(b, 0), 0o600)
 	require.NoError(t, err)
 	err = CheckShipped(mod)
-	assert.ErrorContains(t, err, "demo.pbo has sha256")
+	require.ErrorContains(t, err, "demo.pbo has sha256")
 	err = os.WriteFile(pbo, b, 0o600)
 	require.NoError(t, err)
 	err = os.WriteFile(filepath.Join(mod, "addons", "extra.pbo"), []byte("x"), 0o600)
 	require.NoError(t, err)
 	err = CheckShipped(mod)
-	assert.ErrorContains(t, err, "extra.pbo is not part of the tested set")
+	require.ErrorContains(t, err, "extra.pbo is not part of the tested set")
 	_ = os.Remove(filepath.Join(mod, "addons", "extra.pbo"))
 	_ = os.Remove(pbo)
 	err = CheckShipped(mod)
@@ -90,13 +90,13 @@ func TestCompatRefusesADifferentBuild(t *testing.T) {
 func TestCheckShippedLeavesOtherModsAlone(t *testing.T) {
 	// no compat.yaml next to the mod
 	err := CheckShipped(filepath.Join(t.TempDir(), "mine"))
-	assert.NoError(t, err, "a mod without compat.yaml must pass")
+	require.NoError(t, err, "a mod without compat.yaml must pass")
 	// a compat.yaml that does not list it
 	root, _ := gitFixture(t)
 	out := filepath.Join(t.TempDir(), "dist")
 	buildCompat(t, root, out)
 	err = CheckShipped(filepath.Join(out, "somebody-elses"))
-	assert.NoError(t, err, "an unlisted mod must pass")
+	require.NoError(t, err, "an unlisted mod must pass")
 	// a compat.yaml that is broken must not be ignored silently
 	err = os.WriteFile(filepath.Join(out, CompatFile), []byte("servermods: [\n"), 0o600)
 	require.NoError(t, err)

@@ -43,7 +43,7 @@ func writeHook(t testing.TB, dir, name, body string) {
 func TestHookScriptsKnowsEveryPoint(t *testing.T) {
 	for _, p := range []string{hookPreStart, hookPostStop, hookPreUpdate, hookPostUpdate, hookPostDownload, hookPostMerge, hookPostRender, "post_backup"} {
 		_, err := hookScripts(siteHooks(), p)
-		assert.NoError(t, err, p)
+		require.NoError(t, err, p)
 	}
 	_, err := hookScripts(siteHooks(), "nope")
 	assert.Error(t, err, "an unknown hook point must be an error")
@@ -65,7 +65,7 @@ func TestInstanceHookRunsWithTheContract(t *testing.T) {
 
 	// post_stop cannot abort anything: a failing script is reported, not an error.
 	out, err := runCmd(t, "instance", "hook", "x", "post_stop", "--config", cfg)
-	assert.NoError(t, err, "post_stop failure: %q", out)
+	require.NoError(t, err, "post_stop failure: %q", out)
 	assert.Contains(t, out, "fail.sh", "post_stop failure")
 	_, err = runCmd(t, "instance", "hook", "x", "bogus", "--config", cfg)
 	assert.Error(t, err, "an unknown point must fail")

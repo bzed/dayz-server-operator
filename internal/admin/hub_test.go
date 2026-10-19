@@ -185,7 +185,7 @@ func TestValidate(t *testing.T) {
 	}
 	for _, tc := range cases {
 		_, err := h.Enqueue(tc.cmd)
-		assert.ErrorContains(t, err, tc.want)
+		require.ErrorContains(t, err, tc.want)
 	}
 	for _, ok := range []Command{
 		{Kind: KindSpawnItem, SteamID: "1", Type: "AKM"},
@@ -439,7 +439,7 @@ func TestMessageTitleAndSecondsLimits(t *testing.T) {
 		"negative": {Kind: KindMessage, Style: "notification", Text: "x", Seconds: -1},
 	} {
 		_, err := h.Enqueue(c)
-		assert.Error(t, err, "%s: accepted", name)
+		require.Error(t, err, "%s: accepted", name)
 	}
 	got := queued(t, h, Command{Kind: KindMessage, Style: "notification", Text: "x"})
 	require.Equal(t, "Server", got.Title)
@@ -485,7 +485,7 @@ func TestHubKeepsFlagMarkers(t *testing.T) {
 	require.Equal(t, "operator", f[0].Visibility)
 	tr := h.Markers("Territories")
 	require.Len(t, tr, 1)
-	require.Equal(t, float64(150), tr[0].Radius)
+	assert.InDelta(t, 150, tr[0].Radius, 1e-9)
 	require.Equal(t, "Camp", tr[0].Label)
 	require.Equal(t, "territory", tr[0].Source)
 	require.Equal(t, "operator", tr[0].Visibility)

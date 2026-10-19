@@ -190,6 +190,12 @@ Tests use `testify <https://github.com/stretchr/testify>`_.
 * Helpers start with ``t.Helper()``.
 * No ``time.Sleep``: wait with ``require.Eventually``, a channel or a fake
   clock.
+* The linters in ``.golangci.yml`` enforce this for test files: ``testifylint``
+  (all checks), ``thelper``, ``usetesting`` and ``forbidigo`` (``time.Sleep``,
+  ``t.Fatal*``, ``t.Error*``).
+* ``make test`` and ``make test-race`` run with ``-shuffle=on``. A failure
+  prints the seed; reproduce it with ``go test -shuffle=<seed> ./pkg/``, then
+  fix the order dependency in the test.
 * Goroutine leaks, fuzzing and the browser tests are described below.
 
 Boot test with a real server

@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -29,7 +28,7 @@ func TestLogsRotateArchiveAndCrashSummary(t *testing.T) {
 	_, err = os.Stat(filepath.Join(prof, "script_1.log"))
 	require.NoError(t, err, "a dry run moved a file")
 	_, err = runCmd(t, "logs", "rotate", "--config", cfg)
-	assert.Error(t, err, "rotate needs a name or --all")
+	require.Error(t, err, "rotate needs a name or --all")
 	out, err = runCmd(t, "logs", "rotate", "--all", "--config", cfg)
 	require.NoError(t, err, "rotate: %s", out)
 	require.Contains(t, out, "archived 1 log file", "rotate")
@@ -37,9 +36,9 @@ func TestLogsRotateArchiveAndCrashSummary(t *testing.T) {
 	require.NoError(t, err, "archive: %s", out)
 	require.Contains(t, out, "script_1.log.gz", "archive")
 	_, err = runCmd(t, "logs", "archive", "x", "--since", "xx", "--config", cfg)
-	assert.Error(t, err, "a bad --since must fail")
+	require.Error(t, err, "a bad --since must fail")
 	_, err = runCmd(t, "logs", "archive", "x", "--match", "(", "--config", cfg)
-	assert.Error(t, err, "a bad --match must fail")
+	require.Error(t, err, "a bad --match must fail")
 
 	t.Setenv("SERVICE_RESULT", "success")
 	out, err = runCmd(t, "logs", "crash-summary", "x", "--config", cfg)

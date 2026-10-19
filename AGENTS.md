@@ -40,6 +40,8 @@ Also, when the change touches them:
   without it.
 - Test through the public API of a package. Keep tests deterministic: no
   `time.Sleep` to wait for something, use `require.Eventually` or a fake clock.
+- The test conventions are in `docs/development.rst` (Tests) and enforced by
+  the linters in `.golangci.yml`.
 - Tests write only under `t.TempDir()`. They never touch `$HOME`, the real
   `/srv`, or a running service.
 

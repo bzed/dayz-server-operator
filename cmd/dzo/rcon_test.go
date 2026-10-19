@@ -107,7 +107,7 @@ func TestRconExecNeedsATarget(t *testing.T) {
 func TestRconExecUnknownInstance(t *testing.T) {
 	cfg := exporterSite(t, "")
 	_, err := runCmd(t, "rcon", "exec", "--instance", "nope", "--config", cfg, "players")
-	assert.Error(t, err, "an instance that is not in the site must be an error")
+	require.Error(t, err, "an instance that is not in the site must be an error")
 	_, err = runCmd(t, "instance", "shutdown", "nope", "--config", cfg)
 	assert.Error(t, err, "dzo instance shutdown of an unknown instance must be an error")
 }

@@ -4,7 +4,6 @@
 package steam
 
 import (
-	"errors"
 	"testing"
 	"time"
 
@@ -14,13 +13,13 @@ import (
 func TestNonInteractivePrompterRefusesPassword(t *testing.T) {
 	var p NonInteractivePrompter
 	_, err := p.Password(t.Context(), "bob")
-	assert.True(t, errors.Is(err, ErrAuthRequired), "err = %v, want ErrAuthRequired", err)
+	assert.ErrorIs(t, err, ErrAuthRequired, "err = %v, want ErrAuthRequired", err)
 }
 
 func TestNonInteractivePrompterRefusesCode(t *testing.T) {
 	var p NonInteractivePrompter
 	_, err := p.Code(t.Context(), PromptGuardCode)
-	assert.True(t, errors.Is(err, ErrAuthRequired), "err = %v, want ErrAuthRequired", err)
+	assert.ErrorIs(t, err, ErrAuthRequired, "err = %v, want ErrAuthRequired", err)
 }
 
 func TestNonInteractivePrompterWaitingIsNoop(t *testing.T) {
@@ -39,5 +38,5 @@ echo "Waiting for user info...OK"
 	defer func() { killGraceDelay = orig }()
 
 	_, err := Run(t.Context(), runOpts(t, script, NonInteractivePrompter{}))
-	assert.True(t, errors.Is(err, ErrAuthRequired), "err = %v, want ErrAuthRequired", err)
+	assert.ErrorIs(t, err, ErrAuthRequired, "err = %v, want ErrAuthRequired", err)
 }

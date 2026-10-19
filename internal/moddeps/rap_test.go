@@ -166,10 +166,10 @@ func nestedArrays(depth int) []byte {
 func TestParseRapifiedErrors(t *testing.T) {
 	good := buildRap(patchesRoot("A"))
 	_, err := ParseRapified([]byte("class X {};"))
-	assert.Error(t, err, "expected error for non-rapified data")
+	require.Error(t, err, "expected error for non-rapified data")
 	for n := 16; n < len(good); n += 3 {
 		_, err := ParseRapified(good[:n])
-		assert.Error(t, err, "no error for data truncated to %d bytes", n)
+		require.Error(t, err, "no error for data truncated to %d bytes", n)
 	}
 	bad := func(entry []byte) []byte {
 		return buildRap(rapNode{entries: [][]byte{entry}})
@@ -182,7 +182,7 @@ func TestParseRapifiedErrors(t *testing.T) {
 		"deep nesting": bytes.Join([][]byte{{2}, rcs("a"), nestedArrays(rapMaxDepth + 2)}, nil),
 	} {
 		_, err := ParseRapified(bad(e))
-		assert.Error(t, err, "%s: expected error", name)
+		require.Error(t, err, "%s: expected error", name)
 	}
 	// A class whose body offset points at its own parent recurses forever
 	// without a depth limit.
@@ -193,7 +193,7 @@ func TestParseRapifiedErrors(t *testing.T) {
 	loop = append(loop, rcs("C")...)
 	loop = append(loop, rU32(16)...)
 	_, err = ParseRapified(loop)
-	assert.ErrorContains(t, err, "deeply")
+	require.ErrorContains(t, err, "deeply")
 	// Class offset beyond the data.
 	far := buildRap(rapNode{})[:16]
 	far = append(far, rcs("")...)
@@ -226,7 +226,7 @@ func TestDecompressLZSS(t *testing.T) {
 		assert.Equal(t, c.want, string(got))
 	}
 	_, err := decompressLZSS([]byte{0, 0, 0}, 3)
-	assert.Error(t, err, "no error for a back reference of distance 0")
+	require.Error(t, err, "no error for a back reference of distance 0")
 	for _, in := range [][]byte{{}, {1}, {0, 1}} {
 		_, err := decompressLZSS(in, 4)
 		assert.Error(t, err, "no error for truncated input %v", in)
@@ -266,7 +266,7 @@ func TestReadEntryCompressedErrors(t *testing.T) {
 	for _, n := range []string{"a", "b"} {
 		e, _ := pbo.Find(n)
 		_, err := pbo.ReadEntry(e)
-		assert.Error(t, err, "entry %s: expected error", n)
+		require.Error(t, err, "entry %s: expected error", n)
 	}
 	e, _ := pbo.Find("a")
 	e.DataSize = 1 << 20

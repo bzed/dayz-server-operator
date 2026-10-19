@@ -76,7 +76,7 @@ func TestAPINotifierSendsExpansionAsNotificationWithoutTheFeature(t *testing.T) 
 func TestAPINotifierFailsWhenTheModIsNotConnected(t *testing.T) {
 	c, got := fakeAPI(t, admin.Status{Instance: "alpha"}, 200)
 	err := apiNotifier(c, "alpha")(t.Context(), "notification", "", "x", 10)
-	assert.ErrorContains(t, err, "not connected")
+	require.ErrorContains(t, err, "not connected")
 	assert.Empty(t, *got, "messages")
 }
 

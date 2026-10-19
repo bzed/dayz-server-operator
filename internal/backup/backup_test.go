@@ -134,7 +134,7 @@ func TestRetentionRunsAfterACreate(t *testing.T) {
 	// keep is the total: the pinned one and the newest
 	assert.Len(t, ss, 2, "want the pinned and the newest")
 	_, err = os.Stat(filepath.Join(e.m.Root, first.ID))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Len(t, e.fs.deleted, 3)
 }
 
@@ -184,7 +184,7 @@ func TestMissingSnapshotsAreMarked(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, Missing, got.State)
 	_, err = e.m.Path(s.ID)
-	assert.Error(t, err, "a missing snapshot has no path")
+	require.Error(t, err, "a missing snapshot has no path")
 	_, err = e.m.Get("nope")
 	assert.Error(t, err, "unknown id")
 }
@@ -200,7 +200,7 @@ func TestOrphansAreReportedNotDeleted(t *testing.T) {
 	_, err = e.m.Prune(false)
 	require.NoError(t, err)
 	_, err = os.Stat(filepath.Join(e.m.Root, "stranger"))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	err = e.m.AdoptOrphans([]string{"20260101-000000-manual"})
 	require.NoError(t, err)
 	s, err := e.m.Get("20260101-000000-manual")
@@ -210,9 +210,9 @@ func TestOrphansAreReportedNotDeleted(t *testing.T) {
 	err = e.m.DeleteOrphans([]string{"stranger"})
 	require.NoError(t, err)
 	_, err = os.Stat(filepath.Join(e.m.Root, "stranger"))
-	assert.ErrorIs(t, err, os.ErrNotExist)
+	require.ErrorIs(t, err, os.ErrNotExist)
 	err = e.m.DeleteOrphans([]string{e.create(Manual).ID})
-	assert.Error(t, err, "an indexed snapshot is not an orphan")
+	require.Error(t, err, "an indexed snapshot is not an orphan")
 	err = e.m.AdoptOrphans([]string{"nothing"})
 	assert.Error(t, err, "adopting a name that is not an orphan must fail")
 }
@@ -221,7 +221,7 @@ func TestSafePathRefusesAnythingButAChild(t *testing.T) {
 	e := newEnv(t)
 	for _, bad := range []string{"", "..", ".", "a/b", "../x", indexFile, lockFile} {
 		_, err := e.m.safePath(bad)
-		assert.Error(t, err, "%q must be refused", bad)
+		require.Error(t, err, "%q must be refused", bad)
 	}
 	err := os.MkdirAll(e.m.Root, 0o750)
 	require.NoError(t, err)
@@ -275,7 +275,7 @@ func TestRestoreFull(t *testing.T) {
 	assert.Equal(t, "stop,start", strings.Join(order, ","))
 	assert.Equal(t, "v1", read(filepath.Join(e.m.InstanceDir, "mpmissions", "m", "storage_1", "data")))
 	_, err = os.Stat(filepath.Join(e.m.InstanceDir, "extra"))
-	assert.ErrorIs(t, err, os.ErrNotExist)
+	require.ErrorIs(t, err, os.ErrNotExist)
 	ss, _ := e.m.List()
 	reasons := map[Reason]bool{}
 	for _, x := range ss {
@@ -306,9 +306,9 @@ func TestRestoreFullFailureLeavesTheInstanceAlone(t *testing.T) {
 	e.fs.failSnapshot = true
 	e.m.FS = e.fs
 	_, err = e.m.Restore(t.Context(), s.ID, RestoreOptions{})
-	assert.ErrorContains(t, err, "nothing was restored")
+	require.ErrorContains(t, err, "nothing was restored")
 	_, err = e.m.Restore(t.Context(), "nope", RestoreOptions{})
-	assert.Error(t, err, "unknown snapshot")
+	require.Error(t, err, "unknown snapshot")
 	stopErr := errors.New("won't stop")
 	e.fs.failSnapshot = false
 	_, err = e.m.Restore(t.Context(), s.ID, RestoreOptions{Stop: func(context.Context) error { return stopErr }})
@@ -340,16 +340,16 @@ func TestRestorePath(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "v1", read(filepath.Join(e.m.InstanceDir, "mpmissions", "m", "storage_1", "data")))
 	_, err = os.Stat(filepath.Join(e.m.InstanceDir, "mpmissions", "m", "storage_1", "newfile"))
-	assert.ErrorIs(t, err, os.ErrNotExist)
+	require.ErrorIs(t, err, os.ErrNotExist)
 	assert.Equal(t, "keep me", read(filepath.Join(e.m.InstanceDir, "profiles", "log")))
 	old, _ := filepath.Glob(filepath.Join(e.m.InstanceDir, "mpmissions", "m", "*.dzo-restore-old"))
 	assert.Empty(t, old)
 	for _, bad := range []string{"../other", "/etc", "..", ".", "a/../../b"} {
 		_, err := e.m.Restore(t.Context(), s.ID, RestoreOptions{Path: bad})
-		assert.Error(t, err, "path %q must be refused", bad)
+		require.Error(t, err, "path %q must be refused", bad)
 	}
 	_, err = e.m.Restore(t.Context(), s.ID, RestoreOptions{Path: "not/in/backup"})
-	assert.Error(t, err, "a path that is not in the snapshot must be refused before anything happens")
+	require.Error(t, err, "a path that is not in the snapshot must be refused before anything happens")
 	ss, _ := e.m.List()
 	assert.Equal(t, 1, countReason(ss, PreRestore))
 }
@@ -398,7 +398,7 @@ func TestOnRealBtrfs(t *testing.T) {
 	if ok, err := btrfs.IsBtrfs(base); err != nil || !ok {
 		t.Skipf("%s is not on btrfs; set DZO_BTRFS_TESTDIR", base)
 	}
-	dir, err := os.MkdirTemp(base, "dzo-backup-test-")
+	dir, err := os.MkdirTemp(base, "dzo-backup-test-") //nolint:usetesting // must live on the btrfs mount, t.TempDir() does not
 	if err != nil {
 		t.Skip(err)
 	}
@@ -445,9 +445,9 @@ func TestOnRealBtrfs(t *testing.T) {
 	ok, _ := btrfs.IsSubvolume(inst)
 	assert.True(t, ok)
 	_, err = os.Stat(filepath.Join(inst, "marker"))
-	assert.ErrorIs(t, err, os.ErrNotExist)
+	require.ErrorIs(t, err, os.ErrNotExist)
 	err = os.WriteFile(filepath.Join(inst, "writable"), []byte("x"), 0o600)
-	assert.NoError(t, err, "the restored instance must be writable")
+	require.NoError(t, err, "the restored instance must be writable")
 	var replaced Snapshot
 	ss, _ = m.List()
 	for _, s := range ss {

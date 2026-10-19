@@ -14,6 +14,6 @@ func TestValidatePriority(t *testing.T) {
 	err := ValidatePriority([]string{"76561198000000001", "76561198000000002"})
 	require.NoError(t, err)
 	for _, bad := range [][]string{{"123"}, {"7656119800000000a"}, {"76561198000000001", "76561198000000001"}} {
-		assert.NotNil(t, ValidatePriority(bad))
+		assert.Error(t, ValidatePriority(bad))
 	}
 }
