@@ -177,6 +177,21 @@ The test suite needs no Steam account and no DayZ server: steamcmd, systemd,
 podman, RCon and the Steam API are replaced by fakes and recorded fixtures.
 Coverage must stay at 85 % or more; CI fails below that.
 
+Test conventions
+~~~~~~~~~~~~~~~~
+
+Tests use `testify <https://github.com/stretchr/testify>`_.
+
+* ``require`` by default; ``assert`` only for independent checks after which
+  the test still makes sense.
+* No ``t.Fatal*`` or ``t.Error*`` (``t.Skip*`` and ``t.Log*`` are fine).
+* ``t.Context()``, ``t.TempDir()``, ``t.Setenv()`` and ``t.Chdir()`` instead of
+  their global counterparts.
+* Helpers start with ``t.Helper()``.
+* No ``time.Sleep``: wait with ``require.Eventually``, a channel or a fake
+  clock.
+* Goroutine leaks, fuzzing and the browser tests are described below.
+
 Boot test with a real server
 ----------------------------
 

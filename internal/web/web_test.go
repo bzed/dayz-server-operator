@@ -13,8 +13,12 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/bzed/dayz-server-operator/internal/admin"
 	"github.com/bzed/dayz-server-operator/internal/api"
@@ -39,46 +43,34 @@ func newEnv(t *testing.T, role api.Role) *env {
 	hubs := admin.NewRegistry(dir)
 	hub := hubs.Add(admin.NewHub("alpha"))
 	apiSrv := api.New("site-a", "v0", hubs, api.NewTokenStore(filepath.Join(dir, "t.json")), admin.NewAudit(filepath.Join(dir, "a.jsonl")))
-	st, err := moderation.Open(context.Background(), filepath.Join(dir, "dzo.sqlite"))
-	if err != nil {
-		t.Fatal(err)
-	}
+	st, err := moderation.Open(t.Context(), filepath.Join(dir, "dzo.sqlite"))
+	require.NoError(t, err)
 	t.Cleanup(func() { _ = st.Close() })
 	apiSrv.Moderation = webMod{st}
 	ats := httptest.NewServer(apiSrv.Handler())
 	t.Cleanup(ats.Close)
 	secret, _, err := apiSrv.Tokens.Create("web", role, nil, true, time.Hour)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	// A second working backend, with its own bans, for the fan-out of a ban form.
 	otherDir := t.TempDir()
 	otherHubs := admin.NewRegistry(otherDir)
 	otherHubs.Add(admin.NewHub("alpha"))
 	otherAPI := api.New("site-b", "v0", otherHubs, api.NewTokenStore(filepath.Join(otherDir, "t.json")), admin.NewAudit(filepath.Join(otherDir, "a.jsonl")))
-	otherStore, err := moderation.Open(context.Background(), filepath.Join(otherDir, "dzo.sqlite"))
-	if err != nil {
-		t.Fatal(err)
-	}
+	otherStore, err := moderation.Open(t.Context(), filepath.Join(otherDir, "dzo.sqlite"))
+	require.NoError(t, err)
 	t.Cleanup(func() { _ = otherStore.Close() })
 	otherAPI.Moderation = webMod{otherStore}
 	otherTS := httptest.NewServer(otherAPI.Handler())
 	t.Cleanup(otherTS.Close)
 	otherSecret, _, err := otherAPI.Tokens.Create("web", role, nil, true, time.Hour)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	assets, docs := filepath.Join(dir, "assets"), filepath.Join(dir, "docs")
 	for _, d := range []string{filepath.Join(assets, "htmx"), docs} {
-		if err := os.MkdirAll(d, 0o750); err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, os.MkdirAll(d, 0o750))
 	}
 	_ = os.WriteFile(filepath.Join(assets, "htmx", "htmx.min.js"), []byte("//htmx"), 0o600)
 	flags := filepath.Join(dir, "flags")
-	if err := os.MkdirAll(flags, 0o750); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, os.MkdirAll(flags, 0o750))
 	_ = os.WriteFile(filepath.Join(flags, "de.svg"), []byte("<svg/>"), 0o600)
 	apiSrv.GeoIP = geoiptest.Legacy(t, map[string]string{"198.51.100.0/24": "DE"})
 	_ = os.WriteFile(filepath.Join(docs, "index.html"), []byte("<h1>docs</h1>"), 0o600)
@@ -87,9 +79,7 @@ func newEnv(t *testing.T, role api.Role) *env {
 		{Name: "other", Client: apiclient.New(otherTS.URL, otherSecret)},
 		{Name: "down", Client: apiclient.New("http://127.0.0.1:1", "x")},
 	}, Options{Version: "v0", Assets: assets, DocsDir: docs, FlagsDir: flags, UserHeader: "X-Forwarded-User"})
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	ws := httptest.NewServer(srv.Handler())
 	t.Cleanup(ws.Close)
 	hub.Sync(admin.SyncRequest{Proto: 1, Hello: true, ModVersion: "0.1.0", World: "enoch",
@@ -103,9 +93,7 @@ func newEnv(t *testing.T, role api.Role) *env {
 func (e *env) get(path string) (int, string, http.Header) {
 	e.t.Helper()
 	resp, err := http.Get(e.web.URL + path)
-	if err != nil {
-		e.t.Fatal(err)
-	}
+	require.NoError(e.t, err)
 	defer func() { _ = resp.Body.Close() }()
 	b, _ := io.ReadAll(resp.Body)
 	return resp.StatusCode, string(b), resp.Header
@@ -120,18 +108,21 @@ func (e *env) post(path string, form url.Values, hdr map[string]string) (int, st
 		req.Header.Set(k, v)
 	}
 	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		e.t.Fatal(err)
-	}
+	require.NoError(e.t, err)
 	defer func() { _ = resp.Body.Close() }()
 	b, _ := io.ReadAll(resp.Body)
 	return resp.StatusCode, string(b)
 }
 
 func (e *env) answerCommands(ok bool, msg string) func() {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(e.t.Context())
+	var wg sync.WaitGroup
+	wg.Add(1)
 	go func() {
-		for ctx.Err() == nil {
+		defer wg.Done()
+		tick := time.NewTicker(time.Millisecond)
+		defer tick.Stop()
+		for {
 			var res []admin.Result
 			for _, c := range e.hub.Sync(admin.SyncRequest{Proto: 1}).Commands {
 				res = append(res, admin.Result{ID: c.ID, OK: admin.Flag(ok), Message: msg})
@@ -139,148 +130,128 @@ func (e *env) answerCommands(ok bool, msg string) func() {
 			if len(res) > 0 {
 				e.hub.Sync(admin.SyncRequest{Proto: 1, Results: res})
 			}
-			time.Sleep(time.Millisecond)
+			select {
+			case <-ctx.Done():
+				return
+			case <-tick.C:
+			}
 		}
 	}()
-	return cancel
+	return func() {
+		cancel()
+		wg.Wait()
+	}
 }
 
 func TestDashboard(t *testing.T) {
 	e := newEnv(t, api.RoleAdmin)
 	code, body, hdr := e.get("/")
-	if code != 200 || !strings.Contains(body, "site-a") || !strings.Contains(body, `href="/b/main/i/alpha"`) || !strings.Contains(body, "connected") {
-		t.Fatalf("dashboard: %d %s", code, body)
-	}
+	require.Equal(t, 200, code, "dashboard: %s", body)
+	require.Contains(t, body, "site-a")
+	require.Contains(t, body, `href="/b/main/i/alpha"`)
+	require.Contains(t, body, "connected")
 	// Every page loads the icon font, and the buttons keep their text next to the icon.
 	// The tab has an icon: an SVG, and a PNG for the browsers that cannot take one.
 	for _, f := range []string{"favicon.svg", "favicon-32.png", "apple-touch-icon.png"} {
-		if !strings.Contains(body, "/static/"+f) {
-			t.Errorf("the page does not link /static/%s", f)
-		}
-		if c, _, h := e.get("/static/" + f); c != 200 || !strings.HasPrefix(h.Get("Content-Type"), "image/") {
-			t.Errorf("/static/%s: %d %q", f, c, h.Get("Content-Type"))
-		}
+		assert.Contains(t, body, "/static/"+f, "the page does not link /static/%s", f)
+		c, _, h := e.get("/static/" + f)
+		assert.Equal(t, 200, c, "/static/%s", f)
+		assert.True(t, strings.HasPrefix(h.Get("Content-Type"), "image/"), "/static/%s: %q", f, h.Get("Content-Type"))
 	}
-	if !strings.Contains(body, "/vendor/fork-awesome/css/fork-awesome.css") || !strings.Contains(body, `fa-map`) || !strings.Contains(body, "Open map") {
-		t.Fatalf("dashboard icons: %s", body)
-	}
-	if !strings.Contains(body, "api: ") && !strings.Contains(body, "down") {
-		t.Fatal("an unreachable backend must be shown with its error")
-	}
-	if !strings.Contains(hdr.Get("Content-Security-Policy"), "default-src 'self'") || hdr.Get("X-Frame-Options") != "DENY" || hdr.Get("X-Content-Type-Options") != "nosniff" {
-		t.Fatalf("security headers: %v", hdr)
-	}
-	if !strings.Contains(body, e.srv.csrf) {
-		t.Fatal("page must carry the CSRF token")
-	}
-	if c, _, _ := e.get("/nope"); c != 404 {
-		t.Fatalf("unknown path: %d", c)
-	}
+	require.Contains(t, body, "/vendor/fork-awesome/css/fork-awesome.css", "dashboard icons")
+	require.Contains(t, body, `fa-map`, "dashboard icons")
+	require.Contains(t, body, "Open map", "dashboard icons")
+	require.True(t, strings.Contains(body, "api: ") || strings.Contains(body, "down"), "an unreachable backend must be shown with its error")
+	require.Contains(t, hdr.Get("Content-Security-Policy"), "default-src 'self'")
+	require.Equal(t, "DENY", hdr.Get("X-Frame-Options"))
+	require.Equal(t, "nosniff", hdr.Get("X-Content-Type-Options"))
+	require.Contains(t, body, e.srv.csrf, "page must carry the CSRF token")
+	c, _, _ := e.get("/nope")
+	require.Equal(t, 404, c, "unknown path")
 }
 
 func TestInstanceAndFragments(t *testing.T) {
 	e := newEnv(t, api.RoleAdmin)
 	_, body, _ := e.get("/b/main/i/alpha")
-	if !strings.Contains(body, "dzo-admin connected") || !strings.Contains(body, "world enoch") || !strings.Contains(body, `hx-get="/b/main/i/alpha/players"`) {
-		t.Fatalf("instance page: %s", body)
+	for _, want := range []string{"dzo-admin connected", "world enoch", `hx-get="/b/main/i/alpha/players"`} {
+		require.Contains(t, body, want, "instance page")
 	}
 	_, body, _ = e.get("/b/main/i/alpha/players")
-	if !strings.Contains(body, "&lt;b&gt;alice&lt;/b&gt;") || strings.Contains(body, "<b>alice") {
-		t.Fatalf("player names must be escaped: %s", body)
-	}
+	require.Contains(t, body, "&lt;b&gt;alice&lt;/b&gt;", "player names must be escaped")
+	require.NotContains(t, body, "<b>alice", "player names must be escaped")
 	_, body, _ = e.get("/b/main/i/alpha/vehicles")
-	if !strings.Contains(body, "OffroadHatchback") || !strings.Contains(body, "50%") || !strings.Contains(body, "/vehicles/1.2.3.4/panel") || !strings.Contains(body, "Motorbike_01") || !strings.Contains(body, "fa-motorcycle") || !strings.Contains(body, "Old_Bike_Red") || !strings.Contains(body, "fa-bicycle") || !strings.Contains(body, "Sedan_02 <em>(covered)</em>") || !strings.Contains(body, "Rita") || strings.Contains(body, "/vehicles/c.c.c.c/panel") {
-		t.Fatalf("vehicles: %s", body)
+	for _, want := range []string{"OffroadHatchback", "50%", "/vehicles/1.2.3.4/panel", "Motorbike_01", "fa-motorcycle", "Old_Bike_Red", "fa-bicycle", "Sedan_02 <em>(covered)</em>", "Rita"} {
+		require.Contains(t, body, want, "vehicles")
 	}
+	require.NotContains(t, body, "/vehicles/c.c.c.c/panel", "vehicles")
 	_, body, _ = e.get("/b/main/i/alpha/players/7656/panel")
-	if !strings.Contains(body, `hx-post="/b/main/i/alpha/players/7656/teleport"`) {
-		t.Fatalf("panel: %s", body)
-	}
+	require.Contains(t, body, `hx-post="/b/main/i/alpha/players/7656/teleport"`, "panel")
 	_, body, _ = e.get("/b/main/i/alpha/vehicles/1.2.3.4/panel")
-	if !strings.Contains(body, `hx-post="/b/main/i/alpha/vehicles/1.2.3.4/flip"`) || !strings.Contains(body, `"scope": "missing"`) {
-		t.Fatalf("vehicle panel: %s", body)
-	}
-	if _, body, _ = e.get("/b/main/i/alpha/vehicles/nope/panel"); !strings.Contains(body, "not found") {
-		t.Fatalf("panel for an absent vehicle: %s", body)
-	}
-	if _, body, _ = e.get("/b/main/i/alpha/players/9999/panel"); !strings.Contains(body, "not online") {
-		t.Fatalf("panel for an absent player: %s", body)
-	}
+	require.Contains(t, body, `hx-post="/b/main/i/alpha/vehicles/1.2.3.4/flip"`, "vehicle panel")
+	require.Contains(t, body, `"scope": "missing"`, "vehicle panel")
+	_, body, _ = e.get("/b/main/i/alpha/vehicles/nope/panel")
+	require.Contains(t, body, "not found", "panel for an absent vehicle")
+	_, body, _ = e.get("/b/main/i/alpha/players/9999/panel")
+	require.Contains(t, body, "not online", "panel for an absent player")
 	_, body, _ = e.get("/b/main/i/alpha/types?type=ak")
-	if !strings.Contains(body, `<option value="AKM">`) {
-		t.Fatalf("types: %s", body)
-	}
-	if _, body, _ = e.get("/b/main/i/alpha/vehicle-types?type=zz"); strings.Contains(body, "AKM") {
-		t.Fatalf("vehicle types: %s", body)
-	}
-	if _, body, _ = e.get("/b/main/i/zzz"); !strings.Contains(body, "unknown instance") {
-		t.Fatalf("unknown instance: %s", body)
-	}
-	if _, body, _ = e.get("/b/main/i/zzz/players"); !strings.Contains(body, "unknown instance") {
-		t.Fatalf("fragment error: %s", body)
-	}
+	require.Contains(t, body, `<option value="AKM">`, "types")
+	_, body, _ = e.get("/b/main/i/alpha/vehicle-types?type=zz")
+	require.NotContains(t, body, "AKM", "vehicle types")
+	_, body, _ = e.get("/b/main/i/zzz")
+	require.Contains(t, body, "unknown instance")
+	_, body, _ = e.get("/b/main/i/zzz/players")
+	require.Contains(t, body, "unknown instance", "fragment error")
 	for _, p := range []string{"/b/nope/i/alpha", "/b/nope/audit", "/b/nope/i/alpha/map", "/b/nope/i/alpha/players", "/b/nope/i/alpha/vehicles", "/b/nope/i/alpha/types", "/b/nope/i/alpha/stream", "/b/nope/i/alpha/players/1/panel"} {
-		if c, _, _ := e.get(p); c != 404 {
-			t.Fatalf("%s: %d", p, c)
-		}
+		c, _, _ := e.get(p)
+		require.Equal(t, 404, c, p)
 	}
 }
 
 func TestMapAndAudit(t *testing.T) {
 	e := newEnv(t, api.RoleAdmin)
 	_, body, _ := e.get("/b/main/i/alpha/map")
-	if !strings.Contains(body, `data-size="12800"`) || !strings.Contains(body, `data-stream="/b/main/i/alpha/stream"`) || strings.Contains(body, "<script>") {
-		t.Fatalf("map page: %s", body)
-	}
-	if mapSize("unknown") != defaultMapSize || mapSize("ChernarusPlus") != 15360 {
-		t.Fatal("mapSize")
-	}
-	if c, js, _ := e.get("/static/map.js"); c != 200 || !strings.Contains(js, "EventSource") {
-		t.Fatalf("map.js: %d", c)
-	}
+	require.Contains(t, body, `data-size="12800"`, "map page")
+	require.Contains(t, body, `data-stream="/b/main/i/alpha/stream"`, "map page")
+	require.NotContains(t, body, "<script>", "map page")
+	require.Equal(t, defaultMapSize, mapSize("unknown"))
+	require.Equal(t, 15360, mapSize("ChernarusPlus"))
+	c, js, _ := e.get("/static/map.js")
+	require.Equal(t, 200, c, "map.js")
+	require.Contains(t, js, "EventSource", "map.js")
 	// Flags show the time they have left, Expansion territories are drawn thin.
 	for _, want := range []string{"function ttlText", "Raise flag", "/raise", "goes down in", "goes down now", "m.source === 'territory'"} {
-		if _, js, _ := e.get("/static/map.js"); !strings.Contains(js, want) {
-			t.Errorf("map.js lacks %q", want)
-		}
+		_, js, _ := e.get("/static/map.js")
+		assert.Contains(t, js, want, "map.js lacks %q", want)
 	}
-	if c, svg, _ := e.get("/static/icons/helicopter.svg"); c != 200 || !strings.Contains(svg, "Font Awesome Free") {
-		t.Fatalf("the helicopter icon is not served: %d", c)
-	}
-	if c, _, _ := e.get("/static/app.css"); c != 200 {
-		t.Fatal("app.css")
-	}
-	if _, body, _ := e.get("/b/main/audit"); !strings.Contains(body, "No entries") {
-		t.Fatalf("empty audit: %s", body)
-	}
+	c, svg, _ := e.get("/static/icons/helicopter.svg")
+	require.Equal(t, 200, c, "the helicopter icon is not served")
+	require.Contains(t, svg, "Font Awesome Free", "the helicopter icon is not served")
+	c, _, _ = e.get("/static/app.css")
+	require.Equal(t, 200, c, "app.css")
+	_, body, _ = e.get("/b/main/audit")
+	require.Contains(t, body, "No entries", "empty audit")
 	e2 := newEnv(t, api.RoleViewer)
-	if _, body, _ := e2.get("/b/main/audit"); !strings.Contains(body, "audit.view") {
-		t.Fatalf("a viewer must see why the audit is closed: %s", body)
-	}
+	_, body, _ = e2.get("/b/main/audit")
+	require.Contains(t, body, "audit.view", "a viewer must see why the audit is closed")
 }
 
 func TestVendorAndDocs(t *testing.T) {
 	e := newEnv(t, api.RoleAdmin)
-	if c, b, _ := e.get("/vendor/htmx/htmx.min.js"); c != 200 || b != "//htmx" {
-		t.Fatalf("vendor: %d %q", c, b)
-	}
-	if c, b, _ := e.get("/docs/"); c != 200 || !strings.Contains(b, "docs") {
-		t.Fatalf("docs: %d", c)
-	}
+	c, b, _ := e.get("/vendor/htmx/htmx.min.js")
+	require.Equal(t, 200, c, "vendor")
+	require.Equal(t, "//htmx", b, "vendor")
+	c, b, _ = e.get("/docs/")
+	require.Equal(t, 200, c, "docs")
+	require.Contains(t, b, "docs")
 	srv, _ := New([]*Backend{{Name: "x", Client: apiclient.New("http://127.0.0.1:1", "t")}}, Options{})
 	ts := httptest.NewServer(srv.Handler())
 	defer ts.Close()
 	r, err := http.Get(ts.URL + "/docs/")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	_ = r.Body.Close()
-	if r.StatusCode != 404 {
-		t.Fatalf("docs without a dir: %d", r.StatusCode)
-	}
-	if _, err := New(nil, Options{}); err == nil {
-		t.Fatal("no backends must fail")
-	}
+	require.Equal(t, 404, r.StatusCode, "docs without a dir")
+	_, err = New(nil, Options{})
+	require.Error(t, err, "no backends must fail")
 }
 
 func TestActions(t *testing.T) {
@@ -302,20 +273,18 @@ func TestActions(t *testing.T) {
 		"/b/main/i/alpha/vehicles/1.2.3.4/delete": {"force": {"1"}},
 	} {
 		code, body := e.post(path, form, map[string]string{"X-Forwarded-User": "alice@example.invalid"})
-		if code != 200 || !strings.Contains(body, "flash ok") {
-			t.Fatalf("%s: %d %s", path, code, body)
-		}
+		require.Equal(t, 200, code, "%s: %s", path, body)
+		require.Contains(t, body, "flash ok", path)
 	}
 	entries, _ := e.api.Audit.Tail("alpha", 1)
-	if len(entries) != 1 || entries[0].Actor != "web:alice@example.invalid" || entries[0].Source != "web" {
-		t.Fatalf("audit = %+v", entries)
-	}
+	require.Len(t, entries, 1)
+	require.Equal(t, "web:alice@example.invalid", entries[0].Actor)
+	require.Equal(t, "web", entries[0].Source)
 	// Without the proxy header the actor is plain "web".
 	e.post("/b/main/i/alpha/message", url.Values{"text": {"x"}}, nil)
 	entries, _ = e.api.Audit.Tail("alpha", 1)
-	if entries[0].Actor != "web:web" {
-		t.Fatalf("actor = %q", entries[0].Actor)
-	}
+	require.NotEmpty(t, entries)
+	require.Equal(t, "web:web", entries[0].Actor)
 }
 
 func TestQuantityMaxAndInvalid(t *testing.T) {
@@ -323,31 +292,24 @@ func TestQuantityMaxAndInvalid(t *testing.T) {
 	defer e.answerCommands(true, "")()
 	for _, q := range []string{"max", "MAX", "", " 5 "} {
 		_, body := e.post("/b/main/i/alpha/spawn", url.Values{"type": {"AKM"}, "quantity": {q}, "x": {"1"}, "z": {"2"}}, nil)
-		if !strings.Contains(body, "flash ok") {
-			t.Errorf("quantity %q: %s", q, body)
-		}
+		assert.Contains(t, body, "flash ok", "quantity %q", q)
 	}
 	for _, q := range []string{"lots", "-3", "NaN", "Inf"} {
 		_, body := e.post("/b/main/i/alpha/players/7656/give", url.Values{"type": {"AKM"}, "quantity": {q}}, nil)
-		if !strings.Contains(body, "quantity must be a number, default or max") {
-			t.Errorf("quantity %q: %s", q, body)
-		}
+		assert.Contains(t, body, "quantity must be a number, default or max", "quantity %q", q)
 	}
 }
 
 func TestActionErrors(t *testing.T) {
 	e := newEnv(t, api.RoleViewer)
 	_, body := e.post("/b/main/i/alpha/message", url.Values{"text": {"x"}}, nil)
-	if !strings.Contains(body, "flash err") || !strings.Contains(body, "lacks") {
-		t.Fatalf("forbidden: %s", body)
-	}
+	require.Contains(t, body, "flash err", "forbidden")
+	require.Contains(t, body, "lacks", "forbidden")
 	e2 := newEnv(t, api.RoleAdmin)
 	stop := e2.answerCommands(false, "player not online")
 	defer stop()
 	_, body = e2.post("/b/main/i/alpha/players/1/teleport", url.Values{"x": {"1"}, "z": {"1"}}, nil)
-	if !strings.Contains(body, "refused: player not online") {
-		t.Fatalf("refused: %s", body)
-	}
+	require.Contains(t, body, "refused: player not online")
 }
 
 func TestCSRF(t *testing.T) {
@@ -363,42 +325,26 @@ func TestCSRF(t *testing.T) {
 			req.Header.Set(k, v)
 		}
 		resp, err := http.DefaultClient.Do(req)
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 		_ = resp.Body.Close()
 		return resp.StatusCode
 	}
-	if c := post(nil, ""); c != 403 {
-		t.Fatalf("no token: %d", c)
-	}
-	if c := post(nil, "wrong"); c != 403 {
-		t.Fatalf("wrong token: %d", c)
-	}
-	if c := post(map[string]string{"Origin": "https://evil.example"}, e.srv.csrf); c != 403 {
-		t.Fatalf("foreign origin: %d", c)
-	}
-	if c := post(map[string]string{"Origin": e.web.URL}, e.srv.csrf); c == 403 {
-		t.Fatalf("same origin must pass: %d", c)
-	}
-	if c := post(map[string]string{"Origin": "::bad"}, e.srv.csrf); c != 403 {
-		t.Fatalf("unparsable origin: %d", c)
-	}
+	require.Equal(t, 403, post(nil, ""), "no token")
+	require.Equal(t, 403, post(nil, "wrong"), "wrong token")
+	require.Equal(t, 403, post(map[string]string{"Origin": "https://evil.example"}, e.srv.csrf), "foreign origin")
+	require.NotEqual(t, 403, post(map[string]string{"Origin": e.web.URL}, e.srv.csrf), "same origin must pass")
+	require.Equal(t, 403, post(map[string]string{"Origin": "::bad"}, e.srv.csrf), "unparsable origin")
 }
 
 func TestStreamRelay(t *testing.T) {
 	e := newEnv(t, api.RoleAdmin)
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 	req, _ := http.NewRequestWithContext(ctx, "GET", e.web.URL+"/b/main/i/alpha/stream", nil)
 	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer func() { _ = resp.Body.Close() }()
-	if resp.Header.Get("Content-Type") != "text/event-stream" {
-		t.Fatalf("content type %q", resp.Header.Get("Content-Type"))
-	}
+	require.Equal(t, "text/event-stream", resp.Header.Get("Content-Type"))
 	sc := bufio.NewScanner(resp.Body)
 	seen := map[string]bool{}
 	for sc.Scan() {
@@ -409,51 +355,40 @@ func TestStreamRelay(t *testing.T) {
 			}
 		}
 	}
-	if !seen["players"] || !seen["status"] {
-		t.Fatalf("relayed events = %v", seen)
-	}
+	require.True(t, seen["players"] && seen["status"], "relayed events = %v", seen)
 	cancel()
 	// A backend that is down answers 502.
-	if c, _, _ := e.get("/b/down/i/alpha/stream"); c != http.StatusBadGateway {
-		t.Fatalf("down backend: %d", c)
-	}
+	c, _, _ := e.get("/b/down/i/alpha/stream")
+	require.Equal(t, http.StatusBadGateway, c, "down backend")
 }
 
 func TestMapTiles(t *testing.T) {
 	e := newEnv(t, api.RoleViewer)
-	if _, body, _ := e.get("/b/main/i/alpha/map"); strings.Contains(body, "data-tiles") {
-		t.Fatalf("a map without tiles must not announce any: %s", body)
-	}
-	if _, body, _ := e.get("/b/main/i/alpha/map"); !strings.Contains(body, "no map imagery") || !strings.Contains(body, "dzo map tiles build enoch") {
-		t.Fatalf("a map without tiles says how to get them: %s", body)
-	}
+	_, body, _ := e.get("/b/main/i/alpha/map")
+	require.NotContains(t, body, "data-tiles", "a map without tiles must not announce any")
+	_, body, _ = e.get("/b/main/i/alpha/map")
+	require.Contains(t, body, "no map imagery", "a map without tiles says how to get them")
+	require.Contains(t, body, "dzo map tiles build enoch", "a map without tiles says how to get them")
 	root := t.TempDir()
 	set := filepath.Join(root, "enoch", "abcdef0123456789")
-	if err := os.MkdirAll(filepath.Join(set, "0", "0"), 0o750); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, os.MkdirAll(filepath.Join(set, "0", "0"), 0o750))
 	_ = os.WriteFile(filepath.Join(set, "metadata.json"), []byte(`{"map":"enoch","hash":"abcdef0123456789"}`), 0o600)
 	_ = os.WriteFile(filepath.Join(set, "0", "0", "0.jpg"), []byte("JPEG"), 0o600)
-	if err := os.Symlink("abcdef0123456789", filepath.Join(root, "enoch", "current")); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, os.Symlink("abcdef0123456789", filepath.Join(root, "enoch", "current")))
 	e.api.TilesDir = root
 
-	_, body, _ := e.get("/b/main/i/alpha/map")
-	if strings.Contains(body, "no map imagery") {
-		t.Fatalf("a map with tiles needs no hint: %s", body)
-	}
-	if !strings.Contains(body, `data-tiles="/b/main/tiles/enoch"`) || !strings.Contains(body, `data-meta="{&#34;map&#34;:&#34;enoch&#34;`) {
-		t.Fatalf("map page: %s", body)
-	}
+	_, body, _ = e.get("/b/main/i/alpha/map")
+	require.NotContains(t, body, "no map imagery", "a map with tiles needs no hint")
+	require.Contains(t, body, `data-tiles="/b/main/tiles/enoch"`, "map page")
+	require.Contains(t, body, `data-meta="{&#34;map&#34;:&#34;enoch&#34;`, "map page")
 	code, b, hdr := e.get("/b/main/tiles/enoch/abcdef0123456789/0/0/0.jpg")
-	if code != 200 || b != "JPEG" || hdr.Get("Content-Type") != "image/jpeg" || !strings.Contains(hdr.Get("Cache-Control"), "immutable") {
-		t.Fatalf("tile: %d %q %v", code, b, hdr)
-	}
+	require.Equal(t, 200, code, "tile: %v", hdr)
+	require.Equal(t, "JPEG", b, "tile")
+	require.Equal(t, "image/jpeg", hdr.Get("Content-Type"))
+	require.Contains(t, hdr.Get("Cache-Control"), "immutable")
 	for _, p := range []string{"/b/nope/tiles/enoch/metadata.json", "/b/main/tiles/enoch/abcdef0123456789/0/0/0.png", "/b/main/tiles/enoch/abcdef0123456789/0/0/9.jpg"} {
-		if code, _, _ := e.get(p); code != 404 {
-			t.Errorf("%s: want 404, got %d", p, code)
-		}
+		code, _, _ := e.get(p)
+		assert.Equal(t, 404, code, p)
 	}
 }
 
@@ -461,18 +396,12 @@ func TestMapTiles(t *testing.T) {
 func TestPlayerPanelLinksToTheBanSite(t *testing.T) {
 	e := newEnv(t, api.RoleAdmin)
 	_, body, _ := e.get("/b/main/i/alpha/players/7656/panel")
-	if !strings.Contains(body, `href="/b/main/bans/new?steam_id=7656&amp;instance=alpha"`) {
-		t.Fatalf("no link to the ban form: %s", body)
-	}
+	require.Contains(t, body, `href="/b/main/bans/new?steam_id=7656&amp;instance=alpha"`, "no link to the ban form")
 	for _, field := range []string{`name="duration"`, `name="scope"`, `name="message"`} { // the kick dialog has its own reason
-		if strings.Contains(body, field) {
-			t.Errorf("the panel has the ban field %s", field)
-		}
+		assert.NotContains(t, body, field, "the panel has the ban field")
 	}
 	for _, group := range []string{"Tell", "Move", "Remove", "Give"} {
-		if !strings.Contains(body, `class="gname">`+group) {
-			t.Errorf("no %q group", group)
-		}
+		assert.Contains(t, body, `class="gname">`+group, "no %q group", group)
 	}
 }
 
@@ -481,9 +410,7 @@ func TestPlayerRowHasFlagSlotAndInfoButton(t *testing.T) {
 	e := newEnv(t, api.RoleAdmin)
 	_, body, _ := e.get("/b/main/i/alpha/players")
 	for _, want := range []string{`class="flag"`, `data-info`, `class="pop"`, `/players/7656/info`} {
-		if !strings.Contains(body, want) {
-			t.Errorf("player table lacks %s: %s", want, body)
-		}
+		assert.Contains(t, body, want, "player table lacks %s", want)
 	}
 }
 
@@ -492,63 +419,53 @@ func TestPlayerInfoShowsTheSteamIDAndOnlyTheCurrentAddress(t *testing.T) {
 	guid, _ := moderation.DeriveGUID(webSteam)
 	st := e.api.Moderation.(webMod).st
 	for i, ip := range []string{"192.0.2.7", "198.51.100.1"} {
-		if err := st.Seen(context.Background(), "alpha", guid, ip, "Alice <i>", time.Now().Add(time.Duration(i)*time.Hour)); err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, st.Seen(t.Context(), "alpha", guid, ip, "Alice <i>", time.Now().Add(time.Duration(i)*time.Hour)))
 	}
 	e.hub.Sync(admin.SyncRequest{Proto: 1, Players: []admin.Player{{SteamID: webSteam, Name: "Alice <i>", Alive: true}}})
 	_, body, _ := e.get("/b/main/i/alpha/players/" + webSteam + "/info")
-	if !strings.Contains(body, webSteam) || !strings.Contains(body, "198.51.100.1") || strings.Contains(body, "192.0.2.7") || strings.Contains(body, "<i>") {
-		t.Fatalf("info: %s", body)
-	}
-	if code, _, _ := e.get("/b/nope/i/alpha/players/" + webSteam + "/info"); code != 404 {
-		t.Fatalf("unknown backend: %d", code)
-	}
+	require.Contains(t, body, webSteam, "info")
+	require.Contains(t, body, "198.51.100.1", "info")
+	require.NotContains(t, body, "192.0.2.7", "info")
+	require.NotContains(t, body, "<i>", "info")
+	code, _, _ := e.get("/b/nope/i/alpha/players/" + webSteam + "/info")
+	require.Equal(t, 404, code, "unknown backend")
 }
 
 func TestPlayerInfoWithoutThePlayerIPPermissionHasNoAddress(t *testing.T) {
 	e := newEnv(t, api.RoleModerator)
 	guid, _ := moderation.DeriveGUID(webSteam)
-	_ = e.api.Moderation.(webMod).st.Seen(context.Background(), "alpha", guid, "192.0.2.7", "alice", time.Now())
+	_ = e.api.Moderation.(webMod).st.Seen(t.Context(), "alpha", guid, "192.0.2.7", "alice", time.Now())
 	e.hub.Sync(admin.SyncRequest{Proto: 1, Players: []admin.Player{{SteamID: webSteam, Name: "alice", Alive: true}}})
 	_, body, _ := e.get("/b/main/i/alpha/players/" + webSteam + "/info")
-	if strings.Contains(body, "192.0.2.7") || !strings.Contains(body, webSteam) {
-		t.Fatalf("info: %s", body)
-	}
+	require.NotContains(t, body, "192.0.2.7", "info")
+	require.Contains(t, body, webSteam, "info")
 }
 
 func TestPlayerPanelHasAProfileButtonThatDoesNothingYet(t *testing.T) {
 	e := newEnv(t, api.RoleAdmin)
 	_, body, _ := e.get("/b/main/i/alpha/players/7656/panel")
-	if !strings.Contains(body, `class="profile" disabled`) {
-		t.Fatalf("no disabled profile button: %s", body)
-	}
+	require.Contains(t, body, `class="profile" disabled`, "no disabled profile button")
 }
 
 func TestPlayerTableHasNoSteamIDColumn(t *testing.T) {
 	e := newEnv(t, api.RoleAdmin)
 	_, body, _ := e.get("/b/main/i/alpha/players")
-	if strings.Contains(body, "Steam ID") || strings.Contains(body, "<td>7656</td>") {
-		t.Fatalf("the table shows the Steam ID: %s", body)
-	}
+	require.NotContains(t, body, "Steam ID", "the table shows the Steam ID")
+	require.NotContains(t, body, "<td>7656</td>", "the table shows the Steam ID")
 }
 
 func TestKickDialogAndAction(t *testing.T) {
 	e := newEnv(t, api.RoleModerator)
 	_, body, _ := e.get("/b/main/i/alpha/players/7656/panel")
 	for _, want := range []string{`data-dialog="kick-7656"`, `<dialog id="kick-7656"`, `hx-post="/b/main/i/alpha/players/7656/kick"`, `name="reason" required maxlength="64"`} {
-		if !strings.Contains(body, want) {
-			t.Errorf("panel lacks %s", want)
-		}
+		assert.Contains(t, body, want, "panel lacks %s", want)
 	}
 	kicked = nil
 	_, out := e.post("/b/main/i/alpha/players/7656/kick", url.Values{"reason": {" afk "}}, nil)
-	if !strings.Contains(out, "done") || len(kicked) != 1 || kicked[0] != "alpha 7656 afk" {
-		t.Fatalf("kick: %s %v", out, kicked)
-	}
-	if _, out := e.post("/b/main/i/alpha/players/7656/kick", url.Values{"reason": {strings.Repeat("r", 65)}}, nil); !strings.Contains(out, "64") {
-		t.Fatalf("long reason: %s", out)
-	}
+	require.Contains(t, out, "done", "kick")
+	require.Equal(t, []string{"alpha 7656 afk"}, kicked)
+	_, out = e.post("/b/main/i/alpha/players/7656/kick", url.Values{"reason": {strings.Repeat("r", 65)}}, nil)
+	require.Contains(t, out, "64", "long reason")
 }
 
 func TestPlayerPanelHasHealFixGearAndKillWithConfirmation(t *testing.T) {
@@ -556,18 +473,14 @@ func TestPlayerPanelHasHealFixGearAndKillWithConfirmation(t *testing.T) {
 	_, body, _ := e.get("/b/main/i/alpha/players/7656/panel")
 	for _, want := range []string{`hx-post="/b/main/i/alpha/players/7656/heal"`, `hx-post="/b/main/i/alpha/players/7656/fixgear"`,
 		`hx-post="/b/main/i/alpha/players/7656/kill"`, `hx-confirm="Kill &lt;b&gt;alice&lt;/b&gt;?`} {
-		if !strings.Contains(body, want) {
-			t.Errorf("panel lacks %s: %s", want, body)
-		}
+		assert.Contains(t, body, want, "panel lacks %s", want)
 	}
 }
 
-func seenFrom(t *testing.T, e *env, ip string) {
+func seenFrom(t testing.TB, e *env, ip string) {
 	t.Helper()
 	guid, _ := moderation.DeriveGUID(webSteam)
-	if err := e.api.Moderation.(webMod).st.Seen(context.Background(), "alpha", guid, ip, "alice", time.Now()); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, e.api.Moderation.(webMod).st.Seen(t.Context(), "alpha", guid, ip, "alice", time.Now()))
 	e.hub.Sync(admin.SyncRequest{Proto: 1, Players: []admin.Player{{SteamID: webSteam, Name: "alice", Alive: true}, {SteamID: "7656", Name: "bob", Alive: true}}})
 }
 
@@ -575,26 +488,20 @@ func TestPlayerListShowsTheFlag(t *testing.T) {
 	e := newEnv(t, api.RoleViewer)
 	seenFrom(t, e, "198.51.100.7")
 	_, body, _ := e.get("/b/main/i/alpha/players")
-	if !strings.Contains(body, `<span class="flag"><img src="/flags/DE.svg" alt="DE"`) {
-		t.Fatalf("no flag: %s", body)
-	}
-	if strings.Count(body, "<img") != 1 {
-		t.Fatalf("a player without a country got a flag: %s", body)
-	}
+	require.Contains(t, body, `<span class="flag"><img src="/flags/DE.svg" alt="DE"`, "no flag")
+	require.Equal(t, 1, strings.Count(body, "<img"), "a player without a country got a flag: %s", body)
 }
 
 func TestPlayerInfoShowsCountryButCityAndProviderNeedThePlayerIP(t *testing.T) {
 	e := newEnv(t, api.RoleOperator)
 	seenFrom(t, e, "198.51.100.7")
 	_, body, _ := e.get("/b/main/i/alpha/players/" + webSteam + "/info")
-	if !strings.Contains(body, "<dt>Country</dt>") || !strings.Contains(body, "/flags/DE.svg") || !strings.Contains(body, "</span>DE</dd>") {
-		t.Fatalf("no country: %s", body)
-	}
+	require.Contains(t, body, "<dt>Country</dt>", "no country")
+	require.Contains(t, body, "/flags/DE.svg", "no country")
+	require.Contains(t, body, "</span>DE</dd>", "no country")
 	// The legacy database holds no city, location or provider, so none are shown.
 	for _, no := range []string{"<dt>City</dt>", "<dt>Location</dt>", "<dt>Provider</dt>"} {
-		if strings.Contains(body, no) {
-			t.Errorf("%s with a country-only database: %s", no, body)
-		}
+		assert.NotContains(t, body, no, "with a country-only database")
 	}
 }
 
@@ -604,31 +511,26 @@ func TestInfoRowsForCityLocationAndProvider(t *testing.T) {
 	var out strings.Builder
 	err := e.srv.tmpl.ExecuteTemplate(&out, "playerinfo", playerInfoView{Name: "<x>", SteamID: webSteam,
 		Geo: geoip.Info{Country: "DE", CountryName: "Germany", City: "München", Lat: &lat, Lon: &lon, ASN: 6805, ASOrg: "Telefonica <Germany>"}})
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	body := out.String()
 	for _, want := range []string{"Germany (DE)", "<dd>München</dd>", "48.14, 11.57", "approximate", "AS6805 Telefonica &lt;Germany&gt;", "&lt;x&gt;"} {
-		if !strings.Contains(body, want) {
-			t.Errorf("no %q: %s", want, body)
-		}
+		assert.Contains(t, body, want)
 	}
 }
 
 func TestFlagsAreServedOnlyForTwoLetterCodes(t *testing.T) {
 	e := newEnv(t, api.RoleViewer)
-	if code, body, h := e.get("/flags/DE.svg"); code != 200 || body != "<svg/>" || !strings.Contains(h.Get("Cache-Control"), "max-age") {
-		t.Fatalf("de: %d %q %v", code, body, h)
-	}
+	code, body, h := e.get("/flags/DE.svg")
+	require.Equal(t, 200, code, "de")
+	require.Equal(t, "<svg/>", body, "de")
+	require.Contains(t, h.Get("Cache-Control"), "max-age", "de")
 	for _, p := range []string{"/flags/xx.svg", "/flags/d1.svg", "/flags/deu.svg", "/flags/%2e%2e%2fa"} {
-		if code, _, _ := e.get(p); code != 404 && code != 400 && code != 301 {
-			t.Errorf("%s: %d", p, code)
-		}
+		code, _, _ := e.get(p)
+		assert.Contains(t, []int{404, 400, 301}, code, p)
 	}
 	e.srv.opts.FlagsDir = ""
-	if code, _, _ := e.get("/flags/de.svg"); code != 404 {
-		t.Fatalf("no flags dir: %d", code)
-	}
+	code, _, _ = e.get("/flags/de.svg")
+	require.Equal(t, 404, code, "no flags dir")
 }
 
 func TestInstancePageOffersExpansionOnlyWithTheFeature(t *testing.T) {
@@ -636,45 +538,44 @@ func TestInstancePageOffersExpansionOnlyWithTheFeature(t *testing.T) {
 	types := []string{"toast", "baguette", "activity", "killfeed", "market", "garage"}
 	for _, path := range []string{"/b/main/i/alpha", "/b/main/i/alpha/players/7656/panel"} {
 		_, body, _ := e.get(path)
-		if strings.Contains(body, `value="expansion"`) || strings.Contains(body, `name="notify_type"`) {
-			t.Errorf("%s offers expansion without the feature: %s", path, body)
-		}
-		if !strings.Contains(body, `value="notification"`) || !strings.Contains(body, `name="title"`) || !strings.Contains(body, `name="seconds"`) {
-			t.Errorf("%s lacks the notification fields: %s", path, body)
+		assert.NotContains(t, body, `value="expansion"`, "%s offers expansion without the feature", path)
+		assert.NotContains(t, body, `name="notify_type"`, "%s offers expansion without the feature", path)
+		for _, want := range []string{`value="notification"`, `name="title"`, `name="seconds"`} {
+			assert.Contains(t, body, want, "%s lacks the notification fields", path)
 		}
 	}
 	e.hub.Sync(admin.SyncRequest{Proto: 1, Hello: true, World: "enoch", Features: []string{"expansion"}})
 	for _, path := range []string{"/b/main/i/alpha", "/b/main/i/alpha/players/7656/panel"} {
 		_, body, _ := e.get(path)
-		if !strings.Contains(body, `value="expansion"`) {
-			t.Errorf("%s: no expansion way with the feature: %s", path, body)
-		}
+		assert.Contains(t, body, `value="expansion"`, "%s: no expansion way with the feature", path)
 		for _, ty := range types {
-			if !strings.Contains(body, `<option value="`+ty+`"`) {
-				t.Errorf("%s: no %s type: %s", path, ty, body)
-			}
+			assert.Contains(t, body, `<option value="`+ty+`"`, "%s: no %s type", path, ty)
 		}
 	}
 }
 
 func TestOnlyTheBroadcastFormOffersRCon(t *testing.T) {
 	e := newEnv(t, api.RoleAdmin)
-	if _, body, _ := e.get("/b/main/i/alpha"); !strings.Contains(body, `value="rcon"`) {
-		t.Errorf("the broadcast form lacks rcon: %s", body)
-	}
-	if _, body, _ := e.get("/b/main/i/alpha/players/7656/panel"); strings.Contains(body, `value="rcon"`) {
-		t.Errorf("the player form offers rcon, which is for everyone only: %s", body)
-	}
+	_, body, _ := e.get("/b/main/i/alpha")
+	assert.Contains(t, body, `value="rcon"`, "the broadcast form lacks rcon")
+	_, body, _ = e.get("/b/main/i/alpha/players/7656/panel")
+	assert.NotContains(t, body, `value="rcon"`, "the player form offers rcon, which is for everyone only")
 }
 
 func TestBroadcastFormPostsNotifyFields(t *testing.T) {
 	e := newEnv(t, api.RoleAdmin)
 	e.hub.Sync(admin.SyncRequest{Proto: 1, Hello: true, World: "enoch", Features: []string{"expansion"}})
 	got := make(chan admin.Command, 1)
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
+	var wg sync.WaitGroup
+	wg.Add(1)
+	defer wg.Wait()
 	defer cancel()
 	go func() {
-		for ctx.Err() == nil {
+		defer wg.Done()
+		tick := time.NewTicker(time.Millisecond)
+		defer tick.Stop()
+		for {
 			var res []admin.Result
 			for _, c := range e.hub.Sync(admin.SyncRequest{Proto: 1}).Commands {
 				select {
@@ -686,27 +587,31 @@ func TestBroadcastFormPostsNotifyFields(t *testing.T) {
 			if len(res) > 0 {
 				e.hub.Sync(admin.SyncRequest{Proto: 1, Results: res})
 			}
-			time.Sleep(time.Millisecond)
+			select {
+			case <-ctx.Done():
+				return
+			case <-tick.C:
+			}
 		}
 	}()
 	code, body := e.post("/b/main/i/alpha/message", url.Values{"text": {"Restart"}, "style": {"expansion"}, "notify_type": {"baguette"}, "title": {"T"}, "seconds": {"5"}}, nil)
-	if code != 200 || !strings.Contains(body, "flash ok") {
-		t.Fatalf("post: %d %s", code, body)
-	}
+	require.Equal(t, 200, code, "post: %s", body)
+	require.Contains(t, body, "flash ok", "post")
 	select {
 	case c := <-got:
-		if c.Style != "expansion" || c.NotifyType != "baguette" || c.Title != "T" || c.Seconds != 5 {
-			t.Errorf("command = %+v", c)
-		}
+		assert.Equal(t, "expansion", c.Style)
+		assert.Equal(t, "baguette", c.NotifyType)
+		assert.Equal(t, "T", c.Title)
+		assert.Equal(t, 5, c.Seconds)
 	case <-time.After(5 * time.Second):
-		t.Fatal("the mod got no command")
+		require.Fail(t, "the mod got no command")
 	}
 }
 
 func TestForcedExpansionWithoutFeatureShowsAFlash(t *testing.T) {
 	e := newEnv(t, api.RoleAdmin)
 	code, body := e.post("/b/main/i/alpha/message", url.Values{"text": {"x"}, "style": {"expansion"}, "notify_type": {"toast"}}, nil)
-	if code != 200 || !strings.Contains(body, "not available") || strings.Contains(body, "flash ok") {
-		t.Fatalf("post: %d %s", code, body)
-	}
+	require.Equal(t, 200, code, "post: %s", body)
+	require.Contains(t, body, "not available", "post")
+	require.NotContains(t, body, "flash ok", "post")
 }
