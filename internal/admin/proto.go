@@ -187,16 +187,21 @@ const (
 // Command is one action for the mod. All fields are always serialised (the
 // mod's JSON reader keeps zero values for the ones a kind does not use).
 type Command struct {
-	ID        string  `json:"id"`
-	Kind      string  `json:"kind"`
-	SteamID   string  `json:"steam_id"`
-	ToSteamID string  `json:"to_steam_id"`
-	Text      string  `json:"text"`
-	Style     string  `json:"style"`
-	Type      string  `json:"type"`
-	Quantity  float64 `json:"quantity"`
-	Health    float64 `json:"health"`
-	Target    string  `json:"target"`
+	ID        string `json:"id"`
+	Kind      string `json:"kind"`
+	SteamID   string `json:"steam_id"`
+	ToSteamID string `json:"to_steam_id"`
+	Text      string `json:"text"`
+	Style     string `json:"style"`
+	// NotifyType, Title and Seconds shape a notification message: the Expansion type (style
+	// expansion), the heading and how long it stays on screen.
+	NotifyType string  `json:"notify_type"`
+	Title      string  `json:"title"`
+	Seconds    int     `json:"seconds"`
+	Type       string  `json:"type"`
+	Quantity   float64 `json:"quantity"`
+	Health     float64 `json:"health"`
+	Target     string  `json:"target"`
 	// Attachments asks for the item the way the game's own debug spawn makes it: with the kit it
 	// needs to be used (a flashlight with its battery, a weapon with its parts).
 	Attachments bool    `json:"attachments,omitempty"`
@@ -225,6 +230,8 @@ type SyncRequest struct {
 	World      string `json:"world"`
 	Seq        int    `json:"seq"`
 	Hello      Flag   `json:"hello"`
+	// Features lists what the mod can do beyond the basics; "expansion" when Expansion is loaded.
+	Features []string `json:"features"`
 	// Clock is the in-game time of day in minutes since midnight; it counts when Has lists "clock".
 	Clock int `json:"clock"`
 	// Has names the parts the mod included. Its JSON writer turns a missing

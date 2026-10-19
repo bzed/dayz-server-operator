@@ -51,7 +51,17 @@ type Hello struct {
 	Proto      int       `json:"protocol"`
 	World      string    `json:"world"`
 	Since      time.Time `json:"since"`
+	// Features lists what the mod can do beyond the basics; "expansion" when Expansion is loaded.
+	Features []string `json:"features,omitempty"`
 }
+
+// Has reports whether the mod announced feature. A nil Hello has none.
+func (h *Hello) Has(feature string) bool {
+	return h != nil && slices.Contains(h.Features, feature)
+}
+
+// NotifyTypes are the Expansion notification types a message can use.
+var NotifyTypes = []string{"toast", "baguette", "activity", "killfeed", "market", "garage"}
 
 // Status is the connection state of one instance's mod.
 type Status struct {
@@ -131,7 +141,7 @@ func (h *Hub) Sync(req SyncRequest) SyncReply {
 	now := h.now()
 	h.lastSeen = now
 	if h.hello == nil || req.Hello {
-		h.hello = &Hello{ModVersion: req.ModVersion, Proto: req.Proto, World: req.World, Since: now}
+		h.hello = &Hello{ModVersion: req.ModVersion, Proto: req.Proto, World: req.World, Since: now, Features: req.Features}
 		h.emit("status", h.statusLocked())
 	}
 	if slices.Contains(req.Has, "clock") && req.Clock >= 0 && req.Clock < 24*60 {
@@ -455,6 +465,9 @@ func (h *Hub) enqueue(cmd Command) (*pending, error) {
 	if !h.connectedLocked() {
 		return nil, ErrOffline
 	}
+	if cmd.Kind == KindMessage && cmd.Style == "expansion" && !h.hello.Has("expansion") {
+		return nil, errors.New("admin: expansion notifications are not available (the mod does not report Expansion)")
+	}
 	cmd.ID = newID()
 	p := &pending{cmd: cmd, queued: h.now(), done: make(chan struct{})}
 	h.queue = append(h.queue, p)
@@ -493,9 +506,29 @@ func (h *Hub) validate(c *Command) error {
 		switch c.Style {
 		case "":
 			c.Style = "chat"
-		case "chat", "blue", "important", "friendly", "action", "notification":
+		case "chat", "blue", "important", "friendly", "action", "notification", "expansion":
 		default:
 			return fmt.Errorf("admin: unknown message style %q", c.Style)
+		}
+		if len(c.Title) > 64 {
+			return errors.New("admin: message title is longer than 64 bytes")
+		}
+		if c.Title == "" {
+			c.Title = "Server"
+		}
+		if c.Seconds < 0 || c.Seconds > 60 {
+			return errors.New("admin: message seconds must be between 0 and 60")
+		}
+		if c.Seconds == 0 {
+			c.Seconds = 10
+		}
+		if c.Style == "expansion" {
+			if c.NotifyType == "" {
+				c.NotifyType = "toast"
+			}
+			if !slices.Contains(NotifyTypes, c.NotifyType) {
+				return fmt.Errorf("admin: unknown expansion type %q (want %s)", c.NotifyType, strings.Join(NotifyTypes, ", "))
+			}
 		}
 	case KindPlayerKill, KindPlayerHeal, KindPlayerFixGear:
 		return need("steam_id", c.SteamID)

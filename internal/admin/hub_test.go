@@ -437,3 +437,84 @@ func TestHubAsksForTheClassListAgainWhenAChunkDoesNotFit(t *testing.T) {
 		t.Errorf("types = %v", got)
 	}
 }
+
+// queued enqueues cmd and returns the command as the mod receives it.
+func queued(t *testing.T, h *Hub, cmd Command) Command {
+	t.Helper()
+	if _, err := h.Enqueue(cmd); err != nil {
+		t.Fatalf("Enqueue: %v", err)
+	}
+	r := h.Sync(SyncRequest{Proto: 1})
+	if len(r.Commands) != 1 {
+		t.Fatalf("commands = %d, want 1", len(r.Commands))
+	}
+	return r.Commands[0]
+}
+
+func TestMessageExpansionNeedsTheFeature(t *testing.T) {
+	h, _ := testHub()
+	hello(h)
+	_, err := h.Enqueue(Command{Kind: KindMessage, Style: "expansion", NotifyType: "toast", Text: "x"})
+	if err == nil || !strings.Contains(err.Error(), "expansion notifications are not available") {
+		t.Fatalf("err = %v", err)
+	}
+	h.Sync(SyncRequest{Proto: 1, Hello: true, World: "w", Features: []string{"expansion"}})
+	if _, err := h.Enqueue(Command{Kind: KindMessage, Style: "expansion", NotifyType: "toast", Text: "x"}); err != nil {
+		t.Fatalf("with the feature: %v", err)
+	}
+}
+
+func TestMessageExpansionTypeIsChecked(t *testing.T) {
+	h, _ := testHub()
+	h.Sync(SyncRequest{Proto: 1, Hello: true, World: "w", Features: []string{"expansion"}})
+	_, err := h.Enqueue(Command{Kind: KindMessage, Style: "expansion", NotifyType: "popup", Text: "x"})
+	if err == nil || !strings.Contains(err.Error(), "baguette") {
+		t.Fatalf("err = %v, want the allowed types", err)
+	}
+	if c := queued(t, h, Command{Kind: KindMessage, Style: "expansion", Text: "x"}); c.NotifyType != "toast" {
+		t.Errorf("default type = %q, want toast", c.NotifyType)
+	}
+}
+
+func TestMessageTitleAndSecondsLimits(t *testing.T) {
+	h, _ := testHub()
+	hello(h)
+	for name, c := range map[string]Command{
+		"title":    {Kind: KindMessage, Style: "notification", Text: "x", Title: strings.Repeat("t", 65)},
+		"seconds":  {Kind: KindMessage, Style: "notification", Text: "x", Seconds: 61},
+		"negative": {Kind: KindMessage, Style: "notification", Text: "x", Seconds: -1},
+	} {
+		if _, err := h.Enqueue(c); err == nil {
+			t.Errorf("%s: accepted", name)
+		}
+	}
+	got := queued(t, h, Command{Kind: KindMessage, Style: "notification", Text: "x"})
+	if got.Title != "Server" || got.Seconds != 10 {
+		t.Errorf("defaults = %q, %d; want Server, 10", got.Title, got.Seconds)
+	}
+}
+
+func TestHelloKeepsFeatures(t *testing.T) {
+	h, _ := testHub()
+	hello(h)
+	if h.Status().Hello.Has("expansion") {
+		t.Error("a hello without features reports expansion")
+	}
+	h.Sync(SyncRequest{Proto: 1, Hello: true, World: "w", Features: []string{"expansion"}})
+	hl := h.Status().Hello
+	if !hl.Has("expansion") || len(hl.Features) != 1 {
+		t.Errorf("hello = %+v", hl)
+	}
+	var none *Hello
+	if none.Has("expansion") {
+		t.Error("nil hello has a feature")
+	}
+}
+
+func TestMessageStyleRConIsRefusedByTheHub(t *testing.T) {
+	h, _ := testHub()
+	hello(h)
+	if _, err := h.Enqueue(Command{Kind: KindMessage, Style: "rcon", Text: "x"}); err == nil {
+		t.Fatal("the hub accepted the rcon style")
+	}
+}
