@@ -5,6 +5,8 @@ version: "2"
 
 run:
   timeout: 5m
+  build-tags:
+    - e2e
 
 linters:
   default: standard
@@ -17,12 +19,38 @@ linters:
     - gosec
     - bodyclose
     - misspell
+    - testifylint
+    - thelper
+    - usetesting
+    - forbidigo
+
+  settings:
+    testifylint:
+      enable-all: true
+    thelper:
+      tb:
+        name: false
+    usetesting:
+      context-background: true
+      context-todo: true
+    forbidigo:
+      forbid:
+        - pattern: ^time\.Sleep$
+          msg: tests wait with require.Eventually, a channel or a fake clock
+        - pattern: (^|\.)(t|tb)\.(Error|Errorf|Fatal|Fatalf)$
+          msg: use testify require/assert
 
   exclusions:
     rules:
       - path: _test\.go
         linters:
           - gosec
+      - path-except: _test\.go
+        linters:
+          - forbidigo
+          - thelper
+          - testifylint
+          - usetesting
 
 formatters:
   enable:

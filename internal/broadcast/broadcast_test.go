@@ -178,7 +178,7 @@ func TestRConPlayerWhoLeftDuringTheGraceIsNotGreeted(t *testing.T) {
 func TestRConRefusesNewlinesAndSlotsThatLeft(t *testing.T) {
 	s := &session{events: make(chan battleye.Event)}
 	b := &RCon{Session: s}
-	assert.Error(t, b.Say(t.Context(), nil, "a\nb", ""), "a newline must be refused")
+	require.Error(t, b.Say(t.Context(), nil, "a\nb", ""), "a newline must be refused")
 	assert.Empty(t, s.sent(), "nothing is sent for a refused message")
 	assert.Error(t, b.Say(t.Context(), &Player{Key: "9"}, "x", ""), "slot 9 never joined")
 }
@@ -256,7 +256,7 @@ func TestModSaysInTheStyleOfTheColour(t *testing.T) {
 	}
 	require.NoError(t, m.Say(t.Context(), nil, "all", "red"))
 	require.Empty(t, h.cmds[len(h.cmds)-1].SteamID)
-	assert.Error(t, m.Say(t.Context(), nil, "x", "pink"), "unknown colour")
+	require.Error(t, m.Say(t.Context(), nil, "x", "pink"), "unknown colour")
 	h.res = admin.Result{OK: false, Message: "player not online"}
 	assert.ErrorContains(t, m.Say(t.Context(), &Player{Key: "x"}, "x", ""), "player not online")
 }

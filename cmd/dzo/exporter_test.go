@@ -80,11 +80,11 @@ func TestExporterServesMetricsAndStatus(t *testing.T) {
 func TestExporterNeedsItsTokenAndRefusesBadConfig(t *testing.T) {
 	cfg := exporterSite(t, "  bearer_token_file: /nonexistent\n")
 	_, err := runCmd(t, "exporter", "--config", cfg)
-	assert.ErrorContains(t, err, "bearer_token_file", "a missing token file")
+	require.ErrorContains(t, err, "bearer_token_file", "a missing token file")
 	bad := filepath.Join(t.TempDir(), "c.yaml")
 	writeFile(t, bad, "exporter:\n  allow: [nonsense]\n")
 	_, err = runCmd(t, "exporter", "--config", bad)
-	assert.ErrorContains(t, err, "CIDR", "a bad allow-list is a config error")
+	require.ErrorContains(t, err, "CIDR", "a bad allow-list is a config error")
 	writeFile(t, bad, "exporter:\n  tls: {cert_file: /a}\n")
 	_, err = runCmd(t, "exporter", "--config", bad)
 	assert.ErrorContains(t, err, "go together", "a certificate without a key")
@@ -111,8 +111,8 @@ func TestStatusCommand(t *testing.T) {
 		}
 	}
 	_, err = runCmd(t, "status", "nope", "--config", cfg)
-	assert.Error(t, err, "an unknown instance")
+	require.Error(t, err, "an unknown instance")
 	out, err = runCmd(t, "status", "--json", "--config", cfg)
-	assert.NoError(t, err, "status --json: %s", out)
+	require.NoError(t, err, "status --json: %s", out)
 	assert.Contains(t, out, `"global"`, "status --json")
 }

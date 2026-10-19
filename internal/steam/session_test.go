@@ -260,7 +260,7 @@ echo "Waiting for user info...OK"
 	prompter := &blockingPrompter{cancel: cancel}
 	_, err := Run(ctx, runOpts(t, script, prompter))
 	require.Error(t, err, "expected a context error")
-	assert.True(t, errors.Is(err, context.Canceled), "err = %v, want context.Canceled", err)
+	assert.ErrorIs(t, err, context.Canceled, "err = %v, want context.Canceled", err)
 }
 
 type blockingPrompter struct {

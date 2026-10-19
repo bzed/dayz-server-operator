@@ -44,7 +44,7 @@ func TestSiteValidateAndPull(t *testing.T) {
 	dir := filepath.Dir(cfg)
 	writeFile(t, filepath.Join(dir, "site", "instances", "bad", "instance.yaml"), "name: bad\nproduct: nonexistent\nmap: m\nmission_source: {git: g, ref: r, path: p}\nports: {game: 2402, rcon: 2406, query: 27116}\nnetwork: host\n")
 	_, err = runCmd(t, "site", "validate", "--config", cfg)
-	assert.Error(t, err, "an instance with an unknown product must fail the validation")
+	require.Error(t, err, "an instance with an unknown product must fail the validation")
 
 	// pull: clone a local remote, then fast-forward it.
 	remote := filepath.Join(t.TempDir(), "remote")
@@ -82,7 +82,7 @@ func TestStopWithCountdownOptions(t *testing.T) {
 		{"stop", "x", "--minutes", "5", "--lock", "2", "--kick", "1", "--text", "Maintenance", "--config", cfg, "--command", script},
 	} {
 		out, err := runCmd(t, args...)
-		assert.NoError(t, err, "dzo %v: %s", args, out)
+		require.NoError(t, err, "dzo %v: %s", args, out)
 	}
 	// the countdown options need the site; an unknown instance fails instead of stopping plainly
 	_, err := runCmd(t, "stop", "nope", "--graceful", "--config", cfg, "--command", script)

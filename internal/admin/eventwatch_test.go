@@ -13,7 +13,7 @@ import (
 func TestVanillaEventWatch(t *testing.T) {
 	seen := map[string]bool{}
 	for _, r := range VanillaEventWatch() {
-		assert.NoError(t, r.Validate(), "layer %q", r.Layer)
+		require.NoError(t, r.Validate(), "layer %q", r.Layer)
 		assert.NotEmpty(t, r.Icon, "layer %q: icon, colour and label are needed", r.Layer)
 		assert.NotEmpty(t, r.Color, "layer %q: icon, colour and label are needed", r.Layer)
 		assert.NotEmpty(t, r.Label, "layer %q: icon, colour and label are needed", r.Layer)

@@ -43,11 +43,11 @@ func TestInstanceCreateAndApply(t *testing.T) {
 	require.NoError(t, err, "create: %s", out)
 	require.Contains(t, out, "created x", "create")
 	_, err = os.Stat(filepath.Join(root, "mpmissions", "empty.m", "init.c"))
-	assert.NoError(t, err, "the live mission was not created")
+	require.NoError(t, err, "the live mission was not created")
 	_, err = runCmd(t, "instance", "create", "x", "--config", cfg)
-	assert.ErrorContains(t, err, "exists", "a second create must fail")
+	require.ErrorContains(t, err, "exists", "a second create must fail")
 	_, err = runCmd(t, "instance", "create", "nope", "--config", cfg)
-	assert.Error(t, err, "an unknown instance must fail")
+	require.Error(t, err, "an unknown instance must fail")
 	// apply: a dry run says what it would write and calls no systemctl
 	out, err = runCmd(t, "instance", "apply", "x", "--config", cfg, "--dry-run")
 	require.NoError(t, err, "apply --dry-run: %s", out)
@@ -73,11 +73,11 @@ func TestInstanceUpgradeDryRunAndChecks(t *testing.T) {
 	require.Contains(t, out, "build 1 -> 2", "dry run")
 	require.Contains(t, out, "+ init.c", "dry run")
 	_, err = os.Stat(filepath.Join(data, "instances", "x", "mpmissions"))
-	assert.Error(t, err, "a dry run must not create the live mission")
+	require.Error(t, err, "a dry run must not create the live mission")
 	_, err = runCmd(t, "instance", "upgrade", "x", "--build", "1", "--dry-run", "--config", cfg)
-	assert.ErrorContains(t, err, "already", "the build it runs")
+	require.ErrorContains(t, err, "already", "the build it runs")
 	_, err = runCmd(t, "instance", "upgrade", "x", "--build", "9", "--dry-run", "--config", cfg)
-	assert.ErrorContains(t, err, "not installed", "an unknown build")
+	require.ErrorContains(t, err, "not installed", "an unknown build")
 	_, err = runCmd(t, "instance", "upgrade", "x", "--config", cfg)
 	assert.Error(t, err, "--build is required")
 }
@@ -142,7 +142,7 @@ func TestInstanceModsAndModRemove(t *testing.T) {
 	_, err = runCmd(t, "instance", "mods", "move", "x", "11", "--after", "22", "--config", cfg)
 	require.NoError(t, err)
 	_, err = runCmd(t, "instance", "mods", "move", "x", "11", "--config", cfg)
-	assert.Error(t, err, "--before or --after is required")
+	require.Error(t, err, "--before or --after is required")
 	_, err = runCmd(t, "mod", "remove", "22", "--instance", "x", "--config", cfg)
 	require.NoError(t, err)
 	b, _ = os.ReadFile(path) //nolint:gosec // test fixture
@@ -156,12 +156,12 @@ func TestMissionUpdateInitRollbackReinit(t *testing.T) {
 	live := filepath.Join(root, "mpmissions", "empty.m")
 
 	_, err := runCmd(t, "mission", "rollback", "x", "--config", cfg)
-	assert.Error(t, err, "a rollback without history must fail")
+	require.Error(t, err, "a rollback without history must fail")
 	out, err := runCmd(t, "mission", "init", "x", "--config", cfg)
 	require.NoError(t, err, "init: %s", out)
 	require.Contains(t, out, "written:", "init")
 	_, err = runCmd(t, "mission", "init", "x", "--config", cfg)
-	assert.ErrorContains(t, err, "exists", "a second init must fail")
+	require.ErrorContains(t, err, "exists", "a second init must fail")
 
 	// the mission repository moves on
 	writeFile(t, filepath.Join(repo, "empty.m", "init.c"), "init2")
@@ -200,18 +200,18 @@ func TestWipe(t *testing.T) {
 	storage := filepath.Join(root, "storage", "empty.m")
 	writeFile(t, filepath.Join(storage, "storage_1", "data.bin"), "world")
 	_, err := runCmd(t, "wipe", "x", "--yes", "--config", cfg)
-	assert.ErrorContains(t, err, "snapshot", "a wipe without btrfs and without --no-snapshot must fail")
+	require.ErrorContains(t, err, "snapshot", "a wipe without btrfs and without --no-snapshot must fail")
 	_, err = os.Stat(filepath.Join(storage, "storage_1"))
 	require.NoError(t, err, "nothing may be deleted when the wipe was refused")
 	_, err = runCmdWithStdin(t, "no\n", "wipe", "x", "--no-snapshot", "--config", cfg)
-	assert.ErrorContains(t, err, "aborted", "an answer other than yes aborts")
+	require.ErrorContains(t, err, "aborted", "an answer other than yes aborts")
 	out, err := runCmdWithStdin(t, "yes\n", "wipe", "x", "--no-snapshot", "--config", cfg)
 	require.NoError(t, err, "wipe: %s", out)
 	require.Contains(t, out, "wiped", "wipe")
 	_, err = os.Stat(filepath.Join(storage, "storage_1"))
-	assert.ErrorIs(t, err, os.ErrNotExist, "the world must be gone")
+	require.ErrorIs(t, err, os.ErrNotExist, "the world must be gone")
 	n, err := removeStorage(filepath.Join(root, "nowhere"))
-	assert.NoError(t, err, "a missing storage directory is nothing to wipe")
+	require.NoError(t, err, "a missing storage directory is nothing to wipe")
 	assert.Zero(t, n, "a missing storage directory is nothing to wipe")
 }
 
@@ -287,7 +287,7 @@ func TestInstanceCloneAndRemove(t *testing.T) {
 
 	for _, bad := range [][]string{{"x", "x"}, {"x", "nope"}} {
 		_, err := runCmd(t, append([]string{"instance", "clone"}, append(bad, "--config", cfg)...)...)
-		assert.Error(t, err, "clone %v must fail", bad)
+		require.Error(t, err, "clone %v must fail", bad)
 	}
 	out, err := runCmd(t, "instance", "clone", "x", "y", "--config", cfg)
 	require.NoError(t, err, "clone: %s", out)
@@ -299,9 +299,9 @@ func TestInstanceCloneAndRemove(t *testing.T) {
 	b, _ = os.ReadFile(filepath.Join(y, "runtime", "build"))
 	assert.Equal(t, "1", string(b), "the build pin was lost")
 	_, err = os.Stat(filepath.Join(y, "profiles", "old.log"))
-	assert.Error(t, err, "the profile logs were copied")
+	require.Error(t, err, "the profile logs were copied")
 	_, err = runCmd(t, "instance", "clone", "x", "y", "--config", cfg)
-	assert.Error(t, err, "clone onto an existing instance must fail")
+	require.Error(t, err, "clone onto an existing instance must fail")
 
 	// remove: units are deleted, the data directory is gone, the site stays
 	q, u := userDirs()
@@ -314,12 +314,12 @@ func TestInstanceCloneAndRemove(t *testing.T) {
 	require.Contains(t, out, "removed 1 snapshot(s)", "remove")
 	for _, p := range []string{y, filepath.Join(q, "dzo-y.container"), filepath.Join(data, "snapshots", "y")} {
 		_, err := os.Lstat(p)
-		assert.Error(t, err, "%s is still there", p)
+		require.Error(t, err, "%s is still there", p)
 	}
 	_, err = runCmd(t, "instance", "remove", "y", "--yes", "--config", cfg)
-	assert.Error(t, err, "removing an instance twice must fail")
+	require.Error(t, err, "removing an instance twice must fail")
 	_, err = runCmd(t, "instance", "remove", "../x", "--yes", "--config", cfg)
-	assert.Error(t, err, "a path as the name must fail")
+	require.Error(t, err, "a path as the name must fail")
 	_, err = runCmd(t, "instance", "remove", "x", "--keep-snapshots", "--delete-logs", "--config", cfg)
 	assert.Error(t, err, "without --yes and without input remove must abort")
 }
@@ -341,7 +341,7 @@ func TestMissionStatusAndSiteStatusCommit(t *testing.T) {
 	require.Contains(t, out, "next render:", "status")
 
 	_, err = runCmd(t, "site", "status", "--config", cfg)
-	assert.Error(t, err, "without a checkout, site status must say so")
+	require.Error(t, err, "without a checkout, site status must say so")
 	commitAll(t, site)
 	writeFile(t, filepath.Join(site, "instances", "x", "note"), "n")
 	out, err = runCmd(t, "site", "status", "--config", cfg)
@@ -367,7 +367,7 @@ func TestLegacyConvertConfig(t *testing.T) {
 	commitAll(t, repo)
 	out := filepath.Join(t.TempDir(), "site")
 	_, err := runCmd(t, "legacy", "convert-config", "--repo", repo, "--out", out)
-	assert.Error(t, err, "--ref is required")
+	require.Error(t, err, "--ref is required")
 	o, err := runCmd(t, "legacy", "convert-config", "--repo", repo, "--ref", "main", "--out", out, "--dry-run")
 	require.NoError(t, err, "dry run: %s", o)
 	require.Contains(t, o, "would write instances/main/instance.yaml", "dry run")

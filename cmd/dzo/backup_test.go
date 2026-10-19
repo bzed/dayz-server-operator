@@ -33,7 +33,7 @@ func btrfsData(t testing.TB) string {
 	if ok, err := btrfs.IsBtrfs(base); err != nil || !ok {
 		t.Skipf("%s is not on btrfs; set DZO_BTRFS_TESTDIR", base)
 	}
-	data, err := os.MkdirTemp(base, "dzo-cli-test-")
+	data, err := os.MkdirTemp(base, "dzo-cli-test-") //nolint:usetesting // must live on the btrfs mount, t.TempDir() does not
 	if err != nil {
 		t.Skip(err)
 	}
@@ -82,7 +82,7 @@ func TestBackupAndRestoreThroughTheCLI(t *testing.T) {
 	_, err = runCmd(t, "backup", "unpin", "x", id, "--config", cfg)
 	require.NoError(t, err)
 	out, err = runCmd(t, "backup", "prune", "--dry-run", "--config", cfg)
-	assert.NoError(t, err, "one snapshot is within the policy: %s", out)
+	require.NoError(t, err, "one snapshot is within the policy: %s", out)
 	assert.NotContains(t, out, "would prune", "one snapshot is within the policy")
 
 	// a path restore, then a full restore, with the instance not running (no systemd here)
@@ -98,7 +98,7 @@ func TestBackupAndRestoreThroughTheCLI(t *testing.T) {
 	out, err = runCmd(t, args...)
 	require.NoError(t, err, "restore: %s", out)
 	_, err = os.Stat(filepath.Join(root, "marker"))
-	assert.ErrorIs(t, err, os.ErrNotExist, "a full restore brings back the backup")
+	require.ErrorIs(t, err, os.ErrNotExist, "a full restore brings back the backup")
 	ok, _ = btrfs.IsSubvolume(root)
 	assert.True(t, ok, "the restored instance is a subvolume")
 	out, _ = runCmd(t, "backup", "list", "x", "--config", cfg)

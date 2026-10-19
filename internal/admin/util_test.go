@@ -18,7 +18,7 @@ func TestParseQuantity(t *testing.T) {
 	} {
 		got, err := ParseQuantity(in)
 		require.NoError(t, err)
-		assert.Equal(t, want, got)
+		assert.InDelta(t, want, got, 1e-9)
 	}
 	for _, in := range []string{"lots", "-3", "-0.5", "NaN", "Inf", "1e999"} {
 		_, err := ParseQuantity(in)

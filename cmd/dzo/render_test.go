@@ -117,7 +117,7 @@ func commitAll2(t testing.TB, dir string) {
 func TestInstanceRenderFailures(t *testing.T) {
 	cfg, _, repo := renderSetup(t)
 	_, err := runCmd(t, "instance", "render", "nope", "--config", cfg)
-	assert.Error(t, err, "unknown instance must fail")
+	require.Error(t, err, "unknown instance must fail")
 	require.NoError(t, os.RemoveAll(repo))
 	_, err = runCmd(t, "instance", "render", "x", "--config", cfg)
 	assert.Error(t, err, "unfetchable pristine must fail")
@@ -134,7 +134,7 @@ func TestInstanceRenderNeedsServerCfgBeforeTouchingTheMission(t *testing.T) {
 		}
 	}
 	_, err := os.Stat(filepath.Join(root, "mpmissions"))
-	assert.ErrorIs(t, err, os.ErrNotExist, "the live mission must not be touched when the start would fail anyway")
+	require.ErrorIs(t, err, os.ErrNotExist, "the live mission must not be touched when the start would fail anyway")
 	writeFile(t, filepath.Join(data, "site", "instances", "x", "serverDZ.cfg"), "not a config")
 	_, err = runCmd(t, "instance", "render", "x", "--config", cfg)
 	assert.Error(t, err, "a serverDZ.cfg that does not parse must fail")

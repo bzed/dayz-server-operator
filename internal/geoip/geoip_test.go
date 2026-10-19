@@ -268,9 +268,13 @@ func countryRec() []byte {
 	return mmdbMap(mmdbString("country"), mmdbMap(mmdbString("iso_code"), mmdbString("US"), mmdbString("names"), mmdbMap(mmdbString("en"), mmdbString("United States"))))
 }
 
-func countryDB(t testing.TB, path string) { writeMMDB(t, path, "GeoLite2-Country", countryRec()) }
+func countryDB(t testing.TB, path string) {
+	t.Helper()
+	writeMMDB(t, path, "GeoLite2-Country", countryRec())
+}
 
 func cityDB(t testing.TB, path string) {
+	t.Helper()
 	rec := mmdbMap(
 		mmdbString("city"), names("Mountain View"),
 		mmdbString("country"), mmdbMap(mmdbString("iso_code"), mmdbString("US"), mmdbString("names"), mmdbMap(mmdbString("en"), mmdbString("United States"))),
@@ -280,6 +284,7 @@ func cityDB(t testing.TB, path string) {
 }
 
 func asnDB(t testing.TB, path string) {
+	t.Helper()
 	writeMMDB(t, path, "GeoLite2-ASN", mmdbMap(
 		mmdbString("autonomous_system_number"), mmdbUint(6, 15169),
 		mmdbString("autonomous_system_organization"), mmdbString("Google LLC"),

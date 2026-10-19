@@ -326,7 +326,7 @@ func TestAnInstanceThatDoesNotResolveDoesNotStopTheOthers(t *testing.T) {
 		}
 	}
 	assert.Equal(t, "failed", bad.Action)
-	assert.Error(t, bad.Err)
+	require.Error(t, bad.Err)
 	assert.Equal(t, "none", good.Action)
 }
 

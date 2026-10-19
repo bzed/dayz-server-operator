@@ -122,7 +122,7 @@ func TestBanLifecycleOverAPI(t *testing.T) {
 	// Another moderator may not revoke alice's ban; an admin may.
 	code, _ = e.do("POST", fmt.Sprintf("/api/v1/bans/%d/revoke", id), mod, `{"reason":"no"}`, "X-Dzo-Actor", "bob")
 	require.Equal(t, 403, code)
-	code, b = e.do("POST", fmt.Sprintf("/api/v1/bans/%d/revoke", id), e.token(RoleAdmin, nil, false), `{"reason":"appeal"}`)
+	code, _ = e.do("POST", fmt.Sprintf("/api/v1/bans/%d/revoke", id), e.token(RoleAdmin, nil, false), `{"reason":"appeal"}`)
 	require.Equal(t, 200, code)
 	code, b = e.do("GET", fmt.Sprintf("/api/v1/bans/%d/history", id), mod, "")
 	require.Equal(t, 200, code, "history: %d %s", code, b)

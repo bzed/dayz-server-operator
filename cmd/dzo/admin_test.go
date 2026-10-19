@@ -335,10 +335,10 @@ func TestCheckModsUsable(t *testing.T) {
 	} {
 		err := check(tc.name, mod(tc.name, tc.files))
 		if tc.wantErr == "" {
-			assert.NoError(t, err, tc.name)
+			require.NoError(t, err, tc.name)
 		} else {
-			assert.ErrorContains(t, err, tc.wantErr, tc.name)
-			assert.ErrorContains(t, err, "@"+tc.name, tc.name)
+			require.ErrorContains(t, err, tc.wantErr, tc.name)
+			require.ErrorContains(t, err, "@"+tc.name, tc.name)
 		}
 	}
 	if os.Geteuid() == 0 {
@@ -352,7 +352,7 @@ func TestCheckModsUsable(t *testing.T) {
 	t.Cleanup(func() { _ = os.Chmod(locked, 0o750) })
 	for name, d := range map[string]string{"locked": locked, "lockedpbo": lockedPBO} {
 		err := check(name, d)
-		assert.ErrorContains(t, err, "@"+name, name)
+		require.ErrorContains(t, err, "@"+name, name)
 		assert.ErrorContains(t, err, "chown -R dayz:dayz", name)
 	}
 }

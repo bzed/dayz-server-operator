@@ -168,9 +168,9 @@ func TestConvertOverlaysAndReport(t *testing.T) {
 
 func TestConvertErrorsAndHelpers(t *testing.T) {
 	_, err := Convert(fake{}, Options{})
-	assert.Error(t, err, "no branch must fail")
+	require.Error(t, err, "no branch must fail")
 	_, err = Convert(fake{}, Options{Refs: []string{"nope"}})
-	assert.Error(t, err, "an unknown branch must fail")
+	require.Error(t, err, "an unknown branch must fail")
 	// a branch without serverDZ.cfg and server.json still converts, and says so
 	res, err := Convert(fake{"x": {"files/messages.xml": "m"}}, Options{Refs: []string{"x"}})
 	require.NoError(t, err)

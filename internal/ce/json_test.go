@@ -50,7 +50,7 @@ func TestMergeJSONArrayAppendedForListedKeys(t *testing.T) {
 	want := []float64{1, 2, 3, 4}
 	require.Len(t, triggers, len(want))
 	for i, w := range want {
-		assert.Equal(t, w, triggers[i])
+		assert.InDelta(t, w, triggers[i], 1e-9)
 	}
 }
 
@@ -62,7 +62,7 @@ func TestMergeJSONAppendKeyOnlyAffectsArrays(t *testing.T) {
 	overlay := `{"Triggers": {"count": 2}}`
 	result := mustMergeJSON(t, base, overlay, []string{"Triggers"})
 	triggers := result["Triggers"].(map[string]any)
-	assert.Equal(t, float64(2), triggers["count"])
+	assert.InDelta(t, 2, triggers["count"], 1e-9)
 }
 
 func TestMergeJSONNewKeyFromOverlayOnly(t *testing.T) {

@@ -134,6 +134,7 @@ func (e *installEnv) run(t testing.TB, args ...string) (string, error) {
 }
 
 func (e *installEnv) downloads(t testing.TB) int {
+	t.Helper()
 	data, _ := os.ReadFile(filepath.Join(e.fake, "calls"))
 	return strings.Count(string(data), "workshop_download_item") + strings.Count(string(data), "app_update")
 }
@@ -193,11 +194,11 @@ func TestModUpdateListRefresh(t *testing.T) {
 
 	// refresh needs --force and a selection
 	_, err = e.run(t, "mod", "refresh", "111")
-	assert.Error(t, err, "refresh without --force must fail")
+	require.Error(t, err, "refresh without --force must fail")
 	_, err = e.run(t, "mod", "refresh", "--force")
-	assert.Error(t, err, "refresh without ids or --all must fail")
+	require.Error(t, err, "refresh without ids or --all must fail")
 	_, err = e.run(t, "mod", "refresh", "999", "--force")
-	assert.ErrorContains(t, err, "not used", "unknown ref")
+	require.ErrorContains(t, err, "not used", "unknown ref")
 	out, err = e.run(t, "mod", "refresh", "111", "--force")
 	require.NoError(t, err, "refresh: %s", out)
 	require.Contains(t, out, "installed 10-r1", "refresh")
@@ -205,7 +206,7 @@ func TestModUpdateListRefresh(t *testing.T) {
 	require.NoError(t, err, "refresh --all: %s", out)
 	require.Contains(t, out, "10-r2", "refresh --all")
 	_, err = e.run(t, "mod", "update", "nope")
-	assert.Error(t, err, "an unknown instance must fail")
+	require.Error(t, err, "an unknown instance must fail")
 	_, err = e.run(t, "mod", "list", "nope")
 	assert.Error(t, err, "an unknown instance must fail")
 }
@@ -244,13 +245,13 @@ func TestModAdd(t *testing.T) {
 	assert.Contains(t, got, "- {id: 222, server: true}", "instance.yaml")
 	assert.Contains(t, got, "# x", "instance.yaml")
 	_, err = e.run(t, "mod", "add", "222", "--instance", "x")
-	assert.Error(t, err, "adding the same mod twice must fail")
+	require.Error(t, err, "adding the same mod twice must fail")
 	_, err = e.run(t, "mod", "add", "ghost", "--instance", "x")
-	assert.Error(t, err, "an unknown local mod must fail")
+	require.Error(t, err, "an unknown local mod must fail")
 	_, err = e.run(t, "mod", "add", "tools", "--instance", "nope")
-	assert.Error(t, err, "an unknown instance must fail")
+	require.Error(t, err, "an unknown instance must fail")
 	out, err = e.run(t, "mod", "list", "x")
-	assert.NoError(t, err, "list: %s", out)
+	require.NoError(t, err, "list: %s", out)
 	assert.Contains(t, out, "@222\tserver\t20", "list")
 }
 
@@ -296,14 +297,14 @@ func TestModAddDebugClient(t *testing.T) {
 	require.Contains(t, out, "warning: x loads the local client mod dbg", "add")
 	assert.Contains(t, readFile(t, inst), "- {local: dbg, debug_client: true}", "instance.yaml")
 	out, err = e.run(t, "mod", "list", "x")
-	assert.NoError(t, err, "list: %s", out)
+	require.NoError(t, err, "list: %s", out)
 	assert.Contains(t, out, "@dbg\tclient (debug, local)\t", "list")
 	out, err = runCmd(t, "site", "validate", "--config", e.cfg)
-	assert.NoError(t, err, "validate: %s", out)
+	require.NoError(t, err, "validate: %s", out)
 	assert.Contains(t, out, "warning: x loads the local client mod dbg", "validate")
 	// a later update keeps importing it as a signed client mod, with its keys
 	out, err = e.run(t, "mod", "update", "x")
-	assert.NoError(t, err, "update: %s", out)
+	require.NoError(t, err, "update: %s", out)
 	assert.NotContains(t, out, "FAILED", "update")
 }
 

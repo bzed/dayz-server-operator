@@ -35,7 +35,7 @@ func TestIconNamesAndUnknownIcons(t *testing.T) {
 func TestWatchRuleIconAndColorValidation(t *testing.T) {
 	ok := WatchRule{Layer: "l", Classes: []string{"X"}, Icon: "fire", Color: "#c0392b"}
 	err := ok.Validate()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	for _, w := range []WatchRule{
 		{Layer: "l", Classes: []string{"X"}, Icon: "Fire"},
 		{Layer: "l", Classes: []string{"X"}, Icon: "fa fa-fire"},

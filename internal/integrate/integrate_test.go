@@ -113,18 +113,18 @@ func TestSourcesAreContainedAndMustExist(t *testing.T) {
 	tr := tree(t, dir)
 	inst := &resolve.Instance{Name: "x", Map: "m", Mods: []resolve.Mod{{ID: 1}}}
 	_, err := Collect(t.Context(), tr, inst, Options{})
-	assert.Error(t, err, "a local path that leaves the integration folder must be refused")
+	require.Error(t, err, "a local path that leaves the integration folder must be refused")
 	// a link out is no way around it
 	put(t, filepath.Join(dir, "integrations", "mods", "1", "integration.yaml"), "mod: 1\nname: One\nfiles:\n  types.xml: {source: local, path: link.xml}\n")
 	require.NoError(t, os.Symlink(outside, filepath.Join(dir, "integrations", "mods", "1", "link.xml")))
 	tr = tree(t, dir)
 	_, err = Collect(t.Context(), tr, inst, Options{})
-	assert.Error(t, err, "a link out of the folder must be refused")
+	require.Error(t, err, "a link out of the folder must be refused")
 	// a mod source needs the mod
 	put(t, filepath.Join(dir, "integrations", "mods", "1", "integration.yaml"), "mod: 1\nname: One\nfiles:\n  events.xml: {source: mod, path: info/events.xml}\n")
 	tr = tree(t, dir)
 	_, err = Collect(t.Context(), tr, inst, Options{})
-	assert.ErrorContains(t, err, "not downloaded")
+	require.ErrorContains(t, err, "not downloaded")
 	_, err = Collect(t.Context(), tr, &resolve.Instance{Name: "x", Map: "m", Overlays: []string{"nope"}}, Options{})
 	assert.Error(t, err, "an overlay that does not exist must be an error")
 }
@@ -158,13 +158,13 @@ func TestURLSourceIsCachedAndPinned(t *testing.T) {
 	require.NoError(t, run(pinned))
 	require.NoError(t, run(pinned))
 	assert.Equal(t, 1, hits, "a pinned file is fetched once")
-	assert.ErrorContains(t, run(write("url: "+srv.URL+"/t.xml, sha256: "+strings.Repeat("0", 64))), "pinned", "a wrong hash must be refused")
+	require.ErrorContains(t, run(write("url: "+srv.URL+"/t.xml, sha256: "+strings.Repeat("0", 64))), "pinned", "a wrong hash must be refused")
 	unpinned := write("url: " + srv.URL + "/u.xml")
 	require.NoError(t, run(unpinned))
 	before := hits
 	require.NoError(t, run(unpinned))
 	assert.Equal(t, before, hits, "an unpinned file is kept by URL too")
-	assert.ErrorContains(t, run(write("url: "+srv.URL+"/missing")), "404", "an HTTP error must be reported")
+	require.ErrorContains(t, run(write("url: "+srv.URL+"/missing")), "404", "an HTTP error must be reported")
 	// the Get hook replaces the HTTP client
 	_, err := Collect(t.Context(), write("url: http://example.invalid/x"), inst, Options{CacheDir: t.TempDir(), Get: func(context.Context, string) ([]byte, error) { return nil, errors.New("no network") }})
 	assert.ErrorContains(t, err, "no network")

@@ -121,12 +121,12 @@ func TestInstallMods(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, res[0].Changed, "mod 1 = %+v", res[0])
 	require.Equal(t, "100", res[0].Generation)
-	assert.Nil(t, res[0].Err)
-	require.NotNil(t, res[1].Err)
+	require.NoError(t, res[0].Err)
+	require.Error(t, res[1].Err)
 	assert.Contains(t, res[1].Err.Error(), "meta.cpp")
-	require.NotNil(t, res[2].Err)
+	require.Error(t, res[2].Err)
 	assert.Contains(t, res[2].Err.Error(), "download failed")
-	require.NotNil(t, res[3].Err)
+	require.Error(t, res[3].Err)
 	assert.Contains(t, res[3].Err.Error(), "does not list this item")
 	cur, _ := ModStore(in.CacheRoot, 221100, 2).Current()
 	assert.Empty(t, cur, "an invalid mod must not become a generation")
@@ -170,14 +170,14 @@ func TestInstallModsUnlistedItem(t *testing.T) {
 
 	res, err := in.InstallMods(ctx, 221100, []uint64{7}, false)
 	require.NoError(t, err)
-	require.Nil(t, res[0].Err)
+	require.NoError(t, res[0].Err)
 	require.True(t, res[0].Changed)
 	require.Equal(t, "777", res[0].Generation)
 	// the version of an unlisted item is only known after a download: a re-run downloads again
 	// and finds the generation it has
 	res, err = in.InstallMods(ctx, 221100, []uint64{7}, false)
 	require.NoError(t, err)
-	require.Nil(t, res[0].Err)
+	require.NoError(t, res[0].Err)
 	require.False(t, res[0].Changed)
 	require.Equal(t, "777", res[0].Generation)
 	// and a version bump on Steam's side becomes a new generation
@@ -252,7 +252,7 @@ func TestInstallModsBatchesDetailsLookups(t *testing.T) {
 	res, err := in.InstallMods(t.Context(), 221100, ids, false)
 	require.NoError(t, err)
 	for _, r := range res {
-		require.Nil(t, r.Err)
+		require.NoError(t, r.Err)
 		require.True(t, r.Changed, "result %+v", r)
 	}
 }

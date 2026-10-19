@@ -46,14 +46,14 @@ func TestMsgExpansionSendsTypeTitleSeconds(t *testing.T) {
 func TestMsgTypeWithoutExpansionStyleIsAnError(t *testing.T) {
 	common, got := msgAPI(t)
 	_, err := runCmd(t, append([]string{"player", "msg", "alpha", "all", "x", "--type", "toast"}, common...)...)
-	assert.ErrorContains(t, err, "--style expansion")
+	require.ErrorContains(t, err, "--style expansion")
 	assert.Empty(t, *got, "requests")
 }
 
 func TestMsgUnknownTypeListsTheTypes(t *testing.T) {
 	common, got := msgAPI(t)
 	_, err := runCmd(t, append([]string{"player", "msg", "alpha", "all", "x", "--style", "expansion", "--type", "popup"}, common...)...)
-	assert.ErrorContains(t, err, "baguette")
+	require.ErrorContains(t, err, "baguette")
 	assert.Empty(t, *got, "requests")
 }
 

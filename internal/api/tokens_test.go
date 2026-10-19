@@ -43,7 +43,7 @@ func TestTokenLifecycle(t *testing.T) {
 	require.NoError(t, err)
 	_, ok = s.Lookup(secret)
 	require.False(t, ok, "revoked token still works")
-	require.NotNil(t, s.Revoke("nope"), "revoking an unknown id must fail")
+	require.Error(t, s.Revoke("nope"), "revoking an unknown id must fail")
 }
 
 func TestTokenExpiryAndValidation(t *testing.T) {

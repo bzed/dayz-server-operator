@@ -35,6 +35,7 @@ func setup(t testing.TB) (*apiclient.Client, *admin.Hub, *api.Server) {
 }
 
 func answer(t testing.TB, hub *admin.Hub, ok bool) func() {
+	t.Helper()
 	ctx, cancel := context.WithCancel(t.Context())
 	done := make(chan struct{})
 	go func() {
@@ -114,7 +115,7 @@ func TestActions(t *testing.T) {
 		"delete":    func() (api.ActionResult, error) { return c.DeleteVehicle(ctx, "alpha", "v", true) },
 	} {
 		r, err := f()
-		assert.NoError(t, err, name)
+		require.NoError(t, err, name)
 		assert.True(t, r.OK, "%s: %+v", name, r)
 	}
 	entries, err := c.Audit(ctx, "alpha", 1)
@@ -164,7 +165,7 @@ func TestStream(t *testing.T) {
 func TestTileRejectsABadPathAndRelaysTheAnswer(t *testing.T) {
 	c, _, _ := setup(t)
 	_, err := c.Tile(t.Context(), "../x", "metadata.json")
-	assert.Error(t, err, "a bad tile path must not be sent")
+	require.Error(t, err, "a bad tile path must not be sent")
 	resp, err := c.Tile(t.Context(), "chernarusplus", "metadata.json")
 	require.NoError(t, err)
 	_ = resp.Body.Close()

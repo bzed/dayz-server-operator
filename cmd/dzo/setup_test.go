@@ -30,7 +30,7 @@ func TestSetupDryRunCommand(t *testing.T) {
 	assert.Contains(t, out, "todo  create paths.data")
 	assert.Contains(t, out, "dzo-image-refresh.timer")
 	_, err = os.Stat(filepath.Join(dir, "data"))
-	assert.ErrorIs(t, err, os.ErrNotExist, "--dry-run created the data directory")
+	require.ErrorIs(t, err, os.ErrNotExist, "--dry-run created the data directory")
 	_, err = runCmd(t, "setup", "--config", filepath.Join(dir, "none.yaml"))
 	assert.Error(t, err, "a missing config must fail")
 }

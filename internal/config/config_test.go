@@ -164,12 +164,12 @@ func TestServeAndWebDefaults(t *testing.T) {
 
 func TestCheckListen(t *testing.T) {
 	for _, ok := range []string{"127.0.0.1:80", "[::1]:80", "localhost:80"} {
-		assert.NoError(t, CheckListen(ok, false), ok)
+		require.NoError(t, CheckListen(ok, false), ok)
 	}
 	for _, bad := range []string{"0.0.0.0:80", "example.invalid:80", ":80", "nonsense", "127.0.0.1:"} {
-		assert.Error(t, CheckListen(bad, false), "%s must be refused", bad)
+		require.Error(t, CheckListen(bad, false), "%s must be refused", bad)
 	}
-	assert.NoError(t, CheckListen("0.0.0.0:80", true), "insecure override")
+	require.NoError(t, CheckListen("0.0.0.0:80", true), "insecure override")
 	assert.Error(t, CheckListen("nonsense", true), "a malformed address is refused even with the override")
 }
 
@@ -182,7 +182,7 @@ func TestValidateListenAndBackends(t *testing.T) {
 		"duplicate name":   "web: {backends: [{name: a, url: http://x, token_file: /t}, {name: a, url: http://y, token_file: /t}]}",
 	} {
 		_, err := Parse([]byte(yml))
-		assert.ErrorContains(t, err, name)
+		require.ErrorContains(t, err, name)
 	}
 	good := "serve: {listen: '0.0.0.0:8080', allow_insecure_http: true}\nweb: {backends: [{name: a, url: http://x, token_file: /t}]}"
 	_, err := Parse([]byte(good))
