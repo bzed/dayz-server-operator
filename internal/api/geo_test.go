@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/bzed/dayz-server-operator/internal/admin"
 	"github.com/bzed/dayz-server-operator/internal/geoip"
 	"github.com/bzed/dayz-server-operator/internal/geoip/geoiptest"
@@ -25,12 +27,12 @@ func TestPlayerListCarriesTheCountry(t *testing.T) {
 	e := geoEnv(t)
 	code, b := e.do("GET", "/api/v1/instances/alpha/players", e.token(RoleViewer, nil, false), "")
 	var ps []admin.Player
-	if err := json.Unmarshal(b, &ps); err != nil || code != 200 || len(ps) != 2 {
-		t.Fatalf("%d %s %v", code, b, err)
-	}
-	if ps[0].Country != "DE" || ps[1].Country != "" {
-		t.Fatalf("countries = %q %q (what the mod sent must be overwritten)", ps[0].Country, ps[1].Country)
-	}
+	err := json.Unmarshal(b, &ps)
+	require.NoError(t, err)
+	require.Equal(t, 200, code)
+	require.Len(t, ps, 2)
+	require.Equal(t, "DE", ps[0].Country, "countries = %q %q (what the mod sent must be overwritten)", ps[0].Country, ps[1].Country)
+	require.Empty(t, ps[1].Country, "countries = %q %q (what the mod sent must be overwritten)", ps[0].Country, ps[1].Country)
 }
 
 func TestPlayerListWithoutGeoIP(t *testing.T) {
@@ -38,9 +40,9 @@ func TestPlayerListWithoutGeoIP(t *testing.T) {
 	e.srv.GeoIP = nil
 	_, b := e.do("GET", "/api/v1/instances/alpha/players", e.token(RoleViewer, nil, false), "")
 	var ps []admin.Player
-	if err := json.Unmarshal(b, &ps); err != nil || ps[0].Country != "ZZ" && ps[0].Country != "" {
-		t.Fatalf("%s %v", b, err)
-	}
+	err := json.Unmarshal(b, &ps)
+	require.NoError(t, err)
+	require.Contains(t, []string{"ZZ", ""}, ps[0].Country)
 }
 
 func TestGeoLookupOfAPlayer(t *testing.T) {
@@ -49,16 +51,15 @@ func TestGeoLookupOfAPlayer(t *testing.T) {
 	for _, role := range []Role{RoleViewer, RoleOperator} {
 		code, b := e.do("GET", path, e.token(role, nil, false), "")
 		var info geoip.Info
-		if err := json.Unmarshal(b, &info); err != nil || code != 200 || info.Country != "DE" {
-			t.Fatalf("%s: %d %s", role, code, b)
-		}
+		err := json.Unmarshal(b, &info)
+		require.NoError(t, err, "%s: %d %s", role, code, b)
+		require.Equal(t, 200, code, "%s: %d %s", role, code, b)
+		require.Equal(t, "DE", info.Country, "%s: %d %s", role, code, b)
 	}
 	// A player never seen has nothing, and so does a server with no database.
-	if _, b := e.do("GET", "/api/v1/instances/alpha/players/76561198000000002/geo", e.token(RoleOperator, nil, false), ""); string(b) != "{}\n" {
-		t.Fatalf("unknown player: %q", b)
-	}
+	_, b := e.do("GET", "/api/v1/instances/alpha/players/76561198000000002/geo", e.token(RoleOperator, nil, false), "")
+	require.Equal(t, "{}\n", string(b))
 	e.srv.GeoIP = nil
-	if _, b := e.do("GET", path, e.token(RoleOperator, nil, false), ""); string(b) != "{}\n" {
-		t.Fatalf("no database: %q", b)
-	}
+	_, b = e.do("GET", path, e.token(RoleOperator, nil, false), "")
+	require.Equal(t, "{}\n", string(b))
 }

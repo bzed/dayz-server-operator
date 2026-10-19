@@ -4,15 +4,16 @@
 package product
 
 import (
-	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-func withFakeSteamWebAPI(t *testing.T, handler http.HandlerFunc) {
+func withFakeSteamWebAPI(t testing.TB, handler http.HandlerFunc) {
 	t.Helper()
 	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
@@ -23,9 +24,7 @@ func withFakeSteamWebAPI(t *testing.T, handler http.HandlerFunc) {
 
 func TestGetFileDetailsSuccess(t *testing.T) {
 	withFakeSteamWebAPI(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			t.Errorf("method = %s, want POST", r.Method)
-		}
+		assert.Equal(t, http.MethodPost, r.Method)
 		_, _ = w.Write([]byte(`{
 			"response": {
 				"result": 1,
@@ -38,28 +37,20 @@ func TestGetFileDetailsSuccess(t *testing.T) {
 	})
 
 	client := &FileDetailsClient{}
-	details, err := client.GetFileDetails(context.Background(), []uint64{111111})
-	if err != nil {
-		t.Fatalf("GetFileDetails: %v", err)
-	}
+	details, err := client.GetFileDetails(t.Context(), []uint64{111111})
+	require.NoError(t, err, "GetFileDetails")
 	d, ok := details[111111]
-	if !ok {
-		t.Fatalf("missing details for id 111111: %+v", details)
-	}
-	if d.Title != "Some Mod" || d.TimeUpdated != 1700000000 || d.FileSize != 12345 {
-		t.Errorf("d = %+v", d)
-	}
+	require.True(t, ok, "missing details for id 111111: %+v", details)
+	require.Equal(t, "Some Mod", d.Title)
+	require.Equal(t, int64(1700000000), d.TimeUpdated)
+	assert.Equal(t, int64(12345), d.FileSize)
 }
 
 func TestGetFileDetailsEmptyInputReturnsEmptyMap(t *testing.T) {
 	client := &FileDetailsClient{}
-	details, err := client.GetFileDetails(context.Background(), nil)
-	if err != nil {
-		t.Fatalf("GetFileDetails: %v", err)
-	}
-	if len(details) != 0 {
-		t.Errorf("details = %+v, want empty", details)
-	}
+	details, err := client.GetFileDetails(t.Context(), nil)
+	require.NoError(t, err, "GetFileDetails")
+	assert.Empty(t, details)
 }
 
 func TestGetFileDetailsRejectsOverBatchLimit(t *testing.T) {
@@ -68,9 +59,8 @@ func TestGetFileDetailsRejectsOverBatchLimit(t *testing.T) {
 		ids[i] = uint64(i + 1)
 	}
 	client := &FileDetailsClient{}
-	if _, err := client.GetFileDetails(context.Background(), ids); err == nil {
-		t.Fatal("expected an error for over 100 ids")
-	}
+	_, err := client.GetFileDetails(t.Context(), ids)
+	require.Error(t, err)
 }
 
 func TestGetFileDetailsHTTPErrorPropagates(t *testing.T) {
@@ -78,9 +68,8 @@ func TestGetFileDetailsHTTPErrorPropagates(t *testing.T) {
 		w.WriteHeader(http.StatusInternalServerError)
 	})
 	client := &FileDetailsClient{}
-	if _, err := client.GetFileDetails(context.Background(), []uint64{1}); err == nil {
-		t.Fatal("expected an error for a non-200 response")
-	}
+	_, err := client.GetFileDetails(t.Context(), []uint64{1})
+	require.Error(t, err)
 }
 
 func TestGetFileDetailsInvalidJSONErrors(t *testing.T) {
@@ -88,9 +77,8 @@ func TestGetFileDetailsInvalidJSONErrors(t *testing.T) {
 		_, _ = w.Write([]byte("not json"))
 	})
 	client := &FileDetailsClient{}
-	if _, err := client.GetFileDetails(context.Background(), []uint64{1}); err == nil {
-		t.Fatal("expected an error for invalid JSON")
-	}
+	_, err := client.GetFileDetails(t.Context(), []uint64{1})
+	require.Error(t, err)
 }
 
 func TestGetFileDetailsUnreachableServerErrors(t *testing.T) {
@@ -99,9 +87,8 @@ func TestGetFileDetailsUnreachableServerErrors(t *testing.T) {
 	defer func() { steamWebAPIURL = orig }()
 
 	client := &FileDetailsClient{}
-	if _, err := client.GetFileDetails(context.Background(), []uint64{1}); err == nil {
-		t.Fatal("expected an error for an unreachable server")
-	}
+	_, err := client.GetFileDetails(t.Context(), []uint64{1})
+	require.Error(t, err)
 }
 
 func TestGetFileDetailsSendsBatchedIDs(t *testing.T) {
@@ -113,10 +100,9 @@ func TestGetFileDetailsSendsBatchedIDs(t *testing.T) {
 	})
 
 	client := &FileDetailsClient{}
-	if _, err := client.GetFileDetails(context.Background(), []uint64{111, 222}); err != nil {
-		t.Fatalf("GetFileDetails: %v", err)
-	}
-	if !strings.Contains(gotBody, "111") || !strings.Contains(gotBody, "222") || !strings.Contains(gotBody, "itemcount=2") {
-		t.Errorf("request body = %q, want both ids and itemcount=2", gotBody)
-	}
+	_, err := client.GetFileDetails(t.Context(), []uint64{111, 222})
+	require.NoError(t, err, "GetFileDetails")
+	require.Contains(t, gotBody, "111")
+	require.Contains(t, gotBody, "222")
+	assert.Contains(t, gotBody, "itemcount=2")
 }

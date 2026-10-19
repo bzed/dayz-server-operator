@@ -6,25 +6,26 @@ package moderation
 import (
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestExpiryFrom(t *testing.T) {
 	now := time.Date(2026, 10, 16, 12, 0, 0, 0, time.UTC)
 	for in, want := range map[string]time.Duration{"30m": 30 * time.Minute, "12h": 12 * time.Hour, "7d": 7 * 24 * time.Hour, "2w": 14 * 24 * time.Hour} {
 		got, err := ExpiryFrom(in, now)
-		if err != nil || got == nil || !got.Equal(now.Add(want)) {
-			t.Errorf("ExpiryFrom(%q) = %v, %v", in, got, err)
-		}
+		require.NoError(t, err)
+		require.NotNil(t, got)
+		assert.True(t, got.Equal(now.Add(want)))
 	}
-	if got, err := ExpiryFrom("permanent", now); err != nil || got != nil {
-		t.Errorf("permanent = %v, %v", got, err)
-	}
+	got, err := ExpiryFrom("permanent", now)
+	require.NoError(t, err)
+	assert.Nil(t, got)
 	for _, bad := range []string{"", "0d", "-1d", "7", "7y", "d", "99999999w"} {
-		if _, err := ExpiryFrom(bad, now); err == nil {
-			t.Errorf("ExpiryFrom(%q) accepted", bad)
-		}
+		_, err := ExpiryFrom(bad, now)
+		require.Error(t, err, "ExpiryFrom(%q) accepted", bad)
 	}
-	if FormatExpiry(nil) != "permanent" || FormatExpiry(&now) != "2026-10-16T12:00:00Z" {
-		t.Error("FormatExpiry")
-	}
+	require.Equal(t, "permanent", FormatExpiry(nil))
+	assert.Equal(t, "2026-10-16T12:00:00Z", FormatExpiry(&now))
 }

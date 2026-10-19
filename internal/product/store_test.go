@@ -6,22 +6,21 @@ package product
 import (
 	"path/filepath"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestProductStoreRoot(t *testing.T) {
 	s := ProductStore("/var/lib/dzo/cache", "dayz-stable")
 	want := filepath.Join("/var/lib/dzo/cache", "products", "dayz-stable")
-	if s.Root != want {
-		t.Errorf("Root = %q, want %q", s.Root, want)
-	}
+	assert.Equal(t, want, s.Root)
 }
 
 func TestModStoreRoot(t *testing.T) {
 	s := ModStore("/var/lib/dzo/cache", 221100, 111111)
 	want := filepath.Join("/var/lib/dzo/cache", "workshop", "221100", "111111")
-	if s.Root != want {
-		t.Errorf("Root = %q, want %q", s.Root, want)
-	}
+	assert.Equal(t, want, s.Root)
 }
 
 func TestModGenerationID(t *testing.T) {
@@ -35,40 +34,28 @@ func TestModGenerationID(t *testing.T) {
 		{1700000000, 2, "1700000000-r2"},
 	}
 	for _, c := range cases {
-		if got := ModGenerationID(c.timeUpdated, c.retry); got != c.want {
-			t.Errorf("ModGenerationID(%d, %d) = %q, want %q", c.timeUpdated, c.retry, got, c.want)
-		}
+		got := ModGenerationID(c.timeUpdated, c.retry)
+		assert.Equal(t, c.want, got)
 	}
 }
 
 func TestStoreIntegrationWithCache(t *testing.T) {
 	root := t.TempDir()
 	s := ModStore(root, 221100, 111111)
-	if err := s.EnsureRoot(); err != nil {
-		t.Fatalf("EnsureRoot: %v", err)
-	}
+	err := s.EnsureRoot()
+	require.NoError(t, err, "EnsureRoot")
 	id := ModGenerationID(1700000000, 0)
 	genDir, err := s.NewGeneration(id)
-	if err != nil {
-		t.Fatalf("NewGeneration: %v", err)
-	}
-	if err := s.SetCurrent(id); err != nil {
-		t.Fatalf("SetCurrent: %v", err)
-	}
+	require.NoError(t, err, "NewGeneration")
+	err = s.SetCurrent(id)
+	require.NoError(t, err, "SetCurrent")
 	current, err := s.Current()
-	if err != nil {
-		t.Fatalf("Current: %v", err)
-	}
-	if current != id {
-		t.Errorf("Current() = %q, want %q", current, id)
-	}
-	if genDir == "" {
-		t.Error("NewGeneration returned an empty path")
-	}
+	require.NoError(t, err, "Current")
+	assert.Equal(t, id, current)
+	assert.NotEmpty(t, genDir, "NewGeneration returned an empty path")
 }
 
 func TestLocalModStore(t *testing.T) {
-	if got, want := LocalModStore("/c", "tools").Root, "/c/local/tools"; got != want {
-		t.Errorf("Root = %q, want %q", got, want)
-	}
+	got, want := LocalModStore("/c", "tools").Root, "/c/local/tools"
+	assert.Equal(t, want, got)
 }

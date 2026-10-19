@@ -4,8 +4,10 @@
 package battleye
 
 import (
-	"bytes"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // serverEncodeLoginResponse and friends below build server-side packets by
@@ -18,158 +20,111 @@ func serverPacket(typ PacketType, rest ...byte) []byte {
 
 func TestEncodeLoginAndPeekType(t *testing.T) {
 	pkt := EncodeLogin("s3cret")
-	if pkt[0] != 'B' || pkt[1] != 'E' {
-		t.Fatalf("bad header: %v", pkt[:2])
-	}
+	require.Equal(t, uint8('B'), pkt[0], "bad header: %v", pkt[:2])
+	require.Equal(t, uint8('E'), pkt[1], "bad header: %v", pkt[:2])
 	typ, err := PeekType(pkt)
-	if err != nil {
-		t.Fatalf("PeekType: %v", err)
-	}
-	if typ != PacketLogin {
-		t.Errorf("type = %#x, want Login", typ)
-	}
+	require.NoError(t, err, "PeekType")
+	assert.Equal(t, PacketLogin, typ)
 }
 
 func TestDecodeLoginResponseSuccess(t *testing.T) {
 	pkt := serverPacket(PacketLogin, 0x01)
 	ok, err := DecodeLoginResponse(pkt)
-	if err != nil {
-		t.Fatalf("DecodeLoginResponse: %v", err)
-	}
-	if !ok {
-		t.Error("expected login success")
-	}
+	require.NoError(t, err, "DecodeLoginResponse")
+	assert.True(t, ok, "expected login success")
 }
 
 func TestDecodeLoginResponseFailure(t *testing.T) {
 	pkt := serverPacket(PacketLogin, 0x00)
 	ok, err := DecodeLoginResponse(pkt)
-	if err != nil {
-		t.Fatalf("DecodeLoginResponse: %v", err)
-	}
-	if ok {
-		t.Error("expected login failure")
-	}
+	require.NoError(t, err, "DecodeLoginResponse")
+	assert.False(t, ok, "expected login failure")
 }
 
 func TestDecodeLoginResponseWrongType(t *testing.T) {
 	pkt := serverPacket(PacketCommand, 0x00, 0x01)
-	if _, err := DecodeLoginResponse(pkt); err == nil {
-		t.Fatal("expected an error for a mistyped packet")
-	}
+	_, err := DecodeLoginResponse(pkt)
+	require.Error(t, err)
 }
 
 func TestEncodeCommandAndSinglePacketResponse(t *testing.T) {
 	pkt := EncodeCommand(7, "players")
 	typ, err := PeekType(pkt)
-	if err != nil || typ != PacketCommand {
-		t.Fatalf("PeekType = %v, %v", typ, err)
-	}
+	require.NoError(t, err)
+	require.Equal(t, PacketCommand, typ)
 
 	resp := serverPacket(PacketCommand, 7, 'o', 'k')
 	seq, multipart, payload, err := DecodeCommandResponse(resp)
-	if err != nil {
-		t.Fatalf("DecodeCommandResponse: %v", err)
-	}
-	if seq != 7 {
-		t.Errorf("seq = %d, want 7", seq)
-	}
-	if multipart != nil {
-		t.Errorf("multipart = %+v, want nil", multipart)
-	}
-	if string(payload) != "ok" {
-		t.Errorf("payload = %q, want %q", payload, "ok")
-	}
+	require.NoError(t, err, "DecodeCommandResponse")
+	assert.Equal(t, uint8(7), seq)
+	assert.Nil(t, multipart)
+	assert.Equal(t, "ok", string(payload))
 }
 
 func TestEncodeCommandEmptyIsKeepAlive(t *testing.T) {
 	pkt := EncodeCommand(1, "")
 	body, err := unwrap(pkt)
-	if err != nil {
-		t.Fatalf("unwrap: %v", err)
-	}
-	if len(body) != 3 {
-		t.Fatalf("expected a 3-byte body (marker, type, seq), got %d bytes", len(body))
-	}
+	require.NoError(t, err, "unwrap")
+	require.Len(t, body, 3)
 }
 
 func TestDecodeCommandResponseMultipart(t *testing.T) {
 	// part 1 of 2
 	resp := serverPacket(PacketCommand, 9, 0x00, 2, 0, 'h', 'e')
 	seq, multipart, payload, err := DecodeCommandResponse(resp)
-	if err != nil {
-		t.Fatalf("DecodeCommandResponse: %v", err)
-	}
-	if seq != 9 {
-		t.Errorf("seq = %d, want 9", seq)
-	}
-	if multipart == nil || multipart.Total != 2 || multipart.Index != 0 {
-		t.Fatalf("multipart = %+v", multipart)
-	}
-	if string(payload) != "he" {
-		t.Errorf("payload = %q", payload)
-	}
+	require.NoError(t, err, "DecodeCommandResponse")
+	assert.Equal(t, uint8(9), seq)
+	require.NotNil(t, multipart)
+	require.Equal(t, 2, multipart.Total)
+	require.Equal(t, 0, multipart.Index)
+	assert.Equal(t, "he", string(payload))
 
 	// part 2 of 2
 	resp = serverPacket(PacketCommand, 9, 0x00, 2, 1, 'l', 'l', 'o')
 	_, multipart, payload, err = DecodeCommandResponse(resp)
-	if err != nil {
-		t.Fatalf("DecodeCommandResponse: %v", err)
-	}
-	if multipart == nil || multipart.Index != 1 {
-		t.Fatalf("multipart = %+v", multipart)
-	}
-	if string(payload) != "llo" {
-		t.Errorf("payload = %q", payload)
-	}
+	require.NoError(t, err, "DecodeCommandResponse")
+	require.NotNil(t, multipart)
+	require.Equal(t, 1, multipart.Index)
+	assert.Equal(t, "llo", string(payload))
 }
 
 func TestDecodeCommandResponseWrongType(t *testing.T) {
 	resp := serverPacket(PacketLogin, 0x01)
-	if _, _, _, err := DecodeCommandResponse(resp); err == nil {
-		t.Fatal("expected an error for a mistyped packet")
-	}
+	_, _, _, err := DecodeCommandResponse(resp)
+	require.Error(t, err)
 }
 
 func TestServerMessageAndAck(t *testing.T) {
 	msg := serverPacket(PacketMessage, 3, 'h', 'i')
 	seq, payload, err := DecodeServerMessage(msg)
-	if err != nil {
-		t.Fatalf("DecodeServerMessage: %v", err)
-	}
-	if seq != 3 || string(payload) != "hi" {
-		t.Errorf("seq=%d payload=%q", seq, payload)
-	}
+	require.NoError(t, err, "DecodeServerMessage")
+	require.Equal(t, uint8(3), seq, "seq=%d payload=%q", seq, payload)
+	assert.Equal(t, "hi", string(payload), "seq=%d payload=%q", seq, payload)
 
 	ack := EncodeMessageAck(3)
 	body, err := unwrap(ack)
-	if err != nil {
-		t.Fatalf("unwrap(ack): %v", err)
-	}
-	if len(body) != 3 || body[1] != byte(PacketMessage) || body[2] != 3 {
-		t.Errorf("ack body = %v", body)
-	}
+	require.NoError(t, err, "unwrap(ack)")
+	require.Len(t, body, 3)
+	require.Equal(t, byte(PacketMessage), body[1])
+	assert.Equal(t, uint8(3), body[2])
 }
 
 func TestDecodeServerMessageWrongType(t *testing.T) {
 	pkt := serverPacket(PacketCommand, 1, 'x')
-	if _, _, err := DecodeServerMessage(pkt); err == nil {
-		t.Fatal("expected an error for a mistyped packet")
-	}
+	_, _, err := DecodeServerMessage(pkt)
+	require.Error(t, err)
 }
 
 func TestUnwrapRejectsShortPacket(t *testing.T) {
-	if _, err := unwrap([]byte{'B', 'E', 0, 0}); err == nil {
-		t.Fatal("expected an error for a too-short packet")
-	}
+	_, err := unwrap([]byte{'B', 'E', 0, 0})
+	require.Error(t, err)
 }
 
 func TestUnwrapRejectsBadHeader(t *testing.T) {
 	pkt := serverPacket(PacketLogin, 0x01)
 	pkt[0] = 'X'
-	if _, err := unwrap(pkt); err == nil {
-		t.Fatal("expected an error for a bad 'BE' header")
-	}
+	_, err := unwrap(pkt)
+	require.Error(t, err)
 }
 
 func TestUnwrapRejectsMissingMarker(t *testing.T) {
@@ -180,33 +135,26 @@ func TestUnwrapRejectsMissingMarker(t *testing.T) {
 	// the CRC. Rebuild with a bad marker but correct CRC to isolate the check.
 	body := []byte{0x00, byte(PacketLogin), 0x01}
 	bad := wrap(body)
-	if _, err := unwrap(bad); err == nil {
-		t.Fatal("expected an error for a missing 0xFF marker")
-	}
+	_, err := unwrap(bad)
+	require.Error(t, err)
 }
 
 func TestUnwrapRejectsCRCMismatch(t *testing.T) {
 	pkt := serverPacket(PacketLogin, 0x01)
 	pkt[2] ^= 0xFF // flip bits in the CRC field
-	if _, err := unwrap(pkt); err == nil {
-		t.Fatal("expected a CRC mismatch error")
-	}
+	_, err := unwrap(pkt)
+	require.Error(t, err)
 }
 
 func TestBodyTypeRejectsShortBody(t *testing.T) {
-	if _, err := bodyType([]byte{packetMarker}); err == nil {
-		t.Fatal("expected an error for a body with no type byte")
-	}
+	_, err := bodyType([]byte{packetMarker})
+	require.Error(t, err)
 }
 
 func TestWrapUnwrapRoundTrip(t *testing.T) {
 	body := []byte{packetMarker, byte(PacketCommand), 42, 'a', 'b', 'c'}
 	pkt := wrap(body)
 	got, err := unwrap(pkt)
-	if err != nil {
-		t.Fatalf("unwrap: %v", err)
-	}
-	if !bytes.Equal(got, body) {
-		t.Errorf("unwrap(wrap(body)) = %v, want %v", got, body)
-	}
+	require.NoError(t, err, "unwrap")
+	assert.Equal(t, body, got)
 }

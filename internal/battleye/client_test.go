@@ -5,27 +5,27 @@ package battleye
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // fakeServer is a minimal BattlEye RCon server used to test Client without
 // a real DayZ server (C15: "RCon protocol (fake UDP server)").
 type fakeServer struct {
-	t      *testing.T
+	t      testing.TB
 	conn   *net.UDPConn
 	remote *net.UDPAddr
 }
 
-func newFakeServer(t *testing.T) *fakeServer {
+func newFakeServer(t testing.TB) *fakeServer {
 	t.Helper()
 	conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 0})
-	if err != nil {
-		t.Fatalf("listen: %v", err)
-	}
+	require.NoError(t, err, "listen")
 	t.Cleanup(func() { _ = conn.Close() })
 	return &fakeServer{t: t, conn: conn}
 }
@@ -35,17 +35,15 @@ func (s *fakeServer) addr() string { return s.conn.LocalAddr().String() }
 // recv reads one client packet and returns its validated body (from the
 // 0xFF marker on), failing the test on any error. Only call this from the
 // test's own goroutine (see tryRecv for use from a spawned goroutine:
-// t.Fatal must run in the test's own goroutine, staticcheck SA2002).
+// require must run in the test's own goroutine, testifylint go-require).
 func (s *fakeServer) recv() []byte {
 	s.t.Helper()
 	body, err := s.tryRecv()
-	if err != nil {
-		s.t.Fatal(err)
-	}
+	require.NoError(s.t, err)
 	return body
 }
 
-// tryRecv is recv without calling t.Fatal, safe to use from a goroutine
+// tryRecv is recv without failing the test, safe to use from a goroutine
 // that only ever consumes a packet without asserting on it (e.g. a fake
 // server that deliberately never replies).
 func (s *fakeServer) tryRecv() ([]byte, error) {
@@ -67,21 +65,16 @@ func (s *fakeServer) tryRecv() ([]byte, error) {
 
 func (s *fakeServer) send(typ PacketType, rest ...byte) {
 	s.t.Helper()
-	if s.remote == nil {
-		s.t.Fatal("send called before recv learned the client address")
-	}
-	if _, err := s.conn.WriteToUDP(serverPacket(typ, rest...), s.remote); err != nil {
-		s.t.Fatalf("send: %v", err)
-	}
+	require.NotNil(s.t, s.remote, "send called before recv learned the client address")
+	_, err := s.conn.WriteToUDP(serverPacket(typ, rest...), s.remote)
+	require.NoError(s.t, err, "send")
 }
 
-func dialFake(t *testing.T, s *fakeServer, password string, opts ...Option) *Client {
+func dialFake(t testing.TB, s *fakeServer, password string, opts ...Option) *Client {
 	t.Helper()
 	opts = append([]Option{WithLoginTimeout(2 * time.Second)}, opts...)
 	c, err := Dial(s.addr(), password, opts...)
-	if err != nil {
-		t.Fatalf("Dial: %v", err)
-	}
+	require.NoError(t, err, "Dial")
 	t.Cleanup(func() { _ = c.Close() })
 	return c
 }
@@ -92,20 +85,14 @@ func TestDialLoginSuccess(t *testing.T) {
 	go func() {
 		defer close(done)
 		body := s.recv()
-		if body[1] != byte(PacketLogin) {
-			t.Errorf("expected a Login packet, got type %#x", body[1])
-		}
-		if string(body[2:]) != "hunter2" {
-			t.Errorf("password = %q, want hunter2", body[2:])
-		}
+		assert.Equal(t, byte(PacketLogin), body[1])
+		assert.Equal(t, "hunter2", string(body[2:]))
 		s.send(PacketLogin, 0x01)
 	}()
 
 	c := dialFake(t, s, "hunter2")
 	<-done
-	if c == nil {
-		t.Fatal("expected a client")
-	}
+	require.NotNil(t, c)
 }
 
 func TestDialLoginFailure(t *testing.T) {
@@ -116,21 +103,17 @@ func TestDialLoginFailure(t *testing.T) {
 	}()
 
 	_, err := Dial(s.addr(), "wrong", WithLoginTimeout(2*time.Second))
-	if err != ErrLoginFailed {
-		t.Fatalf("err = %v, want ErrLoginFailed", err)
-	}
+	require.Equal(t, ErrLoginFailed, err)
 }
 
 func TestDialLoginTimeout(t *testing.T) {
 	s := newFakeServer(t)
 	// Server never responds.
 	_, err := Dial(s.addr(), "whatever", WithLoginTimeout(100*time.Millisecond))
-	if err == nil {
-		t.Fatal("expected a timeout error")
-	}
+	require.Error(t, err)
 }
 
-func acceptLogin(t *testing.T, s *fakeServer) {
+func acceptLogin(t testing.TB, s *fakeServer) {
 	t.Helper()
 	s.recv()
 	s.send(PacketLogin, 0x01)
@@ -143,25 +126,17 @@ func TestCommandSinglePacketResponse(t *testing.T) {
 
 	go func() {
 		body := s.recv()
-		if body[1] != byte(PacketCommand) {
-			t.Errorf("expected a Command packet, got %#x", body[1])
-		}
+		assert.Equal(t, byte(PacketCommand), body[1])
 		seq := body[2]
-		if string(body[3:]) != "players" {
-			t.Errorf("command = %q, want players", body[3:])
-		}
+		assert.Equal(t, "players", string(body[3:]))
 		s.send(PacketCommand, seq, 'o', 'k')
 	}()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
 	defer cancel()
 	resp, err := c.Command(ctx, "players")
-	if err != nil {
-		t.Fatalf("Command: %v", err)
-	}
-	if resp != "ok" {
-		t.Errorf("resp = %q, want ok", resp)
-	}
+	require.NoError(t, err, "Command")
+	assert.Equal(t, "ok", resp)
 }
 
 func TestCommandMultipartResponse(t *testing.T) {
@@ -176,15 +151,11 @@ func TestCommandMultipartResponse(t *testing.T) {
 		s.send(PacketCommand, seq, 0x00, 2, 1, 'l', 'l', 'o')
 	}()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
 	defer cancel()
 	resp, err := c.Command(ctx, "bigcommand")
-	if err != nil {
-		t.Fatalf("Command: %v", err)
-	}
-	if resp != "hello" {
-		t.Errorf("resp = %q, want hello", resp)
-	}
+	require.NoError(t, err, "Command")
+	assert.Equal(t, "hello", resp)
 }
 
 func TestCommandMultipartOutOfOrder(t *testing.T) {
@@ -200,15 +171,11 @@ func TestCommandMultipartOutOfOrder(t *testing.T) {
 		s.send(PacketCommand, seq, 0x00, 2, 0, 'h', 'e')
 	}()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
 	defer cancel()
 	resp, err := c.Command(ctx, "bigcommand")
-	if err != nil {
-		t.Fatalf("Command: %v", err)
-	}
-	if resp != "hello" {
-		t.Errorf("resp = %q, want hello", resp)
-	}
+	require.NoError(t, err, "Command")
+	assert.Equal(t, "hello", resp)
 }
 
 func TestCommandContextTimeout(t *testing.T) {
@@ -218,12 +185,10 @@ func TestCommandContextTimeout(t *testing.T) {
 
 	go func() { _, _ = s.tryRecv() }() // consume the command, never reply
 
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
 	defer cancel()
 	_, err := c.Command(ctx, "slow")
-	if err == nil {
-		t.Fatal("expected a context deadline error")
-	}
+	require.Error(t, err)
 }
 
 func TestEventsAndAck(t *testing.T) {
@@ -237,17 +202,15 @@ func TestEventsAndAck(t *testing.T) {
 	}()
 
 	ack := s.recv()
-	if ack[1] != byte(PacketMessage) || ack[2] != 5 {
-		t.Fatalf("ack body = %v, want message ack for seq 5", ack)
-	}
+	require.Equal(t, byte(PacketMessage), ack[1])
+	require.Equal(t, uint8(5), ack[2])
 
 	select {
 	case e := <-c.Events():
-		if e.Kind != EventConnect || e.PlayerName != "Bob" {
-			t.Errorf("Event = %+v", e)
-		}
+		require.Equal(t, EventConnect, e.Kind)
+		assert.Equal(t, "Bob", e.PlayerName)
 	case <-time.After(2 * time.Second):
-		t.Fatal("timed out waiting for the event")
+		require.Fail(t, "timed out waiting for the event")
 	}
 }
 
@@ -257,12 +220,8 @@ func TestKeepAliveSendsEmptyCommand(t *testing.T) {
 	c := dialFake(t, s, "pw", WithKeepAliveInterval(20*time.Millisecond))
 
 	body := s.recv()
-	if body[1] != byte(PacketCommand) {
-		t.Fatalf("expected a keep-alive Command packet, got %#x", body[1])
-	}
-	if len(body) != 3 {
-		t.Fatalf("expected an empty command payload, got %d bytes", len(body)-3)
-	}
+	require.Equal(t, byte(PacketCommand), body[1])
+	require.Len(t, body, 3)
 	_ = c
 }
 
@@ -271,28 +230,27 @@ func TestConnectionLostFailsPendingCommand(t *testing.T) {
 	go acceptLogin(t, s)
 	c := dialFake(t, s, "pw")
 
-	go func() { _, _ = s.tryRecv() }() // consume the command, never reply
+	consumed := make(chan struct{})
+	go func() { _, _ = s.tryRecv(); close(consumed) }() // consume the command, never reply
 
 	done := make(chan struct{})
 	var cmdErr error
 	go func() {
 		defer close(done)
-		_, cmdErr = c.Command(context.Background(), "players")
+		_, cmdErr = c.Command(t.Context(), "players")
 	}()
 
 	// Simulate the socket disappearing out from under the read loop,
 	// without going through the normal Close() path.
-	time.Sleep(50 * time.Millisecond)
+	<-consumed
 	_ = c.conn.Close()
 
 	select {
 	case <-done:
 	case <-time.After(2 * time.Second):
-		t.Fatal("Command did not return after the connection was lost")
+		require.Fail(t, "Command did not return after the connection was lost")
 	}
-	if cmdErr == nil {
-		t.Fatal("expected an error when the connection is lost")
-	}
+	require.Error(t, cmdErr)
 }
 
 func TestDialMalformedLoginResponse(t *testing.T) {
@@ -301,26 +259,20 @@ func TestDialMalformedLoginResponse(t *testing.T) {
 		s.recv()
 		// Not a valid BE packet at all (no 'B','E' header) - login must
 		// surface a decode error, not hang until the timeout.
-		if _, err := s.conn.WriteToUDP([]byte("garbage"), s.remote); err != nil {
-			t.Errorf("write garbage: %v", err)
-		}
+		_, err := s.conn.WriteToUDP([]byte("garbage"), s.remote)
+		assert.NoError(t, err, "write garbage")
 	}()
 
 	start := time.Now()
 	_, err := Dial(s.addr(), "pw", WithLoginTimeout(2*time.Second))
 	elapsed := time.Since(start)
-	if err == nil {
-		t.Fatal("expected a decode error for a malformed login response")
-	}
-	if elapsed > time.Second {
-		t.Errorf("Dial took %v, want it to fail fast on a decode error rather than wait out the login timeout", elapsed)
-	}
+	require.Error(t, err)
+	assert.LessOrEqual(t, elapsed, time.Second)
 }
 
 func TestDialResolveFailure(t *testing.T) {
-	if _, err := Dial("not a valid address", "pw"); err == nil {
-		t.Fatal("expected a resolve error")
-	}
+	_, err := Dial("not a valid address", "pw")
+	require.Error(t, err)
 }
 
 func TestDialConnectionRefused(t *testing.T) {
@@ -329,15 +281,12 @@ func TestDialConnectionRefused(t *testing.T) {
 	// asserts an error occurs, not the exact latency, in case that varies
 	// by platform/sandbox.
 	conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 0})
-	if err != nil {
-		t.Fatalf("listen: %v", err)
-	}
+	require.NoError(t, err, "listen")
 	addr := conn.LocalAddr().String()
 	_ = conn.Close()
 
-	if _, err := Dial(addr, "pw", WithLoginTimeout(2*time.Second)); err == nil {
-		t.Fatal("expected an error dialing an address nothing listens on")
-	}
+	_, err = Dial(addr, "pw", WithLoginTimeout(2*time.Second))
+	require.Error(t, err)
 }
 
 func TestCommandAlreadyExpiredContext(t *testing.T) {
@@ -346,36 +295,33 @@ func TestCommandAlreadyExpiredContext(t *testing.T) {
 	c := dialFake(t, s, "pw")
 	go func() { _, _ = s.tryRecv() }() // consume the command, never reply
 
-	ctx, cancel := context.WithTimeout(context.Background(), 0)
+	ctx, cancel := context.WithTimeout(t.Context(), 0)
 	defer cancel()
 	<-ctx.Done() // guarantee it is already expired before Command is even called
 
 	_, err := c.Command(ctx, "players")
-	if err == nil {
-		t.Fatal("expected an error for an already-expired context")
-	}
+	require.Error(t, err)
 }
 
 func TestCommandContextCancelled(t *testing.T) {
 	s := newFakeServer(t)
 	go acceptLogin(t, s)
 	c := dialFake(t, s, "pw")
-	go func() { _, _ = s.tryRecv() }() // consume the command, never reply
+	consumed := make(chan struct{})
+	go func() { _, _ = s.tryRecv(); close(consumed) }() // consume the command, never reply
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	done := make(chan error, 1)
 	go func() { _, err := c.Command(ctx, "players"); done <- err }()
 
-	time.Sleep(20 * time.Millisecond)
+	<-consumed
 	cancel()
 
 	select {
 	case err := <-done:
-		if err == nil {
-			t.Fatal("expected an error after cancellation")
-		}
+		require.Error(t, err)
 	case <-time.After(2 * time.Second):
-		t.Fatal("Command did not return after ctx was cancelled")
+		require.Fail(t, "Command did not return after ctx was cancelled")
 	}
 }
 
@@ -395,15 +341,11 @@ func TestUnsolicitedResponseForUnknownSeqIsDroppedSafely(t *testing.T) {
 		s.send(PacketCommand, seq, 'o', 'k')
 	}()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
 	defer cancel()
 	resp, err := c.Command(ctx, "players")
-	if err != nil {
-		t.Fatalf("Command: %v", err)
-	}
-	if resp != "ok" {
-		t.Errorf("resp = %q, want ok (the bogus packet must not have disrupted it)", resp)
-	}
+	require.NoError(t, err, "Command")
+	assert.Equal(t, "ok", resp)
 }
 
 func TestMalformedServerMessageDroppedWithoutCrashing(t *testing.T) {
@@ -412,43 +354,33 @@ func TestMalformedServerMessageDroppedWithoutCrashing(t *testing.T) {
 	c := dialFake(t, s, "pw")
 
 	// A Message-type packet with no sequence byte (too short to decode).
-	go func() {
-		if _, err := s.conn.WriteToUDP(wrap([]byte{packetMarker, byte(PacketMessage)}), s.remote); err != nil {
-			t.Errorf("write malformed message: %v", err)
-		}
-	}()
+	_, err := s.conn.WriteToUDP(wrap([]byte{packetMarker, byte(PacketMessage)}), s.remote)
+	require.NoError(t, err, "write malformed message")
 
 	// The client must keep working afterwards: a real command should
 	// still complete normally.
-	time.Sleep(50 * time.Millisecond)
 	go func() {
 		body := s.recv()
 		s.send(PacketCommand, body[2], 'o', 'k')
 	}()
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
 	defer cancel()
-	if _, err := c.Command(ctx, "players"); err != nil {
-		t.Fatalf("Command after malformed message: %v", err)
-	}
+	_, err = c.Command(ctx, "players")
+	require.NoError(t, err, "Command after malformed message")
 }
 
 func TestKeepAliveStopsAfterClose(t *testing.T) {
 	s := newFakeServer(t)
 	go acceptLogin(t, s)
 	c, err := Dial(s.addr(), "pw", WithLoginTimeout(2*time.Second), WithKeepAliveInterval(10*time.Millisecond))
-	if err != nil {
-		t.Fatalf("Dial: %v", err)
-	}
+	require.NoError(t, err, "Dial")
 
-	if err := c.Close(); err != nil {
-		t.Fatalf("Close: %v", err)
-	}
+	err = c.Close()
+	require.NoError(t, err, "Close")
 	// No further keep-alives should arrive; give any in-flight tick a
 	// window to (incorrectly) fire, then confirm nothing shows up.
 	_, err = s.tryRecv()
-	if err == nil {
-		t.Error("expected no further packets after Close, but one arrived")
-	}
+	require.Error(t, err)
 }
 
 func TestConcurrentCommandsGetDistinctSequenceNumbers(t *testing.T) {
@@ -470,16 +402,15 @@ func TestConcurrentCommandsGetDistinctSequenceNumbers(t *testing.T) {
 	errs := make(chan error, n)
 	for i := 0; i < n; i++ {
 		go func() {
-			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
 			defer cancel()
 			_, err := c.Command(ctx, "players")
 			errs <- err
 		}()
 	}
 	for i := 0; i < n; i++ {
-		if err := <-errs; err != nil {
-			t.Errorf("Command: %v", err)
-		}
+		err := <-errs
+		require.NoError(t, err, "Command")
 	}
 
 	// Read exactly n values rather than closing seen from this goroutine:
@@ -490,9 +421,7 @@ func TestConcurrentCommandsGetDistinctSequenceNumbers(t *testing.T) {
 	seqs := map[byte]bool{}
 	for i := 0; i < n; i++ {
 		seq := <-seen
-		if seqs[seq] {
-			t.Errorf("sequence number %d used more than once among %d concurrent commands", seq, n)
-		}
+		assert.False(t, seqs[seq], "sequence number %d used more than once among %d concurrent commands", seq, n)
 		seqs[seq] = true
 	}
 }
@@ -501,25 +430,18 @@ func TestCloseIsIdempotentAndRejectsCommands(t *testing.T) {
 	s := newFakeServer(t)
 	go acceptLogin(t, s)
 	c, err := Dial(s.addr(), "pw", WithLoginTimeout(2*time.Second))
-	if err != nil {
-		t.Fatalf("Dial: %v", err)
-	}
+	require.NoError(t, err, "Dial")
 
-	if err := c.Close(); err != nil {
-		t.Fatalf("Close: %v", err)
-	}
-	if err := c.Close(); err != nil {
-		t.Fatalf("second Close: %v", err)
-	}
+	err = c.Close()
+	require.NoError(t, err, "Close")
+	err = c.Close()
+	require.NoError(t, err, "second Close")
 
-	_, err = c.Command(context.Background(), "players")
-	if err != ErrClosed {
-		t.Fatalf("Command after Close: err = %v, want ErrClosed", err)
-	}
+	_, err = c.Command(t.Context(), "players")
+	require.Equal(t, ErrClosed, err)
 
-	if _, open := <-c.Events(); open {
-		t.Error("Events() channel should be closed after Close()")
-	}
+	_, open := <-c.Events()
+	assert.False(t, open, "Events() channel should be closed after Close()")
 }
 
 func TestLivenessTimeoutMarksTheConnectionLost(t *testing.T) {
@@ -529,9 +451,8 @@ func TestLivenessTimeoutMarksTheConnectionLost(t *testing.T) {
 	select {
 	case <-c.Done():
 	case <-time.After(2 * time.Second):
-		t.Fatal("a server that answers nothing must be declared lost")
+		require.Fail(t, "a server that answers nothing must be declared lost")
 	}
-	if _, err := c.Command(context.Background(), "players"); !errors.Is(err, ErrConnectionLost) {
-		t.Errorf("a command on a lost connection: %v", err)
-	}
+	_, err := c.Command(t.Context(), "players")
+	require.ErrorIs(t, err, ErrConnectionLost, "a command on a lost connection")
 }

@@ -7,16 +7,15 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestLoadManifestMissingFileReturnsEmpty(t *testing.T) {
 	m, err := LoadManifest(filepath.Join(t.TempDir(), "nope.json"))
-	if err != nil {
-		t.Fatalf("LoadManifest: %v", err)
-	}
-	if len(m.Entries) != 0 {
-		t.Fatalf("Entries = %v, want empty", m.Entries)
-	}
+	require.NoError(t, err, "LoadManifest")
+	require.Empty(t, m.Entries)
 }
 
 func TestManifestSaveAndLoadRoundTrip(t *testing.T) {
@@ -25,19 +24,12 @@ func TestManifestSaveAndLoadRoundTrip(t *testing.T) {
 	m.Entries["db/types.xml"] = Entry{Origin: OriginPristine, SourceHash: "sha256:a", WrittenHash: "sha256:a"}
 	m.Entries["mod_123/events.xml"] = Entry{Origin: OriginGenerated, SourceHash: "sha256:b", WrittenHash: "sha256:b"}
 
-	if err := m.Save(path); err != nil {
-		t.Fatalf("Save: %v", err)
-	}
+	err := m.Save(path)
+	require.NoError(t, err, "Save")
 	loaded, err := LoadManifest(path)
-	if err != nil {
-		t.Fatalf("LoadManifest: %v", err)
-	}
-	if len(loaded.Entries) != 2 {
-		t.Fatalf("Entries = %v", loaded.Entries)
-	}
-	if loaded.Entries["db/types.xml"].SourceHash != "sha256:a" {
-		t.Errorf("entry = %+v", loaded.Entries["db/types.xml"])
-	}
+	require.NoError(t, err, "LoadManifest")
+	require.Len(t, loaded.Entries, 2)
+	assert.Equal(t, "sha256:a", loaded.Entries["db/types.xml"].SourceHash)
 }
 
 func TestManifestSaveIsDeterministic(t *testing.T) {
@@ -48,33 +40,24 @@ func TestManifestSaveIsDeterministic(t *testing.T) {
 
 	p1 := filepath.Join(dir, "m1.json")
 	p2 := filepath.Join(dir, "m2.json")
-	if err := m.Save(p1); err != nil {
-		t.Fatalf("Save: %v", err)
-	}
-	if err := m.Save(p2); err != nil {
-		t.Fatalf("Save: %v", err)
-	}
+	err := m.Save(p1)
+	require.NoError(t, err, "Save")
+	err = m.Save(p2)
+	require.NoError(t, err, "Save")
 	b1, _ := os.ReadFile(p1)
 	b2, _ := os.ReadFile(p2)
-	if string(b1) != string(b2) {
-		t.Fatalf("Save output is not deterministic:\n%s\nvs\n%s", b1, b2)
-	}
+	require.Equal(t, string(b2), string(b1))
 }
 
 func TestManifestSaveAtomicNoPartialFile(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "manifest.json")
 	m := NewManifest()
-	if err := m.Save(path); err != nil {
-		t.Fatalf("Save: %v", err)
-	}
+	err := m.Save(path)
+	require.NoError(t, err, "Save")
 	entries, err := os.ReadDir(dir)
-	if err != nil {
-		t.Fatalf("ReadDir: %v", err)
-	}
-	if len(entries) != 1 {
-		t.Fatalf("expected only the final manifest file, got %v", entries)
-	}
+	require.NoError(t, err, "ReadDir")
+	require.Len(t, entries, 1)
 }
 
 func TestManifestPathsSorted(t *testing.T) {
@@ -83,69 +66,52 @@ func TestManifestPathsSorted(t *testing.T) {
 	m.Entries["a"] = Entry{}
 	m.Entries["m"] = Entry{}
 	paths := m.Paths()
-	if paths[0] != "a" || paths[1] != "m" || paths[2] != "z" {
-		t.Errorf("Paths() = %v", paths)
-	}
+	require.Equal(t, "a", paths[0])
+	require.Equal(t, "m", paths[1])
+	assert.Equal(t, "z", paths[2])
 }
 
 func TestHashBytesStable(t *testing.T) {
 	h1 := HashBytes([]byte("hello"))
 	h2 := HashBytes([]byte("hello"))
-	if h1 != h2 {
-		t.Fatalf("hashes differ: %s vs %s", h1, h2)
-	}
-	if HashBytes([]byte("world")) == h1 {
-		t.Fatal("different content produced the same hash")
-	}
+	require.Equal(t, h2, h1)
+	require.NotEqual(t, h1, HashBytes([]byte("world")), "different content produced the same hash")
 }
 
 func TestHashFileMissingReturnsEmpty(t *testing.T) {
 	h, err := HashFile(filepath.Join(t.TempDir(), "nope"))
-	if err != nil {
-		t.Fatalf("HashFile: %v", err)
-	}
-	if h != "" {
-		t.Errorf("HashFile(missing) = %q, want empty", h)
-	}
+	require.NoError(t, err, "HashFile")
+	assert.Empty(t, h)
 }
 
 func TestLoadManifestInvalidJSON(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "bad.json")
-	if err := os.WriteFile(path, []byte("not json"), 0o600); err != nil {
-		t.Fatalf("write: %v", err)
-	}
-	if _, err := LoadManifest(path); err == nil {
-		t.Fatal("expected an error for invalid JSON")
-	}
+	err := os.WriteFile(path, []byte("not json"), 0o600)
+	require.NoError(t, err, "write")
+	_, err = LoadManifest(path)
+	require.Error(t, err)
 }
 
 func TestManifestSaveMissingParentDirErrors(t *testing.T) {
 	m := NewManifest()
 	path := filepath.Join(t.TempDir(), "nonexistent-subdir", "manifest.json")
-	if err := m.Save(path); err == nil {
-		t.Fatal("expected an error when the parent directory doesn't exist")
-	}
+	err := m.Save(path)
+	require.Error(t, err)
 }
 
 func TestHashFileReadErrorOnDirectory(t *testing.T) {
 	// Reading a directory as a file is a real (non-ENOENT) error, distinct
 	// from "missing file".
-	if _, err := HashFile(t.TempDir()); err == nil {
-		t.Fatal("expected an error hashing a directory")
-	}
+	_, err := HashFile(t.TempDir())
+	require.Error(t, err)
 }
 
 func TestHashFileMatchesHashBytes(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "f.txt")
 	content := []byte("some content")
-	if err := os.WriteFile(path, content, 0o600); err != nil {
-		t.Fatalf("write: %v", err)
-	}
+	err := os.WriteFile(path, content, 0o600)
+	require.NoError(t, err, "write")
 	h, err := HashFile(path)
-	if err != nil {
-		t.Fatalf("HashFile: %v", err)
-	}
-	if h != HashBytes(content) {
-		t.Errorf("HashFile() = %q, want %q", h, HashBytes(content))
-	}
+	require.NoError(t, err, "HashFile")
+	assert.Equal(t, HashBytes(content), h)
 }

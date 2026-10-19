@@ -5,10 +5,11 @@ package moderation
 
 import (
 	"bytes"
-	"errors"
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 // png1x1 is a minimal valid PNG header followed by filler; http.DetectContentType only needs the header.
@@ -16,21 +17,19 @@ var png1x1 = append([]byte("\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR"), bytes.Repeat(
 
 func TestAddEvidenceLogDerivesTheGUID(t *testing.T) {
 	s, _ := newStore(t)
-	e, err := s.AddEvidence(ctx, "detector:speed", EvidenceInput{SteamID: steamA, Instance: "alpha", Kind: EvidenceLog, Body: "speed 900 km/h\x00"}, nil, t0)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if e.GUID != guidOf(t, steamA) || e.Body != "speed 900 km/h" || e.Source != "detector:speed" {
-		t.Fatalf("evidence %+v", e)
-	}
-	list, err := s.EvidenceFor(ctx, Who{GUID: guidOf(t, steamA)})
-	if err != nil || len(list) != 1 || list[0].ID != e.ID {
-		t.Fatalf("EvidenceFor = %+v, %v", list, err)
-	}
-	b, err := s.CreateBan(ctx, "a", BanInput{SteamID: steamA, Reason: "speedhack", Scope: ScopeGlobal, Evidence: []int64{e.ID}}, t0)
-	if err != nil || len(b.Evidence) != 1 || b.Evidence[0] != e.ID {
-		t.Fatalf("ban evidence %+v, %v", b.Evidence, err)
-	}
+	e, err := s.AddEvidence(t.Context(), "detector:speed", EvidenceInput{SteamID: steamA, Instance: "alpha", Kind: EvidenceLog, Body: "speed 900 km/h\x00"}, nil, t0)
+	require.NoError(t, err)
+	require.Equal(t, guidOf(t, steamA), e.GUID)
+	require.Equal(t, "speed 900 km/h", e.Body)
+	require.Equal(t, "detector:speed", e.Source)
+	list, err := s.EvidenceFor(t.Context(), Who{GUID: guidOf(t, steamA)})
+	require.NoError(t, err)
+	require.Len(t, list, 1)
+	require.Equal(t, e.ID, list[0].ID)
+	b, err := s.CreateBan(t.Context(), "a", BanInput{SteamID: steamA, Reason: "speedhack", Scope: ScopeGlobal, Evidence: []int64{e.ID}}, t0)
+	require.NoError(t, err)
+	require.Len(t, b.Evidence, 1)
+	require.Equal(t, e.ID, b.Evidence[0])
 }
 
 func TestAddEvidenceValidates(t *testing.T) {
@@ -45,39 +44,29 @@ func TestAddEvidenceValidates(t *testing.T) {
 		"too long":      {SteamID: steamA, Instance: "alpha", Kind: EvidenceLog, Body: strings.Repeat("l", MaxEvidenceBody+1)},
 	} {
 		var inv *InvalidError
-		if _, err := s.AddEvidence(ctx, "a", in, nil, t0); !errors.As(err, &inv) {
-			t.Errorf("%s: %v", name, err)
-		}
+		_, err := s.AddEvidence(t.Context(), "a", in, nil, t0)
+		require.ErrorAs(t, err, &inv, "%s", name)
 	}
 }
 
 func TestAddEvidenceImageIsStoredByHash(t *testing.T) {
 	s, _ := newStore(t)
-	e, err := s.AddEvidence(ctx, "alice", EvidenceInput{IP: "192.0.2.7", Instance: "alpha", Body: "screenshot"}, png1x1, t0)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if e.Kind != EvidenceImage || e.FileType != "image/png" {
-		t.Fatalf("evidence %+v", e)
-	}
-	path, ct, err := s.EvidenceFile(ctx, e.ID)
-	if err != nil || ct != "image/png" {
-		t.Fatalf("EvidenceFile = %q, %q, %v", path, ct, err)
-	}
+	e, err := s.AddEvidence(t.Context(), "alice", EvidenceInput{IP: "192.0.2.7", Instance: "alpha", Body: "screenshot"}, png1x1, t0)
+	require.NoError(t, err)
+	require.Equal(t, EvidenceImage, e.Kind)
+	require.Equal(t, "image/png", e.FileType)
+	path, ct, err := s.EvidenceFile(t.Context(), e.ID)
+	require.NoError(t, err)
+	require.Equal(t, "image/png", ct)
 	info, err := os.Stat(path)
-	if err != nil || info.Mode().Perm() != 0o600 {
-		t.Fatalf("file mode %v, %v", info.Mode().Perm(), err)
-	}
-	e2, err := s.AddEvidence(ctx, "alice", EvidenceInput{IP: "192.0.2.7", Instance: "alpha"}, png1x1, t0)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if p2, _, _ := s.EvidenceFile(ctx, e2.ID); p2 != path {
-		t.Fatalf("the same image is stored twice: %s, %s", path, p2)
-	}
-	if _, _, err := s.EvidenceFile(ctx, 999); !errors.Is(err, ErrNotFound) {
-		t.Fatalf("missing evidence file: %v", err)
-	}
+	require.NoError(t, err)
+	require.Equal(t, os.FileMode(0o600), info.Mode().Perm())
+	e2, err := s.AddEvidence(t.Context(), "alice", EvidenceInput{IP: "192.0.2.7", Instance: "alpha"}, png1x1, t0)
+	require.NoError(t, err)
+	p2, _, _ := s.EvidenceFile(t.Context(), e2.ID)
+	require.Equal(t, path, p2)
+	_, _, err = s.EvidenceFile(t.Context(), 999)
+	require.ErrorIs(t, err, ErrNotFound)
 }
 
 func TestAddEvidenceRefusesNonImages(t *testing.T) {
@@ -90,8 +79,7 @@ func TestAddEvidenceRefusesNonImages(t *testing.T) {
 		"gif":     []byte("GIF89a......"),
 	} {
 		var inv *InvalidError
-		if _, err := s.AddEvidence(ctx, "a", EvidenceInput{SteamID: steamA, Instance: "alpha"}, data, t0); !errors.As(err, &inv) {
-			t.Errorf("%s: %v", name, err)
-		}
+		_, err := s.AddEvidence(t.Context(), "a", EvidenceInput{SteamID: steamA, Instance: "alpha"}, data, t0)
+		require.ErrorAs(t, err, &inv, "%s", name)
 	}
 }

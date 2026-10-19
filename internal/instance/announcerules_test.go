@@ -10,6 +10,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 const (
@@ -73,9 +76,7 @@ func TestDefaultTimelineNotifiesTheLastTenMinutes(t *testing.T) {
 		"3m10s notification Server restart NOW",
 		"3m0s kick",
 	}
-	if strings.Join(got, "\n") != strings.Join(want, "\n") {
-		t.Errorf("timeline:\n%s\nwant:\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
-	}
+	assert.Equal(t, strings.Join(want, "\n"), strings.Join(got, "\n"))
 }
 
 func TestTimelineEveryAndWithin(t *testing.T) {
@@ -86,25 +87,21 @@ func TestTimelineEveryAndWithin(t *testing.T) {
 	want := "25m0s chat Server restart in 25 minutes|20m0s chat Server restart in 20 minutes|15m0s chat Server restart in 15 minutes|" +
 		"10m0s expansion:baguette Server restart in 10 minutes|8m0s expansion:baguette Server restart in 8 minutes|6m0s expansion:baguette Server restart in 6 minutes|" +
 		"4m0s expansion:baguette Server restart in 4 minutes|2m0s expansion:baguette Server restart in 2 minutes|0s kick"
-	if got := strings.Join(plan(a), "|"); got != want {
-		t.Errorf("timeline:\n got %s\nwant %s", got, want)
-	}
+	got := strings.Join(plan(a), "|")
+	assert.Equal(t, want, got)
 }
 
 func TestTimelineAtMarks(t *testing.T) {
 	a := Announcement{Minutes: 30, Rules: []AnnounceRule{{Way: "rcon", At: []time.Duration{20 * mn, 5 * mn, 40 * mn}}}}
 	want := "30m0s rcon Server restart in 30 minutes|20m0s rcon Server restart in 20 minutes|5m0s rcon Server restart in 5 minutes|0s kick"
-	if got := strings.Join(plan(a), "|"); got != want {
-		t.Errorf("timeline:\n got %s\nwant %s", got, want)
-	}
+	got := strings.Join(plan(a), "|")
+	assert.Equal(t, want, got)
 }
 
 func TestNowIsSkippedWhenItDoesNotFitTheCountdown(t *testing.T) {
 	a := Announcement{Minutes: 3, Rules: []AnnounceRule{{Way: "notification", Every: mn, Now: 5 * mn}}}
 	for _, s := range plan(a) {
-		if strings.Contains(s, "NOW") {
-			t.Errorf("NOW sent although the countdown is shorter: %s", s)
-		}
+		assert.NotContains(t, s, "NOW")
 	}
 }
 
@@ -112,15 +109,12 @@ func TestAShortCountdownStartsWithTheCoveringRule(t *testing.T) {
 	got := strings.Join(plan(Announcement{Minutes: 3}), "|")
 	want := "3m0s notification Server restart in 3 minutes|2m0s notification Server restart in 2 minutes|1m0s notification Server restart in 1 minute|" +
 		"10s notification Server restart NOW|0s kick"
-	if got != want {
-		t.Errorf("timeline:\n got %s\nwant %s", got, want)
-	}
+	assert.Equal(t, want, got)
 }
 
 func TestNoCountdownAnnouncesNothing(t *testing.T) {
-	if got := strings.Join(plan(Announcement{}), "|"); got != "0s kick" {
-		t.Errorf("timeline = %s, want only the kick", got)
-	}
+	got := strings.Join(plan(Announcement{}), "|")
+	assert.Equal(t, "0s kick", got)
 }
 
 func TestNotificationStepsAreAtLeastAMinuteApart(t *testing.T) {
@@ -132,8 +126,8 @@ func TestNotificationStepsAreAtLeastAMinuteApart(t *testing.T) {
 				if st.way != "notification" || st.now {
 					continue
 				}
-				if last >= 0 && last-st.left < mn {
-					t.Fatalf("%+v: notifications at %v and %v are less than a minute apart", a, last, st.left)
+				if last >= 0 {
+					require.GreaterOrEqual(t, last-st.left, mn, "%+v: notifications at %v and %v are less than a minute apart", a, last, st.left)
 				}
 				last = st.left
 			}
@@ -146,7 +140,7 @@ type notifyCall struct {
 	seconds        int
 }
 
-func countdownRestarter(t *testing.T, cmd *recCommander, notify func(context.Context, string, string, string, int) error) Restarter {
+func countdownRestarter(t testing.TB, cmd *recCommander, notify func(context.Context, string, string, string, int) error) Restarter {
 	t.Helper()
 	lc, _ := fakeSystemctl(t, true)
 	return Restarter{Lifecycle: lc, Dial: func(context.Context) (Commander, error) { return cmd, nil }, Sleep: func(time.Duration) {}, Notify: notify}
@@ -159,21 +153,16 @@ func TestNotificationStepsGoThroughNotify(t *testing.T) {
 		calls = append(calls, notifyCall{way, typ, text, seconds})
 		return nil
 	})
-	if err := r.Restart(context.Background(), "x", Announcement{Minutes: 2}, nil); err != nil {
-		t.Fatal(err)
-	}
+	err := r.Restart(t.Context(), "x", Announcement{Minutes: 2}, nil)
+	require.NoError(t, err)
 	want := []notifyCall{
 		{"notification", "", "Server restart in 2 minutes", 10},
 		{"notification", "", "Server restart in 1 minute", 10},
 		{"notification", "", "Server restart NOW", 8},
 	}
-	if fmt.Sprint(calls) != fmt.Sprint(want) {
-		t.Errorf("Notify calls = %v, want %v", calls, want)
-	}
+	assert.Equal(t, fmt.Sprint(want), fmt.Sprint(calls))
 	for _, c := range cmd.cmds {
-		if strings.HasPrefix(c, "say") {
-			t.Errorf("an announcement went over RCon as well: %v", cmd.cmds)
-		}
+		assert.False(t, strings.HasPrefix(c, "say"), "an announcement went over RCon as well: %v", cmd.cmds)
 	}
 }
 
@@ -182,27 +171,21 @@ func TestNotifyFailureFallsBackToSay(t *testing.T) {
 	r := countdownRestarter(t, cmd, func(context.Context, string, string, string, int) error { return errors.New("API is down") })
 	var logged []string
 	r.Log = func(f string, a ...any) { logged = append(logged, fmt.Sprintf(f, a...)) }
-	if err := r.Restart(context.Background(), "x", Announcement{Minutes: 2}, nil); err != nil {
-		t.Fatal(err)
-	}
+	err := r.Restart(t.Context(), "x", Announcement{Minutes: 2}, nil)
+	require.NoError(t, err)
 	said := strings.Join(cmd.cmds, "|")
-	if !strings.Contains(said, "say -1 Server restart in 2 minutes") || !strings.Contains(said, "say -1 Server restart NOW") {
-		t.Errorf("RCon commands %q", cmd.cmds)
-	}
-	if len(logged) == 0 || !strings.Contains(strings.Join(logged, "\n"), "API is down") {
-		t.Errorf("the failure is not logged: %v", logged)
-	}
+	require.Contains(t, said, "say -1 Server restart in 2 minutes", "RCon commands %q", cmd.cmds)
+	assert.Contains(t, said, "say -1 Server restart NOW", "RCon commands %q", cmd.cmds)
+	require.NotEmpty(t, logged)
+	assert.Contains(t, strings.Join(logged, "\n"), "API is down")
 }
 
 func TestNilNotifyUsesSay(t *testing.T) {
 	cmd := &recCommander{}
 	r := countdownRestarter(t, cmd, nil)
-	if err := r.Restart(context.Background(), "x", Announcement{Minutes: 2}, nil); err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(strings.Join(cmd.cmds, "|"), "say -1 Server restart in 2 minutes") {
-		t.Errorf("RCon commands %q", cmd.cmds)
-	}
+	err := r.Restart(t.Context(), "x", Announcement{Minutes: 2}, nil)
+	require.NoError(t, err)
+	assert.Contains(t, strings.Join(cmd.cmds, "|"), "say -1 Server restart in 2 minutes")
 }
 
 func TestACancelNoticeUsesTheWayOfTheCountdown(t *testing.T) {
@@ -213,12 +196,11 @@ func TestACancelNoticeUsesTheWayOfTheCountdown(t *testing.T) {
 		return nil
 	})
 	r.Cancelled = func() bool { return true }
-	if err := r.Restart(context.Background(), "x", Announcement{Minutes: 5, Kick: 1}, nil); !errors.Is(err, ErrCancelled) {
-		t.Fatalf("err = %v", err)
-	}
-	if last := calls[len(calls)-1]; last.way != "notification" || last.text != "The restart was cancelled" {
-		t.Errorf("calls = %v", calls)
-	}
+	err := r.Restart(t.Context(), "x", Announcement{Minutes: 5, Kick: 1}, nil)
+	require.ErrorIs(t, err, ErrCancelled, "err")
+	last := calls[len(calls)-1]
+	require.Equal(t, "notification", last.way, "calls = %v", calls)
+	assert.Equal(t, "The restart was cancelled", last.text, "calls = %v", calls)
 }
 
 type fakeClock struct{ t time.Time }
@@ -231,20 +213,18 @@ func TestSlowNotificationsDoNotDelayTheRestart(t *testing.T) {
 	clk := &fakeClock{t: time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)}
 	start := clk.t
 	r := countdownRestarter(t, cmd, func(ctx context.Context, way, typ, text string, seconds int) error {
-		if dl, ok := ctx.Deadline(); !ok || time.Until(dl) > 5*time.Second {
-			t.Errorf("Notify has no short deadline: %v %v", dl, ok)
-		}
+		dl, ok := ctx.Deadline()
+		require.True(t, ok, "Notify has no short deadline: %v %v", dl, ok)
+		assert.LessOrEqual(t, time.Until(dl), 5*time.Second, "Notify has no short deadline: %v %v", dl, ok)
 		clk.add(5 * time.Second) // the API and the mod take their time
 		return nil
 	})
 	r.Now = clk.now
 	r.Sleep = clk.add
-	if err := r.Restart(context.Background(), "x", Announcement{Minutes: 3}, nil); err != nil {
-		t.Fatal(err)
-	}
-	if got := clk.t.Sub(start); got != 3*time.Minute {
-		t.Errorf("the countdown took %v, want exactly the 3 minutes asked for", got)
-	}
+	err := r.Restart(t.Context(), "x", Announcement{Minutes: 3}, nil)
+	require.NoError(t, err)
+	got := clk.t.Sub(start)
+	assert.Equal(t, 3*time.Minute, got)
 }
 
 func TestDurationTextKeepsTheSecondsOfAFractionalMinute(t *testing.T) {
@@ -258,16 +238,14 @@ func TestDurationTextKeepsTheSecondsOfAFractionalMinute(t *testing.T) {
 		3*mn + 1*sc:   "3 minutes 1 second",
 		10*mn + 59*sc: "10 minutes 59 seconds",
 	} {
-		if got := durationText(d); got != want {
-			t.Errorf("durationText(%v) = %q, want %q", d, got, want)
-		}
+		got := durationText(d)
+		assert.Equal(t, want, got)
 	}
 }
 
 func TestEveryKeepsTheLastMarkBelowTheInterval(t *testing.T) {
 	a := Announcement{Minutes: 10, Rules: []AnnounceRule{{Within: 10 * mn, Way: "chat", Every: 3 * mn}}}
 	want := "10m0s chat Server restart in 10 minutes|7m0s chat Server restart in 7 minutes|4m0s chat Server restart in 4 minutes|1m0s chat Server restart in 1 minute|0s kick"
-	if got := strings.Join(plan(a), "|"); got != want {
-		t.Errorf("timeline:\n got %s\nwant %s", got, want)
-	}
+	got := strings.Join(plan(a), "|")
+	assert.Equal(t, want, got)
 }

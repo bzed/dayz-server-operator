@@ -10,6 +10,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 // buildPBO hand-assembles a minimal PBO: a "Vers" header carrying prefix (if
@@ -44,16 +46,14 @@ func buildPBO(prefix string) []byte {
 	return b.Bytes()
 }
 
-func writeTree(t *testing.T, root string, files map[string][]byte) {
+func writeTree(t testing.TB, root string, files map[string][]byte) {
 	t.Helper()
 	for rel, data := range files {
 		p := filepath.Join(root, filepath.FromSlash(rel))
-		if err := os.MkdirAll(filepath.Dir(p), 0o750); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(p, data, 0o644); err != nil { //nolint:gosec // fixture
-			t.Fatal(err)
-		}
+		err := os.MkdirAll(filepath.Dir(p), 0o750)
+		require.NoError(t, err)
+		err = os.WriteFile(p, data, 0o644)
+		require.NoError(t, err)
 	}
 }
 
@@ -101,14 +101,13 @@ done
 `
 
 // newFakeSteam returns the script path and the $FAKE dir (set in the environment).
-func newFakeSteam(t *testing.T) (script, fake string) {
+func newFakeSteam(t testing.TB) (script, fake string) {
 	t.Helper()
 	fake = t.TempDir()
 	t.Setenv("FAKE", fake)
 	script = filepath.Join(t.TempDir(), "steamcmd")
-	if err := os.WriteFile(script, []byte(fakeSteam), 0o755); err != nil { //nolint:gosec // fixture
-		t.Fatal(err)
-	}
+	err := os.WriteFile(script, []byte(fakeSteam), 0o755)
+	require.NoError(t, err)
 	return script, fake
 }
 

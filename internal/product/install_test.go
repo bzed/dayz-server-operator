@@ -12,17 +12,20 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/bzed/dayz-server-operator/internal/config"
 	"github.com/bzed/dayz-server-operator/internal/steam"
 )
 
-func newInstaller(t *testing.T, details stubDetails) (*Installer, string) {
+func newInstaller(t testing.TB, details stubDetails) (*Installer, string) {
 	t.Helper()
 	script, fake := newFakeSteam(t)
 	return &Installer{CacheRoot: t.TempDir(), Command: script, Account: "bob", Details: details.get}, fake
 }
 
-func calls(t *testing.T, fake string) []string {
+func calls(t testing.TB, fake string) []string {
 	t.Helper()
 	data, _ := os.ReadFile(filepath.Join(fake, "calls"))
 	return strings.Split(strings.TrimSpace(string(data)), "\n")
@@ -30,7 +33,8 @@ func calls(t *testing.T, fake string) []string {
 
 // downloads counts the steamcmd runs that actually downloaded something
 // (every job also runs a bare login check first).
-func downloads(t *testing.T, fake string) int {
+func downloads(t testing.TB, fake string) int {
+	t.Helper()
 	n := 0
 	for _, c := range calls(t, fake) {
 		if strings.Contains(c, "workshop_download_item") || strings.Contains(c, "app_update") {
@@ -46,66 +50,59 @@ func TestInstallProduct(t *testing.T) {
 	writeTree(t, fake, map[string][]byte{"buildid": []byte("1000")})
 	p := config.Product{AppID: 223350, WorkshopAppID: 221100}
 
-	r, err := in.InstallProduct(context.Background(), "dayz-stable", p, false)
-	if err != nil || !r.Changed || r.Generation != "1000" {
-		t.Fatalf("first install = %+v, %v", r, err)
-	}
+	r, err := in.InstallProduct(t.Context(), "dayz-stable", p, false)
+	require.NoError(t, err)
+	require.True(t, r.Changed)
+	require.Equal(t, "1000", r.Generation)
 	store := ProductStore(in.CacheRoot, "dayz-stable")
-	if cur, _ := store.Current(); cur != "1000" {
-		t.Fatalf("current = %q", cur)
-	}
-	if b, _ := os.ReadFile(filepath.Join(store.Root, "1000", "DayZServer")); string(b) != "bin" {
-		t.Errorf("generation content = %q", b)
-	}
+	cur, _ := store.Current()
+	require.Equal(t, "1000", cur)
+	b, _ := os.ReadFile(filepath.Join(store.Root, "1000", "DayZServer"))
+	assert.Equal(t, "bin", string(b))
 
 	// same build again: nothing new, and the existing generation is untouched
-	if err := os.WriteFile(filepath.Join(store.Root, "1000", "marker"), []byte("m"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if r, err = in.InstallProduct(context.Background(), "dayz-stable", p, false); err != nil || r.Changed {
-		t.Fatalf("second install = %+v, %v", r, err)
-	}
-	if _, err := os.Stat(filepath.Join(store.Root, "1000", "marker")); err != nil {
-		t.Error("an existing generation must survive a re-run untouched")
-	}
+	err = os.WriteFile(filepath.Join(store.Root, "1000", "marker"), []byte("m"), 0o600)
+	require.NoError(t, err)
+	r, err = in.InstallProduct(t.Context(), "dayz-stable", p, false)
+	require.NoError(t, err)
+	require.False(t, r.Changed)
+	_, err = os.Stat(filepath.Join(store.Root, "1000", "marker"))
+	require.NoError(t, err, "an existing generation must survive a re-run untouched")
 
 	// force stores the same build again under a new name; again and again
 	for _, want := range []string{"1000-r1", "1000-r2"} {
-		if r, err = in.InstallProduct(context.Background(), "dayz-stable", p, true); err != nil || r.Generation != want || !r.Changed {
-			t.Fatalf("forced install = %+v, %v, want %s", r, err, want)
-		}
+		r, err = in.InstallProduct(t.Context(), "dayz-stable", p, true)
+		require.NoError(t, err, "forced install = %+v, %v, want %s", r, err, want)
+		require.Equal(t, want, r.Generation, "forced install = %+v, %v, want %s", r, err, want)
+		require.True(t, r.Changed, "forced install = %+v, %v, want %s", r, err, want)
 	}
-	if gens, _ := store.Generations(); len(gens) != 3 {
-		t.Errorf("generations = %v, want 3", gens)
-	}
+	gens, _ := store.Generations()
+	assert.Len(t, gens, 3)
 }
 
 func TestInstallProductErrors(t *testing.T) {
 	p := config.Product{AppID: 223350}
 	in, fake := newInstaller(t, nil)
 	// no app dir: steamcmd never reports success
-	if _, err := in.InstallProduct(context.Background(), "x", p, false); err == nil || !strings.Contains(err.Error(), "did not report success") {
-		t.Errorf("err = %v", err)
-	}
+	_, err := in.InstallProduct(t.Context(), "x", p, false)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "did not report success")
 	// success but no manifest
 	writeTree(t, filepath.Join(fake, "app"), map[string][]byte{"f": nil})
 	writeTree(t, fake, map[string][]byte{"buildid": []byte("")})
-	if _, err := in.InstallProduct(context.Background(), "x", p, false); err == nil || !strings.Contains(err.Error(), "buildid") {
-		t.Errorf("err = %v", err)
-	}
+	_, err = in.InstallProduct(t.Context(), "x", p, false)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "buildid")
 	// login rejected
 	auth := filepath.Join(t.TempDir(), "steamcmd")
-	if err := os.WriteFile(auth, []byte("#!/bin/sh\necho 'FAILED (Invalid Password)'\n"), 0o755); err != nil { //nolint:gosec // fixture
-		t.Fatal(err)
-	}
+	err = os.WriteFile(auth, []byte("#!/bin/sh\necho 'FAILED (Invalid Password)'\n"), 0o755)
+	require.NoError(t, err)
 	in.Command = auth
-	if _, err := in.InstallProduct(context.Background(), "x", p, false); !errors.Is(err, steam.ErrAuthRequired) {
-		t.Errorf("err = %v, want ErrAuthRequired", err)
-	}
+	_, err = in.InstallProduct(t.Context(), "x", p, false)
+	require.ErrorIs(t, err, steam.ErrAuthRequired)
 	in.Command = "/nonexistent/steamcmd"
-	if _, err := in.InstallProduct(context.Background(), "x", p, false); err == nil {
-		t.Error("a missing steamcmd must fail")
-	}
+	_, err = in.InstallProduct(t.Context(), "x", p, false)
+	require.Error(t, err)
 }
 
 func TestInstallMods(t *testing.T) {
@@ -118,57 +115,49 @@ func TestInstallMods(t *testing.T) {
 	writeTree(t, filepath.Join(fake, "mod", "1"), modFiles(false))
 	writeTree(t, filepath.Join(fake, "mod", "2"), map[string][]byte{"addons/a.pbo": buildPBO("p")}) // no meta.cpp: invalid
 	// mod 3 has no fixture: steamcmd reports the download as failed
-	ctx := context.Background()
+	ctx := t.Context()
 
 	res, err := in.InstallMods(ctx, 221100, []uint64{1, 2, 3, 4}, false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !res[0].Changed || res[0].Generation != "100" || res[0].Err != nil {
-		t.Errorf("mod 1 = %+v", res[0])
-	}
-	if res[1].Err == nil || !strings.Contains(res[1].Err.Error(), "meta.cpp") {
-		t.Errorf("mod 2 = %+v, want a validation error", res[1])
-	}
-	if res[2].Err == nil || !strings.Contains(res[2].Err.Error(), "download failed") {
-		t.Errorf("mod 3 = %+v, want a download error", res[2])
-	}
-	if res[3].Err == nil || !strings.Contains(res[3].Err.Error(), "does not list this item") {
-		t.Errorf("mod 4 = %+v, want an unknown-item error", res[3])
-	}
-	if cur, _ := ModStore(in.CacheRoot, 221100, 2).Current(); cur != "" {
-		t.Error("an invalid mod must not become a generation")
-	}
+	require.NoError(t, err)
+	require.True(t, res[0].Changed, "mod 1 = %+v", res[0])
+	require.Equal(t, "100", res[0].Generation)
+	assert.Nil(t, res[0].Err)
+	require.NotNil(t, res[1].Err)
+	assert.Contains(t, res[1].Err.Error(), "meta.cpp")
+	require.NotNil(t, res[2].Err)
+	assert.Contains(t, res[2].Err.Error(), "download failed")
+	require.NotNil(t, res[3].Err)
+	assert.Contains(t, res[3].Err.Error(), "does not list this item")
+	cur, _ := ModStore(in.CacheRoot, 221100, 2).Current()
+	assert.Empty(t, cur, "an invalid mod must not become a generation")
 
 	// mod 1 is current: a re-run must not download again
 	before := downloads(t, fake)
-	if res, err = in.InstallMods(ctx, 221100, []uint64{1}, false); err != nil || res[0].Changed || res[0].Generation != "100" {
-		t.Fatalf("re-run = %+v, %v", res, err)
-	}
-	if downloads(t, fake) != before {
-		t.Error("an up-to-date mod must not be downloaded again")
-	}
+	res, err = in.InstallMods(ctx, 221100, []uint64{1}, false)
+	require.NoError(t, err)
+	require.False(t, res[0].Changed)
+	require.Equal(t, "100", res[0].Generation)
+	assert.Equal(t, before, downloads(t, fake), "an up-to-date mod must not be downloaded again")
 
 	// Steam has a newer version: a new generation, the old one stays
 	details[1] = FileDetails{PublishedFileID: 1, Result: 1, TimeUpdated: 150}
-	if res, err = in.InstallMods(ctx, 221100, []uint64{1}, false); err != nil || res[0].Generation != "150" {
-		t.Fatalf("update = %+v, %v", res, err)
-	}
-	if gens, _ := ModStore(in.CacheRoot, 221100, 1).Generations(); len(gens) != 2 {
-		t.Errorf("generations = %v, want the old one kept", gens)
-	}
+	res, err = in.InstallMods(ctx, 221100, []uint64{1}, false)
+	require.NoError(t, err)
+	require.Equal(t, "150", res[0].Generation)
+	gens, _ := ModStore(in.CacheRoot, 221100, 1).Generations()
+	assert.Len(t, gens, 2)
 
 	// forced refresh: downloads although unchanged, as <time>-r<n>
 	for _, want := range []string{"150-r1", "150-r2"} {
-		if res, err = in.InstallMods(ctx, 221100, []uint64{1}, true); err != nil || res[0].Generation != want {
-			t.Fatalf("refresh = %+v, %v, want %s", res, err, want)
-		}
+		res, err = in.InstallMods(ctx, 221100, []uint64{1}, true)
+		require.NoError(t, err, "refresh = %+v, %v, want %s", res, err, want)
+		require.Equal(t, want, res[0].Generation, "refresh = %+v, %v, want %s", res, err, want)
 	}
 	// and a normal update run afterwards sees the refreshed generation as current
 	before = downloads(t, fake)
-	if res, _ = in.InstallMods(ctx, 221100, []uint64{1}, false); res[0].Changed || downloads(t, fake) != before {
-		t.Errorf("after a refresh the mod is still up to date: %+v", res[0])
-	}
+	res, _ = in.InstallMods(ctx, 221100, []uint64{1}, false)
+	require.False(t, res[0].Changed, "after a refresh the mod is still up to date: %+v", res[0])
+	assert.Equal(t, before, downloads(t, fake), "after a refresh the mod is still up to date: %+v", res[0])
 }
 
 // An item the public Web API does not show (result 9, unlisted or restricted) is downloaded with
@@ -177,23 +166,25 @@ func TestInstallModsUnlistedItem(t *testing.T) {
 	in, fake := newInstaller(t, stubDetails{7: {PublishedFileID: 7, Result: 9}})
 	writeTree(t, filepath.Join(fake, "mod", "7"), modFiles(false))
 	writeTree(t, filepath.Join(fake, "timeupdated"), map[string][]byte{"7": []byte("777")})
-	ctx := context.Background()
+	ctx := t.Context()
 
 	res, err := in.InstallMods(ctx, 221100, []uint64{7}, false)
-	if err != nil || res[0].Err != nil || !res[0].Changed || res[0].Generation != "777" {
-		t.Fatalf("install = %+v, %v", res, err)
-	}
+	require.NoError(t, err)
+	require.Nil(t, res[0].Err)
+	require.True(t, res[0].Changed)
+	require.Equal(t, "777", res[0].Generation)
 	// the version of an unlisted item is only known after a download: a re-run downloads again
 	// and finds the generation it has
 	res, err = in.InstallMods(ctx, 221100, []uint64{7}, false)
-	if err != nil || res[0].Err != nil || res[0].Changed || res[0].Generation != "777" {
-		t.Fatalf("re-run = %+v, %v", res, err)
-	}
+	require.NoError(t, err)
+	require.Nil(t, res[0].Err)
+	require.False(t, res[0].Changed)
+	require.Equal(t, "777", res[0].Generation)
 	// and a version bump on Steam's side becomes a new generation
 	writeTree(t, filepath.Join(fake, "timeupdated"), map[string][]byte{"7": []byte("800")})
-	if res, err = in.InstallMods(ctx, 221100, []uint64{7}, false); err != nil || res[0].Generation != "800" {
-		t.Fatalf("update = %+v, %v", res, err)
-	}
+	res, err = in.InstallMods(ctx, 221100, []uint64{7}, false)
+	require.NoError(t, err)
+	require.Equal(t, "800", res[0].Generation)
 }
 
 func TestInstallModsRefreshWipesSteamState(t *testing.T) {
@@ -208,48 +199,39 @@ func TestInstallModsRefreshWipesSteamState(t *testing.T) {
 		"steamapps/workshop/content/221100/2/other-mod":  []byte("keep"),
 		"steamapps/workshop/appworkshop_221100.acf":      []byte("\"AppWorkshop\"\n{\n\t\"WorkshopItemsInstalled\"\n\t{\n\t\t\"1\"\n\t\t{\n\t\t\t\"size\"\t\"1\"\n\t\t}\n\t\t\"2\"\n\t\t{\n\t\t\t\"size\"\t\"2\"\n\t\t}\n\t}\n}\n"),
 	})
-	if _, err := in.InstallMods(context.Background(), 221100, []uint64{1}, true); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := os.Stat(stale); !os.IsNotExist(err) {
-		t.Error("steamcmd's old copy of the item must be wiped before a forced download")
-	}
-	if _, err := os.Stat(filepath.Join(work, "steamapps", "workshop", "content", "221100", "2", "other-mod")); err != nil {
-		t.Error("other items must not be touched")
-	}
+	_, err := in.InstallMods(t.Context(), 221100, []uint64{1}, true)
+	require.NoError(t, err)
+	_, err = os.Stat(stale)
+	assert.True(t, os.IsNotExist(err), "steamcmd's old copy of the item must be wiped before a forced download")
+	_, err = os.Stat(filepath.Join(work, "steamapps", "workshop", "content", "221100", "2", "other-mod"))
+	require.NoError(t, err, "other items must not be touched")
 	acf, _ := os.ReadFile(filepath.Join(work, "steamapps", "workshop", "appworkshop_221100.acf"))
-	if strings.Contains(string(acf), `"1"`) || !strings.Contains(string(acf), `"2"`) {
-		t.Errorf("acf = %s", acf)
-	}
+	require.NotContains(t, string(acf), `"1"`)
+	assert.Contains(t, string(acf), `"2"`)
 }
 
 func TestInstallModsErrors(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	in, _ := newInstaller(t, stubDetails{1: {PublishedFileID: 1, Result: 1, TimeUpdated: 5}})
 	in.Command = "/nonexistent/steamcmd"
-	if _, err := in.InstallMods(ctx, 221100, []uint64{1}, false); err == nil {
-		t.Error("a missing steamcmd must fail")
-	}
+	_, err := in.InstallMods(ctx, 221100, []uint64{1}, false)
+	require.Error(t, err)
 	in.Details = failingDetails
-	if _, err := in.InstallMods(ctx, 221100, []uint64{1}, false); err == nil {
-		t.Error("a failing Steam Web API must fail")
-	}
+	_, err = in.InstallMods(ctx, 221100, []uint64{1}, false)
+	require.Error(t, err, "a failing Steam Web API must fail")
 	// nothing stale, nothing to do
 	in, _ = newInstaller(t, stubDetails{})
 	res, err := in.InstallMods(ctx, 221100, nil, false)
-	if err != nil || len(res) != 0 {
-		t.Errorf("empty = %v, %v", res, err)
-	}
+	require.NoError(t, err)
+	assert.Empty(t, res)
 	// auth
 	auth := filepath.Join(t.TempDir(), "steamcmd")
-	if err := os.WriteFile(auth, []byte("#!/bin/sh\necho 'FAILED (Invalid Password)'\n"), 0o755); err != nil { //nolint:gosec // fixture
-		t.Fatal(err)
-	}
+	err = os.WriteFile(auth, []byte("#!/bin/sh\necho 'FAILED (Invalid Password)'\n"), 0o755)
+	require.NoError(t, err)
 	in, _ = newInstaller(t, stubDetails{1: {PublishedFileID: 1, Result: 1, TimeUpdated: 5}})
 	in.Command = auth
-	if _, err := in.InstallMods(ctx, 221100, []uint64{1}, false); !errors.Is(err, steam.ErrAuthRequired) {
-		t.Errorf("err = %v, want ErrAuthRequired", err)
-	}
+	_, err = in.InstallMods(ctx, 221100, []uint64{1}, false)
+	require.ErrorIs(t, err, steam.ErrAuthRequired)
 }
 
 func failingDetails(context.Context, []uint64) (map[uint64]FileDetails, error) {
@@ -267,31 +249,24 @@ func TestInstallModsBatchesDetailsLookups(t *testing.T) {
 	for _, id := range ids {
 		writeTree(t, filepath.Join(fake, "mod", strconv.FormatUint(id, 10)), modFiles(false))
 	}
-	res, err := in.InstallMods(context.Background(), 221100, ids, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	res, err := in.InstallMods(t.Context(), 221100, ids, false)
+	require.NoError(t, err)
 	for _, r := range res {
-		if r.Err != nil || !r.Changed {
-			t.Fatalf("result %+v", r)
-		}
+		require.Nil(t, r.Err)
+		require.True(t, r.Changed, "result %+v", r)
 	}
 }
 
 func TestDropVDFBlockAndBaseGeneration(t *testing.T) {
 	in := "a\n\t\"7\"\n\t{\n\t\t\"x\"\n\t\t{\n\t\t}\n\t}\nb\n\t\"7\"\n\t{\n\t}\nc"
-	if got := dropVDFBlock(in, "7"); got != "a\nb\nc" {
-		t.Errorf("dropVDFBlock = %q", got)
-	}
-	if got := dropVDFBlock("no block here", "7"); got != "no block here" {
-		t.Errorf("dropVDFBlock = %q", got)
-	}
+	got := dropVDFBlock(in, "7")
+	assert.Equal(t, "a\nb\nc", got)
+	got = dropVDFBlock("no block here", "7")
+	assert.Equal(t, "no block here", got)
 	for in, want := range map[string]string{"100": "100", "100-r3": "100", "-r1": "-r1", "abc-rx": "abc"} {
-		if got := baseGeneration(in); got != want {
-			t.Errorf("baseGeneration(%q) = %q, want %q", in, got, want)
-		}
+		got := baseGeneration(in)
+		assert.Equal(t, want, got)
 	}
-	if tail("a\nb") != "a\nb" || strings.Count(tail(strings.Repeat("x\n", 40)), "\n") != 14 {
-		t.Error("tail keeps the last 15 lines")
-	}
+	require.Equal(t, "a\nb", tail("a\nb"))
+	assert.Equal(t, 14, strings.Count(tail(strings.Repeat("x\n", 40)), "\n"))
 }

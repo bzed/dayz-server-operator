@@ -3,15 +3,17 @@
 
 package site
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
 
 func TestValidatePriority(t *testing.T) {
-	if err := ValidatePriority([]string{"76561198000000001", "76561198000000002"}); err != nil {
-		t.Fatal(err)
-	}
+	err := ValidatePriority([]string{"76561198000000001", "76561198000000002"})
+	require.NoError(t, err)
 	for _, bad := range [][]string{{"123"}, {"7656119800000000a"}, {"76561198000000001", "76561198000000001"}} {
-		if ValidatePriority(bad) == nil {
-			t.Errorf("%v accepted", bad)
-		}
+		assert.NotNil(t, ValidatePriority(bad))
 	}
 }

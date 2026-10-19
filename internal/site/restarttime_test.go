@@ -8,6 +8,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/bzed/dayz-server-operator/internal/admin"
 )
 
@@ -29,55 +32,44 @@ func TestRestartTimeOnCalendar(t *testing.T) {
 		{"Sat,Sun *:15", 0, "Sat,Sun *-*-* *:15:00"},
 	} {
 		rt, err := ParseRestartTime(c.entry)
-		if err != nil {
-			t.Fatalf("%q: %v", c.entry, err)
-		}
-		if got := rt.OnCalendar(c.before); got != c.want {
-			t.Errorf("%q - %v = %q, want %q", c.entry, c.before, got, c.want)
-		}
+		require.NoError(t, err, "%q", c.entry)
+		got := rt.OnCalendar(c.before)
+		assert.Equal(t, c.want, got)
 	}
 }
 
 func TestParseRestartTimeRejectsSystemdSyntax(t *testing.T) {
 	for _, s := range []string{"", "*-*-* 00/4:00", "4:00", "24:00", "04:60", "Fri..Sun 04:00", "Mon 04:00 extra", "Foo 04:00", "04:00:00", "*:5", "*:60", "**:00", "Mon hourly"} {
-		if _, err := ParseRestartTime(s); err == nil {
-			t.Errorf("%q should be rejected", s)
-		}
+		_, err := ParseRestartTime(s)
+		require.Error(t, err)
 	}
 }
 
 func TestRestartsConfigValidatesTheAnnouncement(t *testing.T) {
-	if err := (RestartsConfig{Announce: Announce{Minutes: 30, Lock: 7, Kick: 3}}).Validate(); err != nil {
-		t.Error(err)
-	}
-	if err := (RestartsConfig{Announce: Announce{Minutes: 30, Lock: 2, Kick: 3}}).Validate(); err == nil {
-		t.Error("the kick cannot come before the lock")
-	}
-	if err := (RestartsConfig{Announce: Announce{Minutes: 5, Lock: 7, Kick: 3}}).Validate(); err == nil {
-		t.Error("the lock cannot come before the countdown")
-	}
+	err := (RestartsConfig{Announce: Announce{Minutes: 30, Lock: 7, Kick: 3}}).Validate()
+	require.NoError(t, err)
+	err = (RestartsConfig{Announce: Announce{Minutes: 30, Lock: 2, Kick: 3}}).Validate()
+	require.Error(t, err, "the kick cannot come before the lock")
+	err = (RestartsConfig{Announce: Announce{Minutes: 5, Lock: 7, Kick: 3}}).Validate()
+	require.Error(t, err, "the lock cannot come before the countdown")
 }
 
 func TestBackupConfigValidatesTheSchedule(t *testing.T) {
-	if err := (BackupConfig{Schedule: []string{"00:00", "Sat 22:30"}}).Validate(); err != nil {
-		t.Errorf("valid schedule: %v", err)
-	}
-	err := (BackupConfig{Schedule: []string{"*-*-* 00/6:00"}}).Validate()
-	if err == nil || !strings.Contains(err.Error(), "backup.schedule") {
-		t.Errorf("a systemd expression must be rejected, naming backup.schedule: %v", err)
-	}
+	err := (BackupConfig{Schedule: []string{"00:00", "Sat 22:30"}}).Validate()
+	require.NoError(t, err, "valid schedule")
+	err = (BackupConfig{Schedule: []string{"*-*-* 00/6:00"}}).Validate()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "backup.schedule")
 }
 
 func TestValidateRConBind(t *testing.T) {
 	for _, s := range []string{"", "127.0.0.1", "0.0.0.0", "::", "::1", "192.0.2.7"} {
-		if err := ValidateRConBind(s); err != nil {
-			t.Errorf("%q: %v", s, err)
-		}
+		err := ValidateRConBind(s)
+		require.NoError(t, err, "%q", s)
 	}
 	for _, s := range []string{"localhost", "all", "192.0.2", "127.0.0.1:2303"} {
-		if err := ValidateRConBind(s); err == nil {
-			t.Errorf("%q should be rejected", s)
-		}
+		err := ValidateRConBind(s)
+		require.Error(t, err)
 	}
 }
 
@@ -95,21 +87,15 @@ func TestMergeWatchByLayerInstanceWins(t *testing.T) {
 	for _, w := range got {
 		layers = append(layers, w.Layer)
 	}
-	if strings.Join(layers, ",") != "fires,ufo,convoy" {
-		t.Fatalf("layers = %v: defaults in their order, the instance's new layers after", layers)
-	}
-	if got[0].Icon != "tree" || got[0].Color != "" || got[0].Classes[0] != "Campfire" {
-		t.Errorf("fires = %+v: the instance rule wins as a whole", got[0])
-	}
-	if got[1].Icon != "rocket" {
-		t.Errorf("ufo = %+v: a default without an instance rule stays", got[1])
-	}
-	if out := MergeWatch(nil, own); len(out) != 2 {
-		t.Errorf("no defaults = %v", out)
-	}
-	if out := MergeWatch(def, nil); len(out) != 2 {
-		t.Errorf("no own rules = %v", out)
-	}
+	require.Equal(t, "fires,ufo,convoy", strings.Join(layers, ","))
+	require.Equal(t, "tree", got[0].Icon)
+	require.Empty(t, got[0].Color)
+	assert.Equal(t, "Campfire", got[0].Classes[0])
+	assert.Equal(t, "rocket", got[1].Icon)
+	out := MergeWatch(nil, own)
+	assert.Len(t, out, 2)
+	out = MergeWatch(def, nil)
+	assert.Len(t, out, 2)
 }
 
 func TestNextRestart(t *testing.T) {
@@ -127,11 +113,8 @@ func TestNextRestart(t *testing.T) {
 		{[]string{"Mon,Thu 04:30"}, "2026-10-16 02:00", "2026-10-19 04:30"}, // 2026-10-16 is a Friday
 		{[]string{"Mon 04:30", "nonsense"}, "2026-10-16 02:00", "2026-10-19 04:30"},
 	} {
-		if got := NextRestart(c.entries, at(c.after)); !got.Equal(at(c.want)) {
-			t.Errorf("%v after %s = %v, want %s", c.entries, c.after, got, c.want)
-		}
+		got := NextRestart(c.entries, at(c.after))
+		assert.True(t, got.Equal(at(c.want)), "%v after %s = %v, want %s", c.entries, c.after, got, c.want)
 	}
-	if !NextRestart(nil, time.Now()).IsZero() {
-		t.Error("no schedule, no restart")
-	}
+	assert.True(t, NextRestart(nil, time.Now()).IsZero(), "no schedule, no restart")
 }

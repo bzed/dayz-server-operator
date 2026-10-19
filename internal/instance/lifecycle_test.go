@@ -4,12 +4,14 @@
 package instance
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // writeFakeSystemctl writes a shell script standing in for systemctl: it
@@ -18,7 +20,7 @@ import (
 // not exercised here (no live systemd user session in this environment);
 // this only verifies Lifecycle builds the right command line and handles
 // the exit code correctly.
-func writeFakeSystemctl(t *testing.T, argsFile string, stdout string, exitCode int) string {
+func writeFakeSystemctl(t testing.TB, argsFile string, stdout string, exitCode int) string {
 	t.Helper()
 	script := "#!/bin/sh\n"
 	script += "printf '%s\\n' \"$@\" > " + argsFile + "\n"
@@ -27,18 +29,15 @@ func writeFakeSystemctl(t *testing.T, argsFile string, stdout string, exitCode i
 	}
 	script += "exit " + strconv.Itoa(exitCode) + "\n"
 	path := filepath.Join(t.TempDir(), "fake-systemctl.sh")
-	if err := os.WriteFile(path, []byte(script), 0o755); err != nil { //nolint:gosec // test fixture, fixed 0755 mode
-		t.Fatalf("write fake systemctl: %v", err)
-	}
+	err := os.WriteFile(path, []byte(script), 0o755)
+	require.NoError(t, err, "write fake systemctl")
 	return path
 }
 
-func readArgsFile(t *testing.T, path string) []string {
+func readArgsFile(t testing.TB, path string) []string {
 	t.Helper()
 	data, err := os.ReadFile(path) //nolint:gosec // test fixture path under t.TempDir()
-	if err != nil {
-		t.Fatalf("read args file: %v", err)
-	}
+	require.NoError(t, err, "read args file")
 	return strings.Fields(string(data))
 }
 
@@ -47,14 +46,11 @@ func TestLifecycleStart(t *testing.T) {
 	script := writeFakeSystemctl(t, argsFile, "", 0)
 	l := Lifecycle{Command: script, UserMode: true}
 
-	if err := l.Start(context.Background(), "deerisle"); err != nil {
-		t.Fatalf("Start: %v", err)
-	}
+	err := l.Start(t.Context(), "deerisle")
+	require.NoError(t, err, "Start")
 	args := readArgsFile(t, argsFile)
 	want := []string{"--user", "start", "dzo-deerisle.service"}
-	if !equalStrings(args, want) {
-		t.Errorf("args = %v, want %v", args, want)
-	}
+	assert.True(t, equalStrings(args, want), "args = %v, want %v", args, want)
 }
 
 func TestLifecycleStop(t *testing.T) {
@@ -62,14 +58,11 @@ func TestLifecycleStop(t *testing.T) {
 	script := writeFakeSystemctl(t, argsFile, "", 0)
 	l := Lifecycle{Command: script}
 
-	if err := l.Stop(context.Background(), "deerisle"); err != nil {
-		t.Fatalf("Stop: %v", err)
-	}
+	err := l.Stop(t.Context(), "deerisle")
+	require.NoError(t, err, "Stop")
 	args := readArgsFile(t, argsFile)
 	want := []string{"stop", "dzo-deerisle.service"}
-	if !equalStrings(args, want) {
-		t.Errorf("args = %v, want %v", args, want)
-	}
+	assert.True(t, equalStrings(args, want), "args = %v, want %v", args, want)
 }
 
 func TestLifecycleRestart(t *testing.T) {
@@ -77,40 +70,29 @@ func TestLifecycleRestart(t *testing.T) {
 	script := writeFakeSystemctl(t, argsFile, "", 0)
 	l := Lifecycle{Command: script}
 
-	if err := l.Restart(context.Background(), "deerisle"); err != nil {
-		t.Fatalf("Restart: %v", err)
-	}
+	err := l.Restart(t.Context(), "deerisle")
+	require.NoError(t, err, "Restart")
 	args := readArgsFile(t, argsFile)
 	want := []string{"restart", "dzo-deerisle.service"}
-	if !equalStrings(args, want) {
-		t.Errorf("args = %v, want %v", args, want)
-	}
+	assert.True(t, equalStrings(args, want), "args = %v, want %v", args, want)
 }
 
 func TestLifecycleFailurePropagates(t *testing.T) {
 	script := writeFakeSystemctl(t, filepath.Join(t.TempDir(), "args.txt"), "some error", 1)
 	l := Lifecycle{Command: script}
 
-	err := l.Start(context.Background(), "deerisle")
-	if err == nil {
-		t.Fatal("expected an error for a non-zero exit")
-	}
-	if !strings.Contains(err.Error(), "some error") {
-		t.Errorf("err = %v, want it to include the command's output", err)
-	}
+	err := l.Start(t.Context(), "deerisle")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "some error")
 }
 
 func TestLifecycleIsActiveTrue(t *testing.T) {
 	script := writeFakeSystemctl(t, filepath.Join(t.TempDir(), "args.txt"), "active", 0)
 	l := Lifecycle{Command: script}
 
-	active, err := l.IsActive(context.Background(), "deerisle")
-	if err != nil {
-		t.Fatalf("IsActive: %v", err)
-	}
-	if !active {
-		t.Error("expected IsActive to be true")
-	}
+	active, err := l.IsActive(t.Context(), "deerisle")
+	require.NoError(t, err, "IsActive")
+	assert.True(t, active, "expected IsActive to be true")
 }
 
 func TestLifecycleIsActiveFalseOnNonZeroExit(t *testing.T) {
@@ -119,13 +101,9 @@ func TestLifecycleIsActiveFalseOnNonZeroExit(t *testing.T) {
 	script := writeFakeSystemctl(t, filepath.Join(t.TempDir(), "args.txt"), "inactive", 3)
 	l := Lifecycle{Command: script}
 
-	active, err := l.IsActive(context.Background(), "deerisle")
-	if err != nil {
-		t.Fatalf("IsActive: %v", err)
-	}
-	if active {
-		t.Error("expected IsActive to be false")
-	}
+	active, err := l.IsActive(t.Context(), "deerisle")
+	require.NoError(t, err, "IsActive")
+	assert.False(t, active, "expected IsActive to be false")
 }
 
 func TestLifecycleAckFailure(t *testing.T) {
@@ -133,14 +111,11 @@ func TestLifecycleAckFailure(t *testing.T) {
 	script := writeFakeSystemctl(t, argsFile, "", 0)
 	l := Lifecycle{Command: script}
 
-	if err := l.AckFailure(context.Background(), "deerisle"); err != nil {
-		t.Fatalf("AckFailure: %v", err)
-	}
+	err := l.AckFailure(t.Context(), "deerisle")
+	require.NoError(t, err, "AckFailure")
 	args := readArgsFile(t, argsFile)
 	want := []string{"reset-failed", "dzo-deerisle.service"}
-	if !equalStrings(args, want) {
-		t.Errorf("args = %v, want %v", args, want)
-	}
+	assert.True(t, equalStrings(args, want), "args = %v, want %v", args, want)
 }
 
 func TestLifecycleDaemonReload(t *testing.T) {
@@ -148,21 +123,16 @@ func TestLifecycleDaemonReload(t *testing.T) {
 	script := writeFakeSystemctl(t, argsFile, "", 0)
 	l := Lifecycle{Command: script}
 
-	if err := l.DaemonReload(context.Background()); err != nil {
-		t.Fatalf("DaemonReload: %v", err)
-	}
+	err := l.DaemonReload(t.Context())
+	require.NoError(t, err, "DaemonReload")
 	args := readArgsFile(t, argsFile)
 	want := []string{"daemon-reload"}
-	if !equalStrings(args, want) {
-		t.Errorf("args = %v, want %v", args, want)
-	}
+	assert.True(t, equalStrings(args, want), "args = %v, want %v", args, want)
 }
 
 func TestLifecycleDefaultCommandIsSystemctl(t *testing.T) {
 	l := Lifecycle{}
-	if l.command() != "systemctl" {
-		t.Errorf("command() = %q, want systemctl", l.command())
-	}
+	assert.Equal(t, "systemctl", l.command())
 }
 
 func equalStrings(a, b []string) bool {
@@ -180,16 +150,12 @@ func equalStrings(a, b []string) bool {
 func TestLifecycleEnableNowAndDisable(t *testing.T) {
 	argsFile := filepath.Join(t.TempDir(), "args.txt")
 	l := Lifecycle{Command: writeFakeSystemctl(t, argsFile, "", 0)}
-	if err := l.EnableNow(context.Background(), "a.timer", "b.timer"); err != nil {
-		t.Fatal(err)
-	}
-	if got := readArgsFile(t, argsFile); !equalStrings(got, []string{"enable", "--now", "a.timer", "b.timer"}) {
-		t.Errorf("enable args = %v", got)
-	}
-	if err := l.Disable(context.Background(), "a.timer"); err != nil {
-		t.Fatal(err)
-	}
-	if got := readArgsFile(t, argsFile); !equalStrings(got, []string{"disable", "--now", "a.timer"}) {
-		t.Errorf("disable args = %v", got)
-	}
+	err := l.EnableNow(t.Context(), "a.timer", "b.timer")
+	require.NoError(t, err)
+	got := readArgsFile(t, argsFile)
+	assert.True(t, equalStrings(got, []string{"enable", "--now", "a.timer", "b.timer"}), "enable args = %v", got)
+	err = l.Disable(t.Context(), "a.timer")
+	require.NoError(t, err)
+	got = readArgsFile(t, argsFile)
+	assert.True(t, equalStrings(got, []string{"disable", "--now", "a.timer"}), "disable args = %v", got)
 }

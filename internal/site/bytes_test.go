@@ -6,6 +6,9 @@ package site
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"gopkg.in/yaml.v3"
 )
 
@@ -22,14 +25,13 @@ func TestBytesParsesUnits(t *testing.T) {
 		"3G":     3_000_000_000,
 	} {
 		var b Bytes
-		if err := yaml.Unmarshal([]byte(`"`+in+`"`), &b); err != nil || b != want {
-			t.Errorf("%q = %d, %v; want %d", in, b, err, want)
-		}
+		err := yaml.Unmarshal([]byte(`"`+in+`"`), &b)
+		require.NoError(t, err, "%q = %d, %v; want %d", in, b, err, want)
+		assert.Equal(t, want, b, "%q = %d, %v; want %d", in, b, err, want)
 	}
 	for _, in := range []string{"GiB", "10IB", "10XB", "-5GiB", "1.5GiB"} {
 		var b Bytes
-		if err := yaml.Unmarshal([]byte(`"`+in+`"`), &b); err == nil {
-			t.Errorf("%q should be rejected, got %d", in, b)
-		}
+		err := yaml.Unmarshal([]byte(`"`+in+`"`), &b)
+		require.Error(t, err)
 	}
 }

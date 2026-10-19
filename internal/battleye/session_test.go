@@ -11,6 +11,9 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // answeringServer is a fake RCon server that logs everyone in and answers every command with
@@ -21,12 +24,10 @@ type answeringServer struct {
 	wg   sync.WaitGroup
 }
 
-func newAnswering(t *testing.T, keepAlives bool) *answeringServer {
+func newAnswering(t testing.TB, keepAlives bool) *answeringServer {
 	t.Helper()
 	conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP("127.0.0.1")})
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	s := &answeringServer{conn: conn}
 	s.wg.Add(1)
 	go func() {
@@ -80,29 +81,19 @@ func TestSessionCommandsAndReconnect(t *testing.T) {
 	}
 	defer func() { _ = s.Close() }()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 	out, err := s.Command(ctx, "players")
-	if err != nil || out != "echo:players" {
-		t.Fatalf("first command: %q %v", out, err)
-	}
-	if !s.Connected() {
-		t.Error("the session is connected")
-	}
+	require.NoError(t, err)
+	require.Equal(t, "echo:players", out)
+	assert.True(t, s.Connected(), "the session is connected")
 
 	// The server goes silent: the liveness timeout notices, the session dials the next address.
 	a.dead.Store(true)
-	deadline := time.Now().Add(3 * time.Second)
-	for dials.Load() < 2 && time.Now().Before(deadline) {
-		time.Sleep(10 * time.Millisecond)
-	}
-	if dials.Load() < 2 {
-		t.Fatal("the session did not dial again after the server went silent")
-	}
+	require.Eventually(t, func() bool { return dials.Load() >= 2 }, 3*time.Second, 10*time.Millisecond, "the session did not dial again after the server went silent")
 	out, err = s.Command(ctx, "lock")
-	if err != nil || out != "echo:lock" {
-		t.Fatalf("command after the reconnect: %q %v", out, err)
-	}
+	require.NoError(t, err)
+	require.Equal(t, "echo:lock", out)
 }
 
 func TestSessionRetriesAfterAFailedDialAndForwardsEvents(t *testing.T) {
@@ -121,15 +112,14 @@ func TestSessionRetriesAfterAFailedDialAndForwardsEvents(t *testing.T) {
 	var logged atomic.Int32
 	s.Log = func(string, ...any) { logged.Add(1) }
 	defer func() { _ = s.Close() }()
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 	// Command waits for the connection that is not there yet.
-	if out, err := s.Command(ctx, "players"); err != nil || out != "echo:players" {
-		t.Fatalf("command: %q %v", out, err)
-	}
-	if tries.Load() != 3 || logged.Load() < 3 {
-		t.Errorf("tries=%d logged=%d: two failures, then the connection", tries.Load(), logged.Load())
-	}
+	out, err := s.Command(ctx, "players")
+	require.NoError(t, err)
+	require.Equal(t, "echo:players", out)
+	require.Equal(t, int32(3), tries.Load(), "two failures, then the connection")
+	assert.GreaterOrEqual(t, logged.Load(), int32(3), "two failures, then the connection")
 	// An event of the server reaches Events (the connect message of a player).
 	srv.conn.SetWriteDeadline(time.Now().Add(time.Second)) //nolint:errcheck // best effort
 	s.mu.Lock()
@@ -138,65 +128,54 @@ func TestSessionRetriesAfterAFailedDialAndForwardsEvents(t *testing.T) {
 	select {
 	case c.events <- Event{Kind: EventConnect}:
 	default:
-		t.Fatal("event channel full")
+		require.Fail(t, "event channel full")
 	}
 	select {
 	case ev := <-s.Events():
-		if ev.Kind != EventConnect {
-			t.Errorf("event = %+v", ev)
-		}
+		assert.Equal(t, EventConnect, ev.Kind)
 	case <-time.After(2 * time.Second):
-		t.Fatal("no event forwarded")
+		require.Fail(t, "no event forwarded")
 	}
 }
 
 func TestSessionCloseAndContext(t *testing.T) {
 	s := &Session{Addr: "x", Password: "pw", MinBackoff: time.Millisecond, MaxBackoff: time.Millisecond, Dial: func(string, string, ...Option) (*Client, error) { return nil, errors.New("down") }}
-	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	ctx, cancel := context.WithTimeout(t.Context(), 50*time.Millisecond)
 	defer cancel()
-	if _, err := s.Command(ctx, "players"); !errors.Is(err, context.DeadlineExceeded) {
-		t.Errorf("a command with no connection waits for its context: %v", err)
-	}
-	if err := s.Close(); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.Close(); err != nil {
-		t.Errorf("a second Close is fine: %v", err)
-	}
-	if _, err := s.Command(context.Background(), "players"); !errors.Is(err, ErrSessionClosed) {
-		t.Errorf("after Close: %v", err)
-	}
-	if s.Connected() {
-		t.Error("closed sessions are not connected")
-	}
+	_, err := s.Command(ctx, "players")
+	require.ErrorIs(t, err, context.DeadlineExceeded, "a command with no connection waits for its context")
+	err = s.Close()
+	require.NoError(t, err)
+	err = s.Close()
+	require.NoError(t, err, "a second Close is fine")
+	_, err = s.Command(t.Context(), "players")
+	require.ErrorIs(t, err, ErrSessionClosed, "after Close")
+	assert.False(t, s.Connected(), "closed sessions are not connected")
 }
 
 func TestSessionBackoffDefaults(t *testing.T) {
 	min, max := (&Session{}).backoff()
-	if min != time.Second || max != 30*time.Second {
-		t.Errorf("defaults = %s %s", min, max)
-	}
-	if min, max = (&Session{MinBackoff: time.Minute}).backoff(); min != time.Minute || max != time.Minute {
-		t.Errorf("max below min is raised to min: %s %s", min, max)
-	}
+	require.Equal(t, time.Second, min, "defaults = %s %s", min, max)
+	assert.Equal(t, 30*time.Second, max, "defaults = %s %s", min, max)
+	min, max = (&Session{MinBackoff: time.Minute}).backoff()
+	require.Equal(t, time.Minute, min, "max below min is raised to min: %s %s", min, max)
+	assert.Equal(t, time.Minute, max, "max below min is raised to min: %s %s", min, max)
 }
 
 func TestSessionWaitConnected(t *testing.T) {
 	srv := newAnswering(t, true)
 	s := &Session{Addr: srv.addr(), Password: "pw", Options: []Option{WithLoginTimeout(time.Second)}}
 	defer func() { _ = s.Close() }()
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
 	defer cancel()
-	if err := s.WaitConnected(ctx); err != nil {
-		t.Fatal(err)
-	}
+	err := s.WaitConnected(ctx)
+	require.NoError(t, err)
 	down := &Session{Addr: "127.0.0.1:1", Password: "pw", MinBackoff: time.Millisecond, MaxBackoff: time.Millisecond, Options: []Option{WithLoginTimeout(50 * time.Millisecond)}}
 	defer func() { _ = down.Close() }()
-	short, cancel2 := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	short, cancel2 := context.WithTimeout(t.Context(), 200*time.Millisecond)
 	defer cancel2()
-	if err := down.WaitConnected(short); !errors.Is(err, context.DeadlineExceeded) {
-		t.Errorf("an unreachable server: %v", err)
-	}
+	err = down.WaitConnected(short)
+	require.ErrorIs(t, err, context.DeadlineExceeded, "an unreachable server")
 }
 
 func TestSessionCommandTimesOutInsteadOfHanging(t *testing.T) {
@@ -216,14 +195,10 @@ func TestSessionCommandTimesOutInsteadOfHanging(t *testing.T) {
 	s := &Session{Addr: silent.addr(), Password: "pw", CommandTimeout: 50 * time.Millisecond, Options: []Option{WithLoginTimeout(time.Second), WithKeepAliveInterval(time.Hour)}}
 	defer func() { _ = s.Close() }()
 	start := time.Now()
-	_, err := s.Command(context.Background(), "silent")
-	if !errors.Is(err, context.DeadlineExceeded) {
-		t.Fatalf("err = %v, want the deadline", err)
-	}
-	if took := time.Since(start); took > 2*time.Second {
-		t.Errorf("took %s: the command must give up after its tries", took)
-	}
-	if n := asked.Load(); n != 3 {
-		t.Errorf("the command was sent %d times, want 3 tries", n)
-	}
+	_, err := s.Command(t.Context(), "silent")
+	require.ErrorIs(t, err, context.DeadlineExceeded)
+	took := time.Since(start)
+	assert.LessOrEqual(t, took, 2*time.Second)
+	n := asked.Load()
+	assert.Equal(t, int32(3), n)
 }

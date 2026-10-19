@@ -8,6 +8,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestRollbackRestoresManagedFiles(t *testing.T) {
@@ -15,12 +18,10 @@ func TestRollbackRestoresManagedFiles(t *testing.T) {
 	hist, live := filepath.Join(root, "filehistory"), filepath.Join(root, "live")
 	put := func(p, body string) {
 		t.Helper()
-		if err := os.MkdirAll(filepath.Dir(p), 0o750); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(p, []byte(body), 0o600); err != nil {
-			t.Fatal(err)
-		}
+		err := os.MkdirAll(filepath.Dir(p), 0o750)
+		require.NoError(t, err)
+		err = os.WriteFile(p, []byte(body), 0o600)
+		require.NoError(t, err)
 	}
 	put(filepath.Join(hist, "20260101T000000.000000000Z", "a.xml"), "old-a")
 	put(filepath.Join(hist, "20260102T000000.000000000Z", "a.xml"), "newer-a")
@@ -32,32 +33,27 @@ func TestRollbackRestoresManagedFiles(t *testing.T) {
 	m.Entries["db/b.xml"] = Entry{Origin: OriginPristine}
 
 	sets, err := HistorySets(hist)
-	if err != nil || len(sets) != 2 || sets[0] > sets[1] {
-		t.Fatalf("sets = %v %v", sets, err)
-	}
+	require.NoError(t, err)
+	require.Len(t, sets, 2)
+	require.LessOrEqual(t, sets[0], sets[1])
 	set, restored, err := Rollback(hist, live, m, "")
-	if err != nil || !strings.HasPrefix(set, "20260102") || strings.Join(restored, ",") != "a.xml,db/b.xml" {
-		t.Fatalf("set=%s restored=%v err=%v", set, restored, err)
-	}
-	if b, _ := os.ReadFile(filepath.Join(live, "a.xml")); string(b) != "newer-a" { //nolint:gosec // test fixture
-		t.Errorf("a.xml = %q", b)
-	}
-	if _, err := os.Stat(filepath.Join(live, "foreign.txt")); err == nil {
-		t.Error("a file that is not in the manifest must not be restored")
-	}
-	if m.Entries["a.xml"].WrittenHash != HashBytes([]byte("newer-a")) {
-		t.Error("the manifest must record the restored content")
-	}
-	if set, _, err := Rollback(hist, live, m, "20260101"); err != nil || !strings.HasPrefix(set, "20260101") {
-		t.Errorf("a named set: %s %v", set, err)
-	}
-	if _, _, err := Rollback(hist, live, m, "1999"); err == nil || !strings.Contains(err.Error(), "20260102") {
-		t.Errorf("an unknown set names the ones there are: %v", err)
-	}
-	if _, _, err := Rollback(filepath.Join(root, "none"), live, m, ""); err == nil {
-		t.Error("no history at all must be an error")
-	}
-	if sets, err := HistorySets(filepath.Join(root, "none")); err != nil || sets != nil {
-		t.Errorf("a missing history directory is no sets: %v %v", sets, err)
-	}
+	require.NoError(t, err)
+	require.True(t, strings.HasPrefix(set, "20260102"))
+	require.Equal(t, "a.xml,db/b.xml", strings.Join(restored, ","))
+	b, _ := os.ReadFile(filepath.Join(live, "a.xml"))
+	assert.Equal(t, "newer-a", string(b))
+	_, err = os.Stat(filepath.Join(live, "foreign.txt"))
+	require.Error(t, err, "a file that is not in the manifest must not be restored")
+	assert.Equal(t, HashBytes([]byte("newer-a")), m.Entries["a.xml"].WrittenHash, "the manifest must record the restored content")
+	set, _, err = Rollback(hist, live, m, "20260101")
+	require.NoError(t, err)
+	assert.True(t, strings.HasPrefix(set, "20260101"))
+	_, _, err = Rollback(hist, live, m, "1999")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "20260102")
+	_, _, err = Rollback(filepath.Join(root, "none"), live, m, "")
+	require.Error(t, err, "no history at all must be an error")
+	sets, err = HistorySets(filepath.Join(root, "none"))
+	require.NoError(t, err)
+	assert.Nil(t, sets)
 }
