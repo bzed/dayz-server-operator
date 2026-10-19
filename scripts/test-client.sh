@@ -59,6 +59,17 @@ bad() { echo "FAIL $1"; fail=$((fail + 1)); }
 verdict() { if [ "$2" = 0 ]; then ok "$1"; else bad "$1"; fi; }
 waitfor() { timeout "$1" bash -c "until $2; do sleep 3; done"; }
 
+# web_tests: the browser (internal/web/live_test.go, chromedp) against this real server and dzo serve. It
+# needs Chrome/Chromium and the JavaScript assets of docs/development.rst (DZO_E2E_CHROME, DZO_E2E_ASSETS).
+web_tests() {
+	local player=dzotester s=0
+	[ "$noclient" = 1 ] && player=
+	DZO_LIVE_API="http://127.0.0.1:$api" DZO_LIVE_TOKEN_FILE="$work/api.token" DZO_LIVE_INSTANCE=t1 DZO_LIVE_PLAYER="$player" \
+		go test -tags 'e2e live' -count=1 -run '^TestLive' ./internal/web/ >"$work/web.log" 2>&1 || s=$?
+	[ "$s" = 0 ] || cat "$work/web.log" >&2
+	verdict "web UI against the real server" $s
+}
+
 # server_tests: needs the server, dzo serve and the probe, no client.
 server_tests() {
 # 1.30 only: Motorbike is not a Car, dzo-admin keeps a registry for it. 1.29 has no motorbikes.
@@ -229,6 +240,7 @@ if [ "$expansion" = 1 ]; then
 	mk | grep -q '"k":"territory","v":"Probe Camp"' || s=1
 	verdict "territory: its flag names the territory" $s
 fi
+web_tests
 }
 
 
