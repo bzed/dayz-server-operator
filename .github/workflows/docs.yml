@@ -42,9 +42,9 @@ jobs:
         run: |
           apt-get update
           apt-get install -y --no-install-recommends git ca-certificates make
+      # No ref: a workflow_run checks out the head of main, a pull_request its merge commit. Never
+      # the head_sha of the triggering run, which can come from a fork branch named main.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
       - name: Install Sphinx
         run: apt-get install -y --no-install-recommends python3-sphinx
       - name: Build
@@ -70,9 +70,8 @@ jobs:
         run: |
           apt-get update
           apt-get install -y --no-install-recommends git ca-certificates
+      # No ref: the head of main (see the build job). The deploy job checks it is the CI run's commit.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ github.event.workflow_run.head_sha }}
       - name: Install repository tools
         run: apt-get install -y --no-install-recommends reprepro gnupg
       # The package the CI run built (a snapshot version) is published as it is, not built again.
