@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -27,12 +28,30 @@ type webMod struct{ st *moderation.Store }
 
 func (m webMod) Store() *moderation.Store { return m.st }
 func (m webMod) Kick(_ context.Context, instance, steamID, reason string) error {
+	kickedMu.Lock()
+	defer kickedMu.Unlock()
 	kicked = append(kicked, instance+" "+steamID+" "+reason)
 	return nil
 }
 
 // kicked records what the web tests asked to kick (the tests of this package do not run in parallel).
-var kicked []string
+var (
+	kickedMu sync.Mutex
+	kicked   []string
+)
+
+// kickedList is a copy of what was asked to kick so far; the browser tests read it while the server writes.
+func kickedList() []string {
+	kickedMu.Lock()
+	defer kickedMu.Unlock()
+	return append([]string(nil), kicked...)
+}
+
+func resetKicked() {
+	kickedMu.Lock()
+	defer kickedMu.Unlock()
+	kicked = nil
+}
 
 func (m webMod) Changed(context.Context, moderation.Ban, *moderation.Ban) map[string]string {
 	return map[string]string{"alpha": "ok"}

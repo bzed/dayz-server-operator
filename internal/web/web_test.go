@@ -35,6 +35,9 @@ type env struct {
 	hub    *admin.Hub
 	api    *api.Server
 	assets string
+
+	mu   sync.Mutex
+	sent []string // the kinds of the commands answerCommands has seen, in order
 }
 
 func newEnv(t *testing.T, role api.Role) *env {
@@ -114,6 +117,13 @@ func (e *env) post(path string, form url.Values, hdr map[string]string) (int, st
 	return resp.StatusCode, string(b)
 }
 
+// commandsOf counts the commands of a kind that answerCommands has answered so far.
+func (e *env) commandsOf(kind string) int {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return strings.Count(strings.Join(e.sent, ","), kind)
+}
+
 func (e *env) answerCommands(ok bool, msg string) func() {
 	ctx, cancel := context.WithCancel(e.t.Context())
 	var wg sync.WaitGroup
@@ -125,6 +135,9 @@ func (e *env) answerCommands(ok bool, msg string) func() {
 		for {
 			var res []admin.Result
 			for _, c := range e.hub.Sync(admin.SyncRequest{Proto: 1}).Commands {
+				e.mu.Lock()
+				e.sent = append(e.sent, c.Kind)
+				e.mu.Unlock()
 				res = append(res, admin.Result{ID: c.ID, OK: admin.Flag(ok), Message: msg})
 			}
 			if len(res) > 0 {
@@ -460,10 +473,10 @@ func TestKickDialogAndAction(t *testing.T) {
 	for _, want := range []string{`data-dialog="kick-7656"`, `<dialog id="kick-7656"`, `hx-post="/b/main/i/alpha/players/7656/kick"`, `name="reason" required maxlength="64"`} {
 		assert.Contains(t, body, want, "panel lacks %s", want)
 	}
-	kicked = nil
+	resetKicked()
 	_, out := e.post("/b/main/i/alpha/players/7656/kick", url.Values{"reason": {" afk "}}, nil)
 	require.Contains(t, out, "done", "kick")
-	require.Equal(t, []string{"alpha 7656 afk"}, kicked)
+	require.Equal(t, []string{"alpha 7656 afk"}, kickedList())
 	_, out = e.post("/b/main/i/alpha/players/7656/kick", url.Values{"reason": {strings.Repeat("r", 65)}}, nil)
 	require.Contains(t, out, "64", "long reason")
 }
