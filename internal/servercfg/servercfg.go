@@ -13,6 +13,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 )
 
 // Item is one value inside a scalar or an array entry.
@@ -215,9 +217,13 @@ func (p *parser) eof() bool { return p.pos >= len(p.src) }
 func (p *parser) skipSpaceAndComments() {
 	for !p.eof() {
 		c := p.src[p.pos]
+		// The same set of spaces as strings.TrimSpace, which trims bare values: skipping and trimming must agree, or a
+		// value such as "\v/*" would be written back as the start of a comment.
+		if r, size := utf8.DecodeRuneInString(p.src[p.pos:]); unicode.IsSpace(r) {
+			p.pos += size
+			continue
+		}
 		switch {
-		case c == ' ' || c == '\t' || c == '\r' || c == '\n':
-			p.pos++
 		case c == '/' && p.peek(1) == '/':
 			for !p.eof() && p.src[p.pos] != '\n' {
 				p.pos++
@@ -394,9 +400,7 @@ func (p *parser) parseValue() (Item, error) {
 	for !p.eof() && !strings.ContainsRune(",;}", rune(p.src[p.pos])) {
 		p.pos++
 	}
-	// Trim only what skipSpaceAndComments skips: with TrimSpace's wider set a value such as
-	// "\v/*" would lose its \v and be written back as the start of a comment.
-	raw := strings.Trim(p.src[start:p.pos], " \t\r\n")
+	raw := strings.TrimSpace(p.src[start:p.pos])
 	if raw == "" {
 		return Item{}, fmt.Errorf("empty bare value at offset %d", start)
 	}
