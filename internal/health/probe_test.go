@@ -7,19 +7,18 @@ import (
 	"bytes"
 	"hash/crc32"
 	"net"
-	"strings"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 // fakeA2SServer answers every A2S_INFO request directly (no challenge),
 // which is enough to exercise Probe's "query port answers" path.
-func fakeA2SServer(t *testing.T) string {
+func fakeA2SServer(t testing.TB) string {
 	t.Helper()
 	conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 0})
-	if err != nil {
-		t.Fatalf("listen: %v", err)
-	}
+	require.NoError(t, err, "listen")
 	t.Cleanup(func() { _ = conn.Close() })
 	go func() {
 		buf := make([]byte, 4096)
@@ -56,7 +55,7 @@ func minimalA2SInfoBody() []byte {
 	return b.Bytes()
 }
 
-func procWithServerRunning(t *testing.T) string {
+func procWithServerRunning(t testing.TB) string {
 	t.Helper()
 	root := fakeProc(t, map[string]struct{ comm, cmdline string }{
 		"1234": {comm: "DayZServer"},
@@ -70,23 +69,20 @@ func TestProbeSuccess(t *testing.T) {
 		ProcRoot:  procWithServerRunning(t),
 		Timeout:   2 * time.Second,
 	}
-	if err := Probe(opts); err != nil {
-		t.Fatalf("Probe: %v", err)
-	}
+	err := Probe(opts)
+	require.NoError(t, err, "Probe")
 }
 
 func TestProbeRequiresQueryAddr(t *testing.T) {
 	opts := Options{ProcRoot: procWithServerRunning(t)}
-	if err := Probe(opts); err == nil || !strings.Contains(err.Error(), "QueryAddr") {
-		t.Fatalf("Probe() = %v", err)
-	}
+	err := Probe(opts)
+	require.ErrorContains(t, err, "QueryAddr")
 }
 
 func TestProbeRequiresProcRoot(t *testing.T) {
 	opts := Options{QueryAddr: fakeA2SServer(t)}
-	if err := Probe(opts); err == nil || !strings.Contains(err.Error(), "ProcRoot") {
-		t.Fatalf("Probe() = %v", err)
-	}
+	err := Probe(opts)
+	require.ErrorContains(t, err, "ProcRoot")
 }
 
 func TestProbeFailsWhenProcessNotRunning(t *testing.T) {
@@ -96,16 +92,12 @@ func TestProbeFailsWhenProcessNotRunning(t *testing.T) {
 		Timeout:   time.Second,
 	}
 	err := Probe(opts)
-	if err == nil || !strings.Contains(err.Error(), "process not found") {
-		t.Fatalf("Probe() = %v", err)
-	}
+	require.ErrorContains(t, err, "process not found")
 }
 
 func TestProbeFailsWhenQueryPortSilent(t *testing.T) {
 	conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 0})
-	if err != nil {
-		t.Fatalf("listen: %v", err)
-	}
+	require.NoError(t, err, "listen")
 	addr := conn.LocalAddr().String()
 	_ = conn.Close() // nothing answers
 
@@ -115,9 +107,7 @@ func TestProbeFailsWhenQueryPortSilent(t *testing.T) {
 		Timeout:   200 * time.Millisecond,
 	}
 	err = Probe(opts)
-	if err == nil || !strings.Contains(err.Error(), "not answering") {
-		t.Fatalf("Probe() = %v", err)
-	}
+	require.ErrorContains(t, err, "not answering")
 }
 
 func TestProbeWithRConSuccess(t *testing.T) {
@@ -130,9 +120,8 @@ func TestProbeWithRConSuccess(t *testing.T) {
 		Timeout:   2 * time.Second,
 		RCon:      &RConProbe{Addr: rconAddr, Password: "pw", Timeout: 2 * time.Second},
 	}
-	if err := Probe(opts); err != nil {
-		t.Fatalf("Probe: %v", err)
-	}
+	err := Probe(opts)
+	require.NoError(t, err, "Probe")
 }
 
 func TestProbeWithRConLoginFailure(t *testing.T) {
@@ -146,20 +135,16 @@ func TestProbeWithRConLoginFailure(t *testing.T) {
 		RCon:      &RConProbe{Addr: rconAddr, Password: "wrong", Timeout: 2 * time.Second},
 	}
 	err := Probe(opts)
-	if err == nil || !strings.Contains(err.Error(), "rcon login failed") {
-		t.Fatalf("Probe() = %v", err)
-	}
+	require.ErrorContains(t, err, "rcon login failed")
 }
 
 // fakeRConServer is a minimal BattlEye server: it accepts login (or not,
 // per loginOK) and, if logged in, answers any Command with an empty OK
 // response - just enough to exercise the version probe.
-func fakeRConServer(t *testing.T, loginOK bool) (addr string, cleanup func()) {
+func fakeRConServer(t testing.TB, loginOK bool) (addr string, cleanup func()) {
 	t.Helper()
 	conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 0})
-	if err != nil {
-		t.Fatalf("listen: %v", err)
-	}
+	require.NoError(t, err, "listen")
 	go func() {
 		buf := make([]byte, 4096)
 		for {

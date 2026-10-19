@@ -33,20 +33,20 @@ import (
 	"github.com/bzed/dayz-server-operator/internal/monitor"
 	"github.com/bzed/dayz-server-operator/internal/site"
 	"github.com/bzed/dayz-server-operator/internal/steam"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-func write(t *testing.T, path, body string) {
+func write(t testing.TB, path, body string) {
 	t.Helper()
-	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
-		t.Fatal(err)
-	}
+	err := os.MkdirAll(filepath.Dir(path), 0o750)
+	require.NoError(t, err)
+	err = os.WriteFile(path, []byte(body), 0o600)
+	require.NoError(t, err)
 }
 
 type fixture struct {
-	t    *testing.T
+	t    testing.TB
 	data string
 	cfg  *config.Config
 	c    *Collector
@@ -56,16 +56,14 @@ type fixture struct {
 	query        func() (a2s.InfoResponse, error)
 }
 
-func newFixture(t *testing.T) *fixture {
+func newFixture(t testing.TB) *fixture {
 	t.Helper()
 	f := &fixture{t: t, data: t.TempDir()}
 	f.unit = "ActiveState=active\nSubState=running\nActiveEnterTimestampMonotonic=1000000\nNRestarts=2\n"
 	f.health = "healthy"
 	f.query = func() (a2s.InfoResponse, error) { return a2s.InfoResponse{Players: 3, MaxPlayers: 60}, nil }
 	cfg, err := config.Parse([]byte("paths:\n  data: " + f.data + "\n"))
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	f.cfg = cfg
 	write(t, filepath.Join(f.data, "site", "instances", "x", "instance.yaml"), `name: x
 product: dayz-stable
@@ -75,9 +73,8 @@ ports: {game: 2302, rcon: 2306, query: 27016}
 network: host
 `)
 	write(t, filepath.Join(f.data, "cache", "products", "dayz-stable", "7", "DayZServer"), "bin")
-	if err := os.Symlink("7", filepath.Join(f.data, "cache", "products", "dayz-stable", "current")); err != nil {
-		t.Fatal(err)
-	}
+	err = os.Symlink("7", filepath.Join(f.data, "cache", "products", "dayz-stable", "current"))
+	require.NoError(t, err)
 	f.c = &Collector{
 		Cfg: cfg, Version: "v-test", Load: func() (*site.Tree, error) { return site.LoadTree(cfg.Paths.Site) },
 		Run: func(_ context.Context, name string, args ...string) ([]byte, error) {
@@ -102,9 +99,8 @@ network: host
 func (f *fixture) inst() monitor.InstanceStatus {
 	f.t.Helper()
 	snap, err := f.c.Snapshot()
-	if err != nil || len(snap.Instances) != 1 {
-		f.t.Fatalf("snapshot: %v %+v", err, snap)
-	}
+	require.NoError(f.t, err, "snapshot")
+	require.Len(f.t, snap.Instances, 1)
 	return snap.Instances[0]
 }
 
@@ -114,12 +110,10 @@ func TestCollectsARunningInstance(t *testing.T) {
 	write(t, filepath.Join(f.data, "instances", "x", "mpmissions", ".dzo-manifest.json"), "{}")
 	write(t, filepath.Join(f.data, "cache", "workshop", "big"), strings.Repeat("x", 5000))
 	now := time.Now()
-	if err := os.MkdirAll(filepath.Join(f.data, "secrets"), 0o700); err != nil {
-		t.Fatal(err)
-	}
-	if err := (steam.Status{Account: "a", LastSuccessAt: &now}).Save(filepath.Join(f.data, "secrets", "steam-status.json")); err != nil {
-		t.Fatal(err)
-	}
+	err := os.MkdirAll(filepath.Join(f.data, "secrets"), 0o700)
+	require.NoError(t, err)
+	err = (steam.Status{Account: "a", LastSuccessAt: &now}).Save(filepath.Join(f.data, "secrets", "steam-status.json"))
+	require.NoError(t, err)
 	write(t, filepath.Join(f.data, "snapshots", "x", "index.json"), `{"snapshots":[
  {"id":"a","reason":"manual","state":"complete","created":"2026-10-01T10:00:00Z"},
  {"id":"b","reason":"manual","state":"complete","created":"2026-10-02T10:00:00Z"},
@@ -127,95 +121,101 @@ func TestCollectsARunningInstance(t *testing.T) {
 
 	snap, _ := f.c.Snapshot()
 	i := snap.Instances[0]
-	if !i.Up || i.Players != 3 || i.MaxPlayers != 60 || i.Health != monitor.HealthHealthy || i.UptimeSeconds != 60 {
-		t.Errorf("instance = %+v", i)
-	}
-	if i.RestartsTotal["all"] != 2 || i.Product != "dayz-stable" || i.Build != "7" || i.Map != "empty.m" || i.ModsPendingUpdate != 2 {
-		t.Errorf("instance = %+v", i)
-	}
-	if i.A2SRTTSeconds == nil || !i.LastRenderSuccess || i.LastRenderTimestamp == 0 || !strings.Contains(i.Message, "3/60 players") {
-		t.Errorf("instance = %+v", i)
-	}
+	require.True(t, i.Up)
+	require.Equal(t, 3, i.Players)
+	require.Equal(t, 60, i.MaxPlayers)
+	require.Equal(t, monitor.HealthHealthy, i.Health)
+	assert.Equal(t, float64(60), i.UptimeSeconds)
+	require.Equal(t, 2, i.RestartsTotal["all"])
+	require.Equal(t, "dayz-stable", i.Product)
+	require.Equal(t, "7", i.Build)
+	require.Equal(t, "empty.m", i.Map)
+	assert.Equal(t, 2, i.ModsPendingUpdate)
+	require.NotNil(t, i.A2SRTTSeconds)
+	require.True(t, i.LastRenderSuccess)
+	require.NotZero(t, i.LastRenderTimestamp)
+	assert.Contains(t, i.Message, "3/60 players")
 	g := snap.Global
-	if g.Version != "v-test" || g.ProductBuilds["dayz-stable"] != "7" || g.UpdateLastCheckUnix != 1234 || g.UpdatesPending != 2 {
-		t.Errorf("global = %+v", g)
-	}
-	if g.CacheBytes < 5000 || g.DiskFreeBytes <= 0 || !g.SteamSessionValid || g.SteamAuthRequired {
-		t.Errorf("global = %+v", g)
-	}
-	if len(snap.Backups) != 1 || snap.Backups[0].Count != 2 || snap.Backups[0].LastSuccess["manual"] != 1790935200 || snap.Backups[0].LastSuccess["update"] != 0 {
-		t.Errorf("backups = %+v (only complete snapshots count)", snap.Backups)
-	}
+	require.Equal(t, "v-test", g.Version)
+	require.Equal(t, "7", g.ProductBuilds["dayz-stable"])
+	require.Equal(t, int64(1234), g.UpdateLastCheckUnix)
+	assert.Equal(t, 2, g.UpdatesPending)
+	assert.GreaterOrEqual(t, g.CacheBytes, int64(5000))
+	assert.Positive(t, g.DiskFreeBytes)
+	assert.True(t, g.SteamSessionValid)
+	assert.False(t, g.SteamAuthRequired)
+	require.Len(t, snap.Backups, 1)
+	require.Equal(t, 2, snap.Backups[0].Count)
+	require.Equal(t, int64(1790935200), snap.Backups[0].LastSuccess["manual"])
+	assert.Equal(t, int64(0), snap.Backups[0].LastSuccess["update"])
 }
 
 func TestInstanceStates(t *testing.T) {
 	f := newFixture(t)
 	f.unit = "ActiveState=inactive\nSubState=dead\nNRestarts=0\n"
 	f.health = ""
-	if i := f.inst(); i.Up || i.Health != monitor.HealthUnhealthy || !strings.Contains(i.Message, "stopped (inactive)") {
-		t.Errorf("a stopped instance = %+v", i)
-	}
+	i := f.inst()
+	require.False(t, i.Up)
+	require.Equal(t, monitor.HealthUnhealthy, i.Health)
+	assert.Contains(t, i.Message, "stopped (inactive)")
 
 	f = newFixture(t)
 	f.query = func() (a2s.InfoResponse, error) { return a2s.InfoResponse{}, errors.New("timeout") }
-	if i := f.inst(); i.Up || !strings.Contains(i.Message, "does not answer the Steam query") {
-		t.Errorf("an active unit that does not answer = %+v", i)
-	}
+	i = f.inst()
+	require.False(t, i.Up)
+	assert.Contains(t, i.Message, "does not answer the Steam query")
 
 	f = newFixture(t)
 	f.unit = "ActiveState=activating\nSubState=start\nNRestarts=0\n"
 	f.health = "starting"
-	if i := f.inst(); i.Up || i.Health != monitor.HealthStarting || i.Message != "starting" {
-		t.Errorf("a starting instance = %+v", i)
-	}
+	i = f.inst()
+	require.False(t, i.Up)
+	require.Equal(t, monitor.HealthStarting, i.Health)
+	assert.Equal(t, "starting", i.Message)
 
 	f = newFixture(t)
 	f.health = "" // no podman health: an active unit is taken as healthy
-	if i := f.inst(); !i.Up || i.Health != monitor.HealthHealthy {
-		t.Errorf("no health check = %+v", i)
-	}
+	i = f.inst()
+	require.True(t, i.Up)
+	assert.Equal(t, monitor.HealthHealthy, i.Health)
 
 	f = newFixture(t)
 	f.unit, f.unitErr = "", errors.New("Failed to connect to bus")
-	if i := f.inst(); i.Up || !strings.Contains(i.Message, "systemd:") {
-		t.Errorf("no systemd = %+v", i)
-	}
+	i = f.inst()
+	require.False(t, i.Up)
+	assert.Contains(t, i.Message, "systemd:")
 
 	f = newFixture(t)
 	f.health = "unhealthy"
-	if i := f.inst(); i.Health != monitor.HealthUnhealthy || !i.Up {
-		t.Errorf("unhealthy = %+v", i)
-	}
+	i = f.inst()
+	require.Equal(t, monitor.HealthUnhealthy, i.Health)
+	assert.True(t, i.Up)
 }
 
 func TestFailedRenderGateAndSiteErrors(t *testing.T) {
 	f := newFixture(t)
 	write(t, filepath.Join(f.data, "instances", "x", "mpmissions", ".dzo-manifest.json"), "{}")
 	gate := instance.GateFile(filepath.Join(f.data, "instances", "x", "runtime"))
-	if err := os.MkdirAll(filepath.Dir(gate), 0o750); err != nil {
-		t.Fatal(err)
-	}
+	err := os.MkdirAll(filepath.Dir(gate), 0o750)
+	require.NoError(t, err)
 	g := instance.FailureGate{}
 	g.RecordFailure("h", "bad serverDZ.cfg", time.Now().Add(time.Hour))
-	if err := g.State.Save(gate); err != nil {
-		t.Fatal(err)
-	}
-	if i := f.inst(); i.LastRenderSuccess {
-		t.Errorf("a recorded render failure must show: %+v", i)
-	}
+	err = g.State.Save(gate)
+	require.NoError(t, err)
+	i := f.inst()
+	assert.False(t, i.LastRenderSuccess)
 
 	f = newFixture(t)
 	f.c.Load = func() (*site.Tree, error) { return nil, errors.New("no site") }
 	snap, _ := f.c.Snapshot()
-	if len(snap.Instances) != 0 || snap.Global.JobsFailedTotal["site_load"] != 1 {
-		t.Errorf("a site that does not load is reported, not hidden: %+v", snap)
-	}
+	require.Empty(t, snap.Instances)
+	assert.Equal(t, 1, snap.Global.JobsFailedTotal["site_load"])
 
 	f = newFixture(t)
 	write(t, filepath.Join(f.data, "site", "instances", "x", "instance.yaml"), "name: x\nproduct: nope\nmap: m\nmission_source: {git: g, ref: r, path: p}\nports: {game: 1}\nnetwork: host\n")
-	if i := f.inst(); !strings.Contains(i.Message, "cannot resolve") || i.Up {
-		t.Errorf("an instance that does not resolve: %+v", i)
-	}
+	i = f.inst()
+	require.Contains(t, i.Message, "cannot resolve")
+	assert.False(t, i.Up)
 }
 
 func TestMissionDriftIsCounted(t *testing.T) {
@@ -225,42 +225,35 @@ func TestMissionDriftIsCounted(t *testing.T) {
 	write(t, filepath.Join(pristine, "db", "types.xml"), "types")
 	live, manifest := filepath.Join(f.data, "instances", "x", "mpmissions", "empty.m"), filepath.Join(f.data, "instances", "x", "mpmissions", ".dzo-manifest.json")
 	in := mission.RenderInput{PristineDir: pristine, LiveDir: live, ManifestPath: manifest, FileHistoryDir: filepath.Join(f.data, "instances", "x", "filehistory")}
-	if _, _, err := mission.Render(in); err != nil {
-		t.Fatal(err)
-	}
-	if i := f.inst(); i.MissionDriftFiles != 0 {
-		t.Errorf("a fresh render has no drift: %+v", i)
-	}
+	_, _, err := mission.Render(in)
+	require.NoError(t, err)
+	i := f.inst()
+	assert.Equal(t, 0, i.MissionDriftFiles)
 	write(t, filepath.Join(live, "init.c"), "somebody edited this")
 	f.c.slow.drift = nil // the drift count is slow; force it
-	f.c.Refresh(context.Background())
-	if i := f.inst(); i.MissionDriftFiles != 1 {
-		t.Errorf("one managed file changed: %+v", i)
-	}
+	f.c.Refresh(t.Context())
+	i = f.inst()
+	assert.Equal(t, 1, i.MissionDriftFiles)
 }
 
 func TestSnapshotIsCachedAndRefreshes(t *testing.T) {
 	f := newFixture(t)
 	var calls atomic.Int32
 	f.query = func() (a2s.InfoResponse, error) { return a2s.InfoResponse{Players: byte(calls.Add(1))}, nil }
-	if i := f.inst(); i.Players != 1 {
-		t.Fatalf("players = %d", i.Players)
-	}
-	if i := f.inst(); i.Players != 1 || calls.Load() != 1 {
-		t.Errorf("a scrape must not query the server again: players %d, %d queries", i.Players, calls.Load())
-	}
-	f.c.Refresh(context.Background())
-	if i := f.inst(); i.Players != 2 {
-		t.Errorf("a refresh updates it: %d", i.Players)
-	}
-	ctx, cancel := context.WithCancel(context.Background())
+	i := f.inst()
+	require.Equal(t, 1, i.Players)
+	i = f.inst()
+	require.Equal(t, 1, i.Players)
+	assert.Equal(t, int32(1), calls.Load())
+	f.c.Refresh(t.Context())
+	i = f.inst()
+	assert.Equal(t, 2, i.Players)
+	ctx, cancel := context.WithCancel(t.Context())
 	f.c.Interval = 20 * time.Millisecond
 	f.c.Start(ctx)
-	time.Sleep(150 * time.Millisecond)
-	cancel()
-	if calls.Load() < 4 {
-		t.Errorf("the background loop must keep refreshing: %d queries", calls.Load())
-	}
+	defer cancel()
+	require.Eventually(t, func() bool { return calls.Load() >= 4 }, 5*time.Second, 5*time.Millisecond,
+		"the background loop must keep refreshing")
 }
 
 func TestMetricsEndToEnd(t *testing.T) {
@@ -272,29 +265,22 @@ func TestMetricsEndToEnd(t *testing.T) {
 	srv := httptest.NewServer(monitor.Handler(f.c))
 	defer srv.Close()
 	resp, err := http.Get(srv.URL + "/metrics")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	b, _ := io.ReadAll(resp.Body)
 	_ = resp.Body.Close()
 	for _, want := range []string{`dzo_instance_up{instance="x"} 1`, `dzo_instance_players{instance="x"} 3`, `dzo_build_info{version="v-test"} 1`, `dzo_backup_count{instance="x"} 1`, `dzo_logs_archive_bytes{instance="x"} 5`, `dzo_profile_unmatched_bytes{instance="x"} 2.097152e+06`, `dzo_backup_last_success_timestamp{instance="x",reason="manual"}`, `dzo_product_build_info{buildid="7",product="dayz-stable"} 1`} {
-		if !strings.Contains(string(b), want) {
-			t.Errorf("metrics lack %s", want)
-		}
+		assert.Contains(t, string(b), want)
 	}
 	// and what dzo check remote reads back
-	res, err := monitor.CheckRemoteInstance(context.Background(), srv.URL+"/status/x", 2*time.Second)
-	if err != nil || res.Status != monitor.StatusOK {
-		t.Errorf("check remote = %+v %v", res, err)
-	}
+	res, err := monitor.CheckRemoteInstance(t.Context(), srv.URL+"/status/x", 2*time.Second)
+	require.NoError(t, err)
+	assert.Equal(t, monitor.StatusOK, res.Status)
 }
 
 func TestGuardAllowListAndToken(t *testing.T) {
 	ok := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { _, _ = io.WriteString(w, "ok") })
 	h, err := Guard(ok, config.Exporter{Allow: []string{"192.0.2.0/24", "2001:db8::/32"}}, "s3cret")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	call := func(remote, auth string) int {
 		r := httptest.NewRequest("GET", "/metrics", nil)
 		r.RemoteAddr = remote
@@ -316,33 +302,27 @@ func TestGuardAllowListAndToken(t *testing.T) {
 		{"198.51.100.1:5000", "Bearer s3cret", 403}, // the address is checked before the token
 		{"garbage", "Bearer s3cret", 403},
 	} {
-		if got := call(tc.remote, tc.auth); got != tc.want {
-			t.Errorf("%s %q: %d, want %d", tc.remote, tc.auth, got, tc.want)
-		}
+		got := call(tc.remote, tc.auth)
+		assert.Equal(t, tc.want, got)
 	}
 	open, _ := Guard(ok, config.Exporter{}, "")
 	r := httptest.NewRequest("GET", "/", nil)
 	r.RemoteAddr = "198.51.100.1:1"
 	w := httptest.NewRecorder()
 	open.ServeHTTP(w, r)
-	if w.Code != 200 {
-		t.Errorf("no rules, no restrictions: %d", w.Code)
-	}
-	if _, err := Guard(ok, config.Exporter{Allow: []string{"nope"}}, ""); err == nil {
-		t.Error("a bad CIDR must be refused")
-	}
+	assert.Equal(t, 200, w.Code)
+	_, err = Guard(ok, config.Exporter{Allow: []string{"nope"}}, "")
+	assert.Error(t, err, "a bad CIDR must be refused")
 }
 
 // ---- TLS ----
 
 type pair struct{ certPEM, keyPEM []byte }
 
-func newCert(t *testing.T, cn string, serial int64) pair {
+func newCert(t testing.TB, cn string, serial int64) pair {
 	t.Helper()
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	tmpl := &x509.Certificate{
 		SerialNumber: big.NewInt(serial), Subject: pkix.Name{CommonName: cn},
 		NotBefore: time.Now().Add(-time.Hour), NotAfter: time.Now().Add(time.Hour),
@@ -350,9 +330,7 @@ func newCert(t *testing.T, cn string, serial int64) pair {
 		IPAddresses: []net.IP{net.ParseIP("127.0.0.1")}, IsCA: true, BasicConstraintsValid: true,
 	}
 	der, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, &key.PublicKey, key)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	kb, _ := x509.MarshalECPrivateKey(key)
 	return pair{pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}), pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: kb})}
 }
@@ -360,16 +338,14 @@ func newCert(t *testing.T, cn string, serial int64) pair {
 func (p pair) write(t *testing.T, dir string) (cert, key string) {
 	t.Helper()
 	cert, key = filepath.Join(dir, "cert.pem"), filepath.Join(dir, "key.pem")
-	if err := os.WriteFile(cert, p.certPEM, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(key, p.keyPEM, 0o600); err != nil {
-		t.Fatal(err)
-	}
+	err := os.WriteFile(cert, p.certPEM, 0o600)
+	require.NoError(t, err)
+	err = os.WriteFile(key, p.keyPEM, 0o600)
+	require.NoError(t, err)
 	return cert, key
 }
 
-func serial(t *testing.T, addr string, clientCert *tls.Certificate) (int64, error) {
+func serial(t testing.TB, addr string, clientCert *tls.Certificate) (int64, error) {
 	t.Helper()
 	cfg := &tls.Config{InsecureSkipVerify: true} //nolint:gosec // a test against our own self-signed certificates
 	if clientCert != nil {
@@ -390,14 +366,25 @@ func serial(t *testing.T, addr string, clientCert *tls.Certificate) (int64, erro
 	return conn.ConnectionState().PeerCertificates[0].SerialNumber.Int64(), nil
 }
 
-func startTLS(t *testing.T, c config.Exporter) (addr string, reload chan struct{}, logs func() []string) {
+// servedSerial is the serial number of the certificate the server presents
+// now, or 0 while it cannot be read.
+func servedSerial(t testing.TB, addr string) int64 {
+	t.Helper()
+	s, err := serial(t, addr, nil)
+	if err != nil {
+		return 0
+	}
+	return s
+}
+
+func startTLS(t testing.TB, c config.Exporter) (addr string, reload chan struct{}, logs func() []string) {
 	t.Helper()
 	c.Listen = "127.0.0.1:0"
 	reload = make(chan struct{})
 	var mu sync.Mutex
 	var lines []string
 	ready := make(chan string, 1)
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	t.Cleanup(cancel)
 	go func() {
 		_ = Serve(ctx, c, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { _, _ = io.WriteString(w, "ok") }), reload,
@@ -406,7 +393,7 @@ func startTLS(t *testing.T, c config.Exporter) (addr string, reload chan struct{
 	select {
 	case addr = <-ready:
 	case <-time.After(3 * time.Second):
-		t.Fatal("the server did not start")
+		require.FailNow(t, "the server did not start")
 	}
 	return addr, reload, func() []string { mu.Lock(); defer mu.Unlock(); return append([]string(nil), lines...) }
 }
@@ -418,41 +405,36 @@ func TestTLSCertificateIsReloadedWithoutARestart(t *testing.T) {
 	c.TLS.CertFile, c.TLS.KeyFile = cert, key
 	addr, reload, logs := startTLS(t, c)
 
-	if s, err := serial(t, addr, nil); err != nil || s != 1 {
-		t.Fatalf("serial = %d %v", s, err)
-	}
+	s, err := serial(t, addr, nil)
+	require.NoError(t, err)
+	require.Equal(t, int64(1), s)
 	newCert(t, "two", 2).write(t, dir)
 	reload <- struct{}{} // like systemctl reload
-	time.Sleep(100 * time.Millisecond)
-	if s, err := serial(t, addr, nil); err != nil || s != 2 {
-		t.Fatalf("after the reload: serial = %d %v", s, err)
-	}
+	require.Eventually(t, func() bool { return servedSerial(t, addr) == 2 }, 5*time.Second, 10*time.Millisecond,
+		"after the reload the new certificate is served")
 
 	// a broken replacement is rejected, the old certificate stays
-	if err := os.WriteFile(cert, []byte("not a certificate"), 0o600); err != nil {
-		t.Fatal(err)
-	}
+	err = os.WriteFile(cert, []byte("not a certificate"), 0o600)
+	require.NoError(t, err)
 	reload <- struct{}{}
-	time.Sleep(100 * time.Millisecond)
-	if s, err := serial(t, addr, nil); err != nil || s != 2 {
-		t.Fatalf("after a broken certificate: serial = %d %v", s, err)
-	}
-	found := false
-	for _, l := range logs() {
-		found = found || strings.Contains(l, "rejected")
-	}
-	if !found {
-		t.Errorf("the rejection must be logged: %v", logs())
-	}
+	require.Eventually(t, func() bool {
+		for _, l := range logs() {
+			if strings.Contains(l, "rejected") {
+				return true
+			}
+		}
+		return false
+	}, 5*time.Second, 10*time.Millisecond, "the rejection must be logged")
+	s, err = serial(t, addr, nil)
+	require.NoError(t, err)
+	require.Equal(t, int64(2), s, "after a broken certificate")
 
 	// and files that are replaced are noticed by themselves
 	newCert(t, "three", 3).write(t, dir)
 	old := time.Now().Add(-time.Minute)
 	_ = os.Chtimes(cert, old, old)
-	time.Sleep(certChecks + 200*time.Millisecond)
-	if s, err := serial(t, addr, nil); err != nil || s != 3 {
-		t.Fatalf("changed files are picked up on a new connection: serial = %d %v", s, err)
-	}
+	require.Eventually(t, func() bool { return servedSerial(t, addr) == 3 }, certChecks+5*time.Second, 100*time.Millisecond,
+		"changed files are picked up on a new connection")
 }
 
 func TestMutualTLS(t *testing.T) {
@@ -460,60 +442,50 @@ func TestMutualTLS(t *testing.T) {
 	srvCert, srvKey := newCert(t, "server", 1).write(t, dir)
 	client := newCert(t, "client", 9)
 	ca := filepath.Join(dir, "ca.pem")
-	if err := os.WriteFile(ca, client.certPEM, 0o600); err != nil {
-		t.Fatal(err)
-	}
+	err := os.WriteFile(ca, client.certPEM, 0o600)
+	require.NoError(t, err)
 	var c config.Exporter
 	c.TLS.CertFile, c.TLS.KeyFile, c.TLS.ClientCAFile = srvCert, srvKey, ca
 	addr, _, _ := startTLS(t, c)
-	if _, err := serial(t, addr, nil); err == nil {
-		t.Error("a client without a certificate must be refused")
-	}
+	_, err = serial(t, addr, nil)
+	assert.Error(t, err, "a client without a certificate must be refused")
 	cc, err := tls.X509KeyPair(client.certPEM, client.keyPEM)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if s, err := serial(t, addr, &cc); err != nil || s != 1 {
-		t.Errorf("a client with the right certificate: %d %v", s, err)
-	}
+	require.NoError(t, err)
+	s, err := serial(t, addr, &cc)
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), s)
 }
 
 func TestServeErrors(t *testing.T) {
 	run := func(c config.Exporter) error {
 		c.Listen = "127.0.0.1:0"
-		return Serve(context.Background(), c, http.NotFoundHandler(), nil, nil, func(string, ...any) {})
+		return Serve(t.Context(), c, http.NotFoundHandler(), nil, nil, func(string, ...any) {})
 	}
-	if err := run(config.Exporter{BearerTokenFile: "/nonexistent"}); err == nil {
-		t.Error("a missing token file")
-	}
+	err := run(config.Exporter{BearerTokenFile: "/nonexistent"})
+	assert.Error(t, err, "a missing token file")
 	empty := filepath.Join(t.TempDir(), "t")
 	write(t, empty, "\n")
-	if err := run(config.Exporter{BearerTokenFile: empty}); err == nil || !strings.Contains(err.Error(), "empty") {
-		t.Errorf("an empty token file: %v", err)
-	}
+	err = run(config.Exporter{BearerTokenFile: empty})
+	assert.ErrorContains(t, err, "empty")
 	var c config.Exporter
 	c.TLS.CertFile, c.TLS.KeyFile = "/nonexistent", "/nonexistent"
-	if err := run(c); err == nil {
-		t.Error("missing certificate files")
-	}
+	err = run(c)
+	assert.Error(t, err, "missing certificate files")
 	dir := t.TempDir()
 	cert, key := newCert(t, "x", 1).write(t, dir)
 	c.TLS.CertFile, c.TLS.KeyFile, c.TLS.ClientCAFile = cert, key, empty
-	if err := run(c); err == nil || !strings.Contains(err.Error(), "holds no certificate") {
-		t.Errorf("a client CA file without certificates: %v", err)
-	}
-	if err := run(config.Exporter{Allow: []string{"x"}}); err == nil {
-		t.Error("a bad allow-list")
-	}
+	err = run(c)
+	assert.ErrorContains(t, err, "holds no certificate")
+	err = run(config.Exporter{Allow: []string{"x"}})
+	assert.Error(t, err, "a bad allow-list")
 	l, _ := net.Listen("tcp", "127.0.0.1:0")
 	defer func() { _ = l.Close() }()
-	if err := Serve(context.Background(), config.Exporter{Listen: l.Addr().String()}, http.NotFoundHandler(), nil, nil, func(string, ...any) {}); err == nil {
-		t.Error("an address in use")
-	}
+	err = Serve(t.Context(), config.Exporter{Listen: l.Addr().String()}, http.NotFoundHandler(), nil, nil, func(string, ...any) {})
+	assert.Error(t, err, "an address in use")
 }
 
 func TestProcUptime(t *testing.T) {
-	if u, err := ProcUptime(); err != nil || u <= 0 {
-		t.Errorf("uptime = %v %v", u, err)
-	}
+	u, err := ProcUptime()
+	require.NoError(t, err)
+	assert.Positive(t, u)
 }

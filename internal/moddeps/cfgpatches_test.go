@@ -3,7 +3,12 @@
 
 package moddeps
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
 
 func TestExtractPatchesFromConfig(t *testing.T) {
 	src := `
@@ -13,52 +18,37 @@ class CfgPatches {
 };
 `
 	patches, err := ExtractPatchesFromConfig([]byte(src))
-	if err != nil {
-		t.Fatalf("ExtractPatchesFromConfig: %v", err)
-	}
-	if len(patches) != 2 {
-		t.Fatalf("patches = %d, want 2", len(patches))
-	}
+	require.NoError(t, err, "ExtractPatchesFromConfig")
+	require.Len(t, patches, 2)
 	byName := map[string]Patch{}
 	for _, p := range patches {
 		byName[p.Name] = p
 	}
-	if !equalStrings(byName["ModB"].RequiredAddons, []string{"DZ_Data", "ModA"}) {
-		t.Errorf("ModB.RequiredAddons = %v", byName["ModB"].RequiredAddons)
-	}
+	assert.True(t, equalStrings(byName["ModB"].RequiredAddons, []string{"DZ_Data", "ModA"}), "ModB.RequiredAddons = %v", byName["ModB"].RequiredAddons)
 }
 
 func TestExtractPatchesNoCfgPatches(t *testing.T) {
 	patches, err := ExtractPatchesFromConfig([]byte(`class Something { x = 1; };`))
-	if err != nil {
-		t.Fatalf("ExtractPatchesFromConfig: %v", err)
-	}
-	if patches != nil {
-		t.Errorf("patches = %v, want nil", patches)
-	}
+	require.NoError(t, err, "ExtractPatchesFromConfig")
+	assert.Nil(t, patches)
 }
 
 func TestExtractPatchesNoRequiredAddons(t *testing.T) {
 	patches, err := ExtractPatchesFromConfig([]byte(`class CfgPatches { class M { units[] = {}; }; };`))
-	if err != nil {
-		t.Fatalf("ExtractPatchesFromConfig: %v", err)
-	}
-	if len(patches) != 1 || patches[0].Name != "M" || patches[0].RequiredAddons != nil {
-		t.Errorf("patches = %+v", patches)
-	}
+	require.NoError(t, err, "ExtractPatchesFromConfig")
+	require.Len(t, patches, 1)
+	require.Equal(t, "M", patches[0].Name)
+	assert.Nil(t, patches[0].RequiredAddons)
 }
 
 func TestExtractPatchesScalarRequiredAddonsErrors(t *testing.T) {
 	_, err := ExtractPatchesFromConfig([]byte(`class CfgPatches { class M { requiredAddons = "not an array"; }; };`))
-	if err == nil {
-		t.Fatal("expected an error for a non-array requiredAddons")
-	}
+	require.Error(t, err, "expected an error for a non-array requiredAddons")
 }
 
 func TestExtractPatchesInvalidConfigErrors(t *testing.T) {
-	if _, err := ExtractPatchesFromConfig([]byte(`class {`)); err == nil {
-		t.Fatal("expected a parse error to propagate")
-	}
+	_, err := ExtractPatchesFromConfig([]byte(`class {`))
+	require.Error(t, err, "expected a parse error to propagate")
 }
 
 func TestExtractPatchesFromPBO(t *testing.T) {
@@ -66,27 +56,19 @@ func TestExtractPatchesFromPBO(t *testing.T) {
 		{name: "config.cpp", data: []byte(`class CfgPatches { class M { requiredAddons[] = {"A"}; }; };`)},
 	})
 	pbo, err := OpenPBO(data)
-	if err != nil {
-		t.Fatalf("OpenPBO: %v", err)
-	}
+	require.NoError(t, err, "OpenPBO")
 	patches, err := ExtractPatchesFromPBO(pbo)
-	if err != nil {
-		t.Fatalf("ExtractPatchesFromPBO: %v", err)
-	}
-	if len(patches) != 1 || patches[0].Name != "M" {
-		t.Errorf("patches = %+v", patches)
-	}
+	require.NoError(t, err, "ExtractPatchesFromPBO")
+	require.Len(t, patches, 1)
+	assert.Equal(t, "M", patches[0].Name)
 }
 
 func TestExtractPatchesFromPBOMissingEntry(t *testing.T) {
 	data := buildPBO(t, false, []pboEntry{{name: "other.txt", data: []byte("x")}})
 	pbo, err := OpenPBO(data)
-	if err != nil {
-		t.Fatalf("OpenPBO: %v", err)
-	}
-	if _, err := ExtractPatchesFromPBO(pbo); err == nil {
-		t.Fatal("expected an error for a missing config.cpp entry")
-	}
+	require.NoError(t, err, "OpenPBO")
+	_, err = ExtractPatchesFromPBO(pbo)
+	require.Error(t, err, "expected an error for a missing config.cpp entry")
 }
 
 // Real config.cpp files hold enum blocks, macros and odd tokens after CfgPatches; only that block is needed.
@@ -102,15 +84,12 @@ class CfgPatches
 class CfgVehicles { class X: Y { v = -1 * (2 + .5); }; };
 `
 	patches, err := ExtractPatchesFromConfig([]byte(src))
-	if err != nil {
-		t.Fatalf("ExtractPatchesFromConfig: %v", err)
-	}
-	if len(patches) != 1 || patches[0].Name != "Mod_A" || !equalStrings(patches[0].RequiredAddons, []string{"DZ_Data", "ModB"}) {
-		t.Errorf("patches = %+v", patches)
-	}
+	require.NoError(t, err, "ExtractPatchesFromConfig")
+	require.Len(t, patches, 1)
+	require.Equal(t, "Mod_A", patches[0].Name)
+	assert.True(t, equalStrings(patches[0].RequiredAddons, []string{"DZ_Data", "ModB"}))
 	for _, bad := range []string{`enum { a = 1 }; class Other { };`, `enum { a = 1 }; /* open`, `enum { a = 1 }; class CfgPatches { class M {`} {
-		if _, err := ExtractPatchesFromConfig([]byte(bad)); err == nil {
-			t.Errorf("no error for %q", bad)
-		}
+		_, err := ExtractPatchesFromConfig([]byte(bad))
+		assert.Error(t, err, "no error for %q", bad)
 	}
 }

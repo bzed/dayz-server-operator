@@ -4,7 +4,6 @@
 package serve
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,32 +12,29 @@ import (
 	"github.com/bzed/dayz-server-operator/internal/admin"
 	"github.com/bzed/dayz-server-operator/internal/resolve"
 	"github.com/bzed/dayz-server-operator/internal/site"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestInstanceMessagesWelcomeFirst(t *testing.T) {
 	custom, off := "Hi #name", ""
 	got := instanceMessages(&resolve.Instance{Welcome: &custom, Messages: []site.Message{{Text: "rules", Repeat: 5}}})
-	if len(got) != 2 || got[0].Text != "Hi #name" || !got[0].OnConnect || got[1].Text != "rules" {
-		t.Errorf("messages = %+v", got)
-	}
-	if got := instanceMessages(&resolve.Instance{}); len(got) != 1 || got[0].Text != site.DefaultWelcome {
-		t.Errorf("default welcome: %+v", got)
-	}
-	if got := instanceMessages(&resolve.Instance{Welcome: &off}); len(got) != 0 {
-		t.Errorf("no welcome and no messages sends nothing: %+v", got)
-	}
+	require.Len(t, got, 2)
+	assert.Equal(t, "Hi #name", got[0].Text)
+	assert.True(t, got[0].OnConnect)
+	assert.Equal(t, "rules", got[1].Text)
+	def := instanceMessages(&resolve.Instance{})
+	require.Len(t, def, 1, "default welcome")
+	assert.Equal(t, site.DefaultWelcome, def[0].Text)
+	assert.Empty(t, instanceMessages(&resolve.Instance{Welcome: &off}), "no welcome and no messages sends nothing")
 }
 
 func TestStartMessengersStartsAndStops(t *testing.T) {
 	cfg, tree := fixture(t)
 	reg := admin.NewRegistry(TokenDir(cfg))
-	if err := AddHubs(reg, cfg, tree); err != nil {
-		t.Fatal(err)
-	}
-	ms, err := startMessengers(context.Background(), cfg, tree, reg, func(string, ...any) {})
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, AddHubs(reg, cfg, tree))
+	ms, err := startMessengers(t.Context(), cfg, tree, reg, func(string, ...any) {})
+	require.NoError(t, err)
 	ms.stop() // returns: the messengers end with their context
 }
 
@@ -47,25 +43,16 @@ func TestStartMessengersWithoutModUsesRCon(t *testing.T) {
 	for _, n := range []string{"alpha", "beta"} {
 		p := filepath.Join(cfg.Paths.Site, "instances", n, "instance.yaml")
 		b, err := os.ReadFile(p)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(p, []byte(strings.Replace(string(b), "  - {local: dzo-admin, server: true}\n", "", 1)), 0o600); err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
+		require.NoError(t, os.WriteFile(p, []byte(strings.Replace(string(b), "  - {local: dzo-admin, server: true}\n", "", 1)), 0o600))
 	}
 	tree, err := site.LoadTree(cfg.Paths.Site)
-	if err != nil {
-		t.Fatal(err)
-	}
-	ms, err := startMessengers(context.Background(), cfg, tree, admin.NewRegistry(TokenDir(cfg)), func(string, ...any) {})
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
+	ms, err := startMessengers(t.Context(), cfg, tree, admin.NewRegistry(TokenDir(cfg)), func(string, ...any) {})
+	require.NoError(t, err)
 	ms.stop()
-	if _, err := os.Stat(filepath.Join(cfg.Paths.Secrets, "rcon", "alpha")); err != nil {
-		t.Errorf("the RCon backend needs the instance's password: %v", err)
-	}
+	_, err = os.Stat(filepath.Join(cfg.Paths.Secrets, "rcon", "alpha"))
+	assert.NoError(t, err, "the RCon backend needs the instance's password")
 }
 
 func TestServerNameIsTheHostnameOfServerDZCfg(t *testing.T) {
@@ -73,13 +60,9 @@ func TestServerNameIsTheHostnameOfServerDZCfg(t *testing.T) {
 	write := func(name, body string) {
 		t.Helper()
 		dir := filepath.Join(site, "instances", name)
-		if err := os.MkdirAll(dir, 0o750); err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, os.MkdirAll(dir, 0o750))
 		if body != "" {
-			if err := os.WriteFile(filepath.Join(dir, "serverDZ.cfg"), []byte(body), 0o600); err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, os.WriteFile(filepath.Join(dir, "serverDZ.cfg"), []byte(body), 0o600))
 		}
 	}
 	write("a", "// a comment\nhostname = \"My DayZ Server\";  // shown in the browser\nmaxPlayers = 60;\n")
@@ -94,8 +77,6 @@ func TestServerNameIsTheHostnameOfServerDZCfg(t *testing.T) {
 		"d": "d",              // does not parse
 		"e": "e",              // no file
 	} {
-		if got := serverName(site, name); got != want {
-			t.Errorf("serverName(%s) = %q, want %q", name, got, want)
-		}
+		assert.Equal(t, want, serverName(site, name), "serverName(%s)", name)
 	}
 }

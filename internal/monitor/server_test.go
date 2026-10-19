@@ -7,8 +7,10 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestHandlerMetrics(t *testing.T) {
@@ -17,16 +19,11 @@ func TestHandlerMetrics(t *testing.T) {
 	defer server.Close()
 
 	resp, err := http.Get(server.URL + "/metrics")
-	if err != nil {
-		t.Fatalf("GET /metrics: %v", err)
-	}
+	require.NoError(t, err, "GET /metrics")
 	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("status = %d", resp.StatusCode)
-	}
-	if ct := resp.Header.Get("Content-Type"); !strings.Contains(ct, "text/plain") {
-		t.Errorf("Content-Type = %q", ct)
-	}
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	ct := resp.Header.Get("Content-Type")
+	assert.Contains(t, ct, "text/plain")
 }
 
 func TestHandlerStatusGlobal(t *testing.T) {
@@ -35,16 +32,11 @@ func TestHandlerStatusGlobal(t *testing.T) {
 	defer server.Close()
 
 	resp, err := http.Get(server.URL + "/status")
-	if err != nil {
-		t.Fatalf("GET /status: %v", err)
-	}
+	require.NoError(t, err, "GET /status")
 	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("status = %d", resp.StatusCode)
-	}
-	if ct := resp.Header.Get("Content-Type"); !strings.Contains(ct, "application/json") {
-		t.Errorf("Content-Type = %q", ct)
-	}
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	ct := resp.Header.Get("Content-Type")
+	assert.Contains(t, ct, "application/json")
 }
 
 func TestHandlerStatusInstance(t *testing.T) {
@@ -53,13 +45,9 @@ func TestHandlerStatusInstance(t *testing.T) {
 	defer server.Close()
 
 	resp, err := http.Get(server.URL + "/status/deerisle")
-	if err != nil {
-		t.Fatalf("GET /status/deerisle: %v", err)
-	}
+	require.NoError(t, err, "GET /status/deerisle")
 	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("status = %d", resp.StatusCode)
-	}
+	require.Equal(t, http.StatusOK, resp.StatusCode)
 }
 
 func TestHandlerStatusInstanceNotFound(t *testing.T) {
@@ -68,13 +56,9 @@ func TestHandlerStatusInstanceNotFound(t *testing.T) {
 	defer server.Close()
 
 	resp, err := http.Get(server.URL + "/status/nonexistent")
-	if err != nil {
-		t.Fatalf("GET: %v", err)
-	}
+	require.NoError(t, err, "GET")
 	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode != http.StatusNotFound {
-		t.Fatalf("status = %d, want 404", resp.StatusCode)
-	}
+	require.Equal(t, http.StatusNotFound, resp.StatusCode)
 }
 
 func TestHandlerStatusEmptyName(t *testing.T) {
@@ -83,13 +67,9 @@ func TestHandlerStatusEmptyName(t *testing.T) {
 	defer server.Close()
 
 	resp, err := http.Get(server.URL + "/status/")
-	if err != nil {
-		t.Fatalf("GET: %v", err)
-	}
+	require.NoError(t, err, "GET")
 	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode != http.StatusNotFound {
-		t.Fatalf("status = %d, want 404", resp.StatusCode)
-	}
+	require.Equal(t, http.StatusNotFound, resp.StatusCode)
 }
 
 func TestHandlerSourceError(t *testing.T) {
@@ -99,22 +79,16 @@ func TestHandlerSourceError(t *testing.T) {
 
 	for _, path := range []string{"/metrics", "/status", "/status/x"} {
 		resp, err := http.Get(server.URL + path)
-		if err != nil {
-			t.Fatalf("GET %s: %v", path, err)
-		}
+		require.NoError(t, err, "GET %s", path)
 		_ = resp.Body.Close()
-		if resp.StatusCode != http.StatusInternalServerError {
-			t.Errorf("GET %s: status = %d, want 500", path, resp.StatusCode)
-		}
+		assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
 	}
 }
 
 func TestSnapshotFind(t *testing.T) {
 	snap := sampleSnapshot()
-	if _, ok := snap.Find("deerisle"); !ok {
-		t.Error("expected to find deerisle")
-	}
-	if _, ok := snap.Find("nope"); ok {
-		t.Error("expected not to find nope")
-	}
+	_, ok := snap.Find("deerisle")
+	assert.True(t, ok)
+	_, ok = snap.Find("nope")
+	assert.False(t, ok)
 }

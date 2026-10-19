@@ -11,6 +11,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
 
 	"github.com/bzed/dayz-server-operator/internal/admin"
@@ -23,7 +25,7 @@ var update = flag.Bool("update", false, "rewrite golden files")
 
 // fixture loads the synthetic site repo and a config whose data dir is a
 // temp dir, optionally with everything "installed" in the cache.
-func fixture(t *testing.T, installed bool) (*config.Config, *site.Tree, string) {
+func fixture(t testing.TB, installed bool) (*config.Config, *site.Tree, string) {
 	t.Helper()
 	data := t.TempDir()
 	cfg := config.Default()
@@ -40,50 +42,34 @@ func fixture(t *testing.T, installed bool) (*config.Config, *site.Tree, string) 
 			{"local/dzo-admin", "abcd"},
 		} {
 			gen := filepath.Join(cfg.Paths.Cache, p[0], p[1])
-			if err := os.MkdirAll(gen, 0o750); err != nil {
-				t.Fatal(err)
-			}
-			if err := os.Symlink(p[1], filepath.Join(cfg.Paths.Cache, p[0], "current")); err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, os.MkdirAll(gen, 0o750))
+			require.NoError(t, os.Symlink(p[1], filepath.Join(cfg.Paths.Cache, p[0], "current")))
 		}
 	}
 	tree, err := site.LoadTree("testdata/site")
-	if err != nil {
-		t.Fatalf("LoadTree: %v", err)
-	}
+	require.NoError(t, err)
 	return cfg, tree, data
 }
 
-func golden(t *testing.T, name, got string) {
+func golden(t testing.TB, name, got string) {
 	t.Helper()
 	path := filepath.Join("testdata", name)
 	if *update {
-		if err := os.WriteFile(path, []byte(got), 0o600); err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, os.WriteFile(path, []byte(got), 0o600))
 	}
 	want, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got != string(want) {
-		t.Errorf("%s differs (run with -update to accept):\n%s", name, got)
-	}
+	require.NoError(t, err)
+	assert.Equal(t, string(want), got, "%s differs (run with -update to accept)", name)
 }
 
-func render(t *testing.T, inst *Instance, data string) string {
+func render(t testing.TB, inst *Instance, data string) string {
 	t.Helper()
 	out, err := yaml.Marshal(inst)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	s := string(out)
 	if inst.Quadlet.Name != "" {
 		unit, err := quadlet.RenderContainer(inst.Quadlet)
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 		s += "---\n" + unit
 	}
 	return strings.ReplaceAll(s, data, "/DATA")
@@ -92,16 +78,10 @@ func render(t *testing.T, inst *Instance, data string) string {
 func TestGoldenInstalled(t *testing.T) {
 	cfg, tree, data := fixture(t, true)
 	all, err := ResolveAll(cfg, tree)
-	if err != nil {
-		t.Fatalf("ResolveAll: %v", err)
-	}
-	if len(all) != 2 {
-		t.Fatalf("got %d instances, want 2", len(all))
-	}
+	require.NoError(t, err)
+	require.Len(t, all, 2)
 	for _, inst := range all {
-		if len(inst.Missing) != 0 {
-			t.Errorf("%s: unexpected Missing %v", inst.Name, inst.Missing)
-		}
+		assert.Empty(t, inst.Missing, "%s: unexpected Missing", inst.Name)
 		golden(t, inst.Name+".golden", render(t, inst, data))
 	}
 }
@@ -109,30 +89,21 @@ func TestGoldenInstalled(t *testing.T) {
 func TestMissingWhenNotInstalled(t *testing.T) {
 	cfg, tree, _ := fixture(t, false)
 	inst, err := Resolve(cfg, tree, "alpha")
-	if err != nil {
-		t.Fatalf("Resolve: %v", err)
-	}
-	if len(inst.Missing) != 3 || inst.Quadlet.Name != "" {
-		t.Errorf("Missing = %v, Quadlet.Name = %q; want 3 missing and no quadlet", inst.Missing, inst.Quadlet.Name)
-	}
+	require.NoError(t, err)
+	assert.Len(t, inst.Missing, 3, "want 3 missing")
+	assert.Empty(t, inst.Quadlet.Name, "want no quadlet")
 }
 
 func TestDefaultsMergeAndInstanceWins(t *testing.T) {
 	cfg, tree, _ := fixture(t, false)
 	alpha, _ := Resolve(cfg, tree, "alpha")
-	if alpha.Updates.Policy != "auto" || alpha.Updates.CheckInterval == 0 {
-		t.Errorf("updates = %+v: instance policy must win, site check_interval must fill in", alpha.Updates)
-	}
-	if alpha.Container.Env["LANG"] != "C" {
-		t.Errorf("container.env not inherited: %v", alpha.Container.Env)
-	}
+	assert.EqualValues(t, "auto", alpha.Updates.Policy, "instance policy must win")
+	assert.NotZero(t, alpha.Updates.CheckInterval, "site check_interval must fill in")
+	assert.Equal(t, "C", alpha.Container.Env["LANG"], "container.env not inherited")
 	beta, _ := Resolve(cfg, tree, "beta")
-	if beta.Notify.Discord == nil || len(*beta.Notify.Discord) != 0 {
-		t.Errorf("notify.discord [] (send nothing) must survive defaults: %v", beta.Notify.Discord)
-	}
-	if beta.Mission.Drift != site.DriftWarnBackupOverwrite {
-		t.Errorf("drift default = %q", beta.Mission.Drift)
-	}
+	require.NotNil(t, beta.Notify.Discord, "notify.discord [] (send nothing) must survive defaults")
+	assert.Empty(t, *beta.Notify.Discord, "notify.discord [] (send nothing) must survive defaults")
+	assert.Equal(t, site.DriftWarnBackupOverwrite, beta.Mission.Drift, "drift default")
 }
 
 func TestPresetOverride(t *testing.T) {
@@ -141,12 +112,11 @@ func TestPresetOverride(t *testing.T) {
 	raw.MissionSource.Ref = "v2"
 	tree.Instances["alpha"] = raw
 	inst, err := Resolve(cfg, tree, "alpha")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := inst.Mission.Source; got.Git == "" || got.Ref != "v2" || got.Path != "dayzOffline.chernarusplus" {
-		t.Errorf("source = %+v", got)
-	}
+	require.NoError(t, err)
+	got := inst.Mission.Source
+	assert.NotEmpty(t, got.Git)
+	assert.Equal(t, "v2", got.Ref)
+	assert.Equal(t, "dayzOffline.chernarusplus", got.Path)
 }
 
 func TestDefaultMissionSourceIsCentralEconomy(t *testing.T) {
@@ -156,19 +126,14 @@ func TestDefaultMissionSourceIsCentralEconomy(t *testing.T) {
 	raw.Map = "dayzOffline.enoch"
 	tree.Instances["alpha"] = raw
 	inst, err := Resolve(cfg, tree, "alpha")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	want := site.MissionSource{Git: site.CentralEconomyRepo, Ref: "master", Path: "dayzOffline.enoch"}
-	if got := inst.Mission.Source; got != want {
-		t.Errorf("source = %+v, want %+v", got, want)
-	}
+	assert.Equal(t, want, inst.Mission.Source)
 	raw.MissionSource = site.MissionSource{Ref: "DZ_1.29"}
 	tree.Instances["alpha"] = raw
 	inst, _ = Resolve(cfg, tree, "alpha")
-	if inst.Mission.Source.Ref != "DZ_1.29" || inst.Mission.Source.Git != site.CentralEconomyRepo {
-		t.Errorf("a ref must pin the default repository: %+v", inst.Mission.Source)
-	}
+	assert.Equal(t, "DZ_1.29", inst.Mission.Source.Ref, "a ref must pin the default repository")
+	assert.Equal(t, site.CentralEconomyRepo, inst.Mission.Source.Git, "a ref must pin the default repository")
 }
 
 func TestStopMethods(t *testing.T) {
@@ -178,26 +143,22 @@ func TestStopMethods(t *testing.T) {
 	raw.Stop = site.StopConfig{Method: site.StopKill, IgnoreAsserts: &no}
 	tree.Instances["alpha"] = raw
 	inst, err := Resolve(cfg, tree, "alpha")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	q := inst.Quadlet
-	if len(q.ExecStop) != 0 || q.StopTimeout != killStopTimeout {
-		t.Errorf("kill: ExecStop=%v StopTimeout=%v, want no shutdown request and a one-second grace", q.ExecStop, q.StopTimeout)
-	}
-	if len(q.Exec) == 0 || q.Exec[0] != "./DayZServer" {
-		t.Errorf("ignore_asserts: false must leave the plain command line: %v", q.Exec)
-	}
+	assert.Empty(t, q.ExecStop, "kill: no shutdown request")
+	assert.Equal(t, killStopTimeout, q.StopTimeout, "kill: a one-second grace")
+	require.NotEmpty(t, q.Exec, "ignore_asserts: false must leave the plain command line")
+	assert.Equal(t, "./DayZServer", q.Exec[0], "ignore_asserts: false must leave the plain command line")
 	raw.Stop = site.StopConfig{}
 	tree.Instances["alpha"] = raw
 	inst, _ = Resolve(cfg, tree, "alpha")
 	q = inst.Quadlet
-	if len(q.ExecStop) != 1 || !strings.Contains(q.ExecStop[0], "instance shutdown alpha --timeout 30s") {
-		t.Errorf("default must ask over RCon first: %v", q.ExecStop)
-	}
-	if len(q.Exec) < 3 || q.Exec[0] != "/bin/sh" || !strings.HasSuffix(q.Exec[2], " </stdin") || !strings.Contains(q.Exec[2], "'-mod=@1559212036'") {
-		t.Errorf("default must feed the server a stdin that answers the assertion prompt and quote every word: %v", q.Exec)
-	}
+	require.Len(t, q.ExecStop, 1, "default must ask over RCon first")
+	assert.Contains(t, q.ExecStop[0], "instance shutdown alpha --timeout 30s", "default must ask over RCon first")
+	require.GreaterOrEqual(t, len(q.Exec), 3, "default must feed the server a stdin that answers the assertion prompt and quote every word: %v", q.Exec)
+	assert.Equal(t, "/bin/sh", q.Exec[0])
+	assert.True(t, strings.HasSuffix(q.Exec[2], " </stdin"), "stdin: %v", q.Exec)
+	assert.Contains(t, q.Exec[2], "'-mod=@1559212036'")
 }
 
 func TestResolveErrors(t *testing.T) {
@@ -230,9 +191,7 @@ func TestResolveErrors(t *testing.T) {
 			cfg, tree, _ := fixture(t, false)
 			tt.mutate(cfg, tree)
 			_, err := Resolve(cfg, tree, "alpha")
-			if err == nil || !strings.Contains(err.Error(), tt.want) {
-				t.Fatalf("Resolve() = %v, want %q", err, tt.want)
-			}
+			require.ErrorContains(t, err, tt.want)
 		})
 	}
 }
@@ -242,71 +201,48 @@ func TestResolveAllPortConflict(t *testing.T) {
 	b := tree.Instances["beta"]
 	b.Ports.Query = 2303
 	tree.Instances["beta"] = b
-	if _, err := ResolveAll(cfg, tree); err == nil || !strings.Contains(err.Error(), "port 2303") {
-		t.Fatalf("ResolveAll() = %v, want a port conflict", err)
-	}
+	_, err := ResolveAll(cfg, tree)
+	require.ErrorContains(t, err, "port 2303", "want a port conflict")
 }
 
 func TestResolveAllPropagatesError(t *testing.T) {
 	cfg, tree, _ := fixture(t, false)
 	delete(cfg.Products, "dayz-experimental")
-	if _, err := ResolveAll(cfg, tree); err == nil {
-		t.Fatal("want an error")
-	}
+	_, err := ResolveAll(cfg, tree)
+	require.Error(t, err)
 }
 
 func TestBrokenCurrentLink(t *testing.T) {
 	cfg, tree, _ := fixture(t, false)
 	// "current" as a regular file makes Readlink fail with a real error.
 	dir := filepath.Join(cfg.Paths.Cache, "products", "dayz-stable")
-	if err := os.MkdirAll(dir, 0o750); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(dir, "current"), nil, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := Resolve(cfg, tree, "alpha"); err == nil {
-		t.Fatal("want an error for an unreadable current link")
-	}
+	require.NoError(t, os.MkdirAll(dir, 0o750))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "current"), nil, 0o600))
+	_, err := Resolve(cfg, tree, "alpha")
+	require.Error(t, err, "want an error for an unreadable current link")
 	// the same for a mod
-	if err := os.Remove(filepath.Join(dir, "current")); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, os.Remove(filepath.Join(dir, "current")))
 	mod := filepath.Join(cfg.Paths.Cache, "workshop", "221100", "1559212036")
-	if err := os.MkdirAll(mod, 0o750); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(mod, "current"), nil, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := Resolve(cfg, tree, "alpha"); err == nil {
-		t.Fatal("want an error for an unreadable mod current link")
-	}
+	require.NoError(t, os.MkdirAll(mod, 0o750))
+	require.NoError(t, os.WriteFile(filepath.Join(mod, "current"), nil, 0o600))
+	_, err = Resolve(cfg, tree, "alpha")
+	require.Error(t, err, "want an error for an unreadable mod current link")
 }
 
 func TestQuadletPublishPortsAndMemory(t *testing.T) {
 	cfg, tree, _ := fixture(t, true)
 	beta, err := Resolve(cfg, tree, "beta")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(beta.Quadlet.Ports) != 3 || beta.Quadlet.Memory != "24G" {
-		t.Errorf("quadlet = %+v", beta.Quadlet)
-	}
+	require.NoError(t, err)
+	assert.Len(t, beta.Quadlet.Ports, 3)
+	assert.Equal(t, "24G", beta.Quadlet.Memory)
 }
 
 func TestAdminEnabled(t *testing.T) {
 	inst := &Instance{Mods: []Mod{{ID: 1}, {Local: AdminName, Server: true}}}
-	if !inst.AdminEnabled() {
-		t.Error("the local dzo-admin mod enables the integration")
-	}
+	assert.True(t, inst.AdminEnabled(), "the local dzo-admin mod enables the integration")
 	inst.Admin.Disabled = true
-	if inst.AdminEnabled() {
-		t.Error("admin.disabled switches it off")
-	}
-	if (&Instance{Mods: []Mod{{ID: 1}}}).AdminEnabled() {
-		t.Error("without the mod there is no integration")
-	}
+	assert.False(t, inst.AdminEnabled(), "admin.disabled switches it off")
+	assert.False(t, (&Instance{Mods: []Mod{{ID: 1}}}).AdminEnabled(), "without the mod there is no integration")
 }
 
 func TestHooksBecomeUnitLines(t *testing.T) {
@@ -315,74 +251,56 @@ func TestHooksBecomeUnitLines(t *testing.T) {
 	raw.Hooks = site.HooksConfig{PreStart: []string{"hooks/a.sh"}, PostStop: []string{"hooks/b.sh"}}
 	tree.Instances["alpha"] = raw
 	inst, err := Resolve(cfg, tree, "alpha")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	q := inst.Quadlet
-	if len(q.PreStart) != 3 || q.PreStart[2] != "/usr/bin/dzo instance hook alpha pre_start" || q.PreStart[1] != "/usr/bin/dzo instance render alpha" {
-		t.Errorf("pre_start must follow the render: %v", q.PreStart)
-	}
-	if len(q.PostStop) != 2 || q.PostStop[1] != "/usr/bin/dzo instance hook alpha post_stop" || q.PostStop[0] != "/usr/bin/dzo logs crash-summary alpha" {
-		t.Errorf("post_stop: %v", q.PostStop)
-	}
+	require.Len(t, q.PreStart, 3, "pre_start must follow the render")
+	assert.Equal(t, "/usr/bin/dzo instance hook alpha pre_start", q.PreStart[2])
+	assert.Equal(t, "/usr/bin/dzo instance render alpha", q.PreStart[1])
+	require.Len(t, q.PostStop, 2)
+	assert.Equal(t, "/usr/bin/dzo instance hook alpha post_stop", q.PostStop[1])
+	assert.Equal(t, "/usr/bin/dzo logs crash-summary alpha", q.PostStop[0])
 	raw.Hooks = site.HooksConfig{}
 	tree.Instances["alpha"] = raw
 	inst, _ = Resolve(cfg, tree, "alpha")
-	if len(inst.Quadlet.PreStart) != 2 || len(inst.Quadlet.PostStop) != 1 {
-		t.Errorf("no hooks, no extra lines: %v %v", inst.Quadlet.PreStart, inst.Quadlet.PostStop)
-	}
+	assert.Len(t, inst.Quadlet.PreStart, 2, "no hooks, no extra lines")
+	assert.Len(t, inst.Quadlet.PostStop, 1, "no hooks, no extra lines")
 }
 
 func TestInstanceIsPinnedToItsBuild(t *testing.T) {
 	cfg, tree, _ := fixture(t, true)
-	if err := os.MkdirAll(filepath.Join(cfg.Paths.Cache, "products", "dayz-stable", "99"), 0o750); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, os.MkdirAll(filepath.Join(cfg.Paths.Cache, "products", "dayz-stable", "99"), 0o750))
 	runtime := filepath.Join(cfg.Paths.Instances, "alpha", "runtime")
 	build := func() (string, string) {
 		inst, err := Resolve(cfg, tree, "alpha")
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 		return inst.Product.Build, inst.Product.Latest
 	}
-	if b, l := build(); b != "100" || l != "100" {
-		t.Errorf("without a pin the newest build runs: %s %s", b, l)
-	}
-	if err := PinBuild(runtime, "99"); err != nil {
-		t.Fatal(err)
-	}
-	if b, l := build(); b != "99" || l != "100" {
-		t.Errorf("pinned: build %s latest %s", b, l)
-	}
-	if err := PinBuild(runtime, "gone"); err != nil {
-		t.Fatal(err)
-	}
-	if b, _ := build(); b != "100" {
-		t.Errorf("a pin to a build that is not installed any more falls back to the newest: %s", b)
-	}
-	if err := os.Remove(BuildPinFile(runtime)); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(runtime, "generations.json"), []byte(`{"build":"99","mods":{}}`), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if b, _ := build(); b != "99" {
-		t.Errorf("an instance deployed before the pin existed stays on its applied build: %s", b)
-	}
+	b, l := build()
+	assert.Equal(t, "100", b, "without a pin the newest build runs")
+	assert.Equal(t, "100", l, "without a pin the newest build runs")
+	require.NoError(t, PinBuild(runtime, "99"))
+	b, l = build()
+	assert.Equal(t, "99", b, "pinned: build")
+	assert.Equal(t, "100", l, "pinned: latest")
+	require.NoError(t, PinBuild(runtime, "gone"))
+	b, _ = build()
+	assert.Equal(t, "100", b, "a pin to a build that is not installed any more falls back to the newest")
+	require.NoError(t, os.Remove(BuildPinFile(runtime)))
+	require.NoError(t, os.WriteFile(filepath.Join(runtime, "generations.json"), []byte(`{"build":"99","mods":{}}`), 0o600))
+	b, _ = build()
+	assert.Equal(t, "99", b, "an instance deployed before the pin existed stays on its applied build")
 }
 
 func TestUnitsUseTheConfiguredBinary(t *testing.T) {
 	cfg, tree, _ := fixture(t, true)
 	cfg.Binary = "/opt/dzo/bin/dzo"
 	inst, err := Resolve(cfg, tree, "alpha")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	q := inst.Quadlet
-	if q.PreStart[len(q.PreStart)-1] != "/opt/dzo/bin/dzo instance render alpha" || q.Volumes[0].Source != "/opt/dzo/bin/dzo" {
-		t.Errorf("prestart %v, first volume %+v", q.PreStart, q.Volumes[0])
-	}
+	require.NotEmpty(t, q.PreStart)
+	assert.Equal(t, "/opt/dzo/bin/dzo instance render alpha", q.PreStart[len(q.PreStart)-1])
+	require.NotEmpty(t, q.Volumes)
+	assert.Equal(t, "/opt/dzo/bin/dzo", q.Volumes[0].Source)
 }
 
 func TestRConBind(t *testing.T) {
@@ -399,43 +317,35 @@ func TestRConBind(t *testing.T) {
 	}
 
 	// the default is the loopback address, for both network modes
-	if alpha.RConAddr() != "127.0.0.1:"+strconv.Itoa(alpha.Ports.RCon) || alpha.RConListen() != "127.0.0.1" {
-		t.Errorf("host default: %s, listen %q", alpha.RConAddr(), alpha.RConListen())
-	}
-	if beta.RConListen() != "" || rconPort(beta).HostIP != "127.0.0.1" {
-		t.Errorf("publish default: listen %q, port %+v", beta.RConListen(), rconPort(beta))
-	}
+	assert.Equal(t, "127.0.0.1:"+strconv.Itoa(alpha.Ports.RCon), alpha.RConAddr(), "host default")
+	assert.Equal(t, "127.0.0.1", alpha.RConListen(), "host default")
+	assert.Empty(t, beta.RConListen(), "publish default")
+	assert.Equal(t, "127.0.0.1", rconPort(beta).HostIP, "publish default")
 
 	// every interface: BattlEye gets no RConIP, the port is published everywhere, dzo uses loopback
 	tree.Site.Defaults.RConBind = "0.0.0.0"
 	alpha, _ = Resolve(cfg, tree, "alpha")
 	beta, _ = Resolve(cfg, tree, "beta")
-	if alpha.RConListen() != "" || alpha.RConAddr() != "127.0.0.1:"+strconv.Itoa(alpha.Ports.RCon) {
-		t.Errorf("host, all interfaces: %s, listen %q", alpha.RConAddr(), alpha.RConListen())
-	}
-	if rconPort(beta).HostIP != "" {
-		t.Errorf("publish, all interfaces: %+v", rconPort(beta))
-	}
+	assert.Empty(t, alpha.RConListen(), "host, all interfaces")
+	assert.Equal(t, "127.0.0.1:"+strconv.Itoa(alpha.Ports.RCon), alpha.RConAddr(), "host, all interfaces")
+	assert.Empty(t, rconPort(beta).HostIP, "publish, all interfaces")
 
 	// one address: BattlEye listens there, and dzo has to connect there
 	tree.Site.Defaults.RConBind = "192.0.2.7"
 	alpha, _ = Resolve(cfg, tree, "alpha")
 	beta, _ = Resolve(cfg, tree, "beta")
-	if alpha.RConListen() != "192.0.2.7" || alpha.RConAddr() != "192.0.2.7:"+strconv.Itoa(alpha.Ports.RCon) {
-		t.Errorf("host, one address: %s, listen %q", alpha.RConAddr(), alpha.RConListen())
-	}
-	if beta.RConListen() != "" || rconPort(beta).HostIP != "192.0.2.7" || beta.RConAddr() != "192.0.2.7:"+strconv.Itoa(beta.Ports.RCon) {
-		t.Errorf("publish, one address: listen %q, port %+v, addr %s", beta.RConListen(), rconPort(beta), beta.RConAddr())
-	}
+	assert.Equal(t, "192.0.2.7", alpha.RConListen(), "host, one address")
+	assert.Equal(t, "192.0.2.7:"+strconv.Itoa(alpha.Ports.RCon), alpha.RConAddr(), "host, one address")
+	assert.Empty(t, beta.RConListen(), "publish, one address")
+	assert.Equal(t, "192.0.2.7", rconPort(beta).HostIP, "publish, one address")
+	assert.Equal(t, "192.0.2.7:"+strconv.Itoa(beta.Ports.RCon), beta.RConAddr(), "publish, one address")
 
 	// the instance wins over the site default
 	raw := tree.Instances["alpha"]
 	raw.RConBind = "::1"
 	tree.Instances["alpha"] = raw
 	alpha, _ = Resolve(cfg, tree, "alpha")
-	if alpha.RConAddr() != "[::1]:"+strconv.Itoa(alpha.Ports.RCon) {
-		t.Errorf("instance rcon_bind: %s", alpha.RConAddr())
-	}
+	assert.Equal(t, "[::1]:"+strconv.Itoa(alpha.Ports.RCon), alpha.RConAddr(), "instance rcon_bind")
 }
 
 func TestAdminMapWatchRulesMergeWithTheSiteDefaults(t *testing.T) {
@@ -445,16 +355,15 @@ func TestAdminMapWatchRulesMergeWithTheSiteDefaults(t *testing.T) {
 	raw.AdminMap.Watch = []admin.WatchRule{{Layer: "ufo", Classes: []string{"UFO*"}, Icon: "rocket"}}
 	tree.Instances["alpha"] = raw
 	alpha, err := Resolve(cfg, tree, "alpha")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if w := alpha.AdminMap.Watch; len(w) != 2 || w[0].Layer != "fires" || w[1].Layer != "ufo" {
-		t.Errorf("alpha watch = %+v: the default rule and the instance's own", w)
-	}
+	require.NoError(t, err)
+	w := alpha.AdminMap.Watch
+	require.Len(t, w, 2, "alpha watch: the default rule and the instance's own")
+	assert.Equal(t, "fires", w[0].Layer)
+	assert.Equal(t, "ufo", w[1].Layer)
 	beta, _ := Resolve(cfg, tree, "beta")
-	if w := beta.AdminMap.Watch; len(w) != 1 || w[0].Layer != "fires" {
-		t.Errorf("beta watch = %+v: only the default", w)
-	}
+	w = beta.AdminMap.Watch
+	require.Len(t, w, 1, "beta watch: only the default")
+	assert.Equal(t, "fires", w[0].Layer)
 }
 
 func TestMessagesDefaultsAndInstanceWins(t *testing.T) {
@@ -469,17 +378,15 @@ func TestMessagesDefaultsAndInstanceWins(t *testing.T) {
 	tree.Instances["beta"] = raw
 
 	alpha, err := Resolve(cfg, tree, "alpha")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if alpha.Welcome == nil || *alpha.Welcome != "Own welcome" || len(alpha.Messages) != 1 || alpha.Messages[0].Text != "Site info" {
-		t.Errorf("alpha = %v %+v: the site defaults fill in", alpha.Welcome, alpha.Messages)
-	}
+	require.NoError(t, err)
+	require.NotNil(t, alpha.Welcome, "the site defaults fill in")
+	assert.Equal(t, "Own welcome", *alpha.Welcome, "the site defaults fill in")
+	require.Len(t, alpha.Messages, 1, "the site defaults fill in")
+	assert.Equal(t, "Site info", alpha.Messages[0].Text)
 	beta, err := Resolve(cfg, tree, "beta")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if beta.Welcome == nil || *beta.Welcome != "" || len(beta.Messages) != 1 || beta.Messages[0].Text != "Beta info" {
-		t.Errorf("beta = %v %+v: its own welcome (even empty) and list replace the defaults", beta.Welcome, beta.Messages)
-	}
+	require.NoError(t, err)
+	require.NotNil(t, beta.Welcome, "its own welcome (even empty) and list replace the defaults")
+	assert.Empty(t, *beta.Welcome, "its own welcome (even empty) replaces the default")
+	require.Len(t, beta.Messages, 1, "its own list replaces the defaults")
+	assert.Equal(t, "Beta info", beta.Messages[0].Text)
 }

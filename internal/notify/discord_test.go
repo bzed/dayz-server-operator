@@ -8,17 +8,17 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"sync"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-func newTestNotifier(t *testing.T, webhooks []Webhook, defaultName string) *DiscordNotifier {
+func newTestNotifier(t testing.TB, webhooks []Webhook, defaultName string) *DiscordNotifier {
 	t.Helper()
 	ts, err := NewTemplateSet()
-	if err != nil {
-		t.Fatalf("NewTemplateSet: %v", err)
-	}
+	require.NoError(t, err, "NewTemplateSet")
 	return &DiscordNotifier{Webhooks: webhooks, Default: defaultName, Templates: ts}
 }
 
@@ -27,9 +27,8 @@ func TestNotifyPostsToDefaultWebhook(t *testing.T) {
 	var received []string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var payload struct{ Content string }
-		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-			t.Errorf("decode body: %v", err)
-		}
+		err := json.NewDecoder(r.Body).Decode(&payload)
+		assert.NoError(t, err, "decode body")
 		mu.Lock()
 		received = append(received, payload.Content)
 		mu.Unlock()
@@ -38,30 +37,26 @@ func TestNotifyPostsToDefaultWebhook(t *testing.T) {
 	defer server.Close()
 
 	n := newTestNotifier(t, []Webhook{{Name: "default", URL: server.URL}}, "default")
-	if err := n.Notify(context.Background(), Event{Kind: KindHealthUnhealthy, Instance: "deerisle"}); err != nil {
-		t.Fatalf("Notify: %v", err)
-	}
+	err := n.Notify(t.Context(), Event{Kind: KindHealthUnhealthy, Instance: "deerisle"})
+	require.NoError(t, err, "Notify")
 
 	mu.Lock()
 	defer mu.Unlock()
-	if len(received) != 1 || !strings.Contains(received[0], "deerisle") {
-		t.Fatalf("received = %v", received)
-	}
+	require.Len(t, received, 1)
+	require.Contains(t, received[0], "deerisle")
 }
 
 func TestNotifyRejectsUnconfiguredDefault(t *testing.T) {
 	n := newTestNotifier(t, nil, "default")
-	if err := n.Notify(context.Background(), Event{Kind: KindHealthUnhealthy}); err == nil {
-		t.Fatal("expected an error when the default webhook isn't configured")
-	}
+	err := n.Notify(t.Context(), Event{Kind: KindHealthUnhealthy})
+	require.Error(t, err, "expected an error when the default webhook isn't configured")
 }
 
 func TestNotifyExplicitTargetsEmptyIsNoOp(t *testing.T) {
 	n := newTestNotifier(t, []Webhook{{Name: "default", URL: "http://unused.invalid"}}, "default")
 	empty := []string{}
-	if err := n.Notify(context.Background(), Event{Kind: KindHealthUnhealthy, Targets: &empty}); err != nil {
-		t.Fatalf("Notify: %v", err)
-	}
+	err := n.Notify(t.Context(), Event{Kind: KindHealthUnhealthy, Targets: &empty})
+	require.NoError(t, err, "Notify")
 }
 
 func TestNotifyExplicitTargetsMultiple(t *testing.T) {
@@ -80,23 +75,20 @@ func TestNotifyExplicitTargetsMultiple(t *testing.T) {
 		{Name: "public", URL: server.URL + "/public"},
 	}, "ops")
 	targets := []string{"ops", "public"}
-	if err := n.Notify(context.Background(), Event{Kind: KindRestartFinished, Instance: "x", Targets: &targets}); err != nil {
-		t.Fatalf("Notify: %v", err)
-	}
+	err := n.Notify(t.Context(), Event{Kind: KindRestartFinished, Instance: "x", Targets: &targets})
+	require.NoError(t, err, "Notify")
 
 	mu.Lock()
 	defer mu.Unlock()
-	if hits["/ops"] != 1 || hits["/public"] != 1 {
-		t.Errorf("hits = %v", hits)
-	}
+	require.Equal(t, 1, hits["/ops"])
+	assert.Equal(t, 1, hits["/public"])
 }
 
 func TestNotifyUnknownTargetName(t *testing.T) {
 	n := newTestNotifier(t, []Webhook{{Name: "ops", URL: "http://unused.invalid"}}, "ops")
 	targets := []string{"nonexistent"}
-	if err := n.Notify(context.Background(), Event{Kind: KindHealthUnhealthy, Targets: &targets}); err == nil {
-		t.Fatal("expected an error for an unknown webhook name")
-	}
+	err := n.Notify(t.Context(), Event{Kind: KindHealthUnhealthy, Targets: &targets})
+	require.Error(t, err, "expected an error for an unknown webhook name")
 }
 
 func TestNotifyHTTPErrorStatus(t *testing.T) {
@@ -106,9 +98,8 @@ func TestNotifyHTTPErrorStatus(t *testing.T) {
 	defer server.Close()
 
 	n := newTestNotifier(t, []Webhook{{Name: "default", URL: server.URL}}, "default")
-	if err := n.Notify(context.Background(), Event{Kind: KindHealthUnhealthy}); err == nil {
-		t.Fatal("expected an error for a non-2xx response")
-	}
+	err := n.Notify(t.Context(), Event{Kind: KindHealthUnhealthy})
+	require.Error(t, err, "expected an error for a non-2xx response")
 }
 
 func TestNotifyUsesPostFuncSeam(t *testing.T) {
@@ -120,19 +111,13 @@ func TestNotifyUsesPostFuncSeam(t *testing.T) {
 		gotBody = body
 		return nil
 	}
-	if err := n.Notify(context.Background(), Event{Kind: KindHealthUnhealthy, Instance: "a"}); err != nil {
-		t.Fatalf("Notify: %v", err)
-	}
-	if gotURL != "http://example.invalid/hook" {
-		t.Errorf("gotURL = %q", gotURL)
-	}
+	err := n.Notify(t.Context(), Event{Kind: KindHealthUnhealthy, Instance: "a"})
+	require.NoError(t, err, "Notify")
+	assert.Equal(t, "http://example.invalid/hook", gotURL)
 	var payload struct{ Content string }
-	if err := json.Unmarshal(gotBody, &payload); err != nil {
-		t.Fatalf("unmarshal: %v", err)
-	}
-	if !strings.Contains(payload.Content, "a") {
-		t.Errorf("payload.Content = %q", payload.Content)
-	}
+	err = json.Unmarshal(gotBody, &payload)
+	require.NoError(t, err, "unmarshal")
+	assert.Contains(t, payload.Content, "a")
 }
 
 func TestNotifyPostFuncError(t *testing.T) {
@@ -140,9 +125,8 @@ func TestNotifyPostFuncError(t *testing.T) {
 	n.PostFunc = func(ctx context.Context, url string, body []byte) error {
 		return context.DeadlineExceeded
 	}
-	if err := n.Notify(context.Background(), Event{Kind: KindHealthUnhealthy}); err == nil {
-		t.Fatal("expected the PostFunc error to propagate")
-	}
+	err := n.Notify(t.Context(), Event{Kind: KindHealthUnhealthy})
+	require.Error(t, err, "expected the PostFunc error to propagate")
 }
 
 func TestNotifyBatch(t *testing.T) {
@@ -163,20 +147,17 @@ func TestNotifyBatch(t *testing.T) {
 		{Kind: KindModUpdateDetected, Instance: "a"},
 		{Kind: KindModUpdateDetected, Instance: "b"},
 	}
-	if err := n.NotifyBatch(context.Background(), KindModUpdateDetected, events); err != nil {
-		t.Fatalf("NotifyBatch: %v", err)
-	}
+	err := n.NotifyBatch(t.Context(), KindModUpdateDetected, events)
+	require.NoError(t, err, "NotifyBatch")
 
 	mu.Lock()
 	defer mu.Unlock()
-	if len(received) != 1 || !strings.Contains(received[0], "2") {
-		t.Fatalf("received = %v", received)
-	}
+	require.Len(t, received, 1)
+	require.Contains(t, received[0], "2")
 }
 
 func TestNotifyBatchEmpty(t *testing.T) {
 	n := newTestNotifier(t, nil, "default")
-	if err := n.NotifyBatch(context.Background(), KindModUpdateDetected, nil); err != nil {
-		t.Fatalf("NotifyBatch(nil) = %v", err)
-	}
+	err := n.NotifyBatch(t.Context(), KindModUpdateDetected, nil)
+	require.NoError(t, err, "NotifyBatch(nil) =")
 }

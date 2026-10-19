@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -20,6 +19,8 @@ import (
 	"github.com/bzed/dayz-server-operator/internal/config"
 	"github.com/bzed/dayz-server-operator/internal/resolve"
 	"github.com/bzed/dayz-server-operator/internal/site"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 const instanceYAML = `name: %s
@@ -36,97 +37,72 @@ admin_map:
     - {layer: fire, classes: [FireplaceBase], icon: fire}
 `
 
-func fixture(t *testing.T) (*config.Config, *site.Tree) {
+func fixture(t testing.TB) (*config.Config, *site.Tree) {
 	t.Helper()
 	data := t.TempDir()
 	siteDir := filepath.Join(data, "site")
 	for i, n := range []struct{ name, network string }{{"alpha", "host"}, {"beta", "publish"}} {
 		dir := filepath.Join(siteDir, "instances", n.name)
-		if err := os.MkdirAll(dir, 0o750); err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, os.MkdirAll(dir, 0o750))
 		y := fmt.Sprintf(instanceYAML, n.name, 2302+10*i, 2303+10*i, 27016+10*i, n.network)
-		if err := os.WriteFile(filepath.Join(dir, "instance.yaml"), []byte(y), 0o600); err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "instance.yaml"), []byte(y), 0o600))
 	}
-	if err := os.MkdirAll(filepath.Join(siteDir, "localmods", "dzo-admin", "addons"), 0o750); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, os.MkdirAll(filepath.Join(siteDir, "localmods", "dzo-admin", "addons"), 0o750))
 	cfg := config.Default()
 	cfg.Paths = config.Paths{Data: data, Instances: data + "/instances", Snapshots: data + "/snapshots", Cache: data + "/cache", Secrets: data + "/secrets", DB: data + "/db", Site: siteDir}
 	cfg.Serve.Listen, cfg.Serve.ModListen = "127.0.0.1:0", "127.0.0.1:0"
 	tree, err := site.LoadTree(siteDir)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	return cfg, tree
 }
 
 func TestModConfigAndEndpoint(t *testing.T) {
 	cfg, tree := fixture(t)
 	insts, err := resolve.ResolveAll(cfg, tree)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !insts[0].AdminEnabled() {
-		t.Fatal("dzo-admin in mods must enable the integration")
-	}
+	require.NoError(t, err)
+	require.True(t, insts[0].AdminEnabled(), "dzo-admin in mods must enable the integration")
 	cfg.Serve.ModListen = "127.0.0.1:2400"
 	alpha, _ := ModEndpoint(cfg, insts[0])
 	beta, _ := ModEndpoint(cfg, insts[1])
-	if alpha != "http://127.0.0.1:2400/" || beta != "http://host.containers.internal:2400/" {
-		t.Fatalf("endpoints %q %q", alpha, beta)
-	}
+	require.Equal(t, "http://127.0.0.1:2400/", alpha)
+	require.Equal(t, "http://host.containers.internal:2400/", beta)
 	mc, err := ModConfig(cfg, insts[0])
-	if err != nil || !mc.AllowSpawn || mc.VehiclesS != 30 || mc.DenyClasses[0] != "Land_*" || len(mc.Watch) != len(admin.VanillaEventWatch())+1 || mc.Watch[len(mc.Watch)-1].Layer != "fire" {
-		t.Fatalf("mod config %+v %v", mc, err)
-	}
+	require.NoError(t, err)
+	require.True(t, mc.AllowSpawn, "mod config %+v", mc)
+	require.Equal(t, 30, mc.VehiclesS)
+	require.Equal(t, "Land_*", mc.DenyClasses[0])
+	require.Len(t, mc.Watch, len(admin.VanillaEventWatch())+1)
+	require.Equal(t, "fire", mc.Watch[len(mc.Watch)-1].Layer)
 	// The events of the Central Economy can be switched off for an instance.
 	off := false
 	insts[0].AdminMap.VanillaEvents = &off
-	if mc, err = ModConfig(cfg, insts[0]); err != nil || len(mc.Watch) != 1 {
-		t.Fatalf("without the vanilla events: %+v %v", mc.Watch, err)
-	}
+	mc, err = ModConfig(cfg, insts[0])
+	require.NoError(t, err)
+	require.Len(t, mc.Watch, 1, "without the vanilla events")
 	insts[0].AdminMap.VanillaEvents = nil
-	if err := WriteModConfig(cfg, insts[0]); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := os.Stat(filepath.Join(TokenDir(cfg), "alpha.token")); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := os.Stat(filepath.Join(insts[0].Paths.Profiles, "dzo", "admin", "config.json")); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, WriteModConfig(cfg, insts[0]))
+	require.FileExists(t, filepath.Join(TokenDir(cfg), "alpha.token"))
+	require.FileExists(t, filepath.Join(insts[0].Paths.Profiles, "dzo", "admin", "config.json"))
 	cfg.Serve.ModListen = "nonsense"
-	if _, err := ModEndpoint(cfg, insts[0]); err == nil {
-		t.Fatal("bad mod_listen must fail")
-	}
-	if err := WriteModConfig(cfg, insts[0]); err == nil {
-		t.Fatal("bad mod_listen must fail the config write")
-	}
+	_, err = ModEndpoint(cfg, insts[0])
+	require.Error(t, err, "bad mod_listen must fail")
+	require.Error(t, WriteModConfig(cfg, insts[0]), "bad mod_listen must fail the config write")
 	insts[0].Admin.Disabled = true
-	if insts[0].AdminEnabled() {
-		t.Fatal("admin.disabled")
-	}
+	require.False(t, insts[0].AdminEnabled(), "admin.disabled")
 }
 
 func TestRunEndToEnd(t *testing.T) {
 	cfg, tree := fixture(t)
 	insts, _ := resolve.ResolveAll(cfg, tree)
-	if err := WriteModConfig(cfg, insts[0]); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, WriteModConfig(cfg, insts[0]))
 	secret, _, err := api.NewTokenStore(APITokens(cfg)).Create("op", api.RoleOperator, nil, false, time.Hour)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	tokenB, _ := os.ReadFile(filepath.Join(TokenDir(cfg), "alpha.token"))
 
 	reload := make(chan struct{})
 	ready := make(chan [2]string, 1)
 	loads := 0
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	done := make(chan error, 1)
 	go func() {
 		done <- Run(ctx, cfg, Options{
@@ -147,48 +123,36 @@ func TestRunEndToEnd(t *testing.T) {
 	// The mod syncs against the mod listener with the rendered token.
 	body := `{"token":"` + strings.TrimSpace(string(tokenB)) + `","protocol":1,"hello":true,"players":[{"steam_id":"7656"}]}`
 	resp, err := http.Post("http://"+addrs[1]+"/mod/v1/sync", "application/json", strings.NewReader(body))
-	if err != nil || resp.StatusCode != 200 {
-		t.Fatalf("mod sync: %v %v", resp, err)
-	}
+	require.NoError(t, err, "mod sync")
 	_ = resp.Body.Close()
+	require.Equal(t, http.StatusOK, resp.StatusCode, "mod sync")
 
 	// And an operator sees it through the API.
 	c := apiclient.New("http://"+addrs[0], secret)
-	players, err := c.Players(context.Background(), "alpha")
-	if err != nil || len(players) != 1 {
-		t.Fatalf("players = %v %v", players, err)
-	}
+	players, err := c.Players(t.Context(), "alpha")
+	require.NoError(t, err)
+	require.Len(t, players, 1)
 
 	reload <- struct{}{} // ok
 	reload <- struct{}{} // load fails: keeps running
 	reload <- struct{}{}
-	if _, err := c.Players(context.Background(), "alpha"); err != nil {
-		t.Fatalf("after reloads: %v", err)
-	}
-	if got, _ := c.Players(context.Background(), "alpha"); len(got) != 1 {
-		t.Fatal("a reload must keep the world state")
-	}
+	_, err = c.Players(t.Context(), "alpha")
+	require.NoError(t, err, "after reloads")
+	got, _ := c.Players(t.Context(), "alpha")
+	require.Len(t, got, 1, "a reload must keep the world state")
 	cancel()
-	if err := <-done; err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, <-done)
 	_ = admin.ProtocolVersion
 }
 
 func TestRunErrors(t *testing.T) {
 	cfg, tree := fixture(t)
 	load := func() (*site.Tree, error) { return tree, nil }
-	if err := Run(context.Background(), cfg, Options{Load: func() (*site.Tree, error) { return nil, os.ErrInvalid }}); err == nil {
-		t.Fatal("load error must fail Run")
-	}
+	require.Error(t, Run(t.Context(), cfg, Options{Load: func() (*site.Tree, error) { return nil, os.ErrInvalid }}), "load error must fail Run")
 	cfg.Serve.Listen = "bad"
-	if err := Run(context.Background(), cfg, Options{Load: load}); err == nil {
-		t.Fatal("bad api listen")
-	}
+	require.Error(t, Run(t.Context(), cfg, Options{Load: load}), "bad api listen")
 	cfg.Serve.Listen, cfg.Serve.ModListen = "127.0.0.1:0", "bad"
-	if err := Run(context.Background(), cfg, Options{Load: load}); err == nil {
-		t.Fatal("bad mod listen")
-	}
+	require.Error(t, Run(t.Context(), cfg, Options{Load: load}), "bad mod listen")
 }
 
 // The shipped event rules reach the hub as they reach the mod: the mod marks every watch marker
@@ -196,13 +160,9 @@ func TestRunErrors(t *testing.T) {
 func TestAddHubsStylesTheVanillaEvents(t *testing.T) {
 	cfg, tree := fixture(t)
 	reg := admin.NewRegistry(TokenDir(cfg))
-	if err := AddHubs(reg, cfg, tree); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, AddHubs(reg, cfg, tree))
 	h, ok := reg.Hub("alpha")
-	if !ok {
-		t.Fatal("no hub for alpha")
-	}
+	require.True(t, ok, "no hub for alpha")
 	h.Sync(admin.SyncRequest{Has: []string{"markers"}, Markers: []admin.Marker{
 		{ID: "w1", Layer: "Police cars", Shape: "point", Icon: "car", Source: "watch", Visibility: "admin"},
 		{ID: "w2", Layer: "fire", Shape: "point", Icon: "fire", Source: "watch", Visibility: "admin"},
@@ -211,57 +171,45 @@ func TestAddHubsStylesTheVanillaEvents(t *testing.T) {
 	for _, m := range h.Markers("") {
 		got[m.Layer] = m
 	}
-	if m := got["Police cars"]; m.Visibility != "viewer" || m.Color == "" {
-		t.Errorf("event marker: visibility %q colour %q, want viewer and the colour of the rule", m.Visibility, m.Color)
-	}
-	if m := got["fire"]; m.Visibility != "admin" {
-		t.Errorf("the instance's own rule without a visibility stays admin-only, got %q", m.Visibility)
-	}
+	m := got["Police cars"]
+	assert.Equal(t, "viewer", m.Visibility, "event marker visibility")
+	assert.NotEmpty(t, m.Color, "event marker has the colour of the rule")
+	assert.Equal(t, "admin", got["fire"].Visibility, "the instance's own rule without a visibility stays admin-only")
 }
 
 // The classes of a vehicle kind are the shipped ones plus the ones the instance lists.
 func TestAddHubsVehicleKinds(t *testing.T) {
 	cfg, tree := fixture(t)
 	reg := admin.NewRegistry(TokenDir(cfg))
-	if err := AddHubs(reg, cfg, tree); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, AddHubs(reg, cfg, tree))
 	h, _ := reg.Hub("alpha")
 	h.Sync(admin.SyncRequest{Has: []string{"vehicles"}, Vehicles: []admin.Vehicle{{ID: "1", Kind: "car", Type: "Old_Bike_Red"}, {ID: "2", Kind: "car", Type: "TandemBike"}, {ID: "3", Kind: "car", Type: "ExpansionMh6"}}})
 	kinds := map[string]string{}
 	for _, v := range h.Vehicles() {
 		kinds[v.ID] = v.Kind
 	}
-	if kinds["1"] != "bicycle" || kinds["2"] != "car" || kinds["3"] != "helicopter" {
-		t.Fatalf("shipped classes: %v", kinds)
-	}
+	require.Equal(t, map[string]string{"1": "bicycle", "2": "car", "3": "helicopter"}, kinds, "shipped classes")
 	insts, err := resolve.ResolveAll(cfg, tree)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	insts[0].Admin.VehicleKinds = map[string][]string{"bicycle": {"TandemBike"}}
 	got := vehicleKinds(insts[0])
-	if !slices.Contains(got["bicycle"], "TandemBike") || !slices.Contains(got["bicycle"], "Old_Bike*") || !slices.Contains(got["helicopter"], "RFMosquito") {
-		t.Fatalf("vehicle kinds %v", got)
-	}
+	require.Contains(t, got["bicycle"], "TandemBike")
+	require.Contains(t, got["bicycle"], "Old_Bike*")
+	require.Contains(t, got["helicopter"], "RFMosquito")
 }
 
 func TestBanInstancesNeedTheRConPassword(t *testing.T) {
 	cfg, tree := fixture(t)
 	insts, err := BanInstances(cfg, tree, t.Logf)
-	if err != nil || len(insts) != 0 {
-		t.Fatalf("without a password file: %+v, %v", insts, err)
-	}
+	require.NoError(t, err)
+	require.Empty(t, insts, "without a password file")
 	pwFile := filepath.Join(cfg.Paths.Secrets, "rcon", "alpha")
-	if err := os.MkdirAll(filepath.Dir(pwFile), 0o700); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(pwFile, []byte("secret\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, os.MkdirAll(filepath.Dir(pwFile), 0o700))
+	require.NoError(t, os.WriteFile(pwFile, []byte("secret\n"), 0o600))
 	insts, err = BanInstances(cfg, tree, t.Logf)
-	if err != nil || len(insts) != 1 || insts[0].Name != "alpha" || insts[0].RConPass != "secret" ||
-		insts[0].BEDir != filepath.Join(cfg.Paths.Instances, "alpha", "profiles", "battleye") {
-		t.Fatalf("with a password file: %+v, %v", insts, err)
-	}
+	require.NoError(t, err)
+	require.Len(t, insts, 1, "with a password file")
+	assert.Equal(t, "alpha", insts[0].Name)
+	assert.Equal(t, "secret", insts[0].RConPass)
+	assert.Equal(t, filepath.Join(cfg.Paths.Instances, "alpha", "profiles", "battleye"), insts[0].BEDir)
 }

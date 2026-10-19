@@ -17,29 +17,23 @@ import (
 
 	"github.com/bzed/dayz-server-operator/internal/resolve"
 	"github.com/bzed/dayz-server-operator/internal/site"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-func put(t *testing.T, path, body string) {
+func put(t testing.TB, path, body string) {
 	t.Helper()
-	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o750))
+	require.NoError(t, os.WriteFile(path, []byte(body), 0o600))
 }
 
-func tree(t *testing.T, dir string) *site.Tree {
+func tree(t testing.TB, dir string) *site.Tree {
 	t.Helper()
 	put(t, filepath.Join(dir, "instances", "x", "instance.yaml"), "name: x\nproduct: dayz-stable\nmap: empty.m\nmission_source: {git: g, ref: r, path: p}\nports: {game: 2302, rcon: 2306, query: 27016}\nnetwork: host\n")
 	tr, err := site.LoadTree(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	return tr
 }
-
-func names(cs []string) string { return strings.Join(cs, ",") }
 
 func TestCollectOrderAndSources(t *testing.T) {
 	dir := t.TempDir()
@@ -68,40 +62,34 @@ normalize: [xml-decl]
 		Name: "x", Map: "empty.m", Overlays: []string{"loadout"},
 		Mods: []resolve.Mod{{Local: "dzo-admin", Server: true}, {ID: 2, Dir: modDir}, {ID: 3}},
 	}
-	cs, err := Collect(context.Background(), tr, inst, Options{CacheDir: t.TempDir(), Log: func(f string, a ...any) { logged = append(logged, f) }})
-	if err != nil {
-		t.Fatal(err)
-	}
+	cs, err := Collect(t.Context(), tr, inst, Options{CacheDir: t.TempDir(), Log: func(f string, a ...any) { logged = append(logged, f) }})
+	require.NoError(t, err)
 	var got []string
 	for _, c := range cs {
 		got = append(got, c.Name)
 	}
-	if want := "instance messages.xml,mod 2 (One),overlay loadout"; names(got) != want {
-		t.Fatalf("contributions = %q, want %q (a local mod and a mod without integration add nothing; the alias finds the integration)", names(got), want)
-	}
+	require.Equal(t, []string{"instance messages.xml", "mod 2 (One)", "overlay loadout"}, got,
+		"a local mod and a mod without integration add nothing; the alias finds the integration")
 	mod := cs[1]
-	if mod.Folder != "mod_2" {
-		t.Errorf("folder = %s", mod.Folder)
-	}
+	assert.Equal(t, "mod_2", mod.Folder)
 	var files []string
 	for _, f := range mod.Files {
 		files = append(files, f.Name)
 	}
-	if names(files) != "cfggameplay.json,events.xml,types.xml" {
-		t.Errorf("files = %v: the variant for another map is left out, the others sorted", files)
-	}
+	assert.Equal(t, []string{"cfggameplay.json", "events.xml", "types.xml"}, files,
+		"the variant for another map is left out, the others sorted")
 	for _, f := range mod.Files {
-		if f.Name == "types.xml" && !strings.HasPrefix(string(f.Data), "<?xml") {
-			t.Errorf("normalize: [xml-decl] was not applied to types.xml: %q", f.Data)
+		if f.Name == "types.xml" {
+			assert.True(t, strings.HasPrefix(string(f.Data), "<?xml"), "normalize: [xml-decl] was not applied to types.xml: %q", f.Data)
 		}
-		if f.Name == "cfggameplay.json" && strings.HasPrefix(string(f.Data), "<?xml") {
-			t.Error("a json file must not be normalised")
+		if f.Name == "cfggameplay.json" {
+			assert.False(t, strings.HasPrefix(string(f.Data), "<?xml"), "a json file must not be normalised")
 		}
 	}
 	ov := cs[2]
-	if ov.Folder != "custom_loadout" || len(ov.Overlay.SpawnGearPresets) != 1 || len(ov.Files) != 2 {
-		t.Errorf("overlay = %+v", ov)
-	}
+	assert.Equal(t, "custom_loadout", ov.Folder)
+	assert.Len(t, ov.Overlay.SpawnGearPresets, 1)
+	assert.Len(t, ov.Files, 2)
 }
 
 func TestInstanceIntegrationOverridesTheSharedOne(t *testing.T) {
@@ -111,13 +99,10 @@ func TestInstanceIntegrationOverridesTheSharedOne(t *testing.T) {
 		put(t, filepath.Join(dir, where, "t.xml"), "<types name=\""+where+"\"/>")
 	}
 	tr := tree(t, dir)
-	cs, err := Collect(context.Background(), tr, &resolve.Instance{Name: "x", Map: "m", Mods: []resolve.Mod{{ID: 1}}}, Options{})
-	if err != nil || len(cs) != 2 { // the instance messages.xml comes first
-		t.Fatalf("err=%v cs=%d", err, len(cs))
-	}
-	if !strings.Contains(string(cs[1].Files[0].Data), "instances/x/integrations/1") {
-		t.Errorf("the instance's own integration must win: %s", cs[1].Files[0].Data)
-	}
+	cs, err := Collect(t.Context(), tr, &resolve.Instance{Name: "x", Map: "m", Mods: []resolve.Mod{{ID: 1}}}, Options{})
+	require.NoError(t, err)
+	require.Len(t, cs, 2) // the instance messages.xml comes first
+	assert.Contains(t, string(cs[1].Files[0].Data), "instances/x/integrations/1", "the instance's own integration must win")
 }
 
 func TestSourcesAreContainedAndMustExist(t *testing.T) {
@@ -127,27 +112,21 @@ func TestSourcesAreContainedAndMustExist(t *testing.T) {
 	put(t, filepath.Join(dir, "integrations", "mods", "1", "integration.yaml"), "mod: 1\nname: One\nfiles:\n  types.xml: {source: local, path: ../../../../secret}\n")
 	tr := tree(t, dir)
 	inst := &resolve.Instance{Name: "x", Map: "m", Mods: []resolve.Mod{{ID: 1}}}
-	if _, err := Collect(context.Background(), tr, inst, Options{}); err == nil {
-		t.Error("a local path that leaves the integration folder must be refused")
-	}
+	_, err := Collect(t.Context(), tr, inst, Options{})
+	assert.Error(t, err, "a local path that leaves the integration folder must be refused")
 	// a link out is no way around it
 	put(t, filepath.Join(dir, "integrations", "mods", "1", "integration.yaml"), "mod: 1\nname: One\nfiles:\n  types.xml: {source: local, path: link.xml}\n")
-	if err := os.Symlink(outside, filepath.Join(dir, "integrations", "mods", "1", "link.xml")); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, os.Symlink(outside, filepath.Join(dir, "integrations", "mods", "1", "link.xml")))
 	tr = tree(t, dir)
-	if _, err := Collect(context.Background(), tr, inst, Options{}); err == nil {
-		t.Error("a link out of the folder must be refused")
-	}
+	_, err = Collect(t.Context(), tr, inst, Options{})
+	assert.Error(t, err, "a link out of the folder must be refused")
 	// a mod source needs the mod
 	put(t, filepath.Join(dir, "integrations", "mods", "1", "integration.yaml"), "mod: 1\nname: One\nfiles:\n  events.xml: {source: mod, path: info/events.xml}\n")
 	tr = tree(t, dir)
-	if _, err := Collect(context.Background(), tr, inst, Options{}); err == nil || !strings.Contains(err.Error(), "not downloaded") {
-		t.Errorf("err = %v", err)
-	}
-	if _, err := Collect(context.Background(), tr, &resolve.Instance{Name: "x", Map: "m", Overlays: []string{"nope"}}, Options{}); err == nil {
-		t.Error("an overlay that does not exist must be an error")
-	}
+	_, err = Collect(t.Context(), tr, inst, Options{})
+	assert.ErrorContains(t, err, "not downloaded")
+	_, err = Collect(t.Context(), tr, &resolve.Instance{Name: "x", Map: "m", Overlays: []string{"nope"}}, Options{})
+	assert.Error(t, err, "an overlay that does not exist must be an error")
 }
 
 func TestURLSourceIsCachedAndPinned(t *testing.T) {
@@ -172,35 +151,23 @@ func TestURLSourceIsCachedAndPinned(t *testing.T) {
 	cache := t.TempDir()
 	inst := &resolve.Instance{Name: "x", Map: "m", Mods: []resolve.Mod{{ID: 1}}}
 	run := func(tr *site.Tree) error {
-		_, err := Collect(context.Background(), tr, inst, Options{CacheDir: cache})
+		_, err := Collect(t.Context(), tr, inst, Options{CacheDir: cache})
 		return err
 	}
 	pinned := write("url: " + srv.URL + "/t.xml, sha256: " + good)
-	if err := run(pinned); err != nil {
-		t.Fatal(err)
-	}
-	if err := run(pinned); err != nil || hits != 1 {
-		t.Errorf("a pinned file is fetched once: hits=%d err=%v", hits, err)
-	}
-	if err := run(write("url: " + srv.URL + "/t.xml, sha256: " + strings.Repeat("0", 64))); err == nil || !strings.Contains(err.Error(), "pinned") {
-		t.Errorf("a wrong hash must be refused: %v", err)
-	}
+	require.NoError(t, run(pinned))
+	require.NoError(t, run(pinned))
+	assert.Equal(t, 1, hits, "a pinned file is fetched once")
+	assert.ErrorContains(t, run(write("url: "+srv.URL+"/t.xml, sha256: "+strings.Repeat("0", 64))), "pinned", "a wrong hash must be refused")
 	unpinned := write("url: " + srv.URL + "/u.xml")
-	if err := run(unpinned); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, run(unpinned))
 	before := hits
-	if err := run(unpinned); err != nil || hits != before {
-		t.Errorf("an unpinned file is kept by URL too: hits %d -> %d", before, hits)
-	}
-	if err := run(write("url: " + srv.URL + "/missing")); err == nil || !strings.Contains(err.Error(), "404") {
-		t.Errorf("an HTTP error must be reported: %v", err)
-	}
+	require.NoError(t, run(unpinned))
+	assert.Equal(t, before, hits, "an unpinned file is kept by URL too")
+	assert.ErrorContains(t, run(write("url: "+srv.URL+"/missing")), "404", "an HTTP error must be reported")
 	// the Get hook replaces the HTTP client
-	_, err := Collect(context.Background(), write("url: http://example.invalid/x"), inst, Options{CacheDir: t.TempDir(), Get: func(context.Context, string) ([]byte, error) { return nil, errors.New("no network") }})
-	if err == nil || !strings.Contains(err.Error(), "no network") {
-		t.Errorf("err = %v", err)
-	}
+	_, err := Collect(t.Context(), write("url: http://example.invalid/x"), inst, Options{CacheDir: t.TempDir(), Get: func(context.Context, string) ([]byte, error) { return nil, errors.New("no network") }})
+	assert.ErrorContains(t, err, "no network")
 }
 
 func TestPostMergeHooksReceiveTheStaging(t *testing.T) {
@@ -209,61 +176,53 @@ func TestPostMergeHooksReceiveTheStaging(t *testing.T) {
 	put(t, filepath.Join(dir, "integrations", "mods", "1", "integration.yaml"), "mod: 1\nname: One\nhooks:\n  post_merge: [hooks/h.sh]\n")
 	script := filepath.Join(dir, "integrations", "mods", "1", "hooks", "h.sh")
 	put(t, script, "#!/bin/sh\necho \"$DZO_STAGING $DZO_MAP $DZO_INSTANCE\"; echo ran > "+mark+"\n")
-	if err := os.Chmod(script, 0o755); err != nil { //nolint:gosec // test fixture
-		t.Fatal(err)
-	}
+	require.NoError(t, os.Chmod(script, 0o755)) //nolint:gosec // test fixture
 	tr := tree(t, dir)
 	inst := &resolve.Instance{Name: "x", Map: "m", Mods: []resolve.Mod{{ID: 1}}, Paths: resolve.Paths{Live: "/live"}}
 	var logged []string
-	cs, err := Collect(context.Background(), tr, inst, Options{Log: func(f string, a ...any) { logged = append(logged, f) }})
-	if err != nil || len(cs) != 2 || cs[1].AfterMerge == nil { // cs[0] is the instance messages.xml
-		t.Fatalf("err=%v cs=%v", err, cs)
-	}
-	if err := cs[1].AfterMerge("/stage"); err != nil {
-		t.Fatal(err)
-	}
-	if b, _ := os.ReadFile(mark); !strings.Contains(string(b), "ran") { //nolint:gosec // test fixture
-		t.Error("the hook did not run")
-	}
-	if len(logged) != 1 {
-		t.Errorf("the hook's output must be logged: %v", logged)
-	}
+	cs, err := Collect(t.Context(), tr, inst, Options{Log: func(f string, a ...any) { logged = append(logged, f) }})
+	require.NoError(t, err)
+	require.Len(t, cs, 2) // cs[0] is the instance messages.xml
+	require.NotNil(t, cs[1].AfterMerge)
+	require.NoError(t, cs[1].AfterMerge("/stage"))
+	b, _ := os.ReadFile(mark) //nolint:gosec // test fixture
+	assert.Contains(t, string(b), "ran", "the hook did not run")
+	assert.Len(t, logged, 1, "the hook's output must be logged")
 	put(t, script, "#!/bin/sh\nexit 2\n")
-	if err := cs[1].AfterMerge("/stage"); err == nil {
-		t.Error("a failing hook must fail the merge")
-	}
+	assert.Error(t, cs[1].AfterMerge("/stage"), "a failing hook must fail the merge")
 }
 
 func TestInstanceEditorFilesGoToTheEditorFilesFolder(t *testing.T) {
 	dir := t.TempDir()
 	tr := tree(t, dir)
 	inst := &resolve.Instance{Name: "x", Map: "empty.m"}
-	cs, err := Collect(context.Background(), tr, inst, Options{CacheDir: t.TempDir()})
-	if err != nil || len(cs) != 1 || cs[0].Name != "instance messages.xml" {
-		t.Fatalf("no EditorFiles folder adds nothing but the messages.xml: %v %v", cs, err)
-	}
+	cs, err := Collect(t.Context(), tr, inst, Options{CacheDir: t.TempDir()})
+	require.NoError(t, err)
+	require.Len(t, cs, 1, "no EditorFiles folder adds nothing but the messages.xml")
+	require.Equal(t, "instance messages.xml", cs[0].Name)
 	put(t, filepath.Join(dir, "instances", "x", "EditorFiles", "a.dze"), "A")
 	put(t, filepath.Join(dir, "instances", "x", "EditorFiles", "sub", "b.dze"), "B")
-	cs, err = Collect(context.Background(), tr, inst, Options{CacheDir: t.TempDir()})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(cs) != 2 || cs[1].Folder != "EditorFiles" || len(cs[1].Files) != 2 || cs[1].Files[0].Name != "a.dze" || cs[1].Files[1].Name != "sub/b.dze" {
-		t.Fatalf("contributions = %+v", cs)
-	}
+	cs, err = Collect(t.Context(), tr, inst, Options{CacheDir: t.TempDir()})
+	require.NoError(t, err)
+	require.Len(t, cs, 2)
+	require.Equal(t, "EditorFiles", cs[1].Folder)
+	require.Len(t, cs[1].Files, 2)
+	require.Equal(t, "a.dze", cs[1].Files[0].Name)
+	require.Equal(t, "sub/b.dze", cs[1].Files[1].Name)
 }
 
-func collectMessages(t *testing.T, dir string, msgs []site.Message) ([]byte, error) {
+func collectMessages(t testing.TB, dir string, msgs []site.Message) ([]byte, error) {
 	t.Helper()
 	tr := tree(t, dir)
 	inst := &resolve.Instance{Name: "x", Map: "empty.m", Messages: msgs}
-	cs, err := Collect(context.Background(), tr, inst, Options{CacheDir: t.TempDir()})
+	cs, err := Collect(t.Context(), tr, inst, Options{CacheDir: t.TempDir()})
 	if err != nil {
 		return nil, err
 	}
-	if len(cs) == 0 || cs[0].Name != "instance messages.xml" || len(cs[0].Files) != 1 || cs[0].Files[0].Name != "messages.xml" {
-		t.Fatalf("the instance messages.xml is always the first contribution: %+v", cs)
-	}
+	require.NotEmpty(t, cs, "the instance messages.xml is always the first contribution")
+	require.Equal(t, "instance messages.xml", cs[0].Name, "the instance messages.xml is always the first contribution")
+	require.Len(t, cs[0].Files, 1)
+	require.Equal(t, "messages.xml", cs[0].Files[0].Name)
 	return cs[0].Files[0].Data, nil
 }
 
@@ -274,12 +233,8 @@ func TestCollectMessagesXMLIsAlwaysEmpty(t *testing.T) {
 		{Name: "x", Map: "empty.m", Welcome: &custom, Messages: []site.Message{{Text: "Homepage", Repeat: 30}}},
 	} {
 		data, err := collectMessages(t, t.TempDir(), inst.Messages)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if string(data) != site.EmptyMessagesXML {
-			t.Errorf("dzo sends the messages itself, the file stays empty: %s", data)
-		}
+		require.NoError(t, err)
+		assert.Equal(t, site.EmptyMessagesXML, string(data), "dzo sends the messages itself, the file stays empty")
 	}
 }
 
@@ -287,9 +242,9 @@ func TestCollectMessagesFileIsRefused(t *testing.T) {
 	dir := t.TempDir()
 	put(t, filepath.Join(dir, "instances", "x", "messages.xml"), "<messages/>")
 	_, err := collectMessages(t, dir, nil)
-	if err == nil || !strings.Contains(err.Error(), "messages.xml") || !strings.Contains(err.Error(), "welcome:") {
-		t.Fatalf("a messages.xml of the instance is refused with a pointer to the config: %v", err)
-	}
+	require.Error(t, err, "a messages.xml of the instance is refused with a pointer to the config")
+	assert.Contains(t, err.Error(), "messages.xml")
+	assert.Contains(t, err.Error(), "welcome:")
 }
 
 func TestCollectModMessagesAreDropped(t *testing.T) {
@@ -298,7 +253,6 @@ func TestCollectModMessagesAreDropped(t *testing.T) {
 	put(t, filepath.Join(dir, "integrations", "mods", "1", "files", "m.xml"), "<messages><message><shutdown>1</shutdown><deadline>60</deadline><text>x</text></message></messages>")
 	tr := tree(t, dir)
 	inst := &resolve.Instance{Name: "x", Map: "empty.m", Mods: []resolve.Mod{{ID: 1}}}
-	if _, err := Collect(context.Background(), tr, inst, Options{CacheDir: t.TempDir()}); err != nil {
-		t.Fatalf("a mod's messages.xml is accepted (and later replaced by the empty one): %v", err)
-	}
+	_, err := Collect(t.Context(), tr, inst, Options{CacheDir: t.TempDir()})
+	require.NoError(t, err, "a mod's messages.xml is accepted (and later replaced by the empty one)")
 }

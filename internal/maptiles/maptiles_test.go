@@ -5,8 +5,6 @@ package maptiles
 
 import (
 	"bytes"
-	"context"
-	"errors"
 	"fmt"
 	"image"
 	"image/color"
@@ -17,6 +15,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/woozymasta/paa"
 	"github.com/woozymasta/pbo"
 )
@@ -34,13 +34,13 @@ func truth(x, z, x0, z0, w, h float64) (r, g uint8) {
 	return uint8((x - x0) / w * 255), uint8((z - z0) / h * 255)
 }
 
-func synth(t *testing.T, flipX, flipY bool, x0, z0 float64) string {
+func synth(t testing.TB, flipX, flipY bool, x0, z0 float64) string {
 	t.Helper()
 	return synthExt(t, flipX, flipY, x0, z0, "paa")
 }
 
 // synthExt is synth with the extension the materials name their texture by.
-func synthExt(t *testing.T, flipX, flipY bool, x0, z0 float64, ext string) string {
+func synthExt(t testing.TB, flipX, flipY bool, x0, z0 float64, ext string) string {
 	t.Helper()
 	const cols, rows = 2, 2
 	w, h := float64(cols*step), float64(rows*step)
@@ -77,9 +77,7 @@ func synthExt(t *testing.T, flipX, flipY bool, x0, z0 float64, ext string) strin
 				}
 			}
 			var pb bytes.Buffer
-			if err := paa.Encode(&pb, img); err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, paa.Encode(&pb, img))
 			add(fmt.Sprintf(`layers\S_%03d_%03d_lco.paa`, c, r), pb.Bytes())
 			add(fmt.Sprintf(`layers\P_%03d-%03d_L01.rvmat`, c, r), []byte(fmt.Sprintf(
 				"class Stage0 { texture=\"x\\layers\\s_%03d_%03d_lco.%s\"; texGen=3; };\n"+
@@ -88,22 +86,17 @@ func synthExt(t *testing.T, flipX, flipY bool, x0, z0 float64, ext string) strin
 		}
 	}
 	p := filepath.Join(t.TempDir(), "data.pbo")
-	if _, err := pbo.PackFile(context.Background(), p, inputs, pbo.PackOptions{}); err != nil {
-		t.Fatal(err)
-	}
+	_, err := pbo.PackFile(t.Context(), p, inputs, pbo.PackOptions{})
+	require.NoError(t, err)
 	return p
 }
 
-func pixel(t *testing.T, dir string, z, x, y, i, j int) (r, g uint8) {
+func pixel(t testing.TB, dir string, z, x, y, i, j int) (r, g uint8) {
 	t.Helper()
 	b, err := os.ReadFile(tilePath(dir, z, x, y))
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	img, err := jpeg.Decode(bytes.NewReader(b))
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	c := color.RGBAModel.Convert(img.At(i, j)).(color.RGBA)
 	return c.R, c.G
 }
@@ -124,28 +117,25 @@ func TestBuildPlacesPixelsInAnyOrientation(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			src := synth(t, tc.flipX, tc.flipY, tc.x0, tc.z0)
 			dir := t.TempDir()
-			m, err := Build(context.Background(), src, dir, Options{})
-			if err != nil {
-				t.Fatal(err)
-			}
+			m, err := Build(t.Context(), src, dir, Options{})
+			require.NoError(t, err)
 			w := float64(2 * step)
-			if m.X0 != tc.x0 || m.Z0 != tc.z0 || m.Width != w || m.Height != w || m.PxPerM != 1 || m.MaxZoom != 1 {
-				t.Fatalf("meta: %+v", m)
-			}
+			require.InDelta(t, tc.x0, m.X0, 0, "meta: %+v", m)
+			require.InDelta(t, tc.z0, m.Z0, 0, "meta: %+v", m)
+			require.InDelta(t, w, m.Width, 0, "meta: %+v", m)
+			require.InDelta(t, w, m.Height, 0, "meta: %+v", m)
+			require.InDelta(t, 1, m.PxPerM, 0, "meta: %+v", m)
+			require.Equal(t, 1, m.MaxZoom, "meta: %+v", m)
 			// world position -> pixel at the deepest zoom, the way a client computes it
 			for _, p := range [][2]float64{{10, 10}, {230, 40}, {240, 240}, {470, 15}, {15, 470}, {470, 470}, {300, 200}} {
 				x, z := tc.x0+p[0], tc.z0+p[1]
 				px, py := int(p[0]), int(w-p[1])
 				wr, wg := truth(x, z, tc.x0, tc.z0, w, w)
 				r, g := pixel(t, dir, m.MaxZoom, px/TileSize, py/TileSize, px%TileSize, py%TileSize)
-				if !close8(r, wr) || !close8(g, wg) {
-					t.Errorf("world (%v,%v): got %d,%d want %d,%d", x, z, r, g, wr, wg)
-				}
+				assert.True(t, close8(r, wr) && close8(g, wg), "world (%v,%v): got %d,%d want %d,%d", x, z, r, g, wr, wg)
 				// one zoom out: the same place at half resolution
 				r, g = pixel(t, dir, 0, 0, 0, px/2, py/2)
-				if !close8(r, wr) || !close8(g, wg) {
-					t.Errorf("zoom 0 at world (%v,%v): got %d,%d want %d,%d", x, z, r, g, wr, wg)
-				}
+				assert.True(t, close8(r, wr) && close8(g, wg), "zoom 0 at world (%v,%v): got %d,%d want %d,%d", x, z, r, g, wr, wg)
 			}
 		})
 	}
@@ -155,9 +145,8 @@ func TestBuildPlacesPixelsInAnyOrientation(t *testing.T) {
 // (ccs\legacy\...\s_010_000_lco.png) although the PBO holds the .paa.
 func TestBuildAcceptsMaterialsNamingSourceImages(t *testing.T) {
 	for _, ext := range []string{"png", "tga"} {
-		if _, err := Build(context.Background(), synthExt(t, false, false, 0, 0, ext), t.TempDir(), Options{}); err != nil {
-			t.Errorf("%s: %v", ext, err)
-		}
+		_, err := Build(t.Context(), synthExt(t, false, false, 0, 0, ext), t.TempDir(), Options{})
+		assert.NoError(t, err, ext)
 	}
 }
 
@@ -166,32 +155,29 @@ func TestBuildRejectsStrippedServerCopy(t *testing.T) {
 	inputs = append(inputs, pbo.Input{Path: `layers\S_000_000_lco.paa`, ModTime: time.Unix(0, 0).UTC(),
 		Open: func() (io.ReadCloser, error) { return io.NopCloser(bytes.NewReader(make([]byte, 172))), nil }})
 	p := filepath.Join(t.TempDir(), "stub.pbo")
-	if _, err := pbo.PackFile(context.Background(), p, inputs, pbo.PackOptions{}); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := Build(context.Background(), p, t.TempDir(), Options{}); !errors.Is(err, ErrStripped) {
-		t.Fatalf("want ErrStripped, got %v", err)
-	}
+	_, err := pbo.PackFile(t.Context(), p, inputs, pbo.PackOptions{})
+	require.NoError(t, err)
+	_, err = Build(t.Context(), p, t.TempDir(), Options{})
+	require.ErrorIs(t, err, ErrStripped)
 }
 
 func TestPublishIsIdempotentAndSwitchesCurrent(t *testing.T) {
 	src := synth(t, false, false, 0, 0)
 	root := t.TempDir()
-	m, built, err := Publish(context.Background(), root, "testmap", src, false, Options{})
-	if err != nil || !built || m.Map != "testmap" || m.Hash == "" {
-		t.Fatalf("first publish: %+v %v %v", m, built, err)
-	}
-	if _, built, err = Publish(context.Background(), root, "testmap", src, false, Options{}); err != nil || built {
-		t.Fatalf("an unchanged source must not be built again: built=%v err=%v", built, err)
-	}
-	if _, built, err = Publish(context.Background(), root, "testmap", src, true, Options{}); err != nil || !built {
-		t.Fatalf("force must rebuild: built=%v err=%v", built, err)
-	}
+	m, built, err := Publish(t.Context(), root, "testmap", src, false, Options{})
+	require.NoError(t, err, "first publish")
+	require.True(t, built, "first publish")
+	require.Equal(t, "testmap", m.Map)
+	require.NotEmpty(t, m.Hash)
+	_, built, err = Publish(t.Context(), root, "testmap", src, false, Options{})
+	require.NoError(t, err)
+	require.False(t, built, "an unchanged source must not be built again")
+	_, built, err = Publish(t.Context(), root, "testmap", src, true, Options{})
+	require.NoError(t, err)
+	require.True(t, built, "force must rebuild")
 	cur, err := Current(root, "testmap")
-	if err != nil || cur.Hash != m.Hash {
-		t.Fatalf("current: %+v %v", cur, err)
-	}
-	if _, err := os.Stat(filepath.Join(root, "testmap", m.Hash, "0", "0", "0.jpg")); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
+	require.Equal(t, m.Hash, cur.Hash)
+	_, err = os.Stat(filepath.Join(root, "testmap", m.Hash, "0", "0", "0.jpg"))
+	require.NoError(t, err)
 }

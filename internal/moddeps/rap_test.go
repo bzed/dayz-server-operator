@@ -8,8 +8,10 @@ import (
 	"encoding/binary"
 	"math"
 	"reflect"
-	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // rapNode describes one class for buildRap. There is no real config.bin
@@ -120,21 +122,15 @@ func patchesRoot(reqs ...any) rapNode {
 
 func TestParseRapifiedPatches(t *testing.T) {
 	data := buildRap(patchesRoot("DZ_Data", "DZ_Scripts"))
-	if !IsRapified(data) {
-		t.Fatal("IsRapified = false")
-	}
+	require.True(t, IsRapified(data), "IsRapified = false")
 	patches, err := ExtractPatchesFromConfig(data)
-	if err != nil {
-		t.Fatalf("ExtractPatchesFromConfig: %v", err)
-	}
+	require.NoError(t, err, "ExtractPatchesFromConfig")
 	got := map[string][]string{}
 	for _, p := range patches {
 		got[p.Name] = p.RequiredAddons
 	}
 	want := map[string][]string{"ModA": {"DZ_Data", "DZ_Scripts"}, "ModB": {"ModA"}}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("patches = %v, want %v", got, want)
-	}
+	assert.True(t, reflect.DeepEqual(got, want), "patches = %v, want %v", got, want)
 }
 
 func TestParseRapifiedValueKinds(t *testing.T) {
@@ -146,20 +142,16 @@ func TestParseRapifiedValueKinds(t *testing.T) {
 		parent:  "Base",
 		entries: [][]byte{rString("s", "hi"), rInt("i", -7), rFloat("f", 0.25), ext, del, appendArr, expr},
 	}))
-	if err != nil {
-		t.Fatalf("ParseRapified: %v", err)
-	}
-	if root.Parent != "Base" {
-		t.Errorf("parent = %q", root.Parent)
-	}
+	require.NoError(t, err, "ParseRapified")
+	assert.Equal(t, "Base", root.Parent)
 	for k, v := range map[string]string{"s": "hi", "i": "-7", "f": "0.25", "e": "1+1"} {
-		if got := root.Properties[k]; got.IsArray || got.Scalar != v {
-			t.Errorf("%s = %+v, want %q", k, got, v)
-		}
+		got := root.Properties[k]
+		require.False(t, got.IsArray)
+		assert.Equal(t, v, got.Scalar)
 	}
-	if got := root.Properties["arr"]; !got.IsArray || !reflect.DeepEqual(got.Array, []string{"-2", "1.5", "x"}) {
-		t.Errorf("arr = %+v", got)
-	}
+	got := root.Properties["arr"]
+	require.True(t, got.IsArray)
+	assert.True(t, reflect.DeepEqual(got.Array, []string{"-2", "1.5", "x"}))
 }
 
 func nestedArrays(depth int) []byte {
@@ -173,13 +165,11 @@ func nestedArrays(depth int) []byte {
 
 func TestParseRapifiedErrors(t *testing.T) {
 	good := buildRap(patchesRoot("A"))
-	if _, err := ParseRapified([]byte("class X {};")); err == nil {
-		t.Error("expected error for non-rapified data")
-	}
+	_, err := ParseRapified([]byte("class X {};"))
+	assert.Error(t, err, "expected error for non-rapified data")
 	for n := 16; n < len(good); n += 3 {
-		if _, err := ParseRapified(good[:n]); err == nil {
-			t.Errorf("no error for data truncated to %d bytes", n)
-		}
+		_, err := ParseRapified(good[:n])
+		assert.Error(t, err, "no error for data truncated to %d bytes", n)
 	}
 	bad := func(entry []byte) []byte {
 		return buildRap(rapNode{entries: [][]byte{entry}})
@@ -191,9 +181,8 @@ func TestParseRapifiedErrors(t *testing.T) {
 		"long varint":  bytes.Join([][]byte{{2}, rcs("a"), {0xff, 0xff, 0xff, 0xff, 0xff}}, nil),
 		"deep nesting": bytes.Join([][]byte{{2}, rcs("a"), nestedArrays(rapMaxDepth + 2)}, nil),
 	} {
-		if _, err := ParseRapified(bad(e)); err == nil {
-			t.Errorf("%s: expected error", name)
-		}
+		_, err := ParseRapified(bad(e))
+		assert.Error(t, err, "%s: expected error", name)
 	}
 	// A class whose body offset points at its own parent recurses forever
 	// without a depth limit.
@@ -203,9 +192,8 @@ func TestParseRapifiedErrors(t *testing.T) {
 	loop = append(loop, 0)
 	loop = append(loop, rcs("C")...)
 	loop = append(loop, rU32(16)...)
-	if _, err := ParseRapified(loop); err == nil || !strings.Contains(err.Error(), "deeply") {
-		t.Errorf("loop err = %v", err)
-	}
+	_, err = ParseRapified(loop)
+	assert.ErrorContains(t, err, "deeply")
 	// Class offset beyond the data.
 	far := buildRap(rapNode{})[:16]
 	far = append(far, rcs("")...)
@@ -213,9 +201,8 @@ func TestParseRapifiedErrors(t *testing.T) {
 	far = append(far, 0)
 	far = append(far, rcs("C")...)
 	far = append(far, rU32(9999)...)
-	if _, err := ParseRapified(far); err == nil {
-		t.Error("expected error for out-of-range class offset")
-	}
+	_, err = ParseRapified(far)
+	assert.Error(t, err, "expected error for out-of-range class offset")
 }
 
 func TestDecompressLZSS(t *testing.T) {
@@ -235,17 +222,14 @@ func TestDecompressLZSS(t *testing.T) {
 	}
 	for _, c := range cases {
 		got, err := decompressLZSS(c.in, c.size)
-		if err != nil || string(got) != c.want {
-			t.Errorf("%s: got %q, %v; want %q", c.name, got, err, c.want)
-		}
+		require.NoError(t, err)
+		assert.Equal(t, c.want, string(got))
 	}
-	if _, err := decompressLZSS([]byte{0, 0, 0}, 3); err == nil {
-		t.Error("no error for a back reference of distance 0")
-	}
+	_, err := decompressLZSS([]byte{0, 0, 0}, 3)
+	assert.Error(t, err, "no error for a back reference of distance 0")
 	for _, in := range [][]byte{{}, {1}, {0, 1}} {
-		if _, err := decompressLZSS(in, 4); err == nil {
-			t.Errorf("no error for truncated input %v", in)
-		}
+		_, err := decompressLZSS(in, 4)
+		assert.Error(t, err, "no error for truncated input %v", in)
 	}
 }
 
@@ -266,16 +250,10 @@ func TestPBOCompressedConfigBin(t *testing.T) {
 		{name: `Config.BIN`, packing: packingCompressed, data: lzssLiterals(bin), original: uint32(len(bin))}, //nolint:gosec // test
 	})
 	pbo, err := OpenPBO(data)
-	if err != nil {
-		t.Fatalf("OpenPBO: %v", err)
-	}
+	require.NoError(t, err, "OpenPBO")
 	patches, err := ExtractPatchesFromPBO(pbo)
-	if err != nil {
-		t.Fatalf("ExtractPatchesFromPBO: %v", err)
-	}
-	if len(patches) != 2 {
-		t.Errorf("patches = %v", patches)
-	}
+	require.NoError(t, err, "ExtractPatchesFromPBO")
+	assert.Len(t, patches, 2)
 }
 
 func TestReadEntryCompressedErrors(t *testing.T) {
@@ -284,46 +262,35 @@ func TestReadEntryCompressedErrors(t *testing.T) {
 		{name: "b", packing: packingCompressed, data: []byte{0}, original: maxEntrySize + 1},
 	})
 	pbo, err := OpenPBO(data)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	for _, n := range []string{"a", "b"} {
 		e, _ := pbo.Find(n)
-		if _, err := pbo.ReadEntry(e); err == nil {
-			t.Errorf("entry %s: expected error", n)
-		}
+		_, err := pbo.ReadEntry(e)
+		assert.Error(t, err, "entry %s: expected error", n)
 	}
 	e, _ := pbo.Find("a")
 	e.DataSize = 1 << 20
-	if _, err := pbo.ReadEntry(e); err == nil {
-		t.Error("expected error for entry past end of PBO")
-	}
+	_, err = pbo.ReadEntry(e)
+	assert.Error(t, err, "expected error for entry past end of PBO")
 }
 
 func TestFindNormalizesNames(t *testing.T) {
 	pbo, err := OpenPBO(buildPBO(t, false, []pboEntry{{name: `Scripts\3_Game\X.c`, data: []byte("x")}}))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, ok := pbo.Find("scripts/3_game/x.c"); !ok {
-		t.Error("Find should ignore case and separator style")
-	}
+	require.NoError(t, err)
+	_, ok := pbo.Find("scripts/3_game/x.c")
+	assert.True(t, ok)
 }
 
 // Subtype 6 is an int64 (a Steam id in CfgMods of real workshop mods).
 func TestRapInt64Value(t *testing.T) {
 	id := bytes.Join([][]byte{{1, 6}, rcs("authorID"), binary.LittleEndian.AppendUint64(nil, 0x0110000148d61cbb)}, nil)
 	root, err := ParseRapified(buildRap(rapNode{entries: [][]byte{id}}))
-	if err != nil {
-		t.Fatalf("ParseRapified: %v", err)
-	}
-	if got := root.Properties["authorID"].Scalar; got != "76561199182257339" {
-		t.Errorf("authorID = %q", got)
-	}
+	require.NoError(t, err, "ParseRapified")
+	got := root.Properties["authorID"].Scalar
+	assert.Equal(t, "76561199182257339", got)
 	short := append(buildRap(rapNode{entries: [][]byte{id}}), 0)
-	if _, err := ParseRapified(short[:len(short)-5]); err == nil {
-		t.Error("no error for a truncated int64")
-	}
+	_, err = ParseRapified(short[:len(short)-5])
+	assert.Error(t, err, "no error for a truncated int64")
 }
 
 // Terrain and object packs keep a config per subfolder; all of them count, config.cpp only where a
@@ -340,20 +307,17 @@ func TestExtractPatchesFromPBOSubfolders(t *testing.T) {
 		{name: `data\readme.txt`, data: []byte("x")},
 	})
 	pbo, err := OpenPBO(data)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	patches, err := ExtractPatchesFromPBO(pbo)
-	if err != nil {
-		t.Fatalf("ExtractPatchesFromPBO: %v", err)
-	}
+	require.NoError(t, err, "ExtractPatchesFromPBO")
 	names := map[string]bool{}
 	for _, p := range patches {
 		names[p.Name] = true
 	}
-	if len(patches) != 3 || !names["Bushes"] || !names["Plants"] || !names["Trees"] {
-		t.Errorf("patches = %+v", patches)
-	}
+	assert.Len(t, patches, 3)
+	assert.True(t, names["Bushes"], "patches = %+v", patches)
+	assert.True(t, names["Plants"], "patches = %+v", patches)
+	assert.True(t, names["Trees"], "patches = %+v", patches)
 }
 
 // Some tools store LZSS data in an entry whose packing method says "stored".
@@ -361,15 +325,11 @@ func TestExtractPatchesFromUnflaggedLZSS(t *testing.T) {
 	bin := buildRap(patchesRoot("DZ_Data"))
 	data := buildPBO(t, false, []pboEntry{{name: `VanillaItems\config.bin`, data: lzssLiterals(bin)}})
 	pbo, err := OpenPBO(data)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	patches, err := ExtractPatchesFromPBO(pbo)
-	if err != nil || len(patches) != 2 {
-		t.Errorf("patches = %v, %v", patches, err)
-	}
+	require.NoError(t, err)
+	assert.Len(t, patches, 2)
 	got, err := decompressLZSS(lzssLiterals([]byte("hello")), -1)
-	if err != nil || string(got) != "hello" {
-		t.Errorf("unsized decode = %q, %v", got, err)
-	}
+	require.NoError(t, err)
+	assert.Equal(t, "hello", string(got))
 }

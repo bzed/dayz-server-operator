@@ -14,9 +14,12 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-func testRegistry(t *testing.T) (*Registry, string) {
+func testRegistry(t testing.TB) (*Registry, string) {
 	t.Helper()
 	dir := t.TempDir()
 	r := NewRegistry(dir)
@@ -36,44 +39,33 @@ func post(r *Registry, body any, remote string) *httptest.ResponseRecorder {
 
 func TestModHandlerAuthAndSync(t *testing.T) {
 	r, dir := testRegistry(t)
-	if err := os.WriteFile(filepath.Join(dir, "alpha.token"), []byte("tok-a\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(dir, "beta.token"), []byte("tok-b\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
+	err := os.WriteFile(filepath.Join(dir, "alpha.token"), []byte("tok-a\n"), 0o600)
+	require.NoError(t, err)
+	err = os.WriteFile(filepath.Join(dir, "beta.token"), []byte("tok-b\n"), 0o600)
+	require.NoError(t, err)
 
 	rec := post(r, SyncRequest{Token: "tok-b", Proto: 1, Hello: true, Players: []Player{{SteamID: "9"}}}, "127.0.0.1:5000")
-	if rec.Code != 200 {
-		t.Fatalf("code %d: %s", rec.Code, rec.Body)
-	}
+	require.Equal(t, 200, rec.Code)
 	var rep SyncReply
-	if err := json.Unmarshal(rec.Body.Bytes(), &rep); err != nil || !rep.OK || rep.Commands == nil {
-		t.Fatalf("reply %+v err %v", rep, err)
-	}
+	err = json.Unmarshal(rec.Body.Bytes(), &rep)
+	require.NoError(t, err)
+	require.True(t, rep.OK)
+	require.NotNil(t, rep.Commands)
 	beta, _ := r.Hub("beta")
 	alpha, _ := r.Hub("alpha")
-	if len(beta.Players()) != 1 || len(alpha.Players()) != 0 {
-		t.Fatal("state went to the wrong instance")
-	}
+	require.Len(t, beta.Players(), 1)
+	require.Empty(t, alpha.Players())
 
 	// The token file is re-read when it changes (rotation at render time).
-	if err := os.WriteFile(filepath.Join(dir, "beta.token"), []byte("tok-b2\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
+	err = os.WriteFile(filepath.Join(dir, "beta.token"), []byte("tok-b2\n"), 0o600)
+	require.NoError(t, err)
 	future := time.Now().Add(time.Hour)
 	_ = os.Chtimes(filepath.Join(dir, "beta.token"), future, future)
-	if post(r, SyncRequest{Token: "tok-b", Proto: 1}, "127.0.0.1:5000").Code != 401 {
-		t.Fatal("rotated token still accepted")
-	}
-	if post(r, SyncRequest{Token: "tok-b2", Proto: 1}, "127.0.0.1:5000").Code != 200 {
-		t.Fatal("new token rejected")
-	}
+	require.Equal(t, 401, post(r, SyncRequest{Token: "tok-b", Proto: 1}, "127.0.0.1:5000").Code)
+	require.Equal(t, 200, post(r, SyncRequest{Token: "tok-b2", Proto: 1}, "127.0.0.1:5000").Code)
 
 	rec = post(r, SyncRequest{Token: "tok-a", Proto: 99}, "127.0.0.1:5000")
-	if !strings.Contains(rec.Body.String(), "protocol mismatch") {
-		t.Fatalf("body = %s", rec.Body)
-	}
+	require.Contains(t, rec.Body.String(), "protocol mismatch")
 }
 
 func TestModHandlerRejects(t *testing.T) {
@@ -81,29 +73,21 @@ func TestModHandlerRejects(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/mod/v1/sync", strings.NewReader("{nope"))
 	rec := httptest.NewRecorder()
 	r.ModHandler().ServeHTTP(rec, req)
-	if rec.Code != 400 {
-		t.Fatalf("bad json: %d", rec.Code)
-	}
+	require.Equal(t, 400, rec.Code)
 	rec = httptest.NewRecorder()
 	r.ModHandler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/mod/v1/sync", nil))
-	if rec.Code != http.StatusMethodNotAllowed {
-		t.Fatalf("GET: %d", rec.Code)
-	}
+	require.Equal(t, http.StatusMethodNotAllowed, rec.Code)
 	// Ten bad tokens block the address, even for a valid one afterwards.
 	for i := 0; i < 10; i++ {
-		if c := post(r, SyncRequest{Token: "bad", Proto: 1}, "10.0.0.1:1").Code; c != 401 {
-			t.Fatalf("attempt %d: %d", i, c)
-		}
+		c := post(r, SyncRequest{Token: "bad", Proto: 1}, "10.0.0.1:1").Code
+		require.Equal(t, 401, c)
 	}
-	if c := post(r, SyncRequest{Token: "bad", Proto: 1}, "10.0.0.1:2").Code; c != http.StatusTooManyRequests {
-		t.Fatalf("not blocked: %d", c)
-	}
-	if c := post(r, SyncRequest{Token: "bad", Proto: 1}, "10.0.0.2:2").Code; c != 401 {
-		t.Fatalf("other address blocked: %d", c)
-	}
-	if _, ok := r.Authenticate(""); ok {
-		t.Fatal("empty token accepted")
-	}
+	c := post(r, SyncRequest{Token: "bad", Proto: 1}, "10.0.0.1:2").Code
+	require.Equal(t, http.StatusTooManyRequests, c)
+	c = post(r, SyncRequest{Token: "bad", Proto: 1}, "10.0.0.2:2").Code
+	require.Equal(t, 401, c)
+	_, ok := r.Authenticate("")
+	require.False(t, ok)
 }
 
 func TestRegistryAddKeepsState(t *testing.T) {
@@ -111,23 +95,22 @@ func TestRegistryAddKeepsState(t *testing.T) {
 	h, _ := r.Hub("alpha")
 	h.Sync(SyncRequest{Proto: 1, Hello: true, Players: []Player{{SteamID: "1"}}})
 	again := r.Add(&Hub{Name: "alpha", Deny: []string{"X*"}, MarkerDir: "/m"})
-	if again != h || len(again.Players()) != 1 || again.Deny[0] != "X*" || again.MarkerDir != "/m" {
-		t.Fatal("re-adding must keep the live state and take the new limits")
-	}
-	if got := r.Names(); len(got) != 2 || got[0] != "alpha" {
-		t.Fatalf("names = %v", got)
-	}
-	if _, ok := r.Hub("zzz"); ok {
-		t.Fatal("unknown hub")
-	}
+	require.Same(t, h, again)
+	require.Len(t, again.Players(), 1)
+	require.Equal(t, "X*", again.Deny[0])
+	require.Equal(t, "/m", again.MarkerDir)
+	got := r.Names()
+	require.Len(t, got, 2)
+	require.Equal(t, "alpha", got[0])
+	_, ok := r.Hub("zzz")
+	require.False(t, ok)
 }
 
 func TestFileMarkers(t *testing.T) {
 	dir := t.TempDir()
 	write := func(name, body string) {
-		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o600); err != nil {
-			t.Fatal(err)
-		}
+		err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o600)
+		require.NoError(t, err)
 	}
 	write("convoy.json", `[{"id":"a","x":1,"z":2},{"layer":"other","id":"b"},{"x":1}]`)
 	write("wrapped.json", `{"markers":[{"id":"w","shape":"circle","radius":50}]}`)
@@ -137,68 +120,54 @@ func TestFileMarkers(t *testing.T) {
 	h.MarkerDir = dir
 	h.Sync(SyncRequest{Proto: 1, Hello: true, Markers: []Marker{{Layer: "ufo", ID: "1"}}})
 	got := h.Markers("")
-	if len(got) != 4 {
-		t.Fatalf("markers = %+v", got)
-	}
-	if n := len(h.Markers("convoy")); n != 1 {
-		t.Fatalf("convoy markers = %d", n)
-	}
+	require.Len(t, got, 4)
+	n := len(h.Markers("convoy"))
+	require.Equal(t, 1, n)
 	for _, m := range got {
-		if m.Layer == "wrapped" && (m.Source != "file" || m.Shape != "circle") {
-			t.Fatalf("wrapped marker = %+v", m)
+		if m.Layer == "wrapped" {
+			require.Equal(t, "file", m.Source, "wrapped marker = %+v", m)
+			require.Equal(t, "circle", m.Shape, "wrapped marker = %+v", m)
 		}
 	}
 	// Cached for a few seconds, re-read afterwards.
 	write("late.json", `[{"id":"l"}]`)
-	if len(h.Markers("")) != 4 {
-		t.Fatal("must serve the cache")
-	}
+	require.Len(t, h.Markers(""), 4)
 	c.advance(fileMarkerTTL + time.Second)
-	if len(h.Markers("")) != 5 {
-		t.Fatal("must re-read after the TTL")
-	}
+	require.Len(t, h.Markers(""), 5)
 	names := map[string]bool{}
 	for _, l := range h.Layers() {
 		names[l.Name] = true
 	}
-	if !names["late"] || !names["ufo"] {
-		t.Fatalf("layers = %v", names)
-	}
+	require.True(t, names["late"])
+	require.True(t, names["ufo"])
 	h.MarkerDir = ""
-	if len(h.Markers("")) != 1 {
-		t.Fatal("no marker dir")
-	}
+	require.Len(t, h.Markers(""), 1)
 }
 
 func TestAudit(t *testing.T) {
 	a := NewAudit(filepath.Join(t.TempDir(), "audit.jsonl"))
-	if got, err := a.Tail("", 10); err != nil || len(got) != 0 {
-		t.Fatalf("empty tail: %v %v", got, err)
-	}
+	got, err := a.Tail("", 10)
+	require.NoError(t, err)
+	require.Empty(t, got)
 	for i, inst := range []string{"a", "b", "a"} {
-		if err := a.Log(AuditEntry{Actor: "x", Source: "api", Instance: inst, Action: "message", Detail: string(rune('0' + i)), OK: true}); err != nil {
-			t.Fatal(err)
-		}
+		err := a.Log(AuditEntry{Actor: "x", Source: "api", Instance: inst, Action: "message", Detail: string(rune('0' + i)), OK: true})
+		require.NoError(t, err)
 	}
-	got, err := a.Tail("a", 10)
-	if err != nil || len(got) != 2 || got[0].Detail != "2" || got[0].Time.IsZero() {
-		t.Fatalf("tail a = %+v %v", got, err)
-	}
-	if got, _ := a.Tail("", 2); len(got) != 2 || got[0].Detail != "2" {
-		t.Fatalf("limit = %+v", got)
-	}
+	got, err = a.Tail("a", 10)
+	require.NoError(t, err)
+	require.Len(t, got, 2)
+	require.Equal(t, "2", got[0].Detail)
+	require.False(t, got[0].Time.IsZero())
+	got, _ = a.Tail("", 2)
+	require.Len(t, got, 2)
+	require.Equal(t, "2", got[0].Detail)
 	info, _ := os.Stat(a.Path)
-	if info.Mode().Perm() != 0o600 {
-		t.Fatalf("mode = %v", info.Mode())
-	}
+	require.Equal(t, os.FileMode(0o600), info.Mode().Perm())
 	nested := NewAudit(filepath.Join(t.TempDir(), "no", "dir", "x"))
-	if err := nested.Log(AuditEntry{}); err != nil {
-		t.Fatalf("a missing directory must be created: %v", err)
-	}
+	err = nested.Log(AuditEntry{})
+	require.NoError(t, err, "a missing directory must be created")
 	blocked := NewAudit(filepath.Join(a.Path, "x"))
-	if blocked.Log(AuditEntry{}) == nil {
-		t.Fatal("an unusable path must fail")
-	}
+	require.Error(t, blocked.Log(AuditEntry{}))
 }
 
 func TestLimiter(t *testing.T) {
@@ -206,70 +175,56 @@ func TestLimiter(t *testing.T) {
 	c := &clock{t: time.Unix(0, 0)}
 	l.now = c.now
 	first, second, third := l.Allow("k"), l.Allow("k"), l.Allow("k")
-	if !first || !second || third || !l.Blocked("k") {
-		t.Fatal("limit of 2")
-	}
-	if !l.Allow("other") {
-		t.Fatal("keys are independent")
-	}
+	require.True(t, first)
+	require.True(t, second)
+	require.False(t, third)
+	require.True(t, l.Blocked("k"))
+	require.True(t, l.Allow("other"), "keys are independent")
 	c.advance(time.Minute + time.Second)
-	if l.Blocked("k") || !l.Allow("k") {
-		t.Fatal("window must slide")
-	}
+	require.False(t, l.Blocked("k"))
+	require.True(t, l.Allow("k"))
 }
 
 func TestWriteModConfig(t *testing.T) {
 	profiles, tokens := t.TempDir(), t.TempDir()
 	in := ModConfig{Endpoint: "http://127.0.0.1:2400/", DenyClasses: []string{"Land_*"}, Watch: []WatchRule{{Layer: "fire", Classes: []string{"FireplaceBase"}}}}
-	if err := WriteModConfig(profiles, tokens, "alpha", in); err != nil {
-		t.Fatal(err)
-	}
+	err := WriteModConfig(profiles, tokens, "alpha", in)
+	require.NoError(t, err)
 	var got ModConfig
 	b, err := os.ReadFile(filepath.Join(profiles, "dzo", "admin", "config.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := json.Unmarshal(b, &got); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
+	err = json.Unmarshal(b, &got)
+	require.NoError(t, err)
 	tok, _ := os.ReadFile(filepath.Join(tokens, "alpha.token"))
-	if got.Version != 1 || got.SyncMS != 1000 || got.Token == "" || strings.TrimSpace(string(tok)) != got.Token || got.AllowClasses == nil || len(got.Watch) != 1 {
-		t.Fatalf("config = %+v", got)
-	}
-	if !strings.Contains(string(b), `"allow_classes": []`) {
-		t.Fatal("empty lists must be [] not null, the mod's JSON reader needs arrays")
-	}
-	if err := WriteModConfig(profiles, tokens, "alpha", in); err != nil {
-		t.Fatal(err)
-	}
+	require.Equal(t, 1, got.Version)
+	require.Equal(t, 1000, got.SyncMS)
+	require.NotEmpty(t, got.Token)
+	require.Equal(t, got.Token, strings.TrimSpace(string(tok)))
+	require.NotNil(t, got.AllowClasses)
+	require.Len(t, got.Watch, 1)
+	require.Contains(t, string(b), `"allow_classes": []`)
+	err = WriteModConfig(profiles, tokens, "alpha", in)
+	require.NoError(t, err)
 	b2, _ := os.ReadFile(filepath.Join(profiles, "dzo", "admin", "config.json"))
-	if string(b2) == string(b) {
-		t.Fatal("token must rotate on every write")
-	}
-	if MarkerDir("/p") != "/p/dzo/admin/markers" {
-		t.Fatal("MarkerDir")
-	}
-	if err := WriteModConfig(filepath.Join(tokens, "alpha.token", "x"), tokens, "b", in); err == nil {
-		t.Fatal("unwritable profiles dir must fail")
-	}
+	require.NotEqual(t, string(b), string(b2))
+	require.Equal(t, "/p/dzo/admin/markers", MarkerDir("/p"))
+	err = WriteModConfig(filepath.Join(tokens, "alpha.token", "x"), tokens, "b", in)
+	require.Error(t, err, "unwritable profiles dir must fail")
 }
 
 func TestWatchRuleValidate(t *testing.T) {
-	if (WatchRule{}).Validate() == nil || (WatchRule{Layer: "l", Classes: []string{"A"}, OnlyIf: "burning"}).Validate() == nil {
-		t.Fatal("must reject empty rule and only_if")
-	}
-	if err := (WatchRule{Layer: "l", Classes: []string{"A"}, Cluster: 50}).Validate(); err != nil {
-		t.Fatal(err)
-	}
+	require.Error(t, (WatchRule{}).Validate())
+	require.Error(t, (WatchRule{Layer: "l", Classes: []string{"A"}, OnlyIf: "burning"}).Validate())
+	err := (WatchRule{Layer: "l", Classes: []string{"A"}, Cluster: 50}).Validate()
+	require.NoError(t, err)
 }
 
 // The mod's JsonSerializer writes bool as 0/1, a missing array as [] and a
 // missing object as {}; this is the shape captured from a real boot.
 func TestModWireShape(t *testing.T) {
 	r, dir := testRegistry(t)
-	if err := os.WriteFile(filepath.Join(dir, "alpha.token"), []byte("tok"), 0o600); err != nil {
-		t.Fatal(err)
-	}
+	err := os.WriteFile(filepath.Join(dir, "alpha.token"), []byte("tok"), 0o600)
+	require.NoError(t, err)
 	send := func(body string) int {
 		req := httptest.NewRequest(http.MethodPost, "/mod/v1/sync", strings.NewReader(body))
 		rec := httptest.NewRecorder()
@@ -280,44 +235,47 @@ func TestModWireShape(t *testing.T) {
 	first := `{"token":"tok","protocol":1,"mod_version":"0.1.0","world":"chernarusplus","seq":0,"hello":1,"has":["players","vehicles"],
 	 "players":[{"steam_id":"1","name":"a","alive":1,"unconscious":0}],"vehicles":[{"id":"v","ruined":0,"engine":1,"occupants":["1"]},{"id":"c","type":"Sedan_02","covered":1,"owner":"Rita"}],
 	 "markers":[],"layers":[],"events":[],"types":{"hash":"h","offset":0,"total":1,"names":["AKM"]},"results":[{"id":"x","ok":1,"message":""}]}`
-	if c := send(first); c != 200 {
-		t.Fatalf("first sync: %d", c)
-	}
+	c := send(first)
+	require.Equal(t, 200, c)
 	p := hub.Players()
-	if len(p) != 1 || !bool(p[0].Alive) || bool(p[0].Unconscious) || p[0].Vehicle != "v" || !bool(hub.Vehicles()[0].Engine) || len(hub.Vehicles()) != 2 || !bool(hub.Vehicles()[1].Covered) || hub.Vehicles()[1].Owner != "Rita" || !hub.Status().Connected {
-		t.Fatalf("state = %+v", p)
-	}
+	require.Len(t, p, 1)
+	require.True(t, bool(p[0].Alive))
+	require.False(t, bool(p[0].Unconscious))
+	require.Equal(t, "v", p[0].Vehicle)
+	require.True(t, bool(hub.Vehicles()[0].Engine))
+	require.Len(t, hub.Vehicles(), 2)
+	require.True(t, bool(hub.Vehicles()[1].Covered))
+	require.Equal(t, "Rita", hub.Vehicles()[1].Owner)
+	require.True(t, hub.Status().Connected)
 	// Not due: empty arrays and an empty types object must not wipe state.
 	later := `{"token":"tok","protocol":1,"seq":1,"hello":0,"has":[],"players":[],"vehicles":[],"markers":[],"layers":[],"events":[],"types":{},"results":[]}`
-	if c := send(later); c != 200 {
-		t.Fatalf("second sync: %d", c)
-	}
-	if len(hub.Players()) != 1 || len(hub.Vehicles()) != 2 || len(hub.Types("", 0)) != 1 {
-		t.Fatal("a sync that lists no parts must keep the state")
-	}
+	c = send(later)
+	require.Equal(t, 200, c)
+	require.Len(t, hub.Players(), 1)
+	require.Len(t, hub.Vehicles(), 2)
+	require.Len(t, hub.Types("", 0), 1)
 	// A listed part with nothing in it does clear the state.
-	if send(`{"token":"tok","protocol":1,"has":["players"],"players":[]}`); len(hub.Players()) != 0 {
-		t.Fatal("an included empty part must clear it")
-	}
+	send(`{"token":"tok","protocol":1,"has":["players"],"players":[]}`)
+	require.Empty(t, hub.Players())
 }
 
 func TestFlag(t *testing.T) {
 	var v struct {
 		A, B, C, D Flag
 	}
-	if err := json.Unmarshal([]byte(`{"A":true,"B":1,"C":0,"D":null}`), &v); err != nil || !bool(v.A) || !bool(v.B) || bool(v.C) || bool(v.D) {
-		t.Fatalf("%+v %v", v, err)
-	}
-	if json.Unmarshal([]byte(`{"A":"yes"}`), &v) == nil || json.Unmarshal([]byte(`{"A":2}`), &v) == nil {
-		t.Fatal("non-boolean values must fail")
-	}
+	err := json.Unmarshal([]byte(`{"A":true,"B":1,"C":0,"D":null}`), &v)
+	require.NoError(t, err)
+	require.True(t, bool(v.A))
+	require.True(t, bool(v.B))
+	require.False(t, bool(v.C))
+	require.False(t, bool(v.D))
+	require.Error(t, json.Unmarshal([]byte(`{"A":"yes"}`), &v))
+	require.Error(t, json.Unmarshal([]byte(`{"A":2}`), &v))
 	b, _ := json.Marshal(struct{ A Flag }{true})
-	if string(b) != `{"A":true}` {
-		t.Fatalf("marshal = %s", b)
-	}
+	require.Equal(t, `{"A":true}`, string(b))
 }
 
-func logRegistry(t *testing.T) (*Registry, string, *[]string) {
+func logRegistry(t testing.TB) (*Registry, string, *[]string) {
 	t.Helper()
 	r, dir := testRegistry(t)
 	var lines []string
@@ -327,9 +285,8 @@ func logRegistry(t *testing.T) (*Registry, string, *[]string) {
 
 func TestConnectionLog(t *testing.T) {
 	r, dir, lines := logRegistry(t)
-	if err := os.WriteFile(filepath.Join(dir, "alpha.token"), []byte("tok-a\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
+	err := os.WriteFile(filepath.Join(dir, "alpha.token"), []byte("tok-a\n"), 0o600)
+	require.NoError(t, err)
 	hub, _ := r.Hub("alpha")
 	clock := time.Now()
 	hub.now = func() time.Time { return clock }
@@ -352,38 +309,25 @@ func TestConnectionLog(t *testing.T) {
 		"instance alpha: mod reconnected from 10.0.0.1 after",
 		"instance alpha: mod restarted",
 	} {
-		if !strings.Contains(out, want) {
-			t.Errorf("log lacks %q:\n%s", want, out)
-		}
+		assert.Contains(t, out, want)
 	}
-	if n := strings.Count(out, "mod lost"); n != 1 {
-		t.Errorf("lost logged %d times", n)
-	}
-	if strings.Contains(out, "tok-a") {
-		t.Error("the log leaks a token")
-	}
+	n := strings.Count(out, "mod lost")
+	assert.Equal(t, 1, n)
+	assert.NotContains(t, out, "tok-a")
 }
 
 func TestRefusalsAreLoggedOncePerAddress(t *testing.T) {
 	r, dir, lines := logRegistry(t)
-	if err := os.WriteFile(filepath.Join(dir, "alpha.token"), []byte("tok-a\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
+	err := os.WriteFile(filepath.Join(dir, "alpha.token"), []byte("tok-a\n"), 0o600)
+	require.NoError(t, err)
 	for i := 0; i < 5; i++ {
 		post(r, SyncRequest{Token: "wrong-secret", Proto: 1}, "10.0.0.2:1")
 	}
 	post(r, SyncRequest{Token: "tok-a", Proto: 99}, "10.0.0.2:1")
 	out := strings.Join(*lines, "\n")
-	if n := strings.Count(out, "token matches no instance"); n != 1 {
-		t.Errorf("token refusal logged %d times:\n%s", n, out)
-	}
-	if !strings.Contains(out, "instances without a token file: beta") {
-		t.Errorf("the log does not name the instance without a token file:\n%s", out)
-	}
-	if !strings.Contains(out, "instance alpha speaks protocol 99") {
-		t.Errorf("protocol mismatch not logged:\n%s", out)
-	}
-	if strings.Contains(out, "wrong-secret") {
-		t.Error("the log leaks a token")
-	}
+	n := strings.Count(out, "token matches no instance")
+	assert.Equal(t, 1, n)
+	assert.Contains(t, out, "instances without a token file: beta")
+	assert.Contains(t, out, "instance alpha speaks protocol 99")
+	assert.NotContains(t, out, "wrong-secret")
 }

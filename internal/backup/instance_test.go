@@ -4,10 +4,8 @@
 package backup
 
 import (
-	"context"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
@@ -15,6 +13,8 @@ import (
 	"github.com/bzed/dayz-server-operator/internal/config"
 	"github.com/bzed/dayz-server-operator/internal/resolve"
 	"github.com/bzed/dayz-server-operator/internal/site"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestPolicyOf(t *testing.T) {
@@ -22,46 +22,44 @@ func TestPolicyOf(t *testing.T) {
 		Keep: 5, MinKeep: 2, MaxAge: site.Age(48 * time.Hour), MinFreeBytes: 100,
 		KeepByReason: map[string]int{"manual": 3},
 	})
-	if p.Keep != 5 || p.MinKeep != 2 || p.MaxAge != 48*time.Hour || p.MinFreeBytes != 100 || p.KeepByReason[Manual] != 3 {
-		t.Errorf("policy = %+v", p)
-	}
-	if q := PolicyOf(site.BackupConfig{Keep: 1}); q.KeepByReason != nil {
-		t.Errorf("no keep_by_reason must stay nil: %+v", q)
-	}
+	require.Equal(t, 5, p.Keep)
+	require.Equal(t, 2, p.MinKeep)
+	require.Equal(t, 48*time.Hour, p.MaxAge)
+	require.Equal(t, int64(100), p.MinFreeBytes)
+	assert.Equal(t, 3, p.KeepByReason[Manual])
+	q := PolicyOf(site.BackupConfig{Keep: 1})
+	assert.Nil(t, q.KeepByReason)
 }
 
 func TestBeforeHonoursThePolicy(t *testing.T) {
 	e := newEnv(t)
 	cfg := site.BackupConfig{Before: []string{"update"}}
-	if _, took, err := Before(context.Background(), e.m, cfg, ModUpdate); err != nil || took {
-		t.Errorf("a reason the policy does not list: took=%v err=%v", took, err)
-	}
-	res, took, err := Before(context.Background(), e.m, cfg, Update)
-	if err != nil || !took || res.Snapshot.ID == "" {
-		t.Fatalf("listed reason: res=%+v took=%v err=%v", res, took, err)
-	}
-	if err := os.RemoveAll(e.m.InstanceDir); err != nil {
-		t.Fatal(err)
-	}
-	if _, took, err := Before(context.Background(), e.m, cfg, Update); err != nil || took {
-		t.Errorf("an instance that does not exist yet has nothing to protect: took=%v err=%v", took, err)
-	}
+	_, took, err := Before(t.Context(), e.m, cfg, ModUpdate)
+	require.NoError(t, err)
+	assert.False(t, took)
+	res, took, err := Before(t.Context(), e.m, cfg, Update)
+	require.NoError(t, err)
+	require.True(t, took)
+	require.NotEmpty(t, res.Snapshot.ID)
+	err = os.RemoveAll(e.m.InstanceDir)
+	require.NoError(t, err)
+	_, took, err = Before(t.Context(), e.m, cfg, Update)
+	require.NoError(t, err)
+	assert.False(t, took)
 }
 
 func TestEnsureInstanceDir(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "instances", "x")
-	if _, err := EnsureInstanceDir(path); err != nil {
-		t.Fatal(err)
-	}
-	if fi, err := os.Stat(path); err != nil || !fi.IsDir() {
-		t.Fatalf("the instance directory must exist: %v", err)
-	}
-	if _, err := EnsureInstanceDir(path); err != nil {
-		t.Errorf("a second call must be fine: %v", err)
-	}
+	_, err := EnsureInstanceDir(path)
+	require.NoError(t, err)
+	fi, err := os.Stat(path)
+	require.NoError(t, err)
+	require.True(t, fi.IsDir())
+	_, err = EnsureInstanceDir(path)
+	assert.NoError(t, err, "a second call must be fine")
 }
 
-func testConfig(t *testing.T) *config.Config {
+func testConfig(t testing.TB) *config.Config {
 	t.Helper()
 	root := t.TempDir()
 	cfg := config.Default()
@@ -78,24 +76,21 @@ func TestCheckWithoutBtrfs(t *testing.T) {
 	}
 	inst := &resolve.Instance{Name: "x", Paths: resolve.Paths{Root: filepath.Join(cfg.Paths.Instances, "x")}}
 	err := Check(cfg, inst)
-	if err == nil || !strings.Contains(err.Error(), "backups need btrfs") {
-		t.Errorf("err = %v", err)
-	}
+	assert.ErrorContains(t, err, "backups need btrfs")
 }
 
 func TestForBuildsTheManager(t *testing.T) {
 	cfg := testConfig(t)
 	inst := &resolve.Instance{Name: "x", Paths: resolve.Paths{Root: filepath.Join(cfg.Paths.Instances, "x")}, Backup: site.BackupConfig{Keep: 7}}
 	m := For(cfg, inst)
-	if m.Instance != "x" || m.InstanceDir != inst.Paths.Root || m.Root != filepath.Join(cfg.Paths.Snapshots, "x") || m.Policy.Keep != 7 || m.PostBackup != nil {
-		t.Errorf("manager = %+v", m)
-	}
+	require.Equal(t, "x", m.Instance)
+	require.Equal(t, inst.Paths.Root, m.InstanceDir)
+	require.Equal(t, filepath.Join(cfg.Paths.Snapshots, "x"), m.Root)
+	require.Equal(t, 7, m.Policy.Keep)
+	assert.Nil(t, m.PostBackup)
 	inst.Hooks.PostBackup = []string{"missing.sh"}
 	m = For(cfg, inst)
-	if m.PostBackup == nil {
-		t.Fatal("post_backup hooks must set PostBackup")
-	}
-	if err := m.PostBackup(context.Background(), "/snap"); err == nil {
-		t.Error("a hook that cannot run must fail the post-backup step")
-	}
+	require.NotNil(t, m.PostBackup)
+	err := m.PostBackup(t.Context(), "/snap")
+	assert.Error(t, err, "a hook that cannot run must fail the post-backup step")
 }

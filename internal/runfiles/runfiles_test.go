@@ -8,16 +8,15 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-func write(t *testing.T, path, body string) {
+func write(t testing.TB, path, body string) {
 	t.Helper()
-	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o750))
+	require.NoError(t, os.WriteFile(path, []byte(body), 0o600))
 }
 
 func TestKeysFromBuildAndClientMods(t *testing.T) {
@@ -27,57 +26,45 @@ func TestKeysFromBuildAndClientMods(t *testing.T) {
 	write(t, filepath.Join(root, "other", "key", "DAYZ.bikey"), "dup")
 	write(t, filepath.Join(root, "other", "keys", "readme.txt"), "x")
 	keys, err := Keys(filepath.Join(root, "build"), []string{filepath.Join(root, "cf"), filepath.Join(root, "other")})
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	var names []string
 	for _, k := range keys {
 		names = append(names, filepath.Base(k))
 	}
-	if strings.Join(names, " ") != "dayz.bikey cf.bikey" {
-		t.Errorf("keys = %v (one key per name, no other files)", names)
-	}
+	assert.Equal(t, []string{"dayz.bikey", "cf.bikey"}, names, "one key per name, no other files")
 }
 
 func TestServerCfgEnforcesTemplateAndQueryPort(t *testing.T) {
 	src := "hostname = \"x\";\nmaxPlayers = 60;\nclass Missions\n{\n    class DayZ\n    {\n        template=\"wrong\"; // Mission\n    };\n};\n"
 	f, err := ServerCfg([]byte(src), "dayzOffline.chernarusplus", 27016)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	got := f.String()
 	for _, want := range []string{`template = "dayzOffline.chernarusplus";`, "steamQueryPort = 27016;", `hostname = "x";`, "maxPlayers = 60;", "class Missions", "class DayZ"} {
-		if !strings.Contains(got, want) {
-			t.Errorf("missing %q in:\n%s", want, got)
-		}
+		assert.Contains(t, got, want)
 	}
-	if strings.Contains(got, "wrong") || strings.Count(got, "template") != 1 {
-		t.Errorf("the template of Missions/DayZ must be replaced, not duplicated:\n%s", got)
-	}
+	assert.NotContains(t, got, "wrong", "the template of Missions/DayZ must be replaced")
+	assert.Equal(t, 1, strings.Count(got, "template"), "the template must not be duplicated:\n%s", got)
 	// a file without the block gets one
 	f, err = ServerCfg([]byte("hostname = \"x\";\n"), "m.x", 0)
-	if err != nil || !strings.Contains(f.String(), "class Missions") || strings.Contains(f.String(), "steamQueryPort") {
-		t.Errorf("created block: %v\n%s", err, f)
-	}
-	if _, err := ServerCfg([]byte("this is not a config"), "m", 1); err == nil {
-		t.Error("a broken serverDZ.cfg must be an error")
-	}
+	require.NoError(t, err)
+	assert.Contains(t, f.String(), "class Missions")
+	assert.NotContains(t, f.String(), "steamQueryPort")
+	_, err = ServerCfg([]byte("this is not a config"), "m", 1)
+	assert.Error(t, err, "a broken serverDZ.cfg must be an error")
 }
 
 func TestRConPasswordIsCreatedOnceAndPrivate(t *testing.T) {
 	dir := t.TempDir()
 	a, err := RConPassword(dir, "x")
-	if err != nil || len(a) != 24 {
-		t.Fatalf("password %q: %v", a, err)
-	}
+	require.NoError(t, err)
+	require.Len(t, a, 24)
 	b, _ := RConPassword(dir, "x")
 	c, _ := RConPassword(dir, "y")
-	if a != b || a == c {
-		t.Errorf("a password is stable per instance and differs between instances: %q %q %q", a, b, c)
-	}
-	if fi, err := os.Stat(filepath.Join(dir, "rcon", "x")); err != nil || fi.Mode().Perm() != 0o600 {
-		t.Errorf("the password file must be 0600: %v %v", fi, err)
-	}
+	assert.Equal(t, a, b, "a password is stable per instance")
+	assert.NotEqual(t, a, c, "a password differs between instances")
+	fi, err := os.Stat(filepath.Join(dir, "rcon", "x"))
+	require.NoError(t, err)
+	assert.Equal(t, os.FileMode(0o600), fi.Mode().Perm(), "the password file must be 0600")
 }
 
 func TestWriteRendersTheRuntimeFiles(t *testing.T) {
@@ -89,49 +76,32 @@ func TestWriteRendersTheRuntimeFiles(t *testing.T) {
 		RuntimeDir: filepath.Join(root, "runtime"), ProfilesDir: filepath.Join(root, "profiles"),
 		ServerCfg: []byte("hostname = \"h\";\n"), Template: "t", QueryPort: 27016, RConPort: 2306, RConPass: "pw", Keys: []string{filepath.Join(root, "k", "a.bikey")},
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := os.Stat(filepath.Join(root, "runtime", "keys", "stale.bikey")); !os.IsNotExist(err) {
-		t.Error("keys of a removed mod must go")
-	}
-	if b, _ := os.ReadFile(filepath.Join(root, "runtime", "keys", "a.bikey")); string(b) != "key" {
-		t.Errorf("key not copied: %q", b)
-	}
-	if b, _ := os.ReadFile(filepath.Join(root, "runtime", "serverDZ.cfg")); !strings.Contains(string(b), "steamQueryPort = 27016;") {
-		t.Errorf("serverDZ.cfg:\n%s", b)
-	}
+	require.NoError(t, err)
+	_, err = os.Stat(filepath.Join(root, "runtime", "keys", "stale.bikey"))
+	assert.True(t, os.IsNotExist(err), "keys of a removed mod must go")
+	b, _ := os.ReadFile(filepath.Join(root, "runtime", "keys", "a.bikey"))
+	assert.Equal(t, "key", string(b), "key not copied")
+	b, _ = os.ReadFile(filepath.Join(root, "runtime", "serverDZ.cfg"))
+	assert.Contains(t, string(b), "steamQueryPort = 27016;")
 	be, _ := os.ReadFile(filepath.Join(root, "profiles", "battleye", "beserver_x64.cfg"))
-	if string(be) != "RConPassword pw\nRestrictRCon 0\nRConPort 2306\n" {
-		t.Errorf("BattlEye seed:\n%s", be)
-	}
-	if _, err := os.Stat(filepath.Join(root, "profiles", "battleye", "beserver_x64_active_1a2b.cfg")); !os.IsNotExist(err) {
-		t.Error("a stale BattlEye working copy would keep the old port")
-	}
-	if fi, _ := os.Stat(filepath.Join(root, "runtime", "serverDZ.cfg")); fi.Mode().Perm() != 0o600 {
-		t.Error("serverDZ.cfg holds passwords: 0600")
-	}
+	assert.Equal(t, "RConPassword pw\nRestrictRCon 0\nRConPort 2306\n", string(be), "BattlEye seed")
+	_, err = os.Stat(filepath.Join(root, "profiles", "battleye", "beserver_x64_active_1a2b.cfg"))
+	assert.True(t, os.IsNotExist(err), "a stale BattlEye working copy would keep the old port")
+	fi, _ := os.Stat(filepath.Join(root, "runtime", "serverDZ.cfg"))
+	assert.Equal(t, os.FileMode(0o600), fi.Mode().Perm(), "serverDZ.cfg holds passwords: 0600")
 }
 
 func TestBattlEyeCfgBindsRConWhenAsked(t *testing.T) {
-	if got := BattlEyeCfg("pw", 2306, ""); strings.Contains(got, "RConIP") {
-		t.Errorf("no address, no RConIP line: %q", got)
-	}
-	if got := BattlEyeCfg("pw", 2306, "127.0.0.1"); !strings.HasSuffix(got, "RConPort 2306\nRConIP 127.0.0.1\n") {
-		t.Errorf("cfg = %q", got)
-	}
+	assert.NotContains(t, BattlEyeCfg("pw", 2306, ""), "RConIP", "no address, no RConIP line")
+	assert.True(t, strings.HasSuffix(BattlEyeCfg("pw", 2306, "127.0.0.1"), "RConPort 2306\nRConIP 127.0.0.1\n"))
 }
 
 func TestCustomKeys(t *testing.T) {
 	site := t.TempDir()
 	put := func(rel string) {
 		p := filepath.Join(site, rel)
-		if err := os.MkdirAll(filepath.Dir(p), 0o750); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(p, []byte(rel), 0o600); err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, os.MkdirAll(filepath.Dir(p), 0o750))
+		require.NoError(t, os.WriteFile(p, []byte(rel), 0o600))
 	}
 	put("keys/site.bikey")
 	put("instances/x/keys/own.bikey")
@@ -141,23 +111,15 @@ func TestCustomKeys(t *testing.T) {
 	put("overlays/shared/readme.txt")
 	put("instances/y/keys/other.bikey")
 	got, err := CustomKeys(site, "x", []string{"mine", "shared", "missing"})
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	var names []string
 	for _, g := range got {
 		names = append(names, filepath.Base(g))
 	}
-	if strings.Join(names, ",") != "site.bikey,own.bikey,o.bikey,s.bikey" {
-		t.Errorf("keys = %v", names)
-	}
+	assert.Equal(t, []string{"site.bikey", "own.bikey", "o.bikey", "s.bikey"}, names)
 }
 
 func TestPriorityFile(t *testing.T) {
-	if got := string(PriorityFile([]string{"76561198000000001", "76561198000000002"})); got != "76561198000000001;76561198000000002;" {
-		t.Errorf("got %q", got)
-	}
-	if got := PriorityFile(nil); len(got) != 0 {
-		t.Errorf("no ids gave %q", got)
-	}
+	assert.Equal(t, "76561198000000001;76561198000000002;", string(PriorityFile([]string{"76561198000000001", "76561198000000002"})))
+	assert.Empty(t, PriorityFile(nil), "no ids")
 }

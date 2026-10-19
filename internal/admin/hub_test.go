@@ -8,6 +8,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 type clock struct{ t time.Time }
@@ -37,123 +40,109 @@ func TestSyncStoresStateAndLinksVehicles(t *testing.T) {
 		Events:   []Event{{ID: "e1"}},
 	})
 	st := h.Status()
-	if !st.Connected || st.Players != 2 || st.Vehicles != 1 || st.Markers != 1 || st.Events != 1 || st.Hello.World != "chernarusplus" {
-		t.Fatalf("status = %+v", st)
-	}
+	require.True(t, st.Connected)
+	require.Equal(t, 2, st.Players)
+	require.Equal(t, 1, st.Vehicles)
+	require.Equal(t, 1, st.Markers)
+	require.Equal(t, 1, st.Events)
+	require.Equal(t, "chernarusplus", st.Hello.World)
 	players := h.Players()
-	if players[0].Vehicle != "" || players[1].Vehicle != "v1" {
-		t.Fatalf("vehicle link wrong: %+v", players)
-	}
-	if got := h.Layers(); len(got) != 1 || got[0].Icon != "ufo" {
-		t.Fatalf("layers = %+v", got)
-	}
-	if len(h.Vehicles()) != 1 || len(h.Events()) != 1 || len(h.Markers("ufo")) != 1 || len(h.Markers("other")) != 0 {
-		t.Fatal("accessors")
-	}
+	require.Empty(t, players[0].Vehicle)
+	require.Equal(t, "v1", players[1].Vehicle)
+	got := h.Layers()
+	require.Len(t, got, 1)
+	require.Equal(t, "ufo", got[0].Icon)
+	require.Len(t, h.Vehicles(), 1)
+	require.Len(t, h.Events(), 1)
+	require.Len(t, h.Markers("ufo"), 1)
+	require.Empty(t, h.Markers("other"))
 }
 
 func TestPartialSyncKeepsOtherState(t *testing.T) {
 	h, _ := testHub()
 	h.Sync(SyncRequest{Proto: 1, Hello: true, Players: []Player{{SteamID: "1"}}, Vehicles: []Vehicle{{ID: "v"}}})
 	h.Sync(SyncRequest{Proto: 1, Players: []Player{}})
-	if len(h.Players()) != 0 || len(h.Vehicles()) != 1 {
-		t.Fatal("a sync without vehicles must keep them")
-	}
+	require.Empty(t, h.Players())
+	require.Len(t, h.Vehicles(), 1)
 }
 
 func TestConnectedExpires(t *testing.T) {
 	h, c := testHub()
-	if h.Status().Connected {
-		t.Fatal("connected before any sync")
-	}
+	require.False(t, h.Status().Connected)
 	hello(h)
 	c.advance(onlineWindow + time.Second)
-	if h.Status().Connected {
-		t.Fatal("still connected after the window")
-	}
+	require.False(t, h.Status().Connected)
 }
 
 func TestSubmitOffline(t *testing.T) {
 	h, _ := testHub()
-	_, err := h.Submit(context.Background(), Command{Kind: KindMessage, Text: "hi"})
-	if err != ErrOffline {
-		t.Fatalf("err = %v, want ErrOffline", err)
-	}
+	_, err := h.Submit(t.Context(), Command{Kind: KindMessage, Text: "hi"})
+	require.ErrorIs(t, err, ErrOffline)
 }
 
 func TestCommandRoundTrip(t *testing.T) {
 	h, _ := testHub()
 	hello(h)
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 	done := make(chan Result, 1)
 	go func() {
 		r, err := h.Submit(ctx, Command{Kind: KindMessage, Text: "hello"})
-		if err != nil {
-			t.Error(err)
-		}
+		assert.NoError(t, err)
 		done <- r
 	}()
 	var cmd Command
-	for cmd.ID == "" {
-		time.Sleep(time.Millisecond)
+	require.Eventually(t, func() bool {
 		if r := h.Sync(SyncRequest{Proto: 1}); len(r.Commands) > 0 {
 			cmd = r.Commands[0]
 		}
-	}
-	if cmd.Kind != KindMessage || cmd.Style != "chat" || cmd.Text != "hello" {
-		t.Fatalf("cmd = %+v", cmd)
-	}
+		return cmd.ID != ""
+	}, 5*time.Second, time.Millisecond, "the command is handed out")
+	require.Equal(t, KindMessage, cmd.Kind)
+	require.Equal(t, "chat", cmd.Style)
+	require.Equal(t, "hello", cmd.Text)
 	h.Sync(SyncRequest{Proto: 1, Results: []Result{{ID: cmd.ID, OK: true}}})
-	if r := <-done; !r.OK || r.ID != cmd.ID {
-		t.Fatalf("result = %+v", r)
-	}
-	if r, ok := h.Result(cmd.ID); !ok || !bool(r.OK) {
-		t.Fatal("Result lookup")
-	}
-	if r := h.Sync(SyncRequest{Proto: 1}); len(r.Commands) != 0 {
-		t.Fatal("a finished command must not be sent again")
-	}
+	r := <-done
+	require.True(t, bool(r.OK))
+	require.Equal(t, cmd.ID, r.ID)
+	r, ok := h.Result(cmd.ID)
+	require.True(t, ok, "Result lookup")
+	require.True(t, bool(r.OK))
+	sr := h.Sync(SyncRequest{Proto: 1})
+	require.Empty(t, sr.Commands, "a finished command must not be sent again")
 }
 
 func TestResendAndTimeout(t *testing.T) {
 	h, c := testHub()
 	hello(h)
 	id, err := h.Enqueue(Command{Kind: KindVehicleDelete, Vehicle: "v"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := h.Sync(SyncRequest{Proto: 1}).Commands; len(got) != 1 {
-		t.Fatalf("first sync commands = %d", len(got))
-	}
-	if got := h.Sync(SyncRequest{Proto: 1}).Commands; len(got) != 0 {
-		t.Fatal("must not resend immediately")
-	}
+	require.NoError(t, err)
+	got := h.Sync(SyncRequest{Proto: 1}).Commands
+	require.Len(t, got, 1, "first sync commands")
+	got = h.Sync(SyncRequest{Proto: 1}).Commands
+	require.Empty(t, got, "must not resend immediately")
 	c.advance(resendAfter)
-	if got := h.Sync(SyncRequest{Proto: 1}).Commands; len(got) != 1 || got[0].ID != id {
-		t.Fatal("must resend an unanswered command")
-	}
+	got = h.Sync(SyncRequest{Proto: 1}).Commands
+	require.Len(t, got, 1, "must resend an unanswered command")
+	require.Equal(t, id, got[0].ID)
 	c.advance(commandTimeout)
-	if got := h.Sync(SyncRequest{Proto: 1}).Commands; len(got) != 0 {
-		t.Fatal("expired command still sent")
-	}
+	got = h.Sync(SyncRequest{Proto: 1}).Commands
+	require.Empty(t, got, "expired command still sent")
 	r, ok := h.Result(id)
-	if !ok || bool(r.OK) || r.Message != ErrTimeout.Error() {
-		t.Fatalf("result = %+v ok=%v", r, ok)
-	}
-	if _, ok := h.Result("nope"); ok {
-		t.Fatal("unknown id has no result")
-	}
+	require.True(t, ok)
+	require.False(t, bool(r.OK))
+	require.Equal(t, ErrTimeout.Error(), r.Message)
+	_, ok = h.Result("nope")
+	require.False(t, ok)
 }
 
 func TestSubmitContextTimeout(t *testing.T) {
 	h, _ := testHub()
 	hello(h)
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Millisecond)
 	defer cancel()
-	if _, err := h.Submit(ctx, Command{Kind: KindVehicleDelete, Vehicle: "v"}); err != ErrTimeout {
-		t.Fatalf("err = %v", err)
-	}
+	_, err := h.Submit(ctx, Command{Kind: KindVehicleDelete, Vehicle: "v"})
+	require.ErrorIs(t, err, ErrTimeout)
 }
 
 func TestValidate(t *testing.T) {
@@ -196,9 +185,7 @@ func TestValidate(t *testing.T) {
 	}
 	for _, tc := range cases {
 		_, err := h.Enqueue(tc.cmd)
-		if err == nil || !strings.Contains(err.Error(), tc.want) {
-			t.Errorf("%s: err = %v, want %q", tc.name, err, tc.want)
-		}
+		assert.ErrorContains(t, err, tc.want)
 	}
 	for _, ok := range []Command{
 		{Kind: KindSpawnItem, SteamID: "1", Type: "AKM"},
@@ -217,95 +204,84 @@ func TestValidate(t *testing.T) {
 		{Kind: KindPlayerHeal, SteamID: "1"},
 		{Kind: KindPlayerFixGear, SteamID: "1"},
 	} {
-		if _, err := h.Enqueue(ok); err != nil {
-			t.Errorf("%+v: %v", ok, err)
-		}
+		_, err := h.Enqueue(ok)
+		assert.NoError(t, err, "%+v", ok)
 	}
 }
 
 func TestSpawnAtPositionDefaultsToGround(t *testing.T) {
 	h, _ := testHub()
 	hello(h)
-	if _, err := h.Enqueue(Command{Kind: KindSpawnItem, Type: "AKM", X: 5, Z: 6}); err != nil {
-		t.Fatal(err)
-	}
+	_, err := h.Enqueue(Command{Kind: KindSpawnItem, Type: "AKM", X: 5, Z: 6})
+	require.NoError(t, err)
 	r := h.Sync(SyncRequest{Proto: 1})
-	if len(r.Commands) != 1 || r.Commands[0].Target != "ground" || r.Commands[0].SteamID != "" {
-		t.Fatalf("commands = %+v", r.Commands)
-	}
+	require.Len(t, r.Commands, 1)
+	require.Equal(t, "ground", r.Commands[0].Target)
+	require.Empty(t, r.Commands[0].SteamID)
 }
 
 func TestSpawnVehicleChecksVehicleTypes(t *testing.T) {
 	h, _ := testHub()
 	h.Sync(SyncRequest{Proto: 1, Hello: true, Types: &TypesChunk{Hash: "i", Offset: 0, Total: 1, Names: []string{"AKM"}},
 		VehicleTypes: &TypesChunk{Hash: "v", Offset: 0, Total: 2, Names: []string{"Offroad_02", "Hatchback_02"}}})
-	if got := h.VehicleTypes("off", 5); len(got) != 1 || got[0] != "Offroad_02" {
-		t.Fatalf("search = %v", got)
-	}
-	if _, err := h.Enqueue(Command{Kind: KindSpawnVehicle, Type: "Offroad_02", X: 1, Z: 2}); err != nil {
-		t.Fatal(err)
-	}
+	got := h.VehicleTypes("off", 5)
+	require.Len(t, got, 1)
+	require.Equal(t, "Offroad_02", got[0])
+	_, err := h.Enqueue(Command{Kind: KindSpawnVehicle, Type: "Offroad_02", X: 1, Z: 2})
+	require.NoError(t, err)
 	// An item is no vehicle, and a vehicle is no item.
-	if _, err := h.Enqueue(Command{Kind: KindSpawnVehicle, Type: "AKM", X: 1, Z: 2}); err == nil || !strings.Contains(err.Error(), "unknown class") {
-		t.Fatalf("item as vehicle: %v", err)
-	}
-	if _, err := h.Enqueue(Command{Kind: KindSpawnItem, Type: "Offroad_02", X: 1, Z: 2}); err == nil || !strings.Contains(err.Error(), "unknown class") {
-		t.Fatalf("vehicle as item: %v", err)
-	}
+	_, err = h.Enqueue(Command{Kind: KindSpawnVehicle, Type: "AKM", X: 1, Z: 2})
+	require.ErrorContains(t, err, "unknown class")
+	_, err = h.Enqueue(Command{Kind: KindSpawnItem, Type: "Offroad_02", X: 1, Z: 2})
+	require.ErrorContains(t, err, "unknown class")
 	// A vehicle chunk that does not follow the ones before asks the mod to start again.
-	if r := h.Sync(SyncRequest{Proto: 1, VehicleTypes: &TypesChunk{Hash: "w", Offset: 3, Total: 9, Names: []string{"x"}}}); !r.ResendTypes {
-		t.Fatal("a broken vehicle list must be sent again")
-	}
+	r := h.Sync(SyncRequest{Proto: 1, VehicleTypes: &TypesChunk{Hash: "w", Offset: 3, Total: 9, Names: []string{"x"}}})
+	require.True(t, r.ResendTypes)
 }
 
 func TestSpawnChecksKnownTypes(t *testing.T) {
 	h, _ := testHub()
 	h.Sync(SyncRequest{Proto: 1, Hello: true, Types: &TypesChunk{Hash: "h", Offset: 0, Total: 3, Names: []string{"B", "A"}}})
 	// Incomplete list: nothing is rejected on it yet.
-	if _, err := h.Enqueue(Command{Kind: KindSpawnItem, SteamID: "1", Type: "Zed"}); err != nil {
-		t.Fatalf("incomplete list must not reject: %v", err)
-	}
+	_, err := h.Enqueue(Command{Kind: KindSpawnItem, SteamID: "1", Type: "Zed"})
+	require.NoError(t, err, "incomplete list must not reject")
 	h.Sync(SyncRequest{Proto: 1, Types: &TypesChunk{Hash: "h", Offset: 2, Total: 3, Names: []string{"C"}}})
 	h.Sync(SyncRequest{Proto: 1, Types: &TypesChunk{Hash: "h", Offset: 9, Total: 3, Names: []string{"X"}}}) // out of order, ignored
-	if got := h.Types("", 0); len(got) != 3 || got[0] != "A" {
-		t.Fatalf("types = %v", got)
-	}
-	if got := h.Types("b", 10); len(got) != 1 || got[0] != "B" {
-		t.Fatalf("search = %v", got)
-	}
-	if got := h.Types("", 2); len(got) != 2 {
-		t.Fatalf("limit = %v", got)
-	}
-	if _, err := h.Enqueue(Command{Kind: KindSpawnItem, SteamID: "1", Type: "Zed"}); err == nil || !strings.Contains(err.Error(), "unknown class") {
-		t.Fatalf("err = %v", err)
-	}
-	if _, err := h.Enqueue(Command{Kind: KindSpawnItem, SteamID: "1", Type: "A"}); err != nil {
-		t.Fatal(err)
-	}
+	got := h.Types("", 0)
+	require.Len(t, got, 3)
+	require.Equal(t, "A", got[0])
+	got = h.Types("b", 10)
+	require.Len(t, got, 1)
+	require.Equal(t, "B", got[0])
+	got = h.Types("", 2)
+	require.Len(t, got, 2)
+	_, err = h.Enqueue(Command{Kind: KindSpawnItem, SteamID: "1", Type: "Zed"})
+	require.ErrorContains(t, err, "unknown class")
+	_, err = h.Enqueue(Command{Kind: KindSpawnItem, SteamID: "1", Type: "A"})
+	require.NoError(t, err)
 	// A new hash restarts the transfer.
 	h.Sync(SyncRequest{Proto: 1, Types: &TypesChunk{Hash: "h2", Offset: 0, Total: 1, Names: []string{"Q"}}})
-	if got := h.Types("", 0); len(got) != 1 || got[0] != "Q" {
-		t.Fatalf("restart = %v", got)
-	}
+	got = h.Types("", 0)
+	require.Len(t, got, 1)
+	require.Equal(t, "Q", got[0])
 }
 
 func TestSubscribe(t *testing.T) {
 	h, _ := testHub()
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	ch := h.Subscribe(ctx)
 	h.Sync(SyncRequest{Proto: 1, Hello: true, Players: []Player{{SteamID: "1"}}})
 	kinds := map[string]bool{}
 	for len(ch) > 0 {
 		kinds[(<-ch).Kind] = true
 	}
-	if !kinds["status"] || !kinds["players"] {
-		t.Fatalf("kinds = %v", kinds)
-	}
+	require.True(t, kinds["status"])
+	require.True(t, kinds["players"])
 	cancel()
 	for range ch { // closed after cancel
 	}
 	// A full buffer must not block Sync.
-	ctx2, cancel2 := context.WithCancel(context.Background())
+	ctx2, cancel2 := context.WithCancel(t.Context())
 	defer cancel2()
 	_ = h.Subscribe(ctx2)
 	for i := 0; i < 100; i++ {
@@ -314,40 +290,36 @@ func TestSubscribe(t *testing.T) {
 }
 
 func TestMatchGlobs(t *testing.T) {
-	if !MatchGlobs([]string{"A*", "B"}, "Abc") || !MatchGlobs([]string{"B"}, "B") || MatchGlobs([]string{"B"}, "Bc") || MatchGlobs([]string{""}, "") || MatchGlobs(nil, "x") {
-		t.Fatal("MatchGlobs")
-	}
-	if !MatchGlobs([]string{"Wreck_*_DE"}, "Wreck_Train_DE") || MatchGlobs([]string{"Wreck_*_DE"}, "Wreck_Train") || MatchGlobs([]string{"ab*ba"}, "aba") || !MatchGlobs([]string{"*_DE"}, "X_DE") {
-		t.Fatal("MatchGlobs with the star inside")
-	}
+	require.True(t, MatchGlobs([]string{"A*", "B"}, "Abc"))
+	require.True(t, MatchGlobs([]string{"B"}, "B"))
+	require.False(t, MatchGlobs([]string{"B"}, "Bc"))
+	require.False(t, MatchGlobs([]string{""}, ""))
+	require.False(t, MatchGlobs(nil, "x"))
+	require.True(t, MatchGlobs([]string{"Wreck_*_DE"}, "Wreck_Train_DE"))
+	require.False(t, MatchGlobs([]string{"Wreck_*_DE"}, "Wreck_Train"))
+	require.False(t, MatchGlobs([]string{"ab*ba"}, "aba"))
+	require.True(t, MatchGlobs([]string{"*_DE"}, "X_DE"))
 }
 
 func TestHubAsksForTheHelloItMissed(t *testing.T) {
 	h := NewHub("alpha")
 	// dzo serve restarted under a running server: the first sync it sees is no hello.
-	if r := h.Sync(SyncRequest{Proto: 1}); !r.Hello {
-		t.Error("a hub that does not know the world must ask for the hello")
-	}
-	if !h.Status().Connected {
-		t.Error("a mod without a hello is still connected")
-	}
-	if r := h.Sync(SyncRequest{Proto: 1, Hello: true, World: "chernarusplus"}); r.Hello {
-		t.Error("the hello arrived: stop asking")
-	}
-	if got := h.Status().Hello.World; got != "chernarusplus" {
-		t.Errorf("world = %q", got)
-	}
-	if r := h.Sync(SyncRequest{Proto: 1}); r.Hello {
-		t.Error("a known world is not asked for again")
-	}
+	r := h.Sync(SyncRequest{Proto: 1})
+	assert.True(t, r.Hello)
+	assert.True(t, h.Status().Connected)
+	r = h.Sync(SyncRequest{Proto: 1, Hello: true, World: "chernarusplus"})
+	assert.False(t, r.Hello)
+	got := h.Status().Hello.World
+	assert.Equal(t, "chernarusplus", got)
+	r = h.Sync(SyncRequest{Proto: 1})
+	assert.False(t, r.Hello)
 }
 
 func TestSyncVehicleKind(t *testing.T) {
 	r := SyncRequest{Vehicles: []Vehicle{{ID: "a"}, {ID: "b", Kind: "motorbike"}}}
 	r.Normalise()
-	if r.Vehicles[0].Kind != "car" || r.Vehicles[1].Kind != "motorbike" {
-		t.Errorf("kinds = %q, %q", r.Vehicles[0].Kind, r.Vehicles[1].Kind)
-	}
+	require.Equal(t, "car", r.Vehicles[0].Kind)
+	assert.Equal(t, "motorbike", r.Vehicles[1].Kind)
 }
 
 // Bicycles and the helicopters of mods are cars to the game (they derive from CarScript); the hub gives
@@ -369,9 +341,7 @@ func TestSyncMarksVehicleKindsByClass(t *testing.T) {
 	}
 	want := map[string]string{"1": "bicycle", "2": "bicycle", "3": "bicycle", "4": "bicycle", "5": "car", "6": "motorbike", "7": "helicopter", "8": "helicopter", "9": "helicopter", "10": "helicopter", "11": "helicopter", "12": "car"}
 	for id, k := range want {
-		if got[id] != k {
-			t.Errorf("vehicle %s: kind %q, want %q", id, got[id], k)
-		}
+		assert.Equal(t, k, got[id])
 	}
 }
 
@@ -380,46 +350,41 @@ func TestStatusCarriesTheNextRestartAndAnnouncesChanges(t *testing.T) {
 	next := time.Date(2026, 10, 16, 5, 0, 0, 0, time.UTC)
 	h.NextRestart = func(time.Time) time.Time { return next }
 	h.Sync(SyncRequest{Hello: true, World: "w"})
-	ch := h.Subscribe(context.Background())
-	if s := h.Status(); s.NextRestart == nil || !s.NextRestart.Equal(next) {
-		t.Fatalf("next restart = %v", s.NextRestart)
-	}
+	ch := h.Subscribe(t.Context())
+	s := h.Status()
+	require.NotNil(t, s.NextRestart)
+	require.True(t, s.NextRestart.Equal(next))
 	h.Sync(SyncRequest{Has: []string{"players"}, Players: []Player{{SteamID: "1"}}})
 	select {
 	case ev := <-ch:
 		for ev.Kind != "status" {
 			ev = <-ch
 		}
-		if s := ev.Data.(Status); s.Players != 1 {
-			t.Errorf("players = %d", s.Players)
-		}
+		s := ev.Data.(Status)
+		assert.Equal(t, 1, s.Players)
 	case <-time.After(time.Second):
-		t.Fatal("no status event when the player count changed")
+		require.FailNow(t, "no status event when the player count changed")
 	}
 	h2 := NewHub("y")
-	if h2.Status().NextRestart != nil {
-		t.Error("no schedule, no next restart")
-	}
+	assert.Nil(t, h2.Status().NextRestart)
 }
 
 func TestStatusCarriesTheGameTime(t *testing.T) {
 	h := NewHub("x")
 	h.Sync(SyncRequest{Hello: true, World: "w"})
-	if h.Status().GameTime != "" {
-		t.Error("an older mod sends no clock")
-	}
-	ch := h.Subscribe(context.Background())
+	assert.Empty(t, h.Status().GameTime)
+	ch := h.Subscribe(t.Context())
 	h.Sync(SyncRequest{Has: []string{"clock"}, Clock: 14*60 + 5})
-	if got := h.Status().GameTime; got != "14:05" {
-		t.Errorf("game time = %q", got)
-	}
+	got := h.Status().GameTime
+	assert.Equal(t, "14:05", got)
 	select {
 	case ev := <-ch:
-		if s, ok := ev.Data.(Status); !ok || ev.Kind != "status" || s.GameTime != "14:05" {
-			t.Errorf("event = %+v", ev)
-		}
+		s, ok := ev.Data.(Status)
+		require.True(t, ok)
+		require.Equal(t, "status", ev.Kind)
+		assert.Equal(t, "14:05", s.GameTime)
 	case <-time.After(time.Second):
-		t.Fatal("no status event for the new time")
+		require.FailNow(t, "no status event for the new time")
 	}
 }
 
@@ -428,28 +393,21 @@ func TestHubAsksForTheClassListAgainWhenAChunkDoesNotFit(t *testing.T) {
 	h.Sync(SyncRequest{Hello: true, World: "w"})
 	// the first chunk was lost (dzo restarted): the next one starts at 2
 	r := h.Sync(SyncRequest{Types: &TypesChunk{Hash: "h", Offset: 2, Total: 4, Names: []string{"c", "d"}}})
-	if !r.ResendTypes {
-		t.Fatal("a chunk that does not follow should make the hub ask again")
-	}
-	if r := h.Sync(SyncRequest{Types: &TypesChunk{Hash: "h", Offset: 0, Total: 4, Names: []string{"a", "b"}}}); r.ResendTypes {
-		t.Error("the restart of the transfer fits")
-	}
+	require.True(t, r.ResendTypes, "a chunk that does not follow should make the hub ask again")
+	r = h.Sync(SyncRequest{Types: &TypesChunk{Hash: "h", Offset: 0, Total: 4, Names: []string{"a", "b"}}})
+	assert.False(t, r.ResendTypes)
 	h.Sync(SyncRequest{Types: &TypesChunk{Hash: "h", Offset: 2, Total: 4, Names: []string{"c", "d"}}})
-	if got := h.Types("", 0); len(got) != 4 {
-		t.Errorf("types = %v", got)
-	}
+	got := h.Types("", 0)
+	assert.Len(t, got, 4)
 }
 
 // queued enqueues cmd and returns the command as the mod receives it.
-func queued(t *testing.T, h *Hub, cmd Command) Command {
+func queued(t testing.TB, h *Hub, cmd Command) Command {
 	t.Helper()
-	if _, err := h.Enqueue(cmd); err != nil {
-		t.Fatalf("Enqueue: %v", err)
-	}
+	_, err := h.Enqueue(cmd)
+	require.NoError(t, err, "Enqueue")
 	r := h.Sync(SyncRequest{Proto: 1})
-	if len(r.Commands) != 1 {
-		t.Fatalf("commands = %d, want 1", len(r.Commands))
-	}
+	require.Len(t, r.Commands, 1)
 	return r.Commands[0]
 }
 
@@ -457,25 +415,19 @@ func TestMessageExpansionNeedsTheFeature(t *testing.T) {
 	h, _ := testHub()
 	hello(h)
 	_, err := h.Enqueue(Command{Kind: KindMessage, Style: "expansion", NotifyType: "toast", Text: "x"})
-	if err == nil || !strings.Contains(err.Error(), "expansion notifications are not available") {
-		t.Fatalf("err = %v", err)
-	}
+	require.ErrorContains(t, err, "expansion notifications are not available")
 	h.Sync(SyncRequest{Proto: 1, Hello: true, World: "w", Features: []string{"expansion"}})
-	if _, err := h.Enqueue(Command{Kind: KindMessage, Style: "expansion", NotifyType: "toast", Text: "x"}); err != nil {
-		t.Fatalf("with the feature: %v", err)
-	}
+	_, err = h.Enqueue(Command{Kind: KindMessage, Style: "expansion", NotifyType: "toast", Text: "x"})
+	require.NoError(t, err, "with the feature")
 }
 
 func TestMessageExpansionTypeIsChecked(t *testing.T) {
 	h, _ := testHub()
 	h.Sync(SyncRequest{Proto: 1, Hello: true, World: "w", Features: []string{"expansion"}})
 	_, err := h.Enqueue(Command{Kind: KindMessage, Style: "expansion", NotifyType: "popup", Text: "x"})
-	if err == nil || !strings.Contains(err.Error(), "baguette") {
-		t.Fatalf("err = %v, want the allowed types", err)
-	}
-	if c := queued(t, h, Command{Kind: KindMessage, Style: "expansion", Text: "x"}); c.NotifyType != "toast" {
-		t.Errorf("default type = %q, want toast", c.NotifyType)
-	}
+	require.ErrorContains(t, err, "baguette")
+	c := queued(t, h, Command{Kind: KindMessage, Style: "expansion", Text: "x"})
+	assert.Equal(t, "toast", c.NotifyType)
 }
 
 func TestMessageTitleAndSecondsLimits(t *testing.T) {
@@ -486,39 +438,31 @@ func TestMessageTitleAndSecondsLimits(t *testing.T) {
 		"seconds":  {Kind: KindMessage, Style: "notification", Text: "x", Seconds: 61},
 		"negative": {Kind: KindMessage, Style: "notification", Text: "x", Seconds: -1},
 	} {
-		if _, err := h.Enqueue(c); err == nil {
-			t.Errorf("%s: accepted", name)
-		}
+		_, err := h.Enqueue(c)
+		assert.Error(t, err, "%s: accepted", name)
 	}
 	got := queued(t, h, Command{Kind: KindMessage, Style: "notification", Text: "x"})
-	if got.Title != "Server" || got.Seconds != 10 {
-		t.Errorf("defaults = %q, %d; want Server, 10", got.Title, got.Seconds)
-	}
+	require.Equal(t, "Server", got.Title)
+	assert.Equal(t, 10, got.Seconds)
 }
 
 func TestHelloKeepsFeatures(t *testing.T) {
 	h, _ := testHub()
 	hello(h)
-	if h.Status().Hello.Has("expansion") {
-		t.Error("a hello without features reports expansion")
-	}
+	assert.False(t, h.Status().Hello.Has("expansion"))
 	h.Sync(SyncRequest{Proto: 1, Hello: true, World: "w", Features: []string{"expansion"}})
 	hl := h.Status().Hello
-	if !hl.Has("expansion") || len(hl.Features) != 1 {
-		t.Errorf("hello = %+v", hl)
-	}
+	require.True(t, hl.Has("expansion"))
+	assert.Len(t, hl.Features, 1)
 	var none *Hello
-	if none.Has("expansion") {
-		t.Error("nil hello has a feature")
-	}
+	assert.False(t, none.Has("expansion"), "nil hello has a feature")
 }
 
 func TestMessageStyleRConIsRefusedByTheHub(t *testing.T) {
 	h, _ := testHub()
 	hello(h)
-	if _, err := h.Enqueue(Command{Kind: KindMessage, Style: "rcon", Text: "x"}); err == nil {
-		t.Fatal("the hub accepted the rcon style")
-	}
+	_, err := h.Enqueue(Command{Kind: KindMessage, Style: "rcon", Text: "x"})
+	require.Error(t, err, "the hub accepted the rcon style")
 }
 
 // The mod reports territory flags and Expansion territories as markers: the remaining time is the ttl, the
@@ -534,14 +478,19 @@ func TestHubKeepsFlagMarkers(t *testing.T) {
 		Layers: []Layer{{Name: "Flags", Icon: "flag", Visibility: "operator"}, {Name: "Territories", Visibility: "operator"}},
 	})
 	f := h.Markers("Flags")
-	if len(f) != 1 || f[0].TTL != 86400 || f[0].Source != "flags" || f[0].Icon != "flag" || f[0].Visibility != "operator" {
-		t.Fatalf("flags = %+v", f)
-	}
+	require.Len(t, f, 1)
+	require.Equal(t, 86400, f[0].TTL)
+	require.Equal(t, "flags", f[0].Source)
+	require.Equal(t, "flag", f[0].Icon)
+	require.Equal(t, "operator", f[0].Visibility)
 	tr := h.Markers("Territories")
-	if len(tr) != 1 || tr[0].Radius != 150 || tr[0].Label != "Camp" || tr[0].Source != "territory" || tr[0].Visibility != "operator" {
-		t.Fatalf("territories = %+v", tr)
-	}
-	if got := h.Layers(); len(got) != 2 || got[0].Visibility != "operator" || got[1].Visibility != "operator" {
-		t.Fatalf("layers = %+v", got)
-	}
+	require.Len(t, tr, 1)
+	require.Equal(t, float64(150), tr[0].Radius)
+	require.Equal(t, "Camp", tr[0].Label)
+	require.Equal(t, "territory", tr[0].Source)
+	require.Equal(t, "operator", tr[0].Visibility)
+	got := h.Layers()
+	require.Len(t, got, 2)
+	require.Equal(t, "operator", got[0].Visibility)
+	require.Equal(t, "operator", got[1].Visibility)
 }

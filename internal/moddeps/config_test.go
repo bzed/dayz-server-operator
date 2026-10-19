@@ -3,7 +3,12 @@
 
 package moddeps
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
 
 func TestParseConfigSimpleClass(t *testing.T) {
 	src := `
@@ -19,28 +24,17 @@ class CfgPatches
 };
 `
 	root, err := ParseConfig([]byte(src))
-	if err != nil {
-		t.Fatalf("ParseConfig: %v", err)
-	}
+	require.NoError(t, err, "ParseConfig")
 	patches, ok := root.Classes["CfgPatches"]
-	if !ok {
-		t.Fatal("CfgPatches not found")
-	}
+	require.True(t, ok, "CfgPatches not found")
 	myMod, ok := patches.Classes["MyMod"]
-	if !ok {
-		t.Fatal("MyMod not found")
-	}
+	require.True(t, ok, "MyMod not found")
 	req, ok := myMod.Properties["requiredAddons"]
-	if !ok || !req.IsArray {
-		t.Fatalf("requiredAddons = %+v, ok=%v", req, ok)
-	}
+	require.True(t, ok)
+	require.True(t, req.IsArray)
 	want := []string{"DZ_Data", "DZ_Scripts", "DZ_Weapons_Melee"}
-	if !equalStrings(req.Array, want) {
-		t.Errorf("requiredAddons = %v, want %v", req.Array, want)
-	}
-	if myMod.Properties["requiredVersion"].Scalar != "0.1" {
-		t.Errorf("requiredVersion = %q", myMod.Properties["requiredVersion"].Scalar)
-	}
+	assert.True(t, equalStrings(req.Array, want), "requiredAddons = %v, want %v", req.Array, want)
+	assert.Equal(t, "0.1", myMod.Properties["requiredVersion"].Scalar)
 }
 
 func TestParseConfigMultipleTopLevelClasses(t *testing.T) {
@@ -56,37 +50,25 @@ class CfgMods
 };
 `
 	root, err := ParseConfig([]byte(src))
-	if err != nil {
-		t.Fatalf("ParseConfig: %v", err)
-	}
-	if len(root.Classes["CfgPatches"].Classes) != 2 {
-		t.Errorf("CfgPatches has %d children, want 2", len(root.Classes["CfgPatches"].Classes))
-	}
-	if _, ok := root.Classes["CfgMods"]; !ok {
-		t.Error("CfgMods not found")
-	}
+	require.NoError(t, err, "ParseConfig")
+	assert.Len(t, root.Classes["CfgPatches"].Classes, 2)
+	_, ok := root.Classes["CfgMods"]
+	assert.True(t, ok)
 }
 
 func TestParseConfigParentClass(t *testing.T) {
 	src := `class Base { x = 1; }; class Derived : Base { y = 2; };`
 	root, err := ParseConfig([]byte(src))
-	if err != nil {
-		t.Fatalf("ParseConfig: %v", err)
-	}
-	if root.Classes["Derived"].Parent != "Base" {
-		t.Errorf("Parent = %q, want Base", root.Classes["Derived"].Parent)
-	}
+	require.NoError(t, err, "ParseConfig")
+	assert.Equal(t, "Base", root.Classes["Derived"].Parent)
 }
 
 func TestParseConfigForwardDeclaration(t *testing.T) {
 	src := `class Foo; class CfgPatches { class Bar { requiredAddons[] = {"Foo"}; }; };`
 	root, err := ParseConfig([]byte(src))
-	if err != nil {
-		t.Fatalf("ParseConfig: %v", err)
-	}
-	if _, ok := root.Classes["Foo"]; !ok {
-		t.Error("forward-declared Foo should still be recorded")
-	}
+	require.NoError(t, err, "ParseConfig")
+	_, ok := root.Classes["Foo"]
+	assert.True(t, ok)
 }
 
 func TestParseConfigComments(t *testing.T) {
@@ -97,13 +79,9 @@ class CfgPatches /* block comment */ {
 };
 `
 	root, err := ParseConfig([]byte(src))
-	if err != nil {
-		t.Fatalf("ParseConfig: %v", err)
-	}
+	require.NoError(t, err, "ParseConfig")
 	req := root.Classes["CfgPatches"].Classes["M"].Properties["requiredAddons"]
-	if !equalStrings(req.Array, []string{"A", "B"}) {
-		t.Errorf("requiredAddons = %v", req.Array)
-	}
+	assert.True(t, equalStrings(req.Array, []string{"A", "B"}), "requiredAddons = %v", req.Array)
 }
 
 func TestParseConfigPreprocessorLinesIgnored(t *testing.T) {
@@ -114,23 +92,17 @@ class CfgPatches {
 };
 `
 	root, err := ParseConfig([]byte(src))
-	if err != nil {
-		t.Fatalf("ParseConfig: %v", err)
-	}
-	if _, ok := root.Classes["CfgPatches"]; !ok {
-		t.Fatal("CfgPatches not found")
-	}
+	require.NoError(t, err, "ParseConfig")
+	_, ok := root.Classes["CfgPatches"]
+	require.True(t, ok)
 }
 
 func TestParseConfigEscapedQuoteInString(t *testing.T) {
 	src := `class M { name = "Say ""Hi""."; };`
 	root, err := ParseConfig([]byte(src))
-	if err != nil {
-		t.Fatalf("ParseConfig: %v", err)
-	}
-	if got := root.Classes["M"].Properties["name"].Scalar; got != `Say "Hi".` {
-		t.Errorf("name = %q", got)
-	}
+	require.NoError(t, err, "ParseConfig")
+	got := root.Classes["M"].Properties["name"].Scalar
+	assert.Equal(t, `Say "Hi".`, got)
 }
 
 func TestParseConfigPlusEqualsArray(t *testing.T) {
@@ -138,9 +110,8 @@ func TestParseConfigPlusEqualsArray(t *testing.T) {
 	// += is accepted grammatically (real config.cpp uses it to extend a
 	// parent's array); this parser does not merge with a prior value, it
 	// just records the latest assignment - documented as a simplification.
-	if _, err := ParseConfig([]byte(src)); err != nil {
-		t.Fatalf("ParseConfig: %v", err)
-	}
+	_, err := ParseConfig([]byte(src))
+	require.NoError(t, err, "ParseConfig")
 }
 
 func TestParseConfigErrors(t *testing.T) {
@@ -152,21 +123,17 @@ func TestParseConfigErrors(t *testing.T) {
 		`/* unterminated`,
 	}
 	for _, c := range cases {
-		if _, err := ParseConfig([]byte(c)); err == nil {
-			t.Errorf("ParseConfig(%q): expected an error", c)
-		}
+		_, err := ParseConfig([]byte(c))
+		assert.Error(t, err, "ParseConfig(%q): expected an error", c)
 	}
 }
 
 func TestParseConfigNumberScalar(t *testing.T) {
 	src := `class M { requiredVersion = -1.5; };`
 	root, err := ParseConfig([]byte(src))
-	if err != nil {
-		t.Fatalf("ParseConfig: %v", err)
-	}
-	if got := root.Classes["M"].Properties["requiredVersion"].Scalar; got != "-1.5" {
-		t.Errorf("requiredVersion = %q", got)
-	}
+	require.NoError(t, err, "ParseConfig")
+	got := root.Classes["M"].Properties["requiredVersion"].Scalar
+	assert.Equal(t, "-1.5", got)
 }
 
 func equalStrings(a, b []string) bool {
@@ -183,11 +150,8 @@ func equalStrings(a, b []string) bool {
 
 func TestParseConfigClassNameStartingWithDigits(t *testing.T) {
 	root, err := ParseConfig([]byte(`class CfgPatches { class 416M4_Sounds { requiredAddons[] = {"DZ_Data"}; v = 0.1; }; };`))
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	c := root.Classes["CfgPatches"].Classes["416M4_Sounds"]
-	if c == nil || c.Properties["v"].Scalar != "0.1" {
-		t.Errorf("class = %+v", c)
-	}
+	require.NotNil(t, c)
+	assert.Equal(t, "0.1", c.Properties["v"].Scalar)
 }

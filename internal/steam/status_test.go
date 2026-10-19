@@ -8,16 +8,16 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestLoadStatusMissingFileReturnsZeroValue(t *testing.T) {
 	s, err := LoadStatus(filepath.Join(t.TempDir(), "missing.json"))
-	if err != nil {
-		t.Fatalf("LoadStatus: %v", err)
-	}
-	if s.Account != "" || s.AuthRequired {
-		t.Fatalf("expected a zero-value Status, got %+v", s)
-	}
+	require.NoError(t, err, "LoadStatus")
+	require.Empty(t, s.Account)
+	require.False(t, s.AuthRequired)
 }
 
 func TestStatusSaveAndLoadRoundTrip(t *testing.T) {
@@ -25,37 +25,29 @@ func TestStatusSaveAndLoadRoundTrip(t *testing.T) {
 	now := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
 	want := Status{Account: "bob", AuthRequired: true, LastFailureAt: &now, LastFailureReason: FailureInvalidPassword}
 
-	if err := want.Save(path); err != nil {
-		t.Fatalf("Save: %v", err)
-	}
+	err := want.Save(path)
+	require.NoError(t, err, "Save")
 	got, err := LoadStatus(path)
-	if err != nil {
-		t.Fatalf("LoadStatus: %v", err)
-	}
-	if got.Account != want.Account || got.AuthRequired != want.AuthRequired || got.LastFailureReason != want.LastFailureReason {
-		t.Fatalf("got = %+v, want %+v", got, want)
-	}
-	if got.LastFailureAt == nil || !got.LastFailureAt.Equal(now) {
-		t.Fatalf("LastFailureAt = %v, want %v", got.LastFailureAt, now)
-	}
+	require.NoError(t, err, "LoadStatus")
+	require.Equal(t, want.Account, got.Account)
+	require.Equal(t, want.AuthRequired, got.AuthRequired)
+	require.Equal(t, want.LastFailureReason, got.LastFailureReason)
+	require.NotNil(t, got.LastFailureAt)
+	require.True(t, got.LastFailureAt.Equal(now))
 }
 
 func TestLoadStatusInvalidJSONErrors(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "status.json")
-	if err := os.WriteFile(path, []byte("not json"), 0o600); err != nil {
-		t.Fatalf("WriteFile: %v", err)
-	}
-	if _, err := LoadStatus(path); err == nil {
-		t.Fatal("expected an error for invalid JSON")
-	}
+	err := os.WriteFile(path, []byte("not json"), 0o600)
+	require.NoError(t, err, "WriteFile")
+	_, err = LoadStatus(path)
+	require.Error(t, err, "expected an error for invalid JSON")
 }
 
 func TestStatusSaveMissingParentDirErrors(t *testing.T) {
 	s := Status{Account: "bob"}
 	err := s.Save(filepath.Join(t.TempDir(), "missing-dir", "status.json"))
-	if err == nil {
-		t.Fatal("expected an error when the parent directory does not exist")
-	}
+	require.Error(t, err, "expected an error when the parent directory does not exist")
 }
 
 func TestStatusRecordSuccessClearsAuthRequired(t *testing.T) {
@@ -63,15 +55,10 @@ func TestStatusRecordSuccessClearsAuthRequired(t *testing.T) {
 	now := time.Now()
 	s.Record("bob", Result{Success: true}, now)
 
-	if s.AuthRequired {
-		t.Error("AuthRequired should be cleared on a successful login")
-	}
-	if s.LastFailureReason != "" {
-		t.Errorf("LastFailureReason = %q, want cleared", s.LastFailureReason)
-	}
-	if s.LastSuccessAt == nil || !s.LastSuccessAt.Equal(now) {
-		t.Errorf("LastSuccessAt = %v, want %v", s.LastSuccessAt, now)
-	}
+	assert.False(t, s.AuthRequired, "AuthRequired should be cleared on a successful login")
+	assert.Empty(t, s.LastFailureReason)
+	require.NotNil(t, s.LastSuccessAt)
+	assert.True(t, s.LastSuccessAt.Equal(now))
 }
 
 func TestStatusRecordAuthFailureSetsAuthRequired(t *testing.T) {
@@ -79,23 +66,16 @@ func TestStatusRecordAuthFailureSetsAuthRequired(t *testing.T) {
 	now := time.Now()
 	s.Record("bob", Result{Success: false, Reason: FailureInvalidPassword}, now)
 
-	if !s.AuthRequired {
-		t.Error("expected AuthRequired to be set on an auth failure")
-	}
-	if s.LastFailureAt == nil || !s.LastFailureAt.Equal(now) {
-		t.Errorf("LastFailureAt = %v, want %v", s.LastFailureAt, now)
-	}
-	if s.LastFailureReason != FailureInvalidPassword {
-		t.Errorf("LastFailureReason = %q, want invalid_password", s.LastFailureReason)
-	}
+	assert.True(t, s.AuthRequired, "expected AuthRequired to be set on an auth failure")
+	require.NotNil(t, s.LastFailureAt)
+	assert.True(t, s.LastFailureAt.Equal(now))
+	assert.Equal(t, FailureInvalidPassword, s.LastFailureReason)
 }
 
 func TestStatusRecordTransientFailureDoesNotSetAuthRequired(t *testing.T) {
 	s := Status{}
 	s.Record("bob", Result{Success: false, Reason: FailureRateLimited}, time.Now())
-	if s.AuthRequired {
-		t.Error("a rate-limit failure should not require re-authentication")
-	}
+	assert.False(t, s.AuthRequired, "a rate-limit failure should not require re-authentication")
 }
 
 func TestIsAuthFailure(t *testing.T) {
@@ -103,14 +83,10 @@ func TestIsAuthFailure(t *testing.T) {
 		FailureInvalidPassword, FailureGuardCodeMismatch, FailureAccountLogonDenied, FailureCachedCredentialsGone,
 	}
 	for _, r := range authFailures {
-		if !IsAuthFailure(r) {
-			t.Errorf("IsAuthFailure(%v) = false, want true", r)
-		}
+		assert.True(t, IsAuthFailure(r), "IsAuthFailure(%v) = false, want true", r)
 	}
 	transient := []FailureReason{FailureRateLimited, FailureNoSubscription, FailureUnknown, ""}
 	for _, r := range transient {
-		if IsAuthFailure(r) {
-			t.Errorf("IsAuthFailure(%v) = true, want false", r)
-		}
+		assert.False(t, IsAuthFailure(r), "IsAuthFailure(%v) = true, want false", r)
 	}
 }

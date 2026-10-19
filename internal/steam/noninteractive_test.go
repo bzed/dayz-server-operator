@@ -4,31 +4,28 @@
 package steam
 
 import (
-	"context"
 	"errors"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestNonInteractivePrompterRefusesPassword(t *testing.T) {
 	var p NonInteractivePrompter
-	_, err := p.Password(context.Background(), "bob")
-	if !errors.Is(err, ErrAuthRequired) {
-		t.Errorf("err = %v, want ErrAuthRequired", err)
-	}
+	_, err := p.Password(t.Context(), "bob")
+	assert.True(t, errors.Is(err, ErrAuthRequired), "err = %v, want ErrAuthRequired", err)
 }
 
 func TestNonInteractivePrompterRefusesCode(t *testing.T) {
 	var p NonInteractivePrompter
-	_, err := p.Code(context.Background(), PromptGuardCode)
-	if !errors.Is(err, ErrAuthRequired) {
-		t.Errorf("err = %v, want ErrAuthRequired", err)
-	}
+	_, err := p.Code(t.Context(), PromptGuardCode)
+	assert.True(t, errors.Is(err, ErrAuthRequired), "err = %v, want ErrAuthRequired", err)
 }
 
 func TestNonInteractivePrompterWaitingIsNoop(t *testing.T) {
 	var p NonInteractivePrompter
-	p.Waiting(context.Background()) // must not panic or block
+	p.Waiting(t.Context()) // must not panic or block
 }
 
 func TestRunWithNonInteractivePrompterReportsAuthRequired(t *testing.T) {
@@ -41,8 +38,6 @@ echo "Waiting for user info...OK"
 	killGraceDelay = 100 * time.Millisecond
 	defer func() { killGraceDelay = orig }()
 
-	_, err := Run(context.Background(), runOpts(t, script, NonInteractivePrompter{}))
-	if !errors.Is(err, ErrAuthRequired) {
-		t.Errorf("err = %v, want ErrAuthRequired", err)
-	}
+	_, err := Run(t.Context(), runOpts(t, script, NonInteractivePrompter{}))
+	assert.True(t, errors.Is(err, ErrAuthRequired), "err = %v, want ErrAuthRequired", err)
 }

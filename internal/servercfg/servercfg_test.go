@@ -6,6 +6,9 @@ package servercfg
 import (
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 const sample = `
@@ -23,156 +26,105 @@ template = "dayzOffline.chernarusplus";
 
 func TestParseBasic(t *testing.T) {
 	f, err := Parse([]byte(sample))
-	if err != nil {
-		t.Fatalf("Parse: %v", err)
-	}
+	require.NoError(t, err)
 
 	wantKeys := []string{"hostname", "maxPlayers", "verifySignatures", "disableVoN", "beLoggerFilters", "motd", "template"}
-	if got := f.Keys(); !equalStrings(got, wantKeys) {
-		t.Fatalf("Keys() = %v, want %v", got, wantKeys)
-	}
+	require.Equal(t, wantKeys, f.Keys())
 
 	hostname, ok := f.Get("hostname")
-	if !ok {
-		t.Fatal("hostname not found")
-	}
-	if hostname.Scalar.Value != "dzo test server" || !hostname.Scalar.Quoted {
-		t.Errorf("hostname = %+v", hostname.Scalar)
-	}
+	require.True(t, ok, "hostname not found")
+	assert.Equal(t, "dzo test server", hostname.Scalar.Value)
+	assert.True(t, hostname.Scalar.Quoted)
 
 	maxPlayers, ok := f.Get("maxPlayers")
-	if !ok {
-		t.Fatal("maxPlayers not found")
-	}
+	require.True(t, ok, "maxPlayers not found")
 	n, err := maxPlayers.AsInt()
-	if err != nil || n != 60 {
-		t.Errorf("maxPlayers.AsInt() = %d, %v, want 60, nil", n, err)
-	}
+	require.NoError(t, err)
+	assert.Equal(t, 60, n)
 
 	motd, ok := f.Get("motd")
-	if !ok || !motd.IsArray || len(motd.Array) != 2 {
-		t.Fatalf("motd = %+v", motd)
-	}
-	if motd.Array[0].Value != "Welcome" || motd.Array[1].Value != "Have fun" {
-		t.Errorf("motd array = %+v", motd.Array)
-	}
+	require.True(t, ok)
+	require.True(t, motd.IsArray)
+	require.Len(t, motd.Array, 2)
+	assert.Equal(t, "Welcome", motd.Array[0].Value)
+	assert.Equal(t, "Have fun", motd.Array[1].Value)
 }
 
 func TestAsIntOnArrayFails(t *testing.T) {
 	f, err := Parse([]byte(sample))
-	if err != nil {
-		t.Fatalf("Parse: %v", err)
-	}
+	require.NoError(t, err)
 	motd, _ := f.Get("motd")
-	if _, err := motd.AsInt(); err == nil {
-		t.Fatal("expected an error calling AsInt on an array entry")
-	}
+	_, err = motd.AsInt()
+	require.Error(t, err, "expected an error calling AsInt on an array entry")
 }
 
 func TestRoundTrip(t *testing.T) {
 	f, err := Parse([]byte(sample))
-	if err != nil {
-		t.Fatalf("Parse: %v", err)
-	}
+	require.NoError(t, err)
 	out := f.String()
 
 	f2, err := Parse([]byte(out))
-	if err != nil {
-		t.Fatalf("re-parse of rendered output: %v\noutput was:\n%s", err, out)
-	}
-	if !equalStrings(f.Keys(), f2.Keys()) {
-		t.Fatalf("keys changed across round trip: %v vs %v", f.Keys(), f2.Keys())
-	}
+	require.NoError(t, err)
+	require.Equal(t, f.Keys(), f2.Keys(), "keys changed across round trip")
 	for _, k := range f.Keys() {
 		e1, _ := f.Get(k)
 		e2, _ := f2.Get(k)
-		if e1.Render() != e2.Render() {
-			t.Errorf("key %s: %q != %q after round trip", k, e1.Render(), e2.Render())
-		}
+		assert.Equal(t, e1.Render(), e2.Render(), "key %s after round trip", k)
 	}
 }
 
 func TestSetScalarUpdatesInPlace(t *testing.T) {
 	f, err := Parse([]byte(sample))
-	if err != nil {
-		t.Fatalf("Parse: %v", err)
-	}
+	require.NoError(t, err)
 	before := f.Keys()
 	f.SetScalar("maxPlayers", "100", false)
 	after := f.Keys()
-	if !equalStrings(before, after) {
-		t.Fatalf("SetScalar on an existing key should not change key order: %v vs %v", before, after)
-	}
+	require.Equal(t, before, after, "SetScalar on an existing key should not change key order")
 	e, _ := f.Get("maxPlayers")
-	if e.Render() != "100" {
-		t.Errorf("maxPlayers = %s, want 100", e.Render())
-	}
+	assert.Equal(t, "100", e.Render())
 }
 
 func TestSetScalarAppendsNewKey(t *testing.T) {
 	f, err := Parse([]byte(sample))
-	if err != nil {
-		t.Fatalf("Parse: %v", err)
-	}
+	require.NoError(t, err)
 	f.SetScalar("steamQueryPort", "27016", false)
 	keys := f.Keys()
-	if keys[len(keys)-1] != "steamQueryPort" {
-		t.Fatalf("new key should be appended, got keys: %v", keys)
-	}
+	require.NotEmpty(t, keys)
+	require.Equal(t, "steamQueryPort", keys[len(keys)-1], "new key should be appended")
 }
 
 func TestSetArray(t *testing.T) {
 	f := newFile()
 	f.SetArray("motd", []Item{{Value: "a", Quoted: true}, {Value: "b", Quoted: true}})
 	e, ok := f.Get("motd")
-	if !ok || !e.IsArray {
-		t.Fatalf("motd = %+v", e)
-	}
-	if e.Render() != `{"a", "b"}` {
-		t.Errorf("Render() = %q", e.Render())
-	}
+	require.True(t, ok)
+	require.True(t, e.IsArray)
+	assert.Equal(t, `{"a", "b"}`, e.Render())
 }
 
 func TestDiffFiles(t *testing.T) {
 	oldFile, err := Parse([]byte(`hostname = "old"; maxPlayers = 40; disableVoN = 0;`))
-	if err != nil {
-		t.Fatalf("Parse old: %v", err)
-	}
+	require.NoError(t, err)
 	newFile, err := Parse([]byte(`hostname = "new"; maxPlayers = 40; steamQueryPort = 27016;`))
-	if err != nil {
-		t.Fatalf("Parse new: %v", err)
-	}
+	require.NoError(t, err)
 
 	d := DiffFiles(oldFile, newFile)
-	if d.Empty() {
-		t.Fatal("expected a non-empty diff")
-	}
-	if !equalStrings(d.Added, []string{"steamQueryPort"}) {
-		t.Errorf("Added = %v", d.Added)
-	}
-	if !equalStrings(d.Removed, []string{"disableVoN"}) {
-		t.Errorf("Removed = %v", d.Removed)
-	}
-	if len(d.Changed) != 1 || d.Changed[0].Key != "hostname" {
-		t.Fatalf("Changed = %+v", d.Changed)
-	}
-	if d.Changed[0].Old != `"old"` || d.Changed[0].New != `"new"` {
-		t.Errorf("Changed[0] = %+v", d.Changed[0])
-	}
+	require.False(t, d.Empty(), "expected a non-empty diff")
+	assert.Equal(t, []string{"steamQueryPort"}, d.Added)
+	assert.Equal(t, []string{"disableVoN"}, d.Removed)
+	require.Len(t, d.Changed, 1)
+	require.Equal(t, "hostname", d.Changed[0].Key)
+	assert.Equal(t, `"old"`, d.Changed[0].Old)
+	assert.Equal(t, `"new"`, d.Changed[0].New)
 }
 
 func TestDiffFilesEmptyWhenEqual(t *testing.T) {
 	a, err := Parse([]byte(`hostname = "same";`))
-	if err != nil {
-		t.Fatalf("Parse: %v", err)
-	}
+	require.NoError(t, err)
 	b, err := Parse([]byte(`hostname = "same";`))
-	if err != nil {
-		t.Fatalf("Parse: %v", err)
-	}
-	if d := DiffFiles(a, b); !d.Empty() {
-		t.Fatalf("expected an empty diff, got %+v", d)
-	}
+	require.NoError(t, err)
+	d := DiffFiles(a, b)
+	require.True(t, d.Empty(), "expected an empty diff, got %+v", d)
 }
 
 func TestParseErrors(t *testing.T) {
@@ -185,41 +137,22 @@ func TestParseErrors(t *testing.T) {
 		`hostname = ;`,
 	}
 	for _, c := range cases {
-		if _, err := Parse([]byte(c)); err == nil {
-			t.Errorf("Parse(%q) should have failed", c)
-		}
+		_, err := Parse([]byte(c))
+		assert.Error(t, err, "Parse(%q) should have failed", c)
 	}
 }
 
 func TestParseEmpty(t *testing.T) {
 	f, err := Parse([]byte("  \n// just a comment\n/* and a block */\n"))
-	if err != nil {
-		t.Fatalf("Parse: %v", err)
-	}
-	if len(f.Keys()) != 0 {
-		t.Fatalf("expected no keys, got %v", f.Keys())
-	}
+	require.NoError(t, err)
+	require.Empty(t, f.Keys())
 }
 
 func TestEntryStringFormatsArrayKey(t *testing.T) {
 	f := newFile()
 	f.SetArray("motd", []Item{{Value: "hi", Quoted: true}})
 	e, _ := f.Get("motd")
-	if !strings.HasPrefix(e.String(), "motd[] = ") {
-		t.Errorf("String() = %q", e.String())
-	}
-}
-
-func equalStrings(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
+	assert.True(t, strings.HasPrefix(e.String(), "motd[] = "), "String() = %q", e.String())
 }
 
 const withClass = `hostname = "x";
@@ -235,58 +168,46 @@ maxPlayers = 60;
 
 func TestClassBlocksParseAndRoundTrip(t *testing.T) {
 	f, err := Parse([]byte(withClass))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if e, ok := f.GetPath([]string{"Missions", "DayZ"}, "template"); !ok || e.Scalar.Value != "dayzOffline.chernarusplus" {
-		t.Fatalf("template = %+v %v", e, ok)
-	}
-	if e, ok := f.Get("Missions"); !ok || !e.IsClass {
-		t.Errorf("Missions must be a class entry: %+v", e)
-	}
+	require.NoError(t, err)
+	e, ok := f.GetPath([]string{"Missions", "DayZ"}, "template")
+	require.True(t, ok)
+	require.Equal(t, "dayzOffline.chernarusplus", e.Scalar.Value)
+	m, ok := f.Get("Missions")
+	assert.True(t, ok)
+	assert.True(t, m.IsClass, "Missions must be a class entry")
 	again, err := Parse(f.Bytes())
-	if err != nil || string(again.Bytes()) != string(f.Bytes()) {
-		t.Fatalf("round trip: %v\n%s\nvs\n%s", err, f.Bytes(), again.Bytes())
-	}
-	if keys := f.Keys(); strings.Join(keys, ",") != "hostname,Missions,maxPlayers" {
-		t.Errorf("keys keep their order: %v", keys)
-	}
+	require.NoError(t, err)
+	require.Equal(t, string(f.Bytes()), string(again.Bytes()), "round trip")
+	assert.Equal(t, []string{"hostname", "Missions", "maxPlayers"}, f.Keys(), "keys keep their order")
 }
 
 func TestSetPathScalarCreatesAndReplaces(t *testing.T) {
 	f, _ := Parse([]byte(withClass))
 	f.SetPathScalar([]string{"Missions", "DayZ"}, "template", "enoch", true)
 	f.SetPathScalar([]string{"Other", "Deep"}, "k", "1", false)
-	if e, _ := f.GetPath([]string{"Missions", "DayZ"}, "template"); e.Scalar.Value != "enoch" {
-		t.Errorf("template = %q", e.Scalar.Value)
-	}
-	if e, ok := f.GetPath([]string{"Other", "Deep"}, "k"); !ok || e.Scalar.Value != "1" {
-		t.Errorf("created path: %+v", e)
-	}
-	if _, ok := f.GetPath([]string{"Nope"}, "k"); ok {
-		t.Error("a missing class has no entries")
-	}
-	if _, ok := f.GetPath([]string{"hostname"}, "k"); ok {
-		t.Error("a scalar is not a class")
-	}
+	e, _ := f.GetPath([]string{"Missions", "DayZ"}, "template")
+	assert.Equal(t, "enoch", e.Scalar.Value)
+	e, ok := f.GetPath([]string{"Other", "Deep"}, "k")
+	require.True(t, ok, "created path")
+	assert.Equal(t, "1", e.Scalar.Value)
+	_, ok = f.GetPath([]string{"Nope"}, "k")
+	assert.False(t, ok, "a missing class has no entries")
+	_, ok = f.GetPath([]string{"hostname"}, "k")
+	assert.False(t, ok, "a scalar is not a class")
 }
 
 func TestDiffSeesInsideClasses(t *testing.T) {
 	a, _ := Parse([]byte(withClass))
 	b, _ := Parse([]byte(strings.Replace(withClass, "chernarusplus", "enoch", 1)))
 	d := DiffFiles(a, b)
-	if len(d.Changed) != 1 || d.Changed[0].Key != "Missions/DayZ/template" {
-		t.Errorf("diff = %+v", d)
-	}
-	if !DiffFiles(a, a).Empty() {
-		t.Error("the same file differs from itself")
-	}
+	require.Len(t, d.Changed, 1)
+	assert.Equal(t, "Missions/DayZ/template", d.Changed[0].Key)
+	assert.True(t, DiffFiles(a, a).Empty(), "the same file must not differ from itself")
 }
 
 func TestClassParseErrors(t *testing.T) {
 	for _, bad := range []string{"class {};", "class A", "class A {", "class A { x = 1; }", "class A { x = ; };"} {
-		if _, err := Parse([]byte(bad)); err == nil {
-			t.Errorf("%q must not parse", bad)
-		}
+		_, err := Parse([]byte(bad))
+		assert.Error(t, err, "%q must not parse", bad)
 	}
 }

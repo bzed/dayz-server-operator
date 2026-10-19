@@ -5,7 +5,6 @@ package boottest
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -21,6 +20,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/woozymasta/pbo"
 
 	"github.com/bzed/dayz-server-operator/internal/admin"
@@ -125,34 +126,26 @@ func fakeServer() {
 }
 
 type env struct {
-	t       *testing.T
+	t       testing.TB
 	root    string
 	server  string
 	mission string
 }
 
-func write(t *testing.T, path, body string) {
+func write(t testing.TB, path, body string) {
 	t.Helper()
-	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o750))
+	require.NoError(t, os.WriteFile(path, []byte(body), 0o600))
 }
 
-func newEnv(t *testing.T) *env {
+func newEnv(t testing.TB) *env {
 	t.Helper()
 	root := t.TempDir()
 	e := &env{t: t, root: root, server: filepath.Join(root, "server"), mission: filepath.Join(root, "staged")}
 	exe, err := os.Executable()
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	write(t, filepath.Join(e.server, "DayZServer"), "#!/bin/sh\nexec env DZO_FAKE_SERVER=1 '"+exe+"' \"$@\"\n")
-	if err := os.Chmod(filepath.Join(e.server, "DayZServer"), 0o755); err != nil { //nolint:gosec // test fixture
-		t.Fatal(err)
-	}
+	require.NoError(t, os.Chmod(filepath.Join(e.server, "DayZServer"), 0o755)) //nolint:gosec // test fixture
 	write(t, filepath.Join(e.server, "addons", "a.pbo"), "pbo")
 	write(t, filepath.Join(e.server, "battleye", "BEServer_x64.so"), "be")
 	write(t, filepath.Join(e.server, "keys", "dayz.bikey"), "k")
@@ -184,12 +177,10 @@ func status(cs []Check, name string) (Status, string) {
 	return "", ""
 }
 
-func mustRun(t *testing.T, c Config) *Result {
+func mustRun(t testing.TB, c Config) *Result {
 	t.Helper()
-	r, err := Run(context.Background(), c)
-	if err != nil {
-		t.Fatal(err)
-	}
+	r, err := Run(t.Context(), c)
+	require.NoError(t, err)
 	return r
 }
 
@@ -200,48 +191,38 @@ func TestBootPassesAndBuildsTheTree(t *testing.T) {
 	write(t, filepath.Join(e.root, "cf", "addons", "x"), "x")
 	write(t, filepath.Join(e.root, "adm", "addons", "x"), "x")
 	r := mustRun(t, c)
-	if Failed(r.Checks) {
-		t.Fatalf("a good boot must pass:\n%s", Text(r.Checks))
-	}
+	require.False(t, Failed(r.Checks), "a good boot must pass:\n%s", Text(r.Checks))
 	tree := c.TreeDir
 	for _, link := range []string{"DayZServer", "addons", "@CF", "@dzo-admin"} {
-		if fi, err := os.Lstat(filepath.Join(tree, link)); err != nil || fi.Mode()&os.ModeSymlink == 0 {
-			t.Errorf("%s must be a symlink: %v", link, err)
+		fi, err := os.Lstat(filepath.Join(tree, link))
+		if assert.NoError(t, err, link) {
+			assert.NotZero(t, fi.Mode()&os.ModeSymlink, "%s must be a symlink", link)
 		}
 	}
 	for _, absent := range []string{"core.123", "@Stray"} {
-		if _, err := os.Lstat(filepath.Join(tree, absent)); err == nil {
-			t.Errorf("%s must not be in the tree", absent)
-		}
+		assert.NoFileExists(t, filepath.Join(tree, absent), "%s must not be in the tree", absent)
 	}
-	if fi, err := os.Lstat(filepath.Join(tree, "battleye", "BEServer_x64.so")); err != nil || fi.Mode()&os.ModeSymlink == 0 {
-		t.Error("battleye must be a real dir of links to the BattlEye binaries")
+	fi, err := os.Lstat(filepath.Join(tree, "battleye", "BEServer_x64.so"))
+	if assert.NoError(t, err, "battleye must be a real dir of links to the BattlEye binaries") {
+		assert.NotZero(t, fi.Mode()&os.ModeSymlink, "battleye must be a real dir of links to the BattlEye binaries")
 	}
-	if b, _ := os.ReadFile(filepath.Join(tree, "mpmissions", "dayzOffline.x", "init.c")); string(b) != "staged" {
-		t.Errorf("the staged mission must be copied: %q", b)
-	}
-	if fi, err := os.Lstat(filepath.Join(tree, "mpmissions", "dayzOffline.x", "init.c")); err != nil || fi.Mode()&os.ModeSymlink != 0 {
-		t.Error("the mission must be a real copy, not links")
+	b, _ := os.ReadFile(filepath.Join(tree, "mpmissions", "dayzOffline.x", "init.c"))
+	assert.Equal(t, "staged", string(b), "the staged mission must be copied")
+	fi, err = os.Lstat(filepath.Join(tree, "mpmissions", "dayzOffline.x", "init.c"))
+	if assert.NoError(t, err, "the mission must be a real copy, not links") {
+		assert.Zero(t, fi.Mode()&os.ModeSymlink, "the mission must be a real copy, not links")
 	}
 	cfg, _ := os.ReadFile(filepath.Join(tree, "serverDZ.cfg"))
 	for _, want := range []string{`hostname = "[dzo boot test] My Server";`, `template = "dayzOffline.x";`, "steamQueryPort = " + strconv.Itoa(r.Ports.Query) + ";"} {
-		if !strings.Contains(string(cfg), want) {
-			t.Errorf("serverDZ.cfg lacks %q:\n%s", want, cfg)
-		}
+		assert.Contains(t, string(cfg), want, "serverDZ.cfg")
 	}
-	if strings.Contains(string(cfg), `"secret"`) {
-		t.Error("the password must be replaced so that nobody can join")
-	}
-	if b, _ := os.ReadFile(filepath.Join(tree, "keys", "dayz.bikey")); string(b) != "k" {
-		t.Errorf("keys: %q", b)
-	}
+	assert.NotContains(t, string(cfg), `"secret"`, "the password must be replaced so that nobody can join")
+	b, _ = os.ReadFile(filepath.Join(tree, "keys", "dayz.bikey"))
+	assert.Equal(t, "k", string(b), "keys")
 	be, _ := os.ReadFile(filepath.Join(tree, "profiles", "battleye", "beserver_x64.cfg"))
-	if !strings.Contains(string(be), "RConPort "+strconv.Itoa(r.Ports.RCon)) {
-		t.Errorf("BattlEye seed: %s", be)
-	}
-	if r.Ports.Game == r.Ports.Query || r.Ports.Query == r.Ports.RCon {
-		t.Errorf("ports must differ: %+v", r.Ports)
-	}
+	assert.Contains(t, string(be), "RConPort "+strconv.Itoa(r.Ports.RCon), "BattlEye seed")
+	assert.NotEqual(t, r.Ports.Game, r.Ports.Query, "ports must differ")
+	assert.NotEqual(t, r.Ports.Query, r.Ports.RCon, "ports must differ")
 }
 
 func TestBootFailures(t *testing.T) {
@@ -262,12 +243,10 @@ func TestBootFailures(t *testing.T) {
 			c := e.config(tc.fake)
 			c.Timeout = 3 * time.Second
 			r := mustRun(t, c)
-			if s, d := status(r.Checks, tc.check); s != tc.want || !strings.Contains(d, tc.detail) {
-				t.Errorf("%s = %s %q, want %s containing %q\n%s", tc.check, s, d, tc.want, tc.detail, Text(r.Checks))
-			}
-			if !Failed(r.Checks) {
-				t.Error("the report must fail")
-			}
+			s, d := status(r.Checks, tc.check)
+			assert.Equal(t, tc.want, s, "%s = %s %q\n%s", tc.check, s, d, Text(r.Checks))
+			assert.Contains(t, d, tc.detail, "%s\n%s", tc.check, Text(r.Checks))
+			assert.True(t, Failed(r.Checks), "the report must fail")
 		})
 	}
 }
@@ -276,66 +255,57 @@ func TestVanillaBaselineAndModuleChecks(t *testing.T) {
 	e := newEnv(t)
 	vanilla := mustRun(t, e.config("newerr"))
 	bl := RecordBaseline(vanilla.Profiles)
-	if bl.Modules["Game"] != 416 || bl.Modules["World"] != 2123 || len(bl.Noise) != 3 {
-		t.Fatalf("baseline = %+v", bl)
-	}
+	require.Equal(t, 416, bl.Modules["Game"], "baseline = %+v", bl)
+	require.Equal(t, 2123, bl.Modules["World"], "baseline = %+v", bl)
+	require.Len(t, bl.Noise, 3, "baseline = %+v", bl)
 	path := filepath.Join(e.root, "cache", "baseline.json")
-	if err := bl.Save(path); err != nil {
-		t.Fatal(err)
-	}
-	if bl, err := LoadBaseline(path); err != nil || bl.Modules["Mission"] != 209 {
-		t.Fatalf("load: %+v %v", bl, err)
-	}
+	require.NoError(t, bl.Save(path))
+	loaded, err := LoadBaseline(path)
+	require.NoError(t, err, "load")
+	require.Equal(t, 209, loaded.Modules["Mission"])
 
 	// without a baseline the counts are information and the engine lines cannot be judged
 	r := mustRun(t, e.config("newerr"))
-	if s, _ := status(r.Checks, "modules"); s != Info {
-		t.Errorf("modules without baseline = %s", s)
-	}
-	if s, _ := status(r.Checks, "engine"); s != Info {
-		t.Errorf("engine without baseline = %s", s)
-	}
+	s, _ := status(r.Checks, "modules")
+	assert.Equal(t, Info, s, "modules without baseline")
+	s, _ = status(r.Checks, "engine")
+	assert.Equal(t, Info, s, "engine without baseline")
 
 	// mods that ship scripts raise the count: pass
 	t.Setenv("FAKE_GAME", "418")
 	c := e.config("")
 	c.Baseline, c.ModScripts = bl, map[string]int{"Game": 2}
 	r = mustRun(t, c)
-	if s, d := status(r.Checks, "modules"); s != Pass {
-		t.Errorf("modules = %s %s", s, d)
-	}
-	if s, _ := status(r.Checks, "engine"); s != Pass {
-		t.Errorf("the baseline's own noise must not be reported: %s", Text(r.Checks))
-	}
+	s, d := status(r.Checks, "modules")
+	assert.Equal(t, Pass, s, "modules = %s %s", s, d)
+	s, _ = status(r.Checks, "engine")
+	assert.Equal(t, Pass, s, "the baseline's own noise must not be reported: %s", Text(r.Checks))
 
 	// mods that ship scripts, count unchanged: they were not loaded
 	t.Setenv("FAKE_GAME", "416")
 	c = e.config("")
 	c.Baseline, c.ModScripts = bl, map[string]int{"Game": 2}
 	r = mustRun(t, c)
-	if s, d := status(r.Checks, "modules"); s != Fail || !strings.Contains(d, "were not loaded") {
-		t.Errorf("modules = %s %s", s, d)
-	}
+	s, d = status(r.Checks, "modules")
+	assert.Equal(t, Fail, s, "modules = %s %s", s, d)
+	assert.Contains(t, d, "were not loaded")
 
 	// a count that is not baseline + shipped is only a warning (formula unproven)
 	t.Setenv("FAKE_GAME", "420")
 	c = e.config("")
 	c.Baseline, c.ModScripts = bl, map[string]int{"Game": 2}
-	if s, _ := status(mustRun(t, c).Checks, "modules"); s != Warn {
-		t.Errorf("modules = %s, want warn", s)
-	}
+	s, _ = status(mustRun(t, c).Checks, "modules")
+	assert.Equal(t, Warn, s, "modules")
 
 	// an error line vanilla does not log: a warning, shown verbatim
 	t.Setenv("FAKE_GAME", "416")
 	c = e.config("newerr")
 	c.Baseline = &Baseline{Modules: bl.Modules, Noise: []string{"ENTITY    (W): Unknown object class 'pond' (dz\\water\\pond.p3d)", "!!! [CE][VehicleRespawner] (PRIBoat) :: Init: \"VehicleBoat\" - Failed to spawn the requested amount (3 < 9) within 6 attempts."}}
 	r = mustRun(t, c)
-	if s, d := status(r.Checks, "engine"); s != Warn || !strings.Contains(d, "types.xml line 5") {
-		t.Errorf("engine = %s %s", s, d)
-	}
-	if Failed(r.Checks) {
-		t.Errorf("new error lines alone must not fail the boot:\n%s", Text(r.Checks))
-	}
+	s, d = status(r.Checks, "engine")
+	assert.Equal(t, Warn, s, "engine = %s %s", s, d)
+	assert.Contains(t, d, "types.xml line 5")
+	assert.False(t, Failed(r.Checks), "new error lines alone must not fail the boot:\n%s", Text(r.Checks))
 }
 
 func TestExpectAndAdminChecks(t *testing.T) {
@@ -354,19 +324,16 @@ func TestExpectAndAdminChecks(t *testing.T) {
 			}
 		}
 	}
-	if pass != 1 || fail != 2 {
-		t.Errorf("expect: %d pass, %d fail:\n%s", pass, fail, Text(r.Checks))
-	}
-	if s, d := status(r.Checks, "dzo-admin"); s != Pass {
-		t.Errorf("dzo-admin = %s %s", s, d)
-	}
+	assert.Equal(t, 1, pass, "expect checks:\n%s", Text(r.Checks))
+	assert.Equal(t, 2, fail, "expect checks:\n%s", Text(r.Checks))
+	s, d := status(r.Checks, "dzo-admin")
+	assert.Equal(t, Pass, s, "dzo-admin = %s %s", s, d)
 
 	e = newEnv(t)
 	c = e.config("noadmin")
 	c.Admin = &admin.ModConfig{}
-	if s, _ := status(mustRun(t, c).Checks, "dzo-admin"); s != Fail {
-		t.Error("a mod that never makes contact must fail")
-	}
+	s, _ = status(mustRun(t, c).Checks, "dzo-admin")
+	assert.Equal(t, Fail, s, "a mod that never makes contact must fail")
 }
 
 func TestAServerThatIgnoresSIGTERMIsKilled(t *testing.T) {
@@ -376,46 +343,33 @@ func TestAServerThatIgnoresSIGTERMIsKilled(t *testing.T) {
 	e := newEnv(t)
 	start := time.Now()
 	r := mustRun(t, e.config("hang"))
-	if time.Since(start) > 8*time.Second {
-		t.Errorf("stopping took %s", time.Since(start))
-	}
-	if Failed(r.Checks) {
-		t.Errorf("the run was fine:\n%s", Text(r.Checks))
-	}
+	assert.LessOrEqual(t, time.Since(start), 8*time.Second, "stopping took too long")
+	assert.False(t, Failed(r.Checks), "the run was fine:\n%s", Text(r.Checks))
 }
 
 func TestArgsRefuseAbsoluteModPaths(t *testing.T) {
 	args, err := Args(2302, []Mod{{Name: "@A"}, {Name: "@B"}, {Name: "@S", Server: true}}, []string{"-cpuCount=2"})
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	got := strings.Join(args, " ")
 	for _, want := range []string{"-mod=@A;@B", "-servermod=@S", "-port=2302", "-profiles=profiles", "-config=serverDZ.cfg", "-cpuCount=2"} {
-		if !strings.Contains(got, want) {
-			t.Errorf("args lack %q: %s", want, got)
-		}
+		assert.Contains(t, got, want, "args")
 	}
 	for _, bad := range []string{"/abs/@A", "../@A", "@A;@B", "A", "@a/b"} {
-		if _, err := Args(1, []Mod{{Name: bad}}, nil); err == nil {
-			t.Errorf("mod name %q must be refused", bad)
-		}
+		_, err := Args(1, []Mod{{Name: bad}}, nil)
+		assert.Error(t, err, "mod name %q must be refused", bad)
 	}
 }
 
 func TestFreePortsAreFreeAndApart(t *testing.T) {
 	ps, err := FreePorts(3)
-	if err != nil || len(ps) != 3 {
-		t.Fatalf("%v %v", ps, err)
-	}
+	require.NoError(t, err)
+	require.Len(t, ps, 3)
 	for i, p := range ps {
 		for _, q := range ps[i+1:] {
-			if d := q - p; d < 10 && d > -10 {
-				t.Errorf("ports %d and %d are closer than 10", p, q)
-			}
+			d := q - p
+			assert.False(t, d < 10 && d > -10, "ports %d and %d are closer than 10", p, q)
 		}
-		if p <= 2310 || (p >= 27015 && p <= 27017) {
-			t.Errorf("default port %d", p)
-		}
+		assert.False(t, p <= 2310 || (p >= 27015 && p <= 27017), "default port %d", p)
 	}
 }
 
@@ -423,42 +377,29 @@ func TestTreeMustNotBeInsideTheServer(t *testing.T) {
 	e := newEnv(t)
 	c := e.config("")
 	c.TreeDir = filepath.Join(e.server, "tree")
-	if _, err := Run(context.Background(), c); err == nil || !strings.Contains(err.Error(), "inside the server install") {
-		t.Errorf("a tree inside the server install must be refused: %v", err)
-	}
+	_, err := Run(t.Context(), c)
+	assert.ErrorContains(t, err, "inside the server install", "a tree inside the server install must be refused")
 	c = e.config("")
 	c.ServerDir = filepath.Join(e.root, "empty")
-	if err := os.MkdirAll(c.ServerDir, 0o750); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := Run(context.Background(), c); err == nil || !strings.Contains(err.Error(), "no DayZServer") {
-		t.Errorf("a server dir without DayZServer: %v", err)
-	}
+	require.NoError(t, os.MkdirAll(c.ServerDir, 0o750))
+	_, err = Run(t.Context(), c)
+	assert.ErrorContains(t, err, "no DayZServer", "a server dir without DayZServer")
 	c = e.config("")
 	c.Mods = []Mod{{Name: "@Missing", Dir: filepath.Join(e.root, "nope")}}
-	if _, err := Run(context.Background(), c); err == nil {
-		t.Error("a missing mod dir must be an error of the test, not a server failure")
-	}
+	_, err = Run(t.Context(), c)
+	assert.Error(t, err, "a missing mod dir must be an error of the test, not a server failure")
 }
 
 func TestGuard(t *testing.T) {
 	dir := t.TempDir()
-	if err := Guard(filepath.Join(dir, "instances"), filepath.Join(dir, "quadlets")); err != nil {
-		t.Errorf("a development machine passes: %v", err)
-	}
+	assert.NoError(t, Guard(filepath.Join(dir, "instances"), filepath.Join(dir, "quadlets")), "a development machine passes")
 	write(t, filepath.Join(dir, "instances", "hashima", "x"), "x")
-	if err := Guard(filepath.Join(dir, "instances"), filepath.Join(dir, "quadlets")); err == nil || !strings.Contains(err.Error(), "never runs where dzo manages instances") {
-		t.Errorf("instance directories must refuse: %v", err)
-	}
+	assert.ErrorContains(t, Guard(filepath.Join(dir, "instances"), filepath.Join(dir, "quadlets")), "never runs where dzo manages instances", "instance directories must refuse")
 	dir = t.TempDir()
 	write(t, filepath.Join(dir, "q", "dzo-hashima.container"), "[Container]")
-	if err := Guard(filepath.Join(dir, "instances"), filepath.Join(dir, "q")); err == nil {
-		t.Error("a dzo quadlet must refuse")
-	}
+	assert.Error(t, Guard(filepath.Join(dir, "instances"), filepath.Join(dir, "q")), "a dzo quadlet must refuse")
 	write(t, filepath.Join(dir, "q2", "other.container"), "[Container]")
-	if err := Guard(filepath.Join(dir, "instances"), filepath.Join(dir, "q2")); err != nil {
-		t.Errorf("quadlets of other things do not count: %v", err)
-	}
+	assert.NoError(t, Guard(filepath.Join(dir, "instances"), filepath.Join(dir, "q2")), "quadlets of other things do not count")
 }
 
 func TestFindSteamServer(t *testing.T) {
@@ -471,25 +412,20 @@ func TestFindSteamServer(t *testing.T) {
 	write(t, filepath.Join(other, "steamapps", "workshop", "content", "221100", "1559212036", "meta.cpp"), "x")
 
 	libs := Libraries(SteamRoots(home))
-	if len(libs) != 2 {
-		t.Fatalf("libraries = %v", libs)
-	}
+	require.Len(t, libs, 2, "libraries")
 	s, err := FindSteamServer(libs, 223350)
-	if err != nil || s.Build != "24570360" || !strings.HasSuffix(s.Dir, filepath.Join("SteamLibrary", "steamapps", "common", "DayZServer")) {
-		t.Fatalf("server = %+v %v", s, err)
-	}
-	if _, err := FindSteamServer(libs, 1042420); err == nil || !strings.Contains(err.Error(), "still being installed") {
-		t.Errorf("an update in progress must be refused: %v", err)
-	}
-	if _, err := FindSteamServer(libs, 999); err == nil || !strings.Contains(err.Error(), "steam://install/999") {
-		t.Errorf("a missing server must say how to install it: %v", err)
-	}
-	if d, err := WorkshopMod(libs, 221100, 1559212036); err != nil || !strings.HasSuffix(d, "1559212036") {
-		t.Errorf("workshop mod = %q %v", d, err)
-	}
-	if _, err := WorkshopMod(libs, 221100, 42); err == nil || !strings.Contains(err.Error(), "subscribe") {
-		t.Errorf("a missing workshop item must say what to do: %v", err)
-	}
+	require.NoError(t, err)
+	require.Equal(t, "24570360", s.Build)
+	require.True(t, strings.HasSuffix(s.Dir, filepath.Join("SteamLibrary", "steamapps", "common", "DayZServer")), "server dir = %s", s.Dir)
+	_, err = FindSteamServer(libs, 1042420)
+	assert.ErrorContains(t, err, "still being installed", "an update in progress must be refused")
+	_, err = FindSteamServer(libs, 999)
+	assert.ErrorContains(t, err, "steam://install/999", "a missing server must say how to install it")
+	d, err := WorkshopMod(libs, 221100, 1559212036)
+	require.NoError(t, err, "workshop mod")
+	assert.True(t, strings.HasSuffix(d, "1559212036"), "workshop mod = %q", d)
+	_, err = WorkshopMod(libs, 221100, 42)
+	assert.ErrorContains(t, err, "subscribe", "a missing workshop item must say what to do")
 }
 
 func TestModScriptsCountsPerModule(t *testing.T) {
@@ -498,52 +434,43 @@ func TestModScriptsCountsPerModule(t *testing.T) {
 	for _, p := range []string{`scripts\3_Game\a.c`, `scripts/3_Game/b.c`, `scripts/4_World/c.c`, `scripts/5_Mission/d.c`, `scripts/5_Mission/e.c`, `scripts/3_Game/readme.txt`, `config.cpp`} {
 		inputs = append(inputs, pbo.Input{Path: p, ModTime: time.Unix(0, 0).UTC(), Open: func() (io.ReadCloser, error) { return io.NopCloser(bytes.NewReader([]byte("x"))), nil }})
 	}
-	if err := os.MkdirAll(filepath.Join(dir, "addons"), 0o750); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := pbo.PackFile(context.Background(), filepath.Join(dir, "addons", "m.pbo"), inputs, pbo.PackOptions{}); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "addons"), 0o750))
+	_, err := pbo.PackFile(t.Context(), filepath.Join(dir, "addons", "m.pbo"), inputs, pbo.PackOptions{})
+	require.NoError(t, err)
 	got, err := ModScripts(dir)
-	if err != nil || got["Game"] != 2 || got["World"] != 1 || got["Mission"] != 2 {
-		t.Errorf("scripts = %v %v", got, err)
-	}
-	if got, _ := ModScripts(t.TempDir()); len(got) != 0 {
-		t.Errorf("no addons: %v", got)
-	}
+	require.NoError(t, err)
+	assert.Equal(t, 2, got["Game"], "scripts = %v", got)
+	assert.Equal(t, 1, got["World"], "scripts = %v", got)
+	assert.Equal(t, 2, got["Mission"], "scripts = %v", got)
+	none, _ := ModScripts(t.TempDir())
+	assert.Empty(t, none, "no addons")
 }
 
 func TestBaselinePathChangesWithTheServerBinary(t *testing.T) {
 	e := newEnv(t)
 	a, err := BaselinePath("/cache", "dayz-stable", e.server)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	write(t, filepath.Join(e.server, "DayZServer"), "a different, updated binary")
 	b, _ := BaselinePath("/cache", "dayz-stable", e.server)
-	if a == b || !strings.HasPrefix(a, "/cache/boottest/baseline/dayz-stable/") {
-		t.Errorf("paths %q %q", a, b)
-	}
-	if _, err := BaselinePath("/cache", "p", t.TempDir()); err == nil {
-		t.Error("no server")
-	}
+	assert.NotEqual(t, a, b)
+	assert.True(t, strings.HasPrefix(a, "/cache/boottest/baseline/dayz-stable/"), "path %q", a)
+	_, err = BaselinePath("/cache", "p", t.TempDir())
+	assert.Error(t, err, "no server")
 }
 
 func TestEvaluateOnLogFixtures(t *testing.T) {
 	dir := t.TempDir()
 	write(t, filepath.Join(dir, "script_1.log"), "SCRIPT       : Module: Game; loaded 416x files\n")
 	cs := Evaluate(Eval{Profiles: dir, Ready: true})
-	if s, _ := status(cs, "scripts"); s != Pass {
-		t.Errorf("clean log: %s", Text(cs))
-	}
+	s, _ := status(cs, "scripts")
+	assert.Equal(t, Pass, s, "clean log: %s", Text(cs))
 	empty := Evaluate(Eval{Profiles: t.TempDir(), Ready: true})
-	if s, d := status(empty, "scripts"); s != Fail || !strings.Contains(d, "no script log") {
-		t.Errorf("no log at all must fail, not pass: %s %s", s, d)
-	}
+	s, d := status(empty, "scripts")
+	assert.Equal(t, Fail, s, "no log at all must fail, not pass")
+	assert.Contains(t, d, "no script log")
 	txt := Text([]Check{{Name: "x", Status: Fail, Detail: "first\nsecond"}})
-	if !strings.Contains(txt, "FAIL  x") || !strings.Contains(txt, "second") {
-		t.Errorf("text = %q", txt)
-	}
+	assert.Contains(t, txt, "FAIL  x")
+	assert.Contains(t, txt, "second")
 }
 
 // The logs of a real 1.29 server (S9), trimmed: the same instance booted with a
@@ -551,9 +478,7 @@ func TestEvaluateOnLogFixtures(t *testing.T) {
 // the vanilla server of that build.
 func TestRealServerLogs(t *testing.T) {
 	bl, err := LoadBaseline("testdata/s9/baseline.json")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	mods := map[string]int{"Game": 6, "World": 2, "Mission": 1} // what dzo-admin ships
 	for _, tc := range []struct {
 		dir    string
@@ -578,19 +503,14 @@ func TestRealServerLogs(t *testing.T) {
 					text.WriteString(c.Detail)
 				}
 			}
-			if strings.Join(failed, ",") != strings.Join(tc.failed, ",") {
-				t.Errorf("failed checks = %v, want %v\n%s", failed, tc.failed, Text(cs))
-			}
-			if !strings.Contains(text.String(), tc.detail) {
-				t.Errorf("the failing checks must show %q:\n%s", tc.detail, Text(cs))
-			}
-			if s, d := status(cs, "modules"); s != Pass {
-				t.Errorf("modules = %s %s", s, d)
-			}
+			assert.Equal(t, strings.Join(tc.failed, ","), strings.Join(failed, ","), "failed checks:\n%s", Text(cs))
+			assert.Contains(t, text.String(), tc.detail, "the failing checks must show it:\n%s", Text(cs))
+			s, d := status(cs, "modules")
+			assert.Equal(t, Pass, s, "modules = %s %s", s, d)
 			if tc.dir == "unknowncls" {
-				if s, d := status(cs, "engine"); s != Warn || !strings.Contains(d, "Type 'NoSuchClassDzoTest' will be ignored") {
-					t.Errorf("an unknown class is shown as a warning: %s %s", s, d)
-				}
+				s, d := status(cs, "engine")
+				assert.Equal(t, Warn, s, "an unknown class is shown as a warning: %s %s", s, d)
+				assert.Contains(t, d, "Type 'NoSuchClassDzoTest' will be ignored")
 			}
 		})
 	}
@@ -620,14 +540,10 @@ done
 shift # the image
 exec "$@"
 `
-	if err := os.WriteFile(fake, []byte(script), 0o755); err != nil { //nolint:gosec // test fixture
-		t.Fatal(err)
-	}
+	require.NoError(t, os.WriteFile(fake, []byte(script), 0o755)) //nolint:gosec // test fixture
 	c.Image, c.Podman = "localhost/dzo-runtime:test", fake
 	r := mustRun(t, c)
-	if Failed(r.Checks) {
-		t.Fatalf("a boot in a container must pass:\n%s", Text(r.Checks))
-	}
+	require.False(t, Failed(r.Checks), "a boot in a container must pass:\n%s", Text(r.Checks))
 	b, _ := os.ReadFile(log)
 	tree, _ := filepath.Abs(c.TreeDir)
 	srv, _ := filepath.Abs(e.server)
@@ -636,22 +552,18 @@ exec "$@"
 		"run --rm --name dzo-boottest-", "--network host", "-v " + tree + ":" + tree, "-v " + srv + ":" + srv + ":O",
 		"-v " + cf + ":" + cf + ":O", "-w " + tree, "localhost/dzo-runtime:test /bin/sh -c", "rm -f -t 0 dzo-boottest-",
 	} {
-		if !strings.Contains(string(b), want) {
-			t.Errorf("podman was not called with %q:\n%s", want, b)
-		}
+		assert.Contains(t, string(b), want, "podman was not called with it")
 	}
-	if s, _ := os.ReadFile(filepath.Join(tree, "stdin")); string(s) != "i\n" {
-		t.Errorf("stdin file: %q", s)
-	}
+	s, _ := os.ReadFile(filepath.Join(tree, "stdin"))
+	assert.Equal(t, "i\n", string(s), "stdin file")
 }
 
 // 1.30 logs no script module for init.c; the economy's storage directory says the mission started.
 func TestMissionLoadedOnTheStorageDirectoryLine(t *testing.T) {
 	e := newEnv(t)
 	r := mustRun(t, e.config("nomission,storagedirs"))
-	if st, d := status(r.Checks, "mission"); st == Fail {
-		t.Fatalf("mission check = %s %s", st, d)
-	}
+	st, d := status(r.Checks, "mission")
+	require.NotEqual(t, Fail, st, "mission check = %s %s", st, d)
 }
 
 func TestShutdownLeakReportsAreNotScriptErrors(t *testing.T) {
@@ -660,11 +572,10 @@ func TestShutdownLeakReportsAreNotScriptErrors(t *testing.T) {
 		"09:06:09.911   SCRIPT    (E): Leaked 'BunkerBroadcastManager' script instance (1x)!\n"+
 		"09:06:09.911   SCRIPT    (E): ==== Total Leaks (2x)! ====\n")
 	cs := Evaluate(Eval{Profiles: dir, Ready: true})
-	if st, d := status(cs, "scripts"); st != Pass || !strings.Contains(d, "2 leak report") {
-		t.Errorf("scripts = %s %s", st, d)
-	}
+	st, d := status(cs, "scripts")
+	assert.Equal(t, Pass, st, "scripts = %s %s", st, d)
+	assert.Contains(t, d, "2 leak report")
 	write(t, filepath.Join(dir, "script_y.log"), "SCRIPT    (E): Can't find variable 'x'\n")
-	if st, _ := status(Evaluate(Eval{Profiles: dir, Ready: true}), "scripts"); st != Fail {
-		t.Error("a real script error must still fail")
-	}
+	st, _ = status(Evaluate(Eval{Profiles: dir, Ready: true}), "scripts")
+	assert.Equal(t, Fail, st, "a real script error must still fail")
 }

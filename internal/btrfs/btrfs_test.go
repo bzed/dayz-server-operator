@@ -4,19 +4,20 @@
 package btrfs
 
 import (
-	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/sys/unix"
 )
 
 // testDir returns a scratch directory on a btrfs filesystem, or skips: set
 // DZO_BTRFS_TESTDIR to a directory on btrfs that the test user may write to.
 // Without it the user's cache directory is tried.
-func testDir(t *testing.T) string {
+func testDir(t testing.TB) string {
 	t.Helper()
 	base := os.Getenv("DZO_BTRFS_TESTDIR")
 	if base == "" {
@@ -50,130 +51,87 @@ func testDir(t *testing.T) string {
 func TestSubvolumeSnapshotAndDelete(t *testing.T) {
 	dir := testDir(t)
 	sub := filepath.Join(dir, "inst")
-	if err := CreateSubvolume(sub); err != nil {
-		t.Fatalf("create: %v", err)
-	}
-	if ok, err := IsSubvolume(sub); err != nil || !ok {
-		t.Fatalf("a created subvolume must be one: %v %v", ok, err)
-	}
+	require.NoError(t, CreateSubvolume(sub), "create")
+	ok, err := IsSubvolume(sub)
+	require.NoError(t, err)
+	require.True(t, ok, "a created subvolume must be one")
 	plain := filepath.Join(dir, "plain")
-	if err := os.Mkdir(plain, 0o750); err != nil {
-		t.Fatal(err)
-	}
-	if ok, _ := IsSubvolume(plain); ok {
-		t.Error("a plain directory is not a subvolume")
-	}
-	if err := os.MkdirAll(filepath.Join(sub, "mpmissions", "m", "storage_1"), 0o750); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(sub, "mpmissions", "m", "storage_1", "data"), []byte("v1"), 0o600); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, os.Mkdir(plain, 0o750))
+	isSub, _ := IsSubvolume(plain)
+	assert.False(t, isSub, "a plain directory is not a subvolume")
+	require.NoError(t, os.MkdirAll(filepath.Join(sub, "mpmissions", "m", "storage_1"), 0o750))
+	require.NoError(t, os.WriteFile(filepath.Join(sub, "mpmissions", "m", "storage_1", "data"), []byte("v1"), 0o600))
 
 	snap := filepath.Join(dir, "20261002-120000-manual")
-	if err := Snapshot(sub, snap, true); err != nil {
-		t.Fatalf("snapshot: %v", err)
-	}
-	if ro, err := ReadOnly(snap); err != nil || !ro {
-		t.Fatalf("a read-only snapshot must be read-only: %v %v", ro, err)
-	}
-	if b, _ := os.ReadFile(filepath.Join(snap, "mpmissions", "m", "storage_1", "data")); string(b) != "v1" {
-		t.Errorf("snapshot content = %q", b)
-	}
-	if err := os.WriteFile(filepath.Join(snap, "x"), []byte("x"), 0o600); !errors.Is(err, unix.EROFS) {
-		t.Errorf("writing into a read-only snapshot must fail with EROFS, got %v", err)
-	}
+	require.NoError(t, Snapshot(sub, snap, true), "snapshot")
+	ro, err := ReadOnly(snap)
+	require.NoError(t, err)
+	require.True(t, ro, "a read-only snapshot must be read-only")
+	b, _ := os.ReadFile(filepath.Join(snap, "mpmissions", "m", "storage_1", "data"))
+	assert.Equal(t, "v1", string(b), "snapshot content")
+	err = os.WriteFile(filepath.Join(snap, "x"), []byte("x"), 0o600)
+	assert.ErrorIs(t, err, unix.EROFS, "writing into a read-only snapshot must fail with EROFS")
 	// the live data moves on, the snapshot does not
-	if err := os.WriteFile(filepath.Join(sub, "mpmissions", "m", "storage_1", "data"), []byte("v2"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if b, _ := os.ReadFile(filepath.Join(snap, "mpmissions", "m", "storage_1", "data")); string(b) != "v1" {
-		t.Errorf("a snapshot must not follow the live data: %q", b)
-	}
+	require.NoError(t, os.WriteFile(filepath.Join(sub, "mpmissions", "m", "storage_1", "data"), []byte("v2"), 0o600))
+	b, _ = os.ReadFile(filepath.Join(snap, "mpmissions", "m", "storage_1", "data"))
+	assert.Equal(t, "v1", string(b), "a snapshot must not follow the live data")
 
 	// a writable snapshot of the backup is how a restore brings it back
 	restored := filepath.Join(dir, "restored")
-	if err := Snapshot(snap, restored, false); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(restored, "x"), []byte("x"), 0o600); err != nil {
-		t.Errorf("a restored instance must be writable: %v", err)
-	}
+	require.NoError(t, Snapshot(snap, restored, false))
+	assert.NoError(t, os.WriteFile(filepath.Join(restored, "x"), []byte("x"), 0o600), "a restored instance must be writable")
 
 	for _, p := range []string{snap, restored, sub} {
-		if err := Delete(p); err != nil {
-			t.Fatalf("delete %s: %v", p, err)
-		}
-		if _, err := os.Stat(p); !os.IsNotExist(err) {
-			t.Errorf("%s still exists after Delete", p)
-		}
+		require.NoError(t, Delete(p), "delete %s", p)
+		assert.NoDirExists(t, p, "still exists after Delete")
 	}
 }
 
 func TestSetReadOnlyRoundTrip(t *testing.T) {
 	dir := testDir(t)
 	sub := filepath.Join(dir, "s")
-	if err := CreateSubvolume(sub); err != nil {
-		t.Fatal(err)
-	}
-	if err := SetReadOnly(sub, true); err != nil {
-		t.Fatal(err)
-	}
-	if ro, _ := ReadOnly(sub); !ro {
-		t.Error("read-only flag not set")
-	}
-	if err := SetReadOnly(sub, false); err != nil {
-		t.Fatal(err)
-	}
-	if ro, _ := ReadOnly(sub); ro {
-		t.Error("read-only flag not cleared")
-	}
+	require.NoError(t, CreateSubvolume(sub))
+	require.NoError(t, SetReadOnly(sub, true))
+	ro, _ := ReadOnly(sub)
+	assert.True(t, ro, "read-only flag not set")
+	require.NoError(t, SetReadOnly(sub, false))
+	ro, _ = ReadOnly(sub)
+	assert.False(t, ro, "read-only flag not cleared")
 }
 
 func TestErrors(t *testing.T) {
 	dir := testDir(t)
-	if err := Snapshot(filepath.Join(dir, "missing"), filepath.Join(dir, "x"), true); err == nil {
-		t.Error("a snapshot of a missing source must fail")
-	}
+	assert.Error(t, Snapshot(filepath.Join(dir, "missing"), filepath.Join(dir, "x"), true), "a snapshot of a missing source must fail")
 	plain := filepath.Join(dir, "plain")
 	_ = os.Mkdir(plain, 0o750)
-	if err := Snapshot(plain, filepath.Join(dir, "x"), true); err == nil {
-		t.Error("a plain directory cannot be snapshotted")
-	}
+	assert.Error(t, Snapshot(plain, filepath.Join(dir, "x"), true), "a plain directory cannot be snapshotted")
 	sub := filepath.Join(dir, "s")
-	if err := CreateSubvolume(sub); err != nil {
-		t.Fatal(err)
-	}
-	if err := CreateSubvolume(sub); err == nil {
-		t.Error("creating a subvolume that exists must fail")
-	}
+	require.NoError(t, CreateSubvolume(sub))
+	assert.Error(t, CreateSubvolume(sub), "creating a subvolume that exists must fail")
 	for _, bad := range []string{"", "a/b", strings.Repeat("x", 5000)} {
-		if err := CreateSubvolume(filepath.Join(dir, bad)); bad != "" && err == nil {
-			t.Errorf("name %q must be refused", bad)
+		err := CreateSubvolume(filepath.Join(dir, bad))
+		if bad != "" {
+			assert.Error(t, err, "name %q must be refused", bad)
 		}
 	}
-	if err := Delete(filepath.Join(dir, "nothing")); err == nil {
-		t.Error("deleting a missing path must fail")
-	}
-	if ok, err := IsBtrfs("/proc"); err != nil || ok {
-		t.Errorf("/proc is not btrfs: %v %v", ok, err)
-	}
-	if _, err := IsBtrfs(filepath.Join(dir, "nope")); err == nil {
-		t.Error("a missing path is an error")
-	}
+	assert.Error(t, Delete(filepath.Join(dir, "nothing")), "deleting a missing path must fail")
+	ok, err := IsBtrfs("/proc")
+	require.NoError(t, err)
+	assert.False(t, ok, "/proc is not btrfs")
+	_, err = IsBtrfs(filepath.Join(dir, "nope"))
+	assert.Error(t, err, "a missing path is an error")
 }
 
 func TestSameFilesystemAndMountOptions(t *testing.T) {
 	dir := testDir(t)
-	if ok, err := SameFilesystem(dir, filepath.Join(dir)); err != nil || !ok {
-		t.Errorf("a directory is on its own filesystem: %v %v", ok, err)
-	}
-	if ok, err := SameFilesystem(dir, "/proc"); err != nil || ok {
-		t.Errorf("/proc is another filesystem: %v %v", ok, err)
-	}
+	same, err := SameFilesystem(dir, filepath.Join(dir))
+	require.NoError(t, err)
+	assert.True(t, same, "a directory is on its own filesystem")
+	same, err = SameFilesystem(dir, "/proc")
+	require.NoError(t, err)
+	assert.False(t, same, "/proc is another filesystem")
 	opts, err := MountOptions(dir)
-	if err != nil || !strings.Contains(opts, "btrfs") && !strings.Contains(opts, "rw") {
-		t.Errorf("mount options of a btrfs dir: %q %v", opts, err)
-	}
+	require.NoError(t, err)
+	assert.True(t, strings.Contains(opts, "btrfs") || strings.Contains(opts, "rw"), "mount options of a btrfs dir: %q", opts)
 	_ = UserSubvolRmAllowed(dir) // either is fine; it must not panic
 }

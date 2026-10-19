@@ -3,7 +3,12 @@
 
 package admin
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
 
 func TestParseQuantity(t *testing.T) {
 	for in, want := range map[string]float64{
@@ -12,13 +17,11 @@ func TestParseQuantity(t *testing.T) {
 		"0": 0, "5": 5, " 2.5 ": 2.5,
 	} {
 		got, err := ParseQuantity(in)
-		if err != nil || got != want {
-			t.Errorf("ParseQuantity(%q) = %v, %v; want %v", in, got, err, want)
-		}
+		require.NoError(t, err)
+		assert.Equal(t, want, got)
 	}
 	for _, in := range []string{"lots", "-3", "-0.5", "NaN", "Inf", "1e999"} {
-		if _, err := ParseQuantity(in); err == nil {
-			t.Errorf("ParseQuantity(%q) did not fail", in)
-		}
+		_, err := ParseQuantity(in)
+		assert.Error(t, err, "ParseQuantity(%q) did not fail", in)
 	}
 }

@@ -5,7 +5,6 @@ package legacy
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
@@ -21,6 +20,7 @@ import (
 	"github.com/bzed/dayz-server-operator/internal/mission"
 	"github.com/bzed/dayz-server-operator/internal/resolve"
 	"github.com/bzed/dayz-server-operator/internal/site"
+	"github.com/stretchr/testify/require"
 )
 
 // TestGoldenAgainstLegacyRender is spike S0: the mission dzo builds for a converted branch against the
@@ -40,13 +40,9 @@ func TestGoldenAgainstLegacyRender(t *testing.T) {
 		t.Skip("DZO_S0_LEGACY, DZO_S0_SITE, DZO_S0_INSTANCE and DZO_S0_CE are not set")
 	}
 	mapName, err := os.ReadFile(filepath.Join(legacyDir, "map"))
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	tree, err := site.LoadTree(siteDir)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	// A "source: mod" file lives inside a workshop mod that is not downloaded here: the legacy render could
 	// not use it either (xml.sh printed "cannot stat"), so leave those files out of both.
 	dropModFiles := func(m map[uint64]site.LoadedIntegration) {
@@ -69,31 +65,25 @@ func TestGoldenAgainstLegacyRender(t *testing.T) {
 		inst.Mods = append(inst.Mods, resolve.Mod{ID: m.ID, Dir: t.TempDir(), Server: m.Server})
 	}
 	var skipped []string
-	cs, err := integrate.Collect(context.Background(), tree, inst, integrate.Options{
+	cs, err := integrate.Collect(t.Context(), tree, inst, integrate.Options{
 		CacheDir: t.TempDir(),
 		Log:      func(f string, a ...any) { skipped = append(skipped, fmt.Sprintf(f, a...)) },
 	})
-	if err != nil {
-		t.Fatalf("collect: %v", err)
-	}
+	require.NoError(t, err)
 	for i := range cs {
 		cs[i].AfterMerge = nil // the hooks need xmlstarlet; the legacy run did them in its container
 	}
 	staging, err := mission.BuildStaging(mission.RenderInput{
 		PristineDir: filepath.Join(ce, inst.Map), FallbackDir: filepath.Join(ce, "dayzOffline.chernarusplus"), Contributions: cs,
 	})
-	if err != nil {
-		t.Fatalf("dzo render: %v", err)
-	}
+	require.NoError(t, err)
 	defer os.RemoveAll(staging) //nolint:errcheck // scratch
 
 	var rep strings.Builder
 	diffs := compareTrees(&rep, filepath.Join(legacyDir, "mission"), staging)
 	fmt.Fprintf(&rep, "\n%d file(s) differ as data\n", diffs)
 	if p := os.Getenv("DZO_S0_REPORT"); p != "" {
-		if err := os.WriteFile(p, []byte(rep.String()), 0o600); err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, os.WriteFile(p, []byte(rep.String()), 0o600))
 	}
 	t.Log("\n" + rep.String())
 }

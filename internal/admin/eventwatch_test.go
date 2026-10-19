@@ -3,35 +3,35 @@
 
 package admin
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
 
 func TestVanillaEventWatch(t *testing.T) {
 	seen := map[string]bool{}
 	for _, r := range VanillaEventWatch() {
-		if err := r.Validate(); err != nil {
-			t.Errorf("%v", err)
-		}
-		if r.Icon == "" || r.Color == "" || r.Label == "" || seen[r.Layer] {
-			t.Errorf("layer %q: icon, colour and label are needed, and a layer once", r.Layer)
-		}
-		if r.Visibility != "viewer" {
-			t.Errorf("layer %q: events are visible to every role", r.Layer)
-		}
+		assert.NoError(t, r.Validate(), "layer %q", r.Layer)
+		assert.NotEmpty(t, r.Icon, "layer %q: icon, colour and label are needed", r.Layer)
+		assert.NotEmpty(t, r.Color, "layer %q: icon, colour and label are needed", r.Layer)
+		assert.NotEmpty(t, r.Label, "layer %q: icon, colour and label are needed", r.Layer)
+		assert.False(t, seen[r.Layer], "layer %q: a layer once", r.Layer)
+		assert.Equal(t, "viewer", r.Visibility)
 		seen[r.Layer] = true
 	}
 }
 
 func TestEventStyles(t *testing.T) {
-	if s := StyleOfEvent("effect_area"); s.Icon != "exclamation-triangle" {
-		t.Errorf("effect area icon = %q", s.Icon)
-	}
-	if s := StyleOfEvent("SomeModEvent"); s.Icon != "flag" || s.Label != "SomeModEvent" {
-		t.Errorf("unknown = %+v", s)
-	}
+	s := StyleOfEvent("effect_area")
+	assert.Equal(t, "exclamation-triangle", s.Icon)
+	s = StyleOfEvent("SomeModEvent")
+	require.Equal(t, "flag", s.Icon)
+	assert.Equal(t, "SomeModEvent", s.Label)
 	for name, s := range eventStyles {
-		if !IconNameOK(s.Icon) || !ColorOK(s.Color) {
-			t.Errorf("%s: bad style %+v", name, s)
-		}
+		assert.True(t, IconNameOK(s.Icon), "%s: bad style %+v", name, s)
+		assert.True(t, ColorOK(s.Color), "%s: bad style %+v", name, s)
 	}
 }
 
@@ -56,8 +56,6 @@ func TestVanillaEventWatchDeerIsle(t *testing.T) {
 				break
 			}
 		}
-		if got != layer {
-			t.Errorf("%s: layer %q, want %q", class, got, layer)
-		}
+		assert.Equal(t, layer, got)
 	}
 }
