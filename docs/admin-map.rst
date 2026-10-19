@@ -245,6 +245,24 @@ Contaminated areas are events of the mod itself: a static or dynamic gas zone (a
 M18 smoke grenade) is reported as soon as it is created, with the radius of the zone
 (120 m for a dynamic one), and the map draws that circle around the icon.
 
+Flags and territories
+---------------------
+
+Every territory flag (the flagpole of base building) is a marker on the **Flags** layer, drawn
+with the ``flag`` icon. Hovering over it shows how long the flag has left: *goes down in 23d 4h*
+is the time the flag's refresher still runs, which is what ``dzo-admin`` reads from the game
+(``TerritoryFlag.m_RefresherTimeRemaining``); the game adds one final refresh of 5 days after it,
+which is not counted. A flag whose refresher is used up says *goes down now*.
+
+With DayZ Expansion loaded, a flag that is an Expansion territory also gets a thin circle of the
+territory's size (``TerritorySize`` of the Expansion territory settings) on the **Territories**
+layer; hovering over the circle shows the name of the territory, and the flag's tooltip names it
+too. Without Expansion there is no Territories layer.
+
+Both layers are visible to the roles ``operator`` and ``admin`` only, since they show where the
+bases are; they appear in ``/map/markers`` and ``/layers`` of the API for those roles and carry
+the remaining time as ``ttl`` (seconds). This needs dzo-admin 0.4.0; an older mod shows no flags.
+
 Markers from other mods
 -----------------------
 
