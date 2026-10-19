@@ -75,6 +75,8 @@ type Restarter struct {
 	// notification or expansion, through dzo-admin). nil, or an error, makes the announcement go
 	// out over RCon "say" instead.
 	Notify func(ctx context.Context, way, typ, text string, seconds int) error
+	// Now is the clock the countdown measures the time its announcements take with; time.Now when nil.
+	Now func() time.Time
 	// Sleep waits; tests replace it.
 	Sleep func(time.Duration)
 	// Log reports what happens, for the journal.
@@ -86,6 +88,17 @@ type Restarter struct {
 
 // ErrCancelled is returned by a restart or stop that was cancelled during its countdown.
 var ErrCancelled = errors.New("instance: the restart was cancelled")
+
+func (r Restarter) now() time.Time {
+	if r.Now != nil {
+		return r.Now()
+	}
+	return time.Now()
+}
+
+// notifyTimeout bounds one announcement through the notification system: a slow API or mod must
+// not hold the countdown up, the text goes out over RCon instead.
+const notifyTimeout = 3 * time.Second
 
 func (r Restarter) sleep(d time.Duration) {
 	if r.Sleep != nil {
@@ -207,13 +220,22 @@ func (r Restarter) countdown(ctx context.Context, c Commander, a Announcement) e
 	// The way of the last announcement, which a cancel notice goes out by as well.
 	last := step{way: "rcon"}
 	left := time.Duration(a.Minutes) * time.Minute
+	// debt is the time the announcements, the lock and the kick took beyond what the timeline
+	// planned; the next waits are shortened by it, so the restart stays at the time asked for.
+	var debt time.Duration
+	pay := func(gap time.Duration) time.Duration {
+		take := min(gap, debt)
+		debt -= take
+		return gap - take
+	}
 	for _, st := range a.timeline() {
-		if err := r.wait(ctx, c, left-st.left, &locked, a.event(), func(text string) error {
+		if err := r.wait(ctx, c, pay(left-st.left), &locked, a.event(), func(text string) error {
 			return r.deliver(ctx, c, step{way: last.way, typ: last.typ, say: text, seconds: noticeSeconds})
 		}); err != nil {
 			return err
 		}
 		left = st.left
+		began := r.now()
 		lock := func() error {
 			err := Lock(ctx, c)
 			if err == nil {
@@ -242,8 +264,9 @@ func (r Restarter) countdown(ctx context.Context, c Commander, a Announcement) e
 				return err
 			}
 		}
+		debt += r.now().Sub(began)
 	}
-	return r.wait(ctx, c, left, &locked, a.event(), func(text string) error {
+	return r.wait(ctx, c, pay(left), &locked, a.event(), func(text string) error {
 		return r.deliver(ctx, c, step{way: last.way, typ: last.typ, say: text, seconds: noticeSeconds})
 	})
 }
@@ -253,7 +276,9 @@ func (r Restarter) countdown(ctx context.Context, c Commander, a Announcement) e
 // words either way.
 func (r Restarter) deliver(ctx context.Context, c Commander, st step) error {
 	if st.way != "rcon" && st.way != "" && r.Notify != nil {
-		err := r.Notify(ctx, st.way, st.typ, st.say, st.seconds)
+		nctx, cancel := context.WithTimeout(ctx, notifyTimeout)
+		err := r.Notify(nctx, st.way, st.typ, st.say, st.seconds)
+		cancel()
 		if err == nil {
 			return nil
 		}

@@ -37,6 +37,9 @@ func fakeSystemctl(t *testing.T, active bool) (Lifecycle, func() []string) {
 	}
 }
 
+// frozen is a clock that stands still, so that the time the commands take does not shorten the sleeps.
+func frozen() time.Time { return time.Time{} }
+
 type recCommander struct {
 	cmds    []string
 	players string
@@ -56,7 +59,7 @@ func TestRestartAnnouncesLocksKicksStopsAndStarts(t *testing.T) {
 	lc, calls := fakeSystemctl(t, true)
 	cmd := &recCommander{players: "Players on server:\n[#] [IP Address]:[Port] [Ping] [GUID] [Name]\n--------\n0   1.2.3.4:5 10 abc(OK) Bob\n(1 players in total)\n"}
 	var slept []time.Duration
-	r := Restarter{Lifecycle: lc, Dial: func(context.Context) (Commander, error) { return cmd, nil }, Sleep: func(d time.Duration) { slept = append(slept, d) }}
+	r := Restarter{Lifecycle: lc, Dial: func(context.Context) (Commander, error) { return cmd, nil }, Sleep: func(d time.Duration) { slept = append(slept, d) }, Now: frozen}
 	var order []string
 	err := r.Restart(context.Background(), "x", Announcement{Minutes: 3, Lock: 2, Kick: 1, Text: "MOD UPDATE", Rules: legacyRules()}, func(context.Context) error {
 		order = append(order, "between")
@@ -257,7 +260,7 @@ func TestAFailedRConCommandIsSkippedAndTheNextOneReconnects(t *testing.T) {
 		f := &flakyRCon{failAt: tc.failAt}
 		var slept time.Duration
 		var logged []string
-		r := Restarter{Lifecycle: lc, Dial: f.dial, Sleep: func(d time.Duration) { slept += d },
+		r := Restarter{Lifecycle: lc, Dial: f.dial, Sleep: func(d time.Duration) { slept += d }, Now: frozen,
 			Log: func(format string, a ...any) { logged = append(logged, fmt.Sprintf(format, a...)) }}
 		if err := r.Restart(context.Background(), "x", Announcement{Minutes: 3, Lock: 2, Kick: 1, Text: "UP", Rules: legacyRules()}, nil); err != nil {
 			t.Fatalf("%s: %v", tc.name, err)
