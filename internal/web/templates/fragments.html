@@ -78,7 +78,7 @@
   <h3><i class="fa fa-user" aria-hidden="true"></i>{{.Player.Name}} <small>{{.Player.SteamID}}</small> <button class="profile" disabled title="The player profile is not available yet"><i class="fa fa-id-card" aria-hidden="true"></i>Profile</button> <button class="quiet" data-close><i class="fa fa-times" aria-hidden="true"></i>Close</button></h3>
   <div id="panel-flash"></div>
   <div class="grp"><span class="gname">Tell</span>
-    <form hx-post="{{$base}}/message" hx-target="#panel-flash" hx-on::after-request="this.reset()">
+    <form hx-post="{{$base}}/message" hx-target="#panel-flash" data-reset>
       <input name="text" placeholder="Direct message" maxlength="400" required size="40">
       {{template "msgfields" .}}
       <button><i class="fa fa-comment" aria-hidden="true"></i>Message</button>
@@ -105,7 +105,7 @@
       <a class="btn danger" href="/b/{{.Backend}}/bans/new?steam_id={{.Player.SteamID}}&amp;instance={{.Instance}}"><i class="fa fa-ban" aria-hidden="true"></i>Ban…</a>
     </span>
     <dialog id="kick-{{.Player.SteamID}}" aria-labelledby="kick-title-{{.Player.SteamID}}">
-      <form hx-post="{{$base}}/kick" hx-target="#panel-flash" hx-on::after-request="this.closest('dialog').close()">
+      <form hx-post="{{$base}}/kick" hx-target="#panel-flash" data-close-dialog>
         <h3 id="kick-title-{{.Player.SteamID}}">Kick {{.Player.Name}}</h3>
         <label>Reason, shown to the player <input name="reason" required maxlength="64" size="40" autocomplete="off"></label>
         <div class="btns"><button type="button" class="quiet" data-dialog-close>Cancel</button><button><i class="fa fa-sign-out" aria-hidden="true"></i>Kick</button></div>
