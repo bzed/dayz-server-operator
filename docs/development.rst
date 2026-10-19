@@ -202,6 +202,20 @@ Tests use `testify <https://github.com/stretchr/testify>`_.
   comment naming the library.
 * Fuzzing and the browser tests are described below.
 
+Fuzzing
+~~~~~~~
+
+The parsers of untrusted input have native Go fuzz targets: BattlEye packets
+and events, the A2S info response, ``serverDZ.cfg`` and the quantity of the
+spawn commands. Their seeds run in every ``go test``. ``make fuzz`` fuzzes each
+target for ``FUZZTIME`` (default 10 s); CI runs the same in the ``fuzz`` job
+and uploads the crashing input on failure. To fuzz one target longer::
+
+   go test ./internal/servercfg -run '^$' -fuzz '^FuzzServercfgParse$' -fuzztime 5m
+
+A crash is a real bug. Go leaves the input in ``testdata/fuzz/<Target>/``;
+commit that file together with the fix, it is the regression test.
+
 Boot test with a real server
 ----------------------------
 

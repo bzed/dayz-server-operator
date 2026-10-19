@@ -22,6 +22,7 @@ fails them is wasted:
 | dependency licences | `make licenses` | go-licenses against the AGPL-compatible allow-list; run it after any `go.mod` change, a new dependency can pull in a library it cannot classify |
 | vulnerabilities | `make vulncheck` | `govulncheck ./...` |
 | tests | `make test-race` | race detector; `make cover` is the quick variant |
+| fuzzing | `make fuzz` | 10 s per target; the seeds also run in `make test` |
 | coverage | `make coverage-check` | **total coverage must stay at or above 85%** |
 
 Also, when the change touches them:
