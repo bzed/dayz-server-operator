@@ -37,11 +37,17 @@ func newServeCmd() *cobra.Command {
 			reload := make(chan struct{}, 1)
 			hup := make(chan os.Signal, 1)
 			signal.Notify(hup, syscall.SIGHUP)
+			defer signal.Stop(hup)
 			go func() {
-				for range hup {
+				for {
 					select {
-					case reload <- struct{}{}:
-					default:
+					case <-hup:
+						select {
+						case reload <- struct{}{}:
+						default:
+						}
+					case <-ctx.Done():
+						return
 					}
 				}
 			}()

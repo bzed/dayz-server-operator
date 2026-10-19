@@ -188,8 +188,13 @@ func Serve(ctx context.Context, c config.Exporter, h http.Handler, reload <-chan
 			srv.TLSConfig.ClientCAs, srv.TLSConfig.ClientAuth = pool, tls.RequireAndVerifyClientCert
 		}
 		go func() {
-			for range reload {
-				cs.Reload()
+			for {
+				select {
+				case <-reload:
+					cs.Reload()
+				case <-ctx.Done():
+					return
+				}
 			}
 		}()
 		ln = tls.NewListener(ln, srv.TLSConfig)
