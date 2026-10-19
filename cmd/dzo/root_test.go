@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"go.uber.org/goleak"
+
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -79,7 +81,7 @@ func TestServerCfgDiffParseError(t *testing.T) {
 func TestMain(m *testing.M) {
 	// The package build runs the tests as root.
 	_ = os.Setenv(allowRootEnv, "1")
-	os.Exit(m.Run())
+	goleak.VerifyTestMain(m)
 }
 
 func TestRefuseRoot(t *testing.T) {

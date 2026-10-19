@@ -16,6 +16,7 @@ require (
 	github.com/woozymasta/pbo v0.3.0
 	github.com/woozymasta/rap v0.1.6
 	github.com/woozymasta/rvmat v0.4.0
+	go.uber.org/goleak v1.3.0
 	golang.org/x/sys v0.49.0
 	golang.org/x/term v0.35.0
 	gopkg.in/yaml.v3 v3.0.1
@@ -26,6 +27,7 @@ require (
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
+	github.com/kr/text v0.2.0 // indirect
 	github.com/mattn/go-isatty v0.0.24 // indirect
 	github.com/ncruces/go-strftime v1.0.0 // indirect
 	github.com/oschwald/maxminddb-golang/v2 v2.8.0 // indirect

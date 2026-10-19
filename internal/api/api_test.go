@@ -326,11 +326,8 @@ func TestStream(t *testing.T) {
 	got := map[string]string{}
 	sc := bufio.NewScanner(resp.Body)
 	var kind string
-	deadline := time.After(5 * time.Second)
-	go func() {
-		<-deadline
-		cancel()
-	}()
+	deadline := time.AfterFunc(5*time.Second, cancel)
+	defer deadline.Stop()
 	pushed := false
 	for sc.Scan() {
 		line := sc.Text()
