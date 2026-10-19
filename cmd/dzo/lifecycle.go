@@ -191,7 +191,7 @@ func newInstanceUpgradeCmd() *cobra.Command {
 			}
 			lc := instance.Lifecycle{UserMode: true}
 			r := rconRestarter(cmd, cfg, inst, lc)
-			a := instance.Announcement{Minutes: inst.Restarts.Announce.Minutes, Lock: inst.Restarts.Announce.Lock, Kick: inst.Restarts.Announce.Kick, Text: inst.Restarts.Announce.Text}
+			a := resolve.AnnouncementOf(inst.Restarts.Announce, inst.Restarts.Announce.Text)
 			if cmd.Flags().Changed("minutes") {
 				a.Minutes = minutes
 			}

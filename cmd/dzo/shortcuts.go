@@ -61,7 +61,7 @@ func newStopCmd() *cobra.Command {
 		if cancel {
 			return cancelCountdown(cmd, inst, r)
 		}
-		a := instance.Announcement{Minutes: inst.Restarts.Announce.Minutes, Lock: inst.Restarts.Announce.Lock, Kick: inst.Restarts.Announce.Kick, Text: text}
+		a := resolve.AnnouncementOf(inst.Restarts.Announce, text)
 		if f.Changed("minutes") {
 			a.Minutes = minutes
 		}

@@ -78,6 +78,7 @@ func rconRestarter(cmd *cobra.Command, cfg *config.Config, inst *resolve.Instanc
 	cancel := filepath.Join(inst.Paths.Runtime, "restart-cancel")
 	return instance.Restarter{
 		Lifecycle: lc,
+		Notify:    lazyNotifier(cfg, inst.Name),
 		Dial: func(ctx context.Context) (instance.Commander, error) {
 			pw, err := runfiles.RConPassword(cfg.Paths.Secrets, inst.Name)
 			if err != nil {
@@ -434,7 +435,7 @@ func newRestartCmd() *cobra.Command {
 			if cancel {
 				return cancelCountdown(cmd, inst, r)
 			}
-			a := instance.Announcement{Minutes: inst.Restarts.Announce.Minutes, Lock: inst.Restarts.Announce.Lock, Kick: inst.Restarts.Announce.Kick, Text: inst.Restarts.Announce.Text}
+			a := resolve.AnnouncementOf(inst.Restarts.Announce, inst.Restarts.Announce.Text)
 			if cmd.Flags().Changed("minutes") {
 				a.Minutes = minutes
 			}

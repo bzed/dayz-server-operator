@@ -213,7 +213,7 @@ func announcement(inst *resolve.Instance) instance.Announcement {
 	if strings.TrimSpace(a.Text) == "" {
 		a.Text = DefaultAnnounceText
 	}
-	return instance.Announcement{Minutes: a.Minutes, Lock: a.Lock, Kick: a.Kick, Text: a.Text}
+	return resolve.AnnouncementOf(a, a.Text)
 }
 
 // Check runs one update check. Without apply it only refreshes, records and
