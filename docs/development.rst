@@ -196,7 +196,11 @@ Tests use `testify <https://github.com/stretchr/testify>`_.
 * ``make test`` and ``make test-race`` run with ``-shuffle=on``. A failure
   prints the seed; reproduce it with ``go test -shuffle=<seed> ./pkg/``, then
   fix the order dependency in the test.
-* Goroutine leaks, fuzzing and the browser tests are described below.
+* A package that starts goroutines has a ``TestMain`` with
+  ``goleak.VerifyTestMain``, so a goroutine that outlives its context fails the
+  package. ``goleak.IgnoreTopFunction`` is only for third-party goroutines, with a
+  comment naming the library.
+* Fuzzing and the browser tests are described below.
 
 Boot test with a real server
 ----------------------------
