@@ -14,18 +14,23 @@
 # --no-client runs only the checks that need no player (motorbike, event scan) and starts no game, so it
 # can run while a DayZ client is open.
 # --bans runs the server with BattlEye and captures how its bans.txt behaves (ban spike V1).
-# Usage: scripts/test-client.sh [--exp] [--keep] [--no-client] [--bans]
+# --expansion runs the server and the client with DayZ Expansion (CF, Dabs Framework, Expansion Licensed and Bundle
+# from the Steam workshop) and checks the Expansion notification types of dzo-admin, with a screenshot of each in
+# $DZO_SHOTS_DIR (default: the work directory, kept); it stops after those checks (the player is still choosing a
+# spawn point).
+# Usage: scripts/test-client.sh [--exp] [--keep] [--no-client] [--bans] [--expansion]
 set -euo pipefail
 cd "$(dirname "$0")/.."
 dev=${DAYZ_DEV_SCRIPTS:-$HOME/.claude/skills/dayz-dev/scripts}
-exp=() keep=0 noclient=0 bans=0 product=stable
+exp=() keep=0 noclient=0 bans=0 expansion=0 product=stable
 for a in "$@"; do
 	case $a in
 	--exp) exp=(-e) product=experimental ;;
 	--keep) keep=1 ;;
 	--no-client) noclient=1 ;;
 	--bans) bans=1 ;;
-	*) echo "usage: $0 [--exp] [--keep] [--no-client] [--bans]" >&2; exit 2 ;;
+	--expansion) expansion=1 ;;
+	*) echo "usage: $0 [--exp] [--keep] [--no-client] [--bans] [--expansion]" >&2; exit 2 ;;
 	esac
 done
 [ -x "$dev/dayz-client-headless.sh" ] || { echo "dayz-dev scripts not found in $dev (DAYZ_DEV_SCRIPTS)" >&2; exit 2; }
@@ -247,10 +252,24 @@ start_serve() {
 [ "$bans" = 1 ] || start_serve
 ln -sfn "$work/built/dzo-admin" "$tree/@dzo-admin"
 ln -sfn "$work/tbuilt/dzo-client-probe" "$tree/@dzo-client-probe"
+modargs=() clientmods=() smods= cmods=
+if [ "$expansion" = 1 ]; then
+	# server folder -> workshop id, and the folder the client knows the same mod by
+	ws=${WORKSHOP:-$HOME/.local/share/Steam/steamapps/workshop/content/221100}
+	for m in CF:1559212036:@9dd22c91 DabsFramework:2545327648:@1bbd85f5 Licensed:2116157322:@0891b3df Bundle:2572331007:@829b91b4; do
+		IFS=: read -r name id cname <<<"$m"
+		ln -sfn "$ws/$id" "$tree/@$name"
+		for k in "$ws/$id"/keys/*.bikey; do ln -sf "$k" "$tree/keys/"; done
+		smods="$smods@$name;"
+		cmods="$cmods$cname;"
+	done
+	modargs=("-mod=${smods%;}")
+	clientmods=("-mod=${cmods%;}")
+fi
 beargs=()
 [ "$bans" = 1 ] && beargs=("-BEpath=$tree/profiles/battleye")
 (cd "$tree" && ulimit -c 0 && exec ./DayZServer -config=serverDZ.cfg -profiles=profiles \
-	"-servermod=@dzo-admin;@dzo-client-probe" -port="$game" -nosplash -nopause -dologs -adminlog "${beargs[@]}") >"$work/server.log" 2>&1 &
+	"${modargs[@]}" "-servermod=@dzo-admin;@dzo-client-probe" -port="$game" -nosplash -nopause -dologs -adminlog "${beargs[@]}") >"$work/server.log" 2>&1 &
 server=$!
 pids+=("$server")
 echo "== $product server $srv, game port $game, work dir $work"
@@ -290,7 +309,7 @@ if [ "$noclient" = 1 ]; then
 	exit
 fi
 
-"$dev/dayz-client-headless.sh" "${exp[@]}" start "$work/client" -name=dzotester -connect=127.0.0.1 -port="$game" >/dev/null 2>&1
+"$dev/dayz-client-headless.sh" "${exp[@]}" start "$work/client" -name=dzotester "${clientmods[@]}" -connect=127.0.0.1 -port="$game" >/dev/null 2>&1
 waitfor 240 "grep -q 'dzotester.*is connected' '$adm'" || { bad "client joined"; exit 1; }
 ok "client joined"
 waitfor 90 "'$work/dzo' player list t1 --config '$work/config.yaml' --token-file '$work/api.token' | grep -q dzotester" || { bad "players: state lists the player"; exit 1; }
@@ -379,6 +398,35 @@ verdict "message to all" $s
 s=0
 dzo player msg t1 all "notification with a title" --style notification --title Restart --seconds 5 | grep -q ok || s=1
 verdict "message (notification with title and seconds)" $s
+if [ "$expansion" = 1 ]; then
+	s=1
+	grep -q 'DZOAdmin.*features: expansion' "$script" && s=0
+	verdict "dzo-admin reports expansion" $s
+	shots=${DZO_SHOTS_DIR:-$work/shots}
+	mkdir -p "$shots"
+	sleep 10
+	"$dev/dayz-client-headless.sh" "${exp[@]}" shot "$work/client" "$shots/00-before.png" >/dev/null 2>&1 || true
+	i=1
+	for ty in toast baguette activity killfeed market garage; do
+		s=0
+		dzo player msg t1 all "Server restart in 10 minutes" --style expansion --type "$ty" --title "dzo $ty" --seconds 6 | grep -q ok || s=1
+		sleep 3
+		"$dev/dayz-client-headless.sh" "${exp[@]}" shot "$work/client" "$shots/0$i-expansion-$ty.png" >/dev/null 2>&1 || true
+		verdict "message (expansion $ty)" $s
+		sleep 8
+		i=$((i + 1))
+	done
+	s=0
+	dzo player msg t1 all "plain notification" --style notification --title notification --seconds 6 | grep -q ok || s=1
+	sleep 3
+	"$dev/dayz-client-headless.sh" "${exp[@]}" shot "$work/client" "$shots/07-notification.png" >/dev/null 2>&1 || true
+	verdict "message (notification with Expansion loaded)" $s
+	echo "screenshots in $shots"
+	[ -n "${DZO_SHOTS_DIR:-}" ] || keep=1
+	echo "== $pass passed, $fail failed (expansion stage)"
+	[ "$fail" = 0 ]
+	exit
+fi
 s=1
 out=$(dzo player msg t1 all "no expansion here" --style expansion --type toast 2>&1 || true)
 grep -q 'not available' <<<"$out" && s=0
