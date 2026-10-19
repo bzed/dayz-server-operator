@@ -100,11 +100,22 @@ func newRconConsoleCmd() *cobra.Command {
 			out := cmd.OutOrStdout()
 			s := &battleye.Session{Addr: inst.RConAddr(), Password: pw}
 			s.Start()
-			defer func() { _ = s.Close() }()
+			stop, printed := make(chan struct{}), make(chan struct{})
 			go func() {
-				for ev := range s.Events() {
-					_, _ = fmt.Fprintf(out, "< %s\n", ev.Raw)
+				defer close(printed)
+				for {
+					select {
+					case ev := <-s.Events():
+						_, _ = fmt.Fprintf(out, "< %s\n", ev.Raw)
+					case <-stop:
+						return
+					}
 				}
+			}()
+			defer func() {
+				_ = s.Close()
+				close(stop)
+				<-printed
 			}()
 			wctx, cancel := context.WithTimeout(cmd.Context(), timeout)
 			defer cancel()
