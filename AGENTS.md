@@ -33,6 +33,11 @@ Also, when the change touches them:
   and lintian, as the `deb` CI job does (debian:trixie).
 - Btrfs snapshot and backup tests skip without a btrfs filesystem. Point
   `DZO_BTRFS_TESTDIR` at a writable btrfs mount to run them, as CI does.
+- `servermods/`, `internal/admin` (the mod protocol), or the player and vehicle
+  actions in `internal/api` and `internal/web`: also run `make test-client`
+  (stable, and `ARGS=--exp` for the next DayZ build) and say in the commit
+  message that it passed. CI cannot run DayZ, so this is the only check against
+  the real game.
 
 ## Coverage
 

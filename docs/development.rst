@@ -252,6 +252,36 @@ CI runs ``make e2e`` in a ``debian:trixie`` container with Debian's
 ``debian:forky`` is allowed to fail: it warns early about the next htmx (4.0
 beta).
 
+The browser against a real DayZ server
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+CI cannot start DayZ, so the tests above run against fakes. The fakes can lie:
+a field the real mod sends differently, an error text, timing. ``make
+test-client`` (``scripts/test-client.sh``, see below) starts a real server with
+dzo-admin, a real ``dzo serve`` and, unless ``--no-client``, the headless DayZ
+client; its last check drives the web UI over that stack with the same browser
+harness (``internal/web/live_test.go``, build tags ``e2e live``, tests
+``TestLive*``). Run it by hand, with ``DZO_E2E_CHROME`` and ``DZO_E2E_ASSETS``
+as above; it fails without them. The script sets:
+
+``DZO_LIVE_API``
+   the base URL of the API of the running ``dzo serve``; without it the tests
+   fail (the ``live`` tag is an explicit opt-in)
+
+``DZO_LIVE_TOKEN_FILE``
+   an admin API token
+
+``DZO_LIVE_INSTANCE``
+   the instance, ``t1``
+
+``DZO_LIVE_PLAYER``
+   the client's player name, ``dzotester``; empty with ``--no-client``, which
+   skips ``TestLivePlayer``
+
+What the live run catches that the CI tests did not gets a fake-backed
+regression test in the same commit as the fix: the live tier finds the bug, CI
+keeps it fixed.
+
 Boot test with a real server
 ----------------------------
 

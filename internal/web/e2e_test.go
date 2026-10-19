@@ -74,6 +74,13 @@ type browser struct {
 
 func newBrowser(t *testing.T) *browser {
 	t.Helper()
+	return newBrowserWithin(t, 30*time.Second)
+}
+
+// newBrowserWithin is newBrowser with another budget for the whole test: the live tier waits for a real
+// server and for htmx polling.
+func newBrowserWithin(t *testing.T, budget time.Duration) *browser {
+	t.Helper()
 	opts := append([]chromedp.ExecAllocatorOption{}, chromedp.DefaultExecAllocatorOptions[:]...)
 	profile := filepath.Join(t.TempDir(), "profile")
 	opts = append(opts, chromedp.UserDataDir(profile))
@@ -87,7 +94,7 @@ func newBrowser(t *testing.T) *browser {
 	if p := os.Getenv(e2eChromeEnv); p != "" {
 		opts = append(opts, chromedp.ExecPath(p))
 	}
-	timeout, cancelTimeout := context.WithTimeout(t.Context(), 30*time.Second)
+	timeout, cancelTimeout := context.WithTimeout(t.Context(), budget)
 	alloc, cancelAlloc := chromedp.NewExecAllocator(timeout, opts...)
 	ctx, _ := chromedp.NewContext(alloc, chromedp.WithErrorf(t.Logf)) //nolint:govet // stopped by chromedp.Cancel below, which also waits for the browser
 	// Cleanups run last in, first out: the problem report below runs before the browser is stopped.
