@@ -15,6 +15,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/bzed/dayz-server-operator/internal/api"
 	"github.com/bzed/dayz-server-operator/internal/moderation"
 )
@@ -44,9 +46,7 @@ func (e *env) postForm(path string, form url.Values, csrf bool) (int, string) {
 		req.Header.Set("X-CSRF-Token", e.srv.csrf)
 	}
 	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		e.t.Fatal(err)
-	}
+	require.NoError(e.t, err)
 	defer func() { _ = resp.Body.Close() }()
 	b, _ := io.ReadAll(resp.Body)
 	return resp.StatusCode, string(b)
@@ -55,71 +55,62 @@ func (e *env) postForm(path string, form url.Values, csrf bool) (int, string) {
 func TestBanFormCreatesAndFansOut(t *testing.T) {
 	e := newEnv(t, api.RoleAdmin)
 	code, body, _ := e.get("/b/main/bans/new?steam_id=" + webSteam + "&instance=alpha")
-	if code != 200 || !strings.Contains(body, webSteam) || !strings.Contains(body, `name="also" value="other"`) {
-		t.Fatalf("form: %d %s", code, body)
-	}
+	require.Equal(t, 200, code, "form: %s", body)
+	require.Contains(t, body, webSteam)
+	require.Contains(t, body, `name="also" value="other"`)
 	form := url.Values{"steam_id": {webSteam}, "reason": {"aimbot <script>"}, "message": {"bye"}, "duration": {"7d"},
 		"scope": {"instances"}, "instances": {"alpha"}, "also": {"other"}}
-	if code, _ := e.postForm("/b/main/bans", form, false); code != 403 {
-		t.Fatalf("no CSRF token: %d", code)
-	}
+	code, _ = e.postForm("/b/main/bans", form, false)
+	require.Equal(t, 403, code, "no CSRF token")
 	code, body = e.postForm("/b/main/bans", form, true)
-	if code != 200 || strings.Count(body, "ban #1") != 2 || !strings.Contains(body, "alpha: ok") {
-		t.Fatalf("create: %d %s", code, body)
-	}
+	require.Equal(t, 200, code, "create: %s", body)
+	require.Equal(t, 2, strings.Count(body, "ban #1"), "create: %s", body)
+	require.Contains(t, body, "alpha: ok")
 	_, list, _ := e.get("/b/main/bans?state=active")
-	if !strings.Contains(list, "aimbot &lt;script&gt;") || strings.Contains(list, "<script>") {
-		t.Fatalf("list escaping: %s", list)
-	}
+	require.Contains(t, list, "aimbot &lt;script&gt;")
+	require.NotContains(t, list, "<script>")
 	_, other, _ := e.get("/b/other/bans")
-	if !strings.Contains(other, "aimbot") {
-		t.Fatalf("the other backend has no ban: %s", other)
-	}
+	require.Contains(t, other, "aimbot", "the other backend has no ban")
 }
 
 func TestBanDetailEditAndRevoke(t *testing.T) {
 	e := newEnv(t, api.RoleAdmin)
 	form := url.Values{"steam_id": {webSteam}, "reason": {"first"}, "duration": {"permanent"}, "scope": {"global"}}
-	if code, body := e.postForm("/b/main/bans", form, true); code != 200 || !strings.Contains(body, "ban #1") {
-		t.Fatalf("create: %d %s", code, body)
-	}
-	code, body, _ := e.get("/b/main/bans/1")
-	if code != 200 || !strings.Contains(body, "first") || !strings.Contains(body, "create") {
-		t.Fatalf("detail: %d %s", code, body)
-	}
+	code, body := e.postForm("/b/main/bans", form, true)
+	require.Equal(t, 200, code, "create: %s", body)
+	require.Contains(t, body, "ban #1")
+	code, body, _ = e.get("/b/main/bans/1")
+	require.Equal(t, 200, code, "detail: %s", body)
+	require.Contains(t, body, "first")
+	require.Contains(t, body, "create")
 	form.Set("reason", "second")
 	form.Set("duration", "keep")
-	if code, body := e.postForm("/b/main/bans/1", form, true); code != 200 || !strings.Contains(body, "changed") {
-		t.Fatalf("edit: %d %s", code, body)
-	}
-	if code, body := e.postForm("/b/main/bans/1/revoke", url.Values{"reason": {"appeal"}}, true); code != 200 || !strings.Contains(body, "revoked") {
-		t.Fatalf("revoke: %d %s", code, body)
-	}
+	code, body = e.postForm("/b/main/bans/1", form, true)
+	require.Equal(t, 200, code, "edit: %s", body)
+	require.Contains(t, body, "changed")
+	code, body = e.postForm("/b/main/bans/1/revoke", url.Values{"reason": {"appeal"}}, true)
+	require.Equal(t, 200, code, "revoke: %s", body)
+	require.Contains(t, body, "revoked")
 	_, body, _ = e.get("/b/main/bans/1")
-	if !strings.Contains(body, "second") || !strings.Contains(body, "appeal") {
-		t.Fatalf("detail after: %s", body)
-	}
-	if code, _, _ := e.get("/b/main/bans/abc"); code != 404 {
-		t.Fatalf("bad id: %d", code)
-	}
+	require.Contains(t, body, "second")
+	require.Contains(t, body, "appeal")
+	code, _, _ = e.get("/b/main/bans/abc")
+	require.Equal(t, 404, code, "bad id")
 }
 
 func TestEvidenceImageProxy(t *testing.T) {
 	e := newEnv(t, api.RoleAdmin)
 	png := append([]byte("\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR"), make([]byte, 64)...)
 	c := e.srv.backend("main").Client
-	ev, err := c.AddEvidenceImage(context.Background(), moderation.EvidenceInput{SteamID: webSteam, Instance: "alpha", Body: "shot"}, png)
-	if err != nil {
-		t.Fatal(err)
-	}
+	ev, err := c.AddEvidenceImage(t.Context(), moderation.EvidenceInput{SteamID: webSteam, Instance: "alpha", Body: "shot"}, png)
+	require.NoError(t, err)
 	code, body, hdr := e.get("/b/main/evidence/" + itoa(ev.ID) + "/file")
-	if code != 200 || hdr.Get("Content-Type") != "image/png" || hdr.Get("X-Content-Type-Options") != "nosniff" || len(body) != len(png) {
-		t.Fatalf("proxy: %d %v", code, hdr)
-	}
+	require.Equal(t, 200, code, "proxy: %v", hdr)
+	require.Equal(t, "image/png", hdr.Get("Content-Type"))
+	require.Equal(t, "nosniff", hdr.Get("X-Content-Type-Options"))
+	require.Len(t, body, len(png))
 	_, page, _ := e.get("/b/main/bans/new?steam_id=" + webSteam + "&instance=alpha")
-	if !strings.Contains(page, `<img src="/b/main/evidence/`+itoa(ev.ID)+`/file"`) {
-		t.Fatalf("the form does not show the player's evidence: %s", page)
-	}
+	require.Contains(t, page, `<img src="/b/main/evidence/`+itoa(ev.ID)+`/file"`, "the form does not show the player's evidence")
 }
 
 func itoa(i int64) string { return strconv.FormatInt(i, 10) }
@@ -129,46 +120,41 @@ func TestBanFormRefusesAMessageBattlEyeWouldCut(t *testing.T) {
 	form := url.Values{"steam_id": {webSteam}, "reason": {"a long internal reason"}, "message": {strings.Repeat("ä", 33)},
 		"duration": {"7d"}, "scope": {"global"}}
 	_, body := e.postForm("/b/main/bans", form, true)
-	if !strings.Contains(body, "BattlEye shows at most 64") {
-		t.Fatalf("no explanation for the player message: %s", body)
-	}
-	if _, list, _ := e.get("/b/main/bans?state=active"); strings.Contains(list, "ban #1") || strings.Contains(list, webSteam) {
-		t.Fatalf("the ban was created anyway: %s", list)
-	}
+	require.Contains(t, body, "BattlEye shows at most 64", "no explanation for the player message")
+	_, list, _ := e.get("/b/main/bans?state=active")
+	require.NotContains(t, list, "ban #1", "the ban was created anyway")
+	require.NotContains(t, list, webSteam, "the ban was created anyway")
 }
 
 func TestBanFormOffersAddressesWithoutShowingThem(t *testing.T) {
 	e := newEnv(t, api.RoleOperator)
 	guid, _ := moderation.DeriveGUID(webSteam)
 	st := e.api.Moderation.(webMod).st
-	_ = st.Seen(context.Background(), "alpha", guid, "192.0.2.7", "alice", time.Now())
-	_ = st.Seen(context.Background(), "alpha", "ea4796e1d71203969fbaad87e2195978", "192.0.2.7", "bob", time.Now())
+	_ = st.Seen(t.Context(), "alpha", guid, "192.0.2.7", "alice", time.Now())
+	_ = st.Seen(t.Context(), "alpha", "ea4796e1d71203969fbaad87e2195978", "192.0.2.7", "bob", time.Now())
 	_, body, _ := e.get("/b/main/bans/new?steam_id=" + webSteam + "&instance=alpha")
-	if strings.Contains(body, "192.0.2.7") || !strings.Contains(body, `name="ip_refs"`) || !strings.Contains(body, "shared with 1 other player") {
-		t.Fatalf("form: %s", body)
-	}
+	require.NotContains(t, body, "192.0.2.7")
+	require.Contains(t, body, `name="ip_refs"`)
+	require.Contains(t, body, "shared with 1 other player")
 	_, ids, _ := e.get("/b/main/bans/new?steam_id=" + webSteam)
 	ref := between(ids, `name="ip_refs" value="`, `"`)
 	form := url.Values{"steam_id": {webSteam}, "reason": {"evading"}, "duration": {"7d"}, "scope": {"instances"}, "instances": {"alpha"}, "ip_refs": {ref}}
-	if _, out := e.postForm("/b/main/bans", form, true); !strings.Contains(out, "ban #1") {
-		t.Fatalf("create: %s", out)
-	}
+	_, out := e.postForm("/b/main/bans", form, true)
+	require.Contains(t, out, "ban #1", "create")
 	_, page, _ := e.get("/b/main/bans/1")
-	if strings.Contains(page, "192.0.2.7") || !strings.Contains(page, "address hidden") || !strings.Contains(page, `name="ip_refs"`) {
-		t.Fatalf("ban page: %s", page)
-	}
-	if _, list, _ := e.get("/b/main/bans"); strings.Contains(list, "192.0.2.7") {
-		t.Fatalf("list: %s", list)
-	}
+	require.NotContains(t, page, "192.0.2.7")
+	require.Contains(t, page, "address hidden")
+	require.Contains(t, page, `name="ip_refs"`)
+	_, list, _ := e.get("/b/main/bans")
+	require.NotContains(t, list, "192.0.2.7", "list")
 }
 
 func TestBanFormShowsAddressesWithTheHistoryPermission(t *testing.T) {
 	e := newEnv(t, api.RoleAdmin)
 	guid, _ := moderation.DeriveGUID(webSteam)
-	_ = e.api.Moderation.(webMod).st.Seen(context.Background(), "alpha", guid, "192.0.2.7", "alice", time.Now())
-	if _, body, _ := e.get("/b/main/bans/new?steam_id=" + webSteam); !strings.Contains(body, "192.0.2.7") {
-		t.Fatalf("form: %s", body)
-	}
+	_ = e.api.Moderation.(webMod).st.Seen(t.Context(), "alpha", guid, "192.0.2.7", "alice", time.Now())
+	_, body, _ := e.get("/b/main/bans/new?steam_id=" + webSteam)
+	require.Contains(t, body, "192.0.2.7")
 }
 
 func between(s, a, b string) string {
@@ -183,66 +169,60 @@ func between(s, a, b string) string {
 func TestBanFormDefaultsToThisInstanceOnly(t *testing.T) {
 	e := newEnv(t, api.RoleAdmin)
 	_, body, _ := e.get("/b/main/bans/new?steam_id=" + webSteam + "&instance=alpha")
-	if !strings.Contains(body, `name="scope_choice" value="this" checked`) || !strings.Contains(body, `name="this_instance" value="alpha"`) ||
-		!strings.Contains(body, `name="scope_choice" value="global"`) || !strings.Contains(body, `name="scope_choice" value="chosen"`) {
-		t.Fatalf("scope choices: %s", body)
+	for _, want := range []string{`name="scope_choice" value="this" checked`, `name="this_instance" value="alpha"`,
+		`name="scope_choice" value="global"`, `name="scope_choice" value="chosen"`} {
+		require.Contains(t, body, want, "scope choices")
 	}
 	form := url.Values{"steam_id": {webSteam}, "reason": {"x"}, "duration": {"7d"}, "scope_choice": {"this"}, "this_instance": {"alpha"}}
 	e.postForm("/b/main/bans", form, true)
-	b, err := e.srv.backend("main").Client.Ban(context.Background(), 1)
-	if err != nil || b.Scope != moderation.ScopeInstances || len(b.Instances) != 1 || b.Instances[0] != "alpha" {
-		t.Fatalf("ban for this instance: %+v %v", b, err)
-	}
+	b, err := e.srv.backend("main").Client.Ban(t.Context(), 1)
+	require.NoError(t, err)
+	require.Equal(t, moderation.ScopeInstances, b.Scope)
+	require.Equal(t, []string{"alpha"}, b.Instances)
 	form.Set("scope_choice", "global")
 	e.postForm("/b/main/bans", form, true)
-	if b, _ := e.srv.backend("main").Client.Ban(context.Background(), 2); b.Scope != moderation.ScopeGlobal {
-		t.Fatalf("global ban: %+v", b)
-	}
+	b, err = e.srv.backend("main").Client.Ban(t.Context(), 2)
+	require.NoError(t, err)
+	require.Equal(t, moderation.ScopeGlobal, b.Scope)
 	// Without an instance in the link there is no "this instance" choice.
 	_, body, _ = e.get("/b/main/bans/new?steam_id=" + webSteam)
-	if strings.Contains(body, `value="this"`) || !strings.Contains(body, `name="scope_choice" value="chosen" checked`) {
-		t.Fatalf("form without an instance: %s", body)
-	}
+	require.NotContains(t, body, `value="this"`, "form without an instance")
+	require.Contains(t, body, `name="scope_choice" value="chosen" checked`, "form without an instance")
 }
 
 func TestBanPageManagesEvidence(t *testing.T) {
 	e := newEnv(t, api.RoleAdmin)
 	e.postForm("/b/main/bans", url.Values{"steam_id": {webSteam}, "reason": {"x"}, "duration": {"7d"}, "scope_choice": {"this"}, "this_instance": {"alpha"}}, true)
 	_, page, _ := e.get("/b/main/bans/1")
-	if !strings.Contains(page, `hx-post="/b/main/bans/1/evidence"`) || !strings.Contains(page, `enctype="multipart/form-data"`) {
-		t.Fatalf("no evidence form: %s", page)
-	}
+	require.Contains(t, page, `hx-post="/b/main/bans/1/evidence"`, "no evidence form")
+	require.Contains(t, page, `enctype="multipart/form-data"`, "no evidence form")
 	// A note.
 	code, out := e.postMultipart("/b/main/bans/1/evidence", map[string]string{"kind": "note", "instance": "alpha", "body": "chat spam <b>"}, nil)
-	if code != 200 || !strings.Contains(out, "added") {
-		t.Fatalf("note: %d %s", code, out)
-	}
+	require.Equal(t, 200, code, "note: %s", out)
+	require.Contains(t, out, "added", "note")
 	// An image.
 	png := append([]byte("\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR"), make([]byte, 64)...)
-	if code, out := e.postMultipart("/b/main/bans/1/evidence", map[string]string{"kind": "image", "instance": "alpha", "body": "the shot"}, png); code != 200 || !strings.Contains(out, "added") {
-		t.Fatalf("image: %d %s", code, out)
-	}
+	code, out = e.postMultipart("/b/main/bans/1/evidence", map[string]string{"kind": "image", "instance": "alpha", "body": "the shot"}, png)
+	require.Equal(t, 200, code, "image: %s", out)
+	require.Contains(t, out, "added", "image")
 	_, page, _ = e.get("/b/main/bans/1")
-	if !strings.Contains(page, "chat spam &lt;b&gt;") || !strings.Contains(page, `<img src="/b/main/evidence/2/file"`) || !strings.Contains(page, `hx-post="/b/main/bans/1/evidence/1/unlink"`) {
-		t.Fatalf("evidence not shown: %s", page)
+	for _, want := range []string{"chat spam &lt;b&gt;", `<img src="/b/main/evidence/2/file"`, `hx-post="/b/main/bans/1/evidence/1/unlink"`} {
+		require.Contains(t, page, want, "evidence not shown")
 	}
-	if code, out := e.postForm("/b/main/bans/1/evidence/1/unlink", url.Values{}, true); code != 200 || !strings.Contains(out, "unlinked") {
-		t.Fatalf("unlink: %d %s", code, out)
-	}
+	code, out = e.postForm("/b/main/bans/1/evidence/1/unlink", url.Values{}, true)
+	require.Equal(t, 200, code, "unlink: %s", out)
+	require.Contains(t, out, "unlinked")
 	_, page, _ = e.get("/b/main/bans/1")
-	if strings.Contains(page, `evidence/1/unlink`) || !strings.Contains(page, `hx-post="/b/main/bans/1/evidence/link"`) || !strings.Contains(page, `name="evidence" value="1"`) {
-		t.Fatalf("after unlink the note is offered to link again: %s", page)
-	}
-	if code, out := e.postForm("/b/main/bans/1/evidence/link", url.Values{"evidence": {"1"}}, true); code != 200 || !strings.Contains(out, "linked") {
-		t.Fatalf("link: %d %s", code, out)
-	}
+	require.NotContains(t, page, `evidence/1/unlink`, "after unlink the note is offered to link again")
+	require.Contains(t, page, `hx-post="/b/main/bans/1/evidence/link"`, "after unlink the note is offered to link again")
+	require.Contains(t, page, `name="evidence" value="1"`, "after unlink the note is offered to link again")
+	code, out = e.postForm("/b/main/bans/1/evidence/link", url.Values{"evidence": {"1"}}, true)
+	require.Equal(t, 200, code, "link: %s", out)
+	require.Contains(t, out, "linked")
 	_, page, _ = e.get("/b/main/bans/1")
-	if !strings.Contains(page, `evidence/1/unlink`) {
-		t.Fatalf("not linked again: %s", page)
-	}
-	if code, _ := e.postForm("/b/main/bans/1/evidence/1/unlink", url.Values{}, false); code != 403 {
-		t.Fatalf("unlink without a CSRF token: %d", code)
-	}
+	require.Contains(t, page, `evidence/1/unlink`, "not linked again")
+	code, _ = e.postForm("/b/main/bans/1/evidence/1/unlink", url.Values{}, false)
+	require.Equal(t, 403, code, "unlink without a CSRF token")
 }
 
 func (e *env) postMultipart(path string, fields map[string]string, file []byte) (int, string) {
@@ -261,9 +241,7 @@ func (e *env) postMultipart(path string, fields map[string]string, file []byte) 
 	req.Header.Set("Content-Type", mw.FormDataContentType())
 	req.Header.Set("X-CSRF-Token", e.srv.csrf)
 	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		e.t.Fatal(err)
-	}
+	require.NoError(e.t, err)
 	defer func() { _ = resp.Body.Close() }()
 	b, _ := io.ReadAll(resp.Body)
 	return resp.StatusCode, string(b)
