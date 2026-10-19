@@ -21,8 +21,11 @@ import (
 type Role string
 
 const (
-	RoleDetector  Role = "detector"
-	RoleViewer    Role = "viewer"
+	RoleDetector Role = "detector"
+	RoleViewer   Role = "viewer"
+	// RoleAnnouncer is for the restart countdown: it reads the instance's status and sends
+	// broadcasts, nothing else.
+	RoleAnnouncer Role = "announcer"
 	RoleModerator Role = "moderator"
 	RoleOperator  Role = "operator"
 	RoleAdmin     Role = "admin"
@@ -66,6 +69,7 @@ const (
 var rolePerms = map[Role][]string{
 	RoleDetector:  {PermEvidenceAdd},
 	RoleViewer:    {PermView},
+	RoleAnnouncer: {PermView, PermBroadcast},
 	RoleModerator: {PermView, PermMessage, PermKick, PermBanView, PermBanInstance, PermEvidenceAdd},
 	RoleOperator:  {PermView, PermMessage, PermKick, PermKill, PermHeal, PermFixGear, PermBroadcast, PermTeleport, PermSpawn, PermRepair, PermDelete, PermBanView, PermBanInstance, PermBanLong, PermBanIP, PermEvidenceAdd, PermPlayerIP},
 	RoleAdmin: {PermView, PermMessage, PermKick, PermKill, PermHeal, PermFixGear, PermBroadcast, PermTeleport, PermSpawn, PermRepair, PermDelete, PermAuditView,
@@ -77,7 +81,7 @@ func (r Role) Rank() int {
 	switch r {
 	case RoleDetector:
 		return 1
-	case RoleViewer:
+	case RoleViewer, RoleAnnouncer:
 		return 2
 	case RoleModerator:
 		return 3

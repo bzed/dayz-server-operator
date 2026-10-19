@@ -105,7 +105,7 @@ How the countdown reaches the players is ``announce.ways`` (in ``restarts.announ
    one more announcement "<text> NOW" this long before the kick; only one rule may set it.
 
 Notifications go through ``dzo-admin`` and the API of ``dzo serve``: the restart needs an API token, ``$DZO_TOKEN`` or
-the file ``announce.token`` in the secrets directory (``dzo token create announce --role operator``). If the mod is not
+the file ``announce.token`` in the secrets directory (``dzo token create announce --role announcer``: that role can only read the instance's status and broadcast). If the mod is not
 connected, the API or the token is missing, or the message is refused, the same text goes out over RCon ``say`` and the
 restart continues on time. ``expansion`` becomes a plain notification when the mod does not report Expansion.
 

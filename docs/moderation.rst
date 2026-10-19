@@ -132,6 +132,8 @@ Who may do what
      - only file evidence (``POST /evidence``); sees nothing else. For cheat detectors and scripts.
    * - ``viewer``
      - none
+   * - ``announcer``
+     - none
    * - ``moderator``
      - see bans and evidence; ban by Steam ID or GUID on instances the token may use, for at most 7 days;
        file evidence; change or revoke their own bans

@@ -80,6 +80,8 @@ action fails with a clear message.
      - only file evidence against players (no web access; for scripts)
    * - ``viewer``
      - see instances, players, vehicles, events and public map markers
+   * - ``announcer``
+     - only see the status of an instance and broadcast (no web access; for the restart countdown's notifications, see :doc:`operations`)
    * - ``moderator``
      - also send direct messages to players, kick them, see bans and ban for up to 7 days (:doc:`moderation`)
    * - ``operator``

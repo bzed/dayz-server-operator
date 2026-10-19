@@ -120,3 +120,20 @@ func TestBanPermissions(t *testing.T) {
 		t.Error("detector: valid, below viewer, sees nothing")
 	}
 }
+
+func TestAnnouncerRoleOnlyViewsAndBroadcasts(t *testing.T) {
+	r := RoleAnnouncer
+	if !r.Valid() {
+		t.Fatal("announcer is not a valid role")
+	}
+	for _, perm := range []string{PermView, PermBroadcast} {
+		if !r.Can(perm) {
+			t.Errorf("announcer cannot %s", perm)
+		}
+	}
+	for _, perm := range []string{PermMessage, PermKick, PermKill, PermSpawn, PermDelete, PermTeleport, PermBanInstance, PermPlayerIP, PermAuditView} {
+		if r.Can(perm) {
+			t.Errorf("announcer can %s", perm)
+		}
+	}
+}
