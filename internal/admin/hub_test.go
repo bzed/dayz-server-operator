@@ -518,3 +518,28 @@ func TestMessageStyleRConIsRefusedByTheHub(t *testing.T) {
 		t.Fatal("the hub accepted the rcon style")
 	}
 }
+
+// The mod reports territory flags and Expansion territories as markers: the remaining time is the ttl, the
+// circle has its radius, and the layers the mod defines keep their visibility.
+func TestHubKeepsFlagMarkers(t *testing.T) {
+	h, _ := testHub()
+	h.Sync(SyncRequest{
+		Proto: 1, Hello: true, ModVersion: "0.4.0", World: "chernarusplus",
+		Markers: []Marker{
+			{Layer: "Flags", ID: "f1", Shape: "point", X: 7600, Z: 7600, Icon: "flag", Label: "Flag", TTL: 86400, Source: "flags", Visibility: "operator"},
+			{Layer: "Territories", ID: "t1", Shape: "circle", X: 7600, Z: 7600, Radius: 150, Label: "Camp", Source: "territory", Visibility: "operator"},
+		},
+		Layers: []Layer{{Name: "Flags", Icon: "flag", Visibility: "operator"}, {Name: "Territories", Visibility: "operator"}},
+	})
+	f := h.Markers("Flags")
+	if len(f) != 1 || f[0].TTL != 86400 || f[0].Source != "flags" || f[0].Icon != "flag" || f[0].Visibility != "operator" {
+		t.Fatalf("flags = %+v", f)
+	}
+	tr := h.Markers("Territories")
+	if len(tr) != 1 || tr[0].Radius != 150 || tr[0].Label != "Camp" || tr[0].Source != "territory" || tr[0].Visibility != "operator" {
+		t.Fatalf("territories = %+v", tr)
+	}
+	if got := h.Layers(); len(got) != 2 || got[0].Visibility != "operator" || got[1].Visibility != "operator" {
+		t.Fatalf("layers = %+v", got)
+	}
+}

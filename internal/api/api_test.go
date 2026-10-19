@@ -445,3 +445,35 @@ func TestMessageRConStyleToOnePlayerIsABadRequest(t *testing.T) {
 		t.Fatalf("rcon to one player = %d %s, want 400", c, b)
 	}
 }
+
+// Flags and territories are for operators: below that role neither the markers nor their layers are listed.
+func TestFlagMarkersAreOperatorOnly(t *testing.T) {
+	e := newEnv(t)
+	e.alpha.Sync(admin.SyncRequest{Proto: 1, Hello: true, ModVersion: "0.4.0", World: "chernarusplus",
+		Markers: []admin.Marker{
+			{Layer: "Flags", ID: "f1", Shape: "point", Icon: "flag", TTL: 86400, Source: "flags", Visibility: "operator"},
+			{Layer: "Territories", ID: "t1", Shape: "circle", Radius: 150, Label: "Camp", Source: "territory", Visibility: "operator"},
+		},
+		Layers: []admin.Layer{{Name: "Flags", Visibility: "operator"}, {Name: "Territories", Visibility: "operator"}},
+	})
+	count := func(role Role, path string) int {
+		t.Helper()
+		c, b := e.do("GET", "/api/v1/instances/alpha/"+path, e.token(role, nil, false), "")
+		if c != 200 {
+			t.Fatalf("%s as %s: %d %s", path, role, c, b)
+		}
+		var list []json.RawMessage
+		if err := json.Unmarshal(b, &list); err != nil {
+			t.Fatal(err)
+		}
+		return len(list)
+	}
+	for role, want := range map[Role]int{RoleViewer: 0, RoleModerator: 0, RoleOperator: 2, RoleAdmin: 2} {
+		if got := count(role, "map/markers"); got != want {
+			t.Errorf("%s: %d markers, want %d", role, got, want)
+		}
+		if got := count(role, "layers"); got != want {
+			t.Errorf("%s: %d layers, want %d", role, got, want)
+		}
+	}
+}

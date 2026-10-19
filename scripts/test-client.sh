@@ -199,6 +199,9 @@ verdict "flag: with the flag icon, at its place, for operators" $s
 s=0
 fl | grep -Eq '"ttl":1[67][0-9]{5}' || s=1
 verdict "flag: the ttl is the refresher time left (about 20 days)" $s
+s=0
+curl -s -H "Authorization: Bearer $(cat "$work/api.token")" "http://127.0.0.1:$api/api/v1/instances/t1/layers" | grep -o '{[^{}]*"name":"Flags"[^{}]*}' | grep -q '"visibility":"operator"' || s=1
+verdict "flag: the Flags layer is defined for operators" $s
 }
 
 
