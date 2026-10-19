@@ -157,7 +157,7 @@ jobs:
       - name: Install the browser and the JavaScript assets
         run: |
           apt-get update
-          apt-get install -y --no-install-recommends git ca-certificates make gcc libc6-dev chromium libjs-htmx libjs-leaflet fonts-fork-awesome
+          apt-get install -y --no-install-recommends git ca-certificates make gcc libc6-dev chromium chromium-sandbox libjs-htmx libjs-leaflet fonts-fork-awesome
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:

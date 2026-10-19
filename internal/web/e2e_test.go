@@ -156,7 +156,7 @@ func newBrowserWithin(t *testing.T, budget time.Duration) *browser {
 	})
 
 	if err := chromedp.Run(ctx, log.Enable(), runtime.Enable()); err != nil {
-		require.NoError(t, err, "no Chrome/Chromium found; install one or set %s", e2eChromeEnv)
+		require.NoError(t, err, "Chrome/Chromium did not start (is one installed, with its sandbox? set %s for another binary)", e2eChromeEnv)
 	}
 	if c := chromedp.FromContext(ctx); c != nil && c.Browser != nil && c.Browser.Process() != nil {
 		pgid = c.Browser.Process().Pid
