@@ -20,10 +20,15 @@ class CfgMods
 		name = "DZOClientProbe";
 		author = "Bernd Zeimetz";
 		type = "servermod";
-		dependencies[] = {"Mission"};
+		dependencies[] = {"Game", "World", "Mission"};
 
 		class defs
 		{
+			class worldScriptModule
+			{
+				value = "";
+				files[] = {"DZOClientProbe/scripts/4_World"};
+			};
 			class missionScriptModule
 			{
 				value = "";

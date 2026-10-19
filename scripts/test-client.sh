@@ -11,8 +11,9 @@
 # Needs, on a machine that does not run dzo instances: the Steam DayZ Server tool (stable 223350, or
 # --exp 1042420), the DayZ client of the same build, a running logged-in Steam, sway, and the dayz-dev
 # skill's scripts (DAYZ_DEV_SCRIPTS, default ~/.claude/skills/dayz-dev/scripts). One game at a time.
-# --no-client runs only the checks that need no player (motorbike, event scan) and starts no game, so it
-# can run while a DayZ client is open.
+# --no-client runs only the checks that need no player (motorbike, event scan, territory flags and their raise) and starts no
+# game, so it can run while a DayZ client is open. With --expansion it also loads Expansion and checks an Expansion
+# territory (made by the probe on the server, no client needed).
 # --bans runs the server with BattlEye and captures how its bans.txt behaves (ban spike V1).
 # --expansion runs the server and the client with DayZ Expansion (CF, Dabs Framework, Expansion Licensed and Bundle
 # from the Steam workshop) and checks the Expansion notification types of dzo-admin, with a screenshot of each in
@@ -202,6 +203,32 @@ verdict "flag: the ttl is the refresher time left (about 20 days)" $s
 s=0
 curl -s -H "Authorization: Bearer $(cat "$work/api.token")" "http://127.0.0.1:$api/api/v1/instances/t1/layers" | grep -o '{[^{}]*"name":"Flags"[^{}]*}' | grep -q '"visibility":"operator"' || s=1
 verdict "flag: the Flags layer is defined for operators" $s
+# Raising the flag (API, CLI and the map's menu all end in this command) fills the timer: 40 days.
+fid=$(fl | sed -n 's/.*"id":"\(f[0-9.-]*\)".*/\1/p' | head -1)
+s=0
+"$work/dzo" flag raise t1 "$fid" --config "$work/config.yaml" --token-file "$work/api.token" 2>&1 | grep -q ok || s=1
+verdict "flag: raise ($fid) is carried out" $s
+s=0
+waitfor 40 "curl -s -H 'Authorization: Bearer $(cat "$work/api.token")' http://127.0.0.1:$api/api/v1/instances/t1/map/markers | grep -o '{[^{}]*\"layer\":\"Flags\"[^{}]*}' | grep -Eq '\"ttl\":3[34][0-9]{5}'" || s=1
+verdict "flag: after raise the timer is full (40 days)" $s
+s=0
+out=$("$work/dzo" flag raise t1 f0.0.0.0 --config "$work/config.yaml" --token-file "$work/api.token" 2>&1) && s=1
+echo "$out" | grep -qi 'flag not found' || { s=1; echo "$out" >&2; }
+verdict "flag: raise of an unknown flag is refused" $s
+if [ "$expansion" = 1 ]; then
+	touch "$tree/profiles/dzo_probe/territory"
+	tr() { mk | grep -o '{[^{}]*"layer":"Territories"[^{}]*}'; }
+	s=0
+	waitfor 60 "curl -s -H 'Authorization: Bearer $(cat "$work/api.token")' http://127.0.0.1:$api/api/v1/instances/t1/map/markers | grep -q '\"layer\":\"Territories\"'" || s=1
+	verdict "territory: an Expansion territory is a marker of the Territories layer" $s
+	s=0
+	tr | grep -q '"label":"Probe Camp"' && tr | grep -q '"shape":"circle"' && tr | grep -Eq '"radius":[1-9]' && tr | grep -q '"visibility":"operator"' && tr | grep -q '"source":"territory"' || s=1
+	[ "$s" = 0 ] || { tr >&2; mk >&2; }
+	verdict "territory: a circle with the name, the radius of the territory, for operators" $s
+	s=0
+	mk | grep -q '"k":"territory","v":"Probe Camp"' || s=1
+	verdict "territory: its flag names the territory" $s
+fi
 }
 
 

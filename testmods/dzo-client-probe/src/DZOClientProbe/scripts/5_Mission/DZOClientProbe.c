@@ -42,6 +42,19 @@ modded class MissionServer
 				flag.SetRefreshTimer01(0.5);
 			Print("DZO-PROBE flag: " + flag);
 		}
+#ifdef EXPANSIONMODBASEBUILDING
+		if (FileExist("$profile:dzo_probe/territory"))
+		{
+			DeleteFile("$profile:dzo_probe/territory");
+			// An Expansion territory without a player: what the territory module does on a client's request.
+			TerritoryFlag tflag = TerritoryFlag.Cast(GetGame().CreateObjectEx("TerritoryFlag", Vector(7700, GetGame().SurfaceY(7700, 7700), 7700), ECE_PLACE_ON_SURFACE));
+			ExpansionTerritoryModule tmod;
+			CF_Modules<ExpansionTerritoryModule>.Get(tmod);
+			if (tflag && tmod)
+				tmod.DZOProbeCreate("Probe Camp", tflag);
+			Print("DZO-PROBE territory: " + tflag + " " + tmod);
+		}
+#endif
 		if (FileExist("$profile:dzo_probe/bike"))
 		{
 			DeleteFile("$profile:dzo_probe/bike");
