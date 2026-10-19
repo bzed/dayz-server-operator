@@ -211,3 +211,11 @@ func TestClassParseErrors(t *testing.T) {
 		assert.Error(t, err, "%q must not parse", bad)
 	}
 }
+
+func TestParseTrimsUnicodeSpaceAroundBareValues(t *testing.T) {
+	f, err := Parse([]byte("maxPlayers = 60 ;\nmotd[] = { \"a\" , 2\f};\n"))
+	require.NoError(t, err)
+	e, ok := f.Get("maxPlayers")
+	require.True(t, ok)
+	require.Equal(t, "60", e.Scalar.Value)
+}
