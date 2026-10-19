@@ -257,8 +257,9 @@ which is not counted. A flag whose refresher is used up says *goes down now*.
 
 With DayZ Expansion loaded, a flag that is an Expansion territory also gets a thin circle of the
 territory's size (``TerritorySize`` of the Expansion territory settings) on the **Territories**
-layer; hovering over the circle shows the name of the territory, and the flag's tooltip names it
-too. Without Expansion there is no Territories layer.
+layer. The circle is only an outline: it has no name or tooltip on the map and clicks pass through it.
+The name of the territory is the title of the menu of its flag (right-click the flag).
+Without Expansion there is no Territories layer.
 
 Operators (and admins) can right-click a flag and choose **Raise flag (fills the timer)**: the flag
 goes to the top of its pole and its timer is filled to the full 40 days, as if a player had raised a new flag

@@ -752,7 +752,7 @@
       if (m.shape === 'circle') {
         // An Expansion territory is a thin outline, so that the map stays readable under it.
         shape = m.source === 'territory'
-          ? L.circle(ll(m), { radius: m.radius || 50, color: color, weight: 1, opacity: 0.9, fillOpacity: 0.04 })
+          ? L.circle(ll(m), { radius: m.radius || 50, color: color, weight: 1, opacity: 0.9, fillOpacity: 0.04, interactive: false })
           : L.circle(ll(m), { radius: m.radius || 50, color: color, weight: 2, fillOpacity: 0.15 });
       } else if ((m.shape === 'polygon' || m.shape === 'polyline') && m.points && m.points.length) {
         var pts = m.points.map(function (p) { return [p.z, p.x]; });
@@ -763,15 +763,17 @@
       } else {
         shape = L.circleMarker(ll(m), { radius: 5, color: color, fillOpacity: 0.9 });
       }
-      var lines = (m.props || []).filter(function (kv) { return kv.k !== 'refresher'; }).map(function (kv) { return kv.k + ': ' + kv.v; });
+      var lines = (m.props || []).filter(function (kv) { return kv.k !== 'refresher' && !(kv.k === 'territory' && m.source === 'flags'); }).map(function (kv) { return kv.k + ': ' + kv.v; });
       var left = ttlText(m);
       if (left) { lines.unshift(left); }
       var title = m.label || m.id;
-      bindTip(shape, title, lines);
-      // A territory is big and often under other things: it has the tooltip, and a click on it goes to the map.
+      // A territory is only an outline: no name on the map, no hover, and clicks go to the map. Its name is
+      // shown in the menu of its flag.
       if (m.source !== 'territory') {
+        bindTip(shape, title, lines);
+        var tname = ((m.props || []).filter(function (kv) { return kv.k === 'territory'; })[0] || {}).v;
         onMenu(shape, function () {
-          var spec = plainSpec(title, lines.concat(posText(m)), m, m.shape === 'circle' ? m.radius : 0);
+          var spec = plainSpec(tname || title, (tname ? [title] : []).concat(lines, posText(m)), m, m.shape === 'circle' ? m.radius : 0);
           if (m.source === 'flags') {
             spec.items.unshift({ label: 'Raise flag (fills the timer)', min: 'operator', run: function () { act('/flags/' + encodeURIComponent(m.id) + '/raise', {}); } }, '-');
           }
