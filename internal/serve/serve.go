@@ -205,6 +205,7 @@ func Run(ctx context.Context, cfg *config.Config, o Options) error {
 	apiSrv := api.New(cfg.Serve.Installation, o.Version, reg, api.NewTokenStore(APITokens(cfg)), audit)
 	apiSrv.Moderation = svc
 	apiSrv.TilesDir = TilesDir(cfg)
+	apiSrv.Say = newRConSay(rconDialer(cfg, tree))
 	apiSrv.GeoIP = geoip.Open(cfg.Serve.GeoIPDir, cfg.Serve.GeoIPLegacyDir)
 	defer apiSrv.GeoIP.Close()
 	// The API serves with write timeouts off: the stream stays open.

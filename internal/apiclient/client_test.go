@@ -91,7 +91,9 @@ func TestActions(t *testing.T) {
 	ctx := context.Background()
 	for name, f := range map[string]func() (api.ActionResult, error){
 		"broadcast": func() (api.ActionResult, error) { return c.Message(ctx, "alpha", "", api.MessageBody{Text: "hi"}) },
-		"message":   func() (api.ActionResult, error) { return c.Message(ctx, "alpha", "1", api.MessageBody{Text: "hi", Style: "important"}) },
+		"message": func() (api.ActionResult, error) {
+			return c.Message(ctx, "alpha", "1", api.MessageBody{Text: "hi", Style: "important"})
+		},
 		"tp":        func() (api.ActionResult, error) { return c.Teleport(ctx, "alpha", "1", 10, 20, "") },
 		"tp-player": func() (api.ActionResult, error) { return c.Teleport(ctx, "alpha", "1", 0, 0, "2") },
 		"heal":      func() (api.ActionResult, error) { return c.Heal(ctx, "alpha", "1") },
