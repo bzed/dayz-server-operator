@@ -5,7 +5,7 @@
 # Tests the dzo-admin actions that need a connected player, with a real DayZ client: a local server
 # with dzo-admin (and the probe servermod testmods/dzo-client-probe), a real `dzo serve`, and the
 # DayZ client started headless (the dayz-dev skill's scripts). Checks, through `dzo player|vehicle`:
-#   players state, message (three styles), teleport, refusal while in a vehicle, spawn_item into the
+#   players state, message (three styles, notification fields, expansion refused), teleport, refusal while in a vehicle, spawn_item into the
 #   inventory, the hands and the ground (with a class watch rule on the item), an unknown class, and
 #   the crew of a vehicle.
 # Needs, on a machine that does not run dzo instances: the Steam DayZ Server tool (stable 223350, or
@@ -374,6 +374,18 @@ done
 s=0
 dzo player msg t1 all "to everyone" | grep -q ok || s=1
 verdict "message to all" $s
+# Notification fields: a title and a duration; Expansion is not loaded here, so the way is refused
+# (the mod's hello carries its features, see the mod's own log line).
+s=0
+dzo player msg t1 all "notification with a title" --style notification --title Restart --seconds 5 | grep -q ok || s=1
+verdict "message (notification with title and seconds)" $s
+s=1
+out=$(dzo player msg t1 all "no expansion here" --style expansion --type toast 2>&1 || true)
+grep -q 'not available' <<<"$out" && s=0
+verdict "message (expansion is refused without Expansion)" $s
+s=1
+grep -q 'DZOAdmin.*features:' "$script" && ! grep -q 'DZOAdmin.*features:.*expansion' "$script" && s=0
+verdict "dzo-admin reports its features, without expansion" $s
 sleep 2
 "$dev/dayz-client-headless.sh" "${exp[@]}" shot "$work/client" "$work/messages.png" >/dev/null 2>&1 || true
 
