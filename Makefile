@@ -20,7 +20,7 @@ COVERAGE_MIN := 85
 GO           ?= go
 
 .PHONY: all cheatsheet docs build build-static test test-race cover coverage-check cover-html lint vet fmt fmt-check \
-        licenses reuse vulncheck check deb clean tidy generate servermods servermods-check servermods-lock test-findfile test-client
+        licenses reuse vulncheck fuzz check deb clean tidy generate servermods servermods-check servermods-lock test-findfile test-client
 
 all: lint reuse test build
 
@@ -89,8 +89,27 @@ reuse:
 vulncheck:
 	$(GO) run golang.org/x/vuln/cmd/govulncheck@v1.7.0 ./...
 
+## fuzz: run every fuzz target for FUZZTIME (default 10s) each; the seeds also run in `make test`.
+## Go fuzzes one target per invocation. Fuzz longer with FUZZTIME=5m or one target by hand
+## (see docs/development.rst); a crash leaves its input in testdata/fuzz/, commit it with the fix.
+FUZZTIME ?= 10s
+FUZZ_TARGETS := \
+	internal/battleye:FuzzDecodeLoginResponse \
+	internal/battleye:FuzzDecodeServerMessage \
+	internal/battleye:FuzzDecodeCommandResponse \
+	internal/battleye:FuzzParsePlayers \
+	internal/battleye:FuzzParseEvent \
+	internal/a2s:FuzzParseInfoResponse \
+	internal/servercfg:FuzzServercfgParse \
+	internal/admin:FuzzParseQuantity
+fuzz:
+	@set -e; for t in $(FUZZ_TARGETS); do \
+		echo "fuzz $${t#*:} ($(FUZZTIME))"; \
+		$(GO) test -run '^$$' -fuzz "^$${t#*:}$$" -fuzztime $(FUZZTIME) ./$${t%%:*}; \
+	done
+
 ## check: everything to run before pushing (mirrors CI; see AGENTS.md).
-check: fmt-check vet lint reuse licenses vulncheck test-race coverage-check
+check: fmt-check vet lint reuse licenses vulncheck test-race fuzz coverage-check
 
 ## vet: run go vet.
 vet:

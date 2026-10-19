@@ -122,6 +122,23 @@ jobs:
           go-version-file: go.mod
       - run: make servermods-check
 
+  fuzz:
+    name: Fuzz the parsers
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: make fuzz
+        run: make fuzz
+      - name: Keep the crashing input
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: fuzz-crashers
+          path: "**/testdata/fuzz/**"
+
   build:
     name: Build binaries
     needs: [lint, reuse, test, licenses, vulncheck]
@@ -142,7 +159,7 @@ jobs:
 
   deb:
     name: Build Debian package
-    needs: [lint, reuse, test, licenses, vulncheck]
+    needs: [lint, reuse, test, licenses, vulncheck, fuzz]
     runs-on: ubuntu-latest
     # Built inside a real debian:trixie container, not the Ubuntu host
     # actions run on by default: dpkg-buildpackage/lintian/debhelper
