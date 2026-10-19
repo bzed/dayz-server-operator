@@ -231,7 +231,7 @@ func TestSlowNotificationsDoNotDelayTheRestart(t *testing.T) {
 	clk := &fakeClock{t: time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)}
 	start := clk.t
 	r := countdownRestarter(t, cmd, func(ctx context.Context, way, typ, text string, seconds int) error {
-		if dl, ok := ctx.Deadline(); !ok || dl.Sub(time.Now()) > 5*time.Second {
+		if dl, ok := ctx.Deadline(); !ok || time.Until(dl) > 5*time.Second {
 			t.Errorf("Notify has no short deadline: %v %v", dl, ok)
 		}
 		clk.add(5 * time.Second) // the API and the mod take their time
