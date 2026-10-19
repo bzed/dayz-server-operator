@@ -246,3 +246,28 @@ func TestSlowNotificationsDoNotDelayTheRestart(t *testing.T) {
 		t.Errorf("the countdown took %v, want exactly the 3 minutes asked for", got)
 	}
 }
+
+func TestDurationTextKeepsTheSecondsOfAFractionalMinute(t *testing.T) {
+	for d, want := range map[time.Duration]string{
+		90 * sc:       "1 minute 30 seconds",
+		150 * sc:      "2 minutes 30 seconds",
+		mn:            "1 minute",
+		2 * mn:        "2 minutes",
+		30 * sc:       "30 seconds",
+		sc:            "1 second",
+		3*mn + 1*sc:   "3 minutes 1 second",
+		10*mn + 59*sc: "10 minutes 59 seconds",
+	} {
+		if got := durationText(d); got != want {
+			t.Errorf("durationText(%v) = %q, want %q", d, got, want)
+		}
+	}
+}
+
+func TestEveryKeepsTheLastMarkBelowTheInterval(t *testing.T) {
+	a := Announcement{Minutes: 10, Rules: []AnnounceRule{{Within: 10 * mn, Way: "chat", Every: 3 * mn}}}
+	want := "10m0s chat Server restart in 10 minutes|7m0s chat Server restart in 7 minutes|4m0s chat Server restart in 4 minutes|1m0s chat Server restart in 1 minute|0s kick"
+	if got := strings.Join(plan(a), "|"); got != want {
+		t.Errorf("timeline:\n got %s\nwant %s", got, want)
+	}
+}

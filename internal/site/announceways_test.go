@@ -86,3 +86,11 @@ func TestInstanceValidatesTheWaysOfBothAnnouncements(t *testing.T) {
 		t.Errorf("updates: %v", err)
 	}
 }
+
+func TestValidateWaysRejectsAnAtMarkOutsideItsRule(t *testing.T) {
+	m := func(n int) Duration { return Duration(time.Duration(n) * time.Minute) }
+	err := Announce{Ways: []AnnounceWay{{Within: m(10), Way: "notification", At: []Duration{m(15)}}}}.ValidateWays()
+	if err == nil || !strings.Contains(err.Error(), "within") {
+		t.Errorf("err = %v, want at above within refused", err)
+	}
+}

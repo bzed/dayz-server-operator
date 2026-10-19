@@ -107,7 +107,7 @@ func marks(sp []ruleSpan, first time.Duration) []time.Duration {
 			if base == forever {
 				base = first
 			}
-			for l := base; l > s.lo && l >= s.Every; l -= s.Every {
+			for l := base; l > s.lo; l -= s.Every {
 				if l <= first {
 					set[l] = true
 				}

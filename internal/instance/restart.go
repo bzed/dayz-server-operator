@@ -50,18 +50,20 @@ type step struct {
 }
 
 func durationText(d time.Duration) string {
-	if d >= time.Minute {
-		n := int(d / time.Minute)
+	plural := func(n int, unit string) string {
 		if n == 1 {
-			return "1 minute"
+			return "1 " + unit
 		}
-		return fmt.Sprintf("%d minutes", n)
+		return fmt.Sprintf("%d %ss", n, unit)
 	}
-	n := int(d / time.Second)
-	if n == 1 {
-		return "1 second"
+	if d >= time.Minute {
+		text := plural(int(d/time.Minute), "minute")
+		if secs := int(d % time.Minute / time.Second); secs > 0 {
+			text += " " + plural(secs, "second")
+		}
+		return text
 	}
-	return fmt.Sprintf("%d seconds", n)
+	return plural(int(d/time.Second), "second")
 }
 
 // Restarter restarts an instance gracefully: announce, lock, kick, stop, do

@@ -86,6 +86,9 @@ func (a Announce) validateWays(prefix string) error {
 			if m <= 0 {
 				return fail("at times must be positive")
 			}
+			if w.Within > 0 && m > w.Within {
+				return fail("at %s is above within %s, the rule would never announce it", time.Duration(m), time.Duration(w.Within))
+			}
 			if j > 0 && (marks[j-1]-m).Std() < gap {
 				return fail("at times must be at least %s apart for way %s (a notification at most once a minute)", gap, w.Way)
 			}
