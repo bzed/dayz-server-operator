@@ -185,6 +185,20 @@ s=0
 ev | grep -o '"x":73[0-9][0-9][^}]*' | grep -q '"radius":120' || s=1
 [ "$s" = 0 ] || ev >&2
 verdict "gas zone: with the radius of the zone (120 m)" $s
+
+# A territory flag is a marker of the Flags layer for operators: the icon, the place, and the refresher time left as ttl.
+touch "$tree/profiles/dzo_probe/flag"
+fl() { mk | grep -o '{[^{}]*"layer":"Flags"[^{}]*}'; }
+s=0
+waitfor 60 "curl -s -H 'Authorization: Bearer $(cat "$work/api.token")' http://127.0.0.1:$api/api/v1/instances/t1/map/markers | grep -q '\"layer\":\"Flags\"'" || s=1
+verdict "flag: a territory flag is a marker of the Flags layer" $s
+s=0
+fl | grep -q '"icon":"flag"' && fl | grep -Eq '"x":76[0-9][0-9]' && fl | grep -Eq '"visibility":"operator"' || s=1
+[ "$s" = 0 ] || fl >&2
+verdict "flag: with the flag icon, at its place, for operators" $s
+s=0
+fl | grep -Eq '"ttl":1[67][0-9]{5}' || s=1
+verdict "flag: the ttl is the refresher time left (about 20 days)" $s
 }
 
 

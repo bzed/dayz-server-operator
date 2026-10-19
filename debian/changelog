@@ -36,5 +36,8 @@ dayz-server-operator (0.1.0-1) UNRELEASED; urgency=medium
     RCon say as the fallback (API token: $DZO_TOKEN or announce.token,
     which dzo instance apply and dzo units sync create with the
     announcer role when an instance runs dzo-admin).
+  * Map: territory flags (flag icon, time until the flag goes down) and,
+    with DayZ Expansion, territory circles with the territory name, for
+    operators; dzo-admin 0.4.0 (the packaged PBO changes).
 
  -- Bernd Zeimetz <bernd@bzed.de>  Sat, 26 Sep 2026 15:00:00 +0000

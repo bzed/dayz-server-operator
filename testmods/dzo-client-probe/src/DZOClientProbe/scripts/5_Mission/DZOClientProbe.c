@@ -33,6 +33,15 @@ modded class MissionServer
 			Object gas = GetGame().CreateObjectEx("ContaminatedArea_Dynamic", Vector(7300, GetGame().SurfaceY(7300, 7300), 7300), ECE_PLACE_ON_SURFACE);
 			Print("DZO-PROBE gas: " + gas);
 		}
+		if (FileExist("$profile:dzo_probe/flag"))
+		{
+			DeleteFile("$profile:dzo_probe/flag");
+			// A territory flag with half of its refresher time left (20 days).
+			TerritoryFlag flag = TerritoryFlag.Cast(GetGame().CreateObjectEx("TerritoryFlag", Vector(7600, GetGame().SurfaceY(7600, 7600), 7600), ECE_PLACE_ON_SURFACE));
+			if (flag)
+				flag.SetRefreshTimer01(0.5);
+			Print("DZO-PROBE flag: " + flag);
+		}
 		if (FileExist("$profile:dzo_probe/bike"))
 		{
 			DeleteFile("$profile:dzo_probe/bike");
