@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"sort"
 	"strings"
 	"time"
 )
@@ -26,6 +25,9 @@ type Announcement struct {
 	// Event names what is coming in the messages to the players: "restart" (the default) or
 	// "shutdown".
 	Event string
+	// Rules say how the announcements reach the players and when; empty means the default of
+	// announce.ways (the last ten minutes on screen, once a minute).
+	Rules []AnnounceRule
 }
 
 func (a Announcement) event() string {
@@ -35,51 +37,16 @@ func (a Announcement) event() string {
 	return a.Event
 }
 
-// Announcements are made at these times left until the kick, plus one at the start of the
-// countdown: sparse until ten minutes are left, then every minute, and in the last minute every
-// few seconds. The ten minutes are counted down to the kick, not to the restart.
-var announceMarks = []time.Duration{
-	30 * time.Minute, 20 * time.Minute, 15 * time.Minute,
-	10 * time.Minute, 9 * time.Minute, 8 * time.Minute, 7 * time.Minute, 6 * time.Minute,
-	5 * time.Minute, 4 * time.Minute, 3 * time.Minute, 2 * time.Minute, time.Minute,
-	30 * time.Second, 15 * time.Second, 10 * time.Second, 5 * time.Second,
-	4 * time.Second, 3 * time.Second, 2 * time.Second, time.Second,
-}
-
 type step struct {
 	left time.Duration // time left until the restart
 	lock bool
 	kick bool
 	say  string // announcement text, empty for none
-}
-
-// timeline lists the steps of a restart in order. The announcements count down to the kick.
-func (a Announcement) timeline() []step {
-	kick := time.Duration(a.Kick) * time.Minute
-	lock := time.Duration(a.Lock) * time.Minute
-	total := time.Duration(a.Minutes) * time.Minute
-	text := strings.TrimSpace(a.Text)
-	if text == "" {
-		text = "Server " + a.event()
-	}
-	if lock < kick {
-		lock = kick // the server is locked at the latest when the players are kicked
-	}
-	var steps []step
-	if first := total - kick; first > 0 {
-		steps = append(steps, step{left: total, say: fmt.Sprintf("%s in %s", text, durationText(first))})
-		for _, m := range announceMarks {
-			if m < first {
-				steps = append(steps, step{left: m + kick, say: fmt.Sprintf("%s in %s", text, durationText(m))})
-			}
-		}
-	}
-	if lock > kick {
-		steps = append(steps, step{left: lock, lock: true, say: "The server is locked for the " + a.event() + ": no new logins"})
-	}
-	steps = append(steps, step{left: kick, kick: true})
-	sort.SliceStable(steps, func(i, j int) bool { return steps[i].left > steps[j].left })
-	return steps
+	// How the announcement reaches the players: way (rcon, chat, notification, expansion), typ (the
+	// Expansion type), seconds on screen. now marks the NOW notice.
+	way, typ string
+	seconds  int
+	now      bool
 }
 
 func durationText(d time.Duration) string {
@@ -104,6 +71,10 @@ type Restarter struct {
 	// Dial connects to the instance's RCon; an error means it is unreachable
 	// and the restart goes ahead at once, without announcing (§C8).
 	Dial func(ctx context.Context) (Commander, error)
+	// Notify sends an announcement through the notification system of the game server (way chat,
+	// notification or expansion, through dzo-admin). nil, or an error, makes the announcement go
+	// out over RCon "say" instead.
+	Notify func(ctx context.Context, way, typ, text string, seconds int) error
 	// Sleep waits; tests replace it.
 	Sleep func(time.Duration)
 	// Log reports what happens, for the journal.
@@ -233,9 +204,13 @@ func (r Restarter) countdown(ctx context.Context, c Commander, a Announcement) e
 		return nil
 	}
 	locked := false
+	// The way of the last announcement, which a cancel notice goes out by as well.
+	last := step{way: "rcon"}
 	left := time.Duration(a.Minutes) * time.Minute
 	for _, st := range a.timeline() {
-		if err := r.wait(ctx, c, left-st.left, &locked, a.event()); err != nil {
+		if err := r.wait(ctx, c, left-st.left, &locked, a.event(), func(text string) error {
+			return r.deliver(ctx, c, step{way: last.way, typ: last.typ, say: text, seconds: noticeSeconds})
+		}); err != nil {
 			return err
 		}
 		left = st.left
@@ -252,7 +227,8 @@ func (r Restarter) countdown(ctx context.Context, c Commander, a Announcement) e
 			}
 		}
 		if st.say != "" {
-			if err := try("announcement", false, func() error { return Announce(ctx, c, st.say) }); err != nil {
+			last = st
+			if err := try("announcement", false, func() error { return r.deliver(ctx, c, st) }); err != nil {
 				return err
 			}
 		}
@@ -267,12 +243,30 @@ func (r Restarter) countdown(ctx context.Context, c Commander, a Announcement) e
 			}
 		}
 	}
-	return r.wait(ctx, c, left, &locked, a.event())
+	return r.wait(ctx, c, left, &locked, a.event(), func(text string) error {
+		return r.deliver(ctx, c, step{way: last.way, typ: last.typ, say: text, seconds: noticeSeconds})
+	})
+}
+
+// deliver sends a step's announcement the way the step says. A way that needs the game server's
+// notification system falls back to RCon "say" when Notify is not set or fails: the players get the
+// words either way.
+func (r Restarter) deliver(ctx context.Context, c Commander, st step) error {
+	if st.way != "rcon" && st.way != "" && r.Notify != nil {
+		err := r.Notify(ctx, st.way, st.typ, st.say, st.seconds)
+		if err == nil {
+			return nil
+		}
+		if ctx.Err() == nil {
+			r.log("announcement by %s failed (%v), using RCon say", st.way, err)
+		}
+	}
+	return Announce(ctx, c, st.say)
 }
 
 // wait sleeps for d in steps of at most a minute, so that a cancelled restart ends quickly. A
 // cancelled restart unlocks the server again.
-func (r Restarter) wait(ctx context.Context, c Commander, d time.Duration, locked *bool, event string) error {
+func (r Restarter) wait(ctx context.Context, c Commander, d time.Duration, locked *bool, event string, say func(text string) error) error {
 	for d > 0 {
 		step := d
 		if step > time.Minute {
@@ -285,7 +279,7 @@ func (r Restarter) wait(ctx context.Context, c Commander, d time.Duration, locke
 			return err
 		}
 		if r.Cancelled != nil && r.Cancelled() {
-			_ = Announce(ctx, c, "The "+event+" was cancelled")
+			_ = say("The " + event + " was cancelled")
 			_ = Unlock(ctx, c)
 			return ErrCancelled
 		}
