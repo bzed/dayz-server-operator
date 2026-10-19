@@ -623,3 +623,83 @@ func TestFlagsAreServedOnlyForTwoLetterCodes(t *testing.T) {
 		t.Fatalf("no flags dir: %d", code)
 	}
 }
+
+func TestInstancePageOffersExpansionOnlyWithTheFeature(t *testing.T) {
+	e := newEnv(t, api.RoleAdmin)
+	types := []string{"toast", "baguette", "activity", "killfeed", "market", "garage"}
+	for _, path := range []string{"/b/main/i/alpha", "/b/main/i/alpha/players/7656/panel"} {
+		_, body, _ := e.get(path)
+		if strings.Contains(body, `value="expansion"`) || strings.Contains(body, `name="notify_type"`) {
+			t.Errorf("%s offers expansion without the feature: %s", path, body)
+		}
+		if !strings.Contains(body, `value="notification"`) || !strings.Contains(body, `name="title"`) || !strings.Contains(body, `name="seconds"`) {
+			t.Errorf("%s lacks the notification fields: %s", path, body)
+		}
+	}
+	e.hub.Sync(admin.SyncRequest{Proto: 1, Hello: true, World: "enoch", Features: []string{"expansion"}})
+	for _, path := range []string{"/b/main/i/alpha", "/b/main/i/alpha/players/7656/panel"} {
+		_, body, _ := e.get(path)
+		if !strings.Contains(body, `value="expansion"`) {
+			t.Errorf("%s: no expansion way with the feature: %s", path, body)
+		}
+		for _, ty := range types {
+			if !strings.Contains(body, `<option value="`+ty+`"`) {
+				t.Errorf("%s: no %s type: %s", path, ty, body)
+			}
+		}
+	}
+}
+
+func TestOnlyTheBroadcastFormOffersRCon(t *testing.T) {
+	e := newEnv(t, api.RoleAdmin)
+	if _, body, _ := e.get("/b/main/i/alpha"); !strings.Contains(body, `value="rcon"`) {
+		t.Errorf("the broadcast form lacks rcon: %s", body)
+	}
+	if _, body, _ := e.get("/b/main/i/alpha/players/7656/panel"); strings.Contains(body, `value="rcon"`) {
+		t.Errorf("the player form offers rcon, which is for everyone only: %s", body)
+	}
+}
+
+func TestBroadcastFormPostsNotifyFields(t *testing.T) {
+	e := newEnv(t, api.RoleAdmin)
+	e.hub.Sync(admin.SyncRequest{Proto: 1, Hello: true, World: "enoch", Features: []string{"expansion"}})
+	got := make(chan admin.Command, 1)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go func() {
+		for ctx.Err() == nil {
+			var res []admin.Result
+			for _, c := range e.hub.Sync(admin.SyncRequest{Proto: 1}).Commands {
+				select {
+				case got <- c:
+				default:
+				}
+				res = append(res, admin.Result{ID: c.ID, OK: true})
+			}
+			if len(res) > 0 {
+				e.hub.Sync(admin.SyncRequest{Proto: 1, Results: res})
+			}
+			time.Sleep(time.Millisecond)
+		}
+	}()
+	code, body := e.post("/b/main/i/alpha/message", url.Values{"text": {"Restart"}, "style": {"expansion"}, "notify_type": {"baguette"}, "title": {"T"}, "seconds": {"5"}}, nil)
+	if code != 200 || !strings.Contains(body, "flash ok") {
+		t.Fatalf("post: %d %s", code, body)
+	}
+	select {
+	case c := <-got:
+		if c.Style != "expansion" || c.NotifyType != "baguette" || c.Title != "T" || c.Seconds != 5 {
+			t.Errorf("command = %+v", c)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the mod got no command")
+	}
+}
+
+func TestForcedExpansionWithoutFeatureShowsAFlash(t *testing.T) {
+	e := newEnv(t, api.RoleAdmin)
+	code, body := e.post("/b/main/i/alpha/message", url.Values{"text": {"x"}, "style": {"expansion"}, "notify_type": {"toast"}}, nil)
+	if code != 200 || !strings.Contains(body, "not available") || strings.Contains(body, "flash ok") {
+		t.Fatalf("post: %d %s", code, body)
+	}
+}

@@ -58,6 +58,8 @@ type instView struct {
 	Status            admin.Status
 	Role              api.Role
 	Err               string
+	Expansion         bool // the mod reports Expansion: its notification types are offered
+	Rcon              bool // the broadcast form may use RCon say
 }
 
 func (s *Server) instance(w http.ResponseWriter, r *http.Request) {
@@ -73,6 +75,7 @@ func (s *Server) instance(w http.ResponseWriter, r *http.Request) {
 	if info, err := c.Info(r.Context()); err == nil {
 		v.Role = info.Role
 	}
+	v.Expansion, v.Rcon = v.Status.Hello.Has("expansion"), true
 	s.render(w, "instance", s.page(inst, b.Name, v))
 }
 
@@ -113,6 +116,8 @@ type panelView struct {
 	Player            admin.Player
 	Others            []admin.Player // the other online players, as teleport targets
 	Err               string
+	Expansion         bool // the mod reports Expansion
+	Rcon              bool // always false: RCon says to everyone only
 }
 
 // playerPanel is the action form block for one player; it is loaded on
@@ -123,6 +128,9 @@ func (s *Server) playerPanel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	v := panelView{Backend: b.Name, Instance: inst}
+	if st, err := c.Status(r.Context(), inst); err == nil {
+		v.Expansion = st.Hello.Has("expansion")
+	}
 	players, err := c.Players(r.Context(), inst)
 	if err != nil {
 		v.Err = err.Error()

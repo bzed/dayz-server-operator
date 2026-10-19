@@ -13,6 +13,12 @@
       document.querySelectorAll('.rowpanel').forEach(function (r) { r.remove(); });
     }
   });
+  // The Expansion notification type is asked for only with the Expansion way.
+  document.addEventListener('change', function (e) {
+    if (!e.target.hasAttribute('data-msgstyle')) { return; }
+    var type = e.target.parentNode.querySelector('[data-msgtype]');
+    if (type) { type.hidden = e.target.value !== 'expansion'; }
+  });
   // The connection info over a name shows on hover and focus, and on a tap of its i button (touch
   // screens have no hover). It is placed under the name with fixed positioning, so that the scrolling
   // table does not clip it.

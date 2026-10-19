@@ -62,6 +62,14 @@
 {{end}}
 {{end}}
 
+{{/* The way a message reaches the players: expects .Expansion (the mod reports Expansion) and .Rcon (the form is for everyone). */}}
+{{define "msgfields"}}
+    <select name="style" data-msgstyle><option value="chat">chat (yellow)</option><option value="important">important (red)</option><option value="friendly">friendly (green)</option><option value="notification">on screen (notification)</option>{{if .Rcon}}<option value="rcon">RCon say</option>{{end}}{{if .Expansion}}<option value="expansion">Expansion notification</option>{{end}}</select>
+    {{if .Expansion}}<select name="notify_type" data-msgtype hidden><option value="toast">toast</option><option value="baguette">baguette</option><option value="activity">activity</option><option value="killfeed">killfeed</option><option value="market">market</option><option value="garage">garage</option></select>{{end}}
+    <input name="title" placeholder="Title (Server)" maxlength="64" size="14" title="Heading of an on-screen notification">
+    <input name="seconds" type="number" min="1" max="60" placeholder="10 s" size="4" title="Seconds an on-screen notification stays">
+{{end}}
+
 {{define "panel"}}
 <tr class="rowpanel"><td colspan="5">
 {{if .Err}}<p class="flash err">{{.Err}}</p><button class="quiet" data-close><i class="fa fa-times" aria-hidden="true"></i>Close</button>{{else}}
@@ -72,6 +80,7 @@
   <div class="grp"><span class="gname">Tell</span>
     <form hx-post="{{$base}}/message" hx-target="#panel-flash" hx-on::after-request="this.reset()">
       <input name="text" placeholder="Direct message" maxlength="400" required size="40">
+      {{template "msgfields" .}}
       <button><i class="fa fa-comment" aria-hidden="true"></i>Message</button>
     </form>
   </div>
