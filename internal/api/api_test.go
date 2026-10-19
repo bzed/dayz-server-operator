@@ -436,3 +436,12 @@ func TestMessageRConStyleWithoutHookIs503(t *testing.T) {
 		t.Fatalf("no hook = %d, want 503", c)
 	}
 }
+
+func TestMessageRConStyleToOnePlayerIsABadRequest(t *testing.T) {
+	e := newEnv(t)
+	e.srv.Say = func(context.Context, string, string, string) error { t.Error("Say called for one player"); return nil }
+	op := e.token(RoleOperator, nil, false)
+	if c, b := e.do("POST", "/api/v1/instances/alpha/players/7656/message", op, `{"text":"hi","style":"rcon"}`); c != 400 || !strings.Contains(string(b), "everyone") {
+		t.Fatalf("rcon to one player = %d %s, want 400", c, b)
+	}
+}

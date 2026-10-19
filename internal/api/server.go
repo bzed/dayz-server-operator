@@ -480,6 +480,8 @@ func (s *Server) say(w http.ResponseWriter, r *http.Request, c *call, cmd admin.
 	switch {
 	case s.Say == nil:
 		deny(http.StatusServiceUnavailable, errors.New("rcon is not available"))
+	case cmd.SteamID != "":
+		deny(http.StatusBadRequest, errors.New("rcon says to everyone only"))
 	case cmd.Text == "" || len(cmd.Text) > 400:
 		deny(http.StatusBadRequest, errors.New("message needs text of at most 400 bytes"))
 	case !s.actions.Allow(c.who.Token.ID) || !s.targets.Allow(c.hub.Name+"/"+target):

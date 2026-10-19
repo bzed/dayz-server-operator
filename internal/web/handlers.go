@@ -421,7 +421,7 @@ func quantity(r *http.Request) (float64, error) {
 }
 
 func actMessage(r *http.Request, c *apiclient.Client, inst string) (api.ActionResult, error) {
-	seconds, _ := strconv.Atoi(strings.TrimSpace(r.PostFormValue("seconds")))
+	seconds, _ := strconv.Atoi(strings.TrimSpace(r.PostFormValue("seconds"))) // empty or bad: 0, the default of the mod
 	return c.Message(r.Context(), inst, r.PathValue("steamid"), api.MessageBody{
 		Text: r.PostFormValue("text"), Style: r.PostFormValue("style"), NotifyType: r.PostFormValue("notify_type"),
 		Title: strings.TrimSpace(r.PostFormValue("title")), Seconds: seconds})
