@@ -9,12 +9,15 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/bzed/dayz-server-operator/internal/btrfs"
 )
 
 // btrfsData returns a data directory on btrfs (DZO_BTRFS_TESTDIR, or the
 // user's cache directory), or skips. Subvolumes need btrfs.Delete to go.
-func btrfsData(t *testing.T) string {
+func btrfsData(t testing.TB) string {
 	t.Helper()
 	base := os.Getenv("DZO_BTRFS_TESTDIR")
 	if base == "" {
@@ -49,76 +52,61 @@ func btrfsData(t *testing.T) string {
 func TestBackupAndRestoreThroughTheCLI(t *testing.T) {
 	data := btrfsData(t)
 	cfg, root, _ := renderSetupIn(t, data)
-	if out, err := runCmd(t, "backup", "create", "x", "--config", cfg); err == nil {
-		t.Fatalf("an instance that was never rendered is not a subvolume yet: %s", out)
-	}
-	if out, err := runCmd(t, "instance", "render", "x", "--config", cfg); err != nil {
-		t.Fatalf("render: %v\n%s", err, out)
-	}
-	if ok, err := btrfs.IsSubvolume(root); err != nil || !ok {
-		t.Fatalf("render must create the instance as a subvolume: %v %v", ok, err)
-	}
+	out, err := runCmd(t, "backup", "create", "x", "--config", cfg)
+	require.Error(t, err, "an instance that was never rendered is not a subvolume yet: %s", out)
+	out, err = runCmd(t, "instance", "render", "x", "--config", cfg)
+	require.NoError(t, err, "render: %s", out)
+	ok, err := btrfs.IsSubvolume(root)
+	require.NoError(t, err)
+	require.True(t, ok, "render must create the instance as a subvolume")
 	live := filepath.Join(root, "mpmissions", "empty.m")
 	storage := filepath.Join(live, "storage_1", "persistence")
 	writeFile(t, storage, "player data v1")
 
-	out, err := runCmd(t, "backup", "create", "x", "--config", cfg)
-	if err != nil {
-		t.Fatalf("create: %v\n%s", err, out)
-	}
+	out, err = runCmd(t, "backup", "create", "x", "--config", cfg)
+	require.NoError(t, err, "create: %s", out)
 	id := strings.Fields(out)[0]
-	if !strings.HasSuffix(id, "-manual") {
-		t.Fatalf("snapshot id = %q", id)
-	}
-	if out, err := runCmd(t, "backup", "list", "x", "--config", cfg); err != nil || !strings.Contains(out, id) || !strings.Contains(out, "complete") {
-		t.Fatalf("list: %v\n%s", err, out)
-	}
+	require.True(t, strings.HasSuffix(id, "-manual"), "snapshot id = %q", id)
+	out, err = runCmd(t, "backup", "list", "x", "--config", cfg)
+	require.NoError(t, err, "list: %s", out)
+	require.Contains(t, out, id, "list")
+	require.Contains(t, out, "complete", "list")
 	writeFile(t, storage, "player data v2, changed")
-	if out, err := runCmd(t, "backup", "diff", "x", id, "--config", cfg); err != nil || !strings.Contains(out, "~ mpmissions/empty.m/storage_1/persistence") {
-		t.Fatalf("diff: %v\n%s", err, out)
-	}
-	if _, err := runCmd(t, "backup", "pin", "x", id, "--config", cfg); err != nil {
-		t.Fatal(err)
-	}
-	if out, _ := runCmd(t, "backup", "list", "x", "--config", cfg); !strings.Contains(out, "pinned") {
-		t.Errorf("pinned snapshots are marked: %s", out)
-	}
-	if _, err := runCmd(t, "backup", "unpin", "x", id, "--config", cfg); err != nil {
-		t.Fatal(err)
-	}
-	if out, err := runCmd(t, "backup", "prune", "--dry-run", "--config", cfg); err != nil || strings.Contains(out, "would prune") {
-		t.Errorf("one snapshot is within the policy: %v\n%s", err, out)
-	}
+	out, err = runCmd(t, "backup", "diff", "x", id, "--config", cfg)
+	require.NoError(t, err, "diff: %s", out)
+	require.Contains(t, out, "~ mpmissions/empty.m/storage_1/persistence", "diff")
+	_, err = runCmd(t, "backup", "pin", "x", id, "--config", cfg)
+	require.NoError(t, err)
+	out, _ = runCmd(t, "backup", "list", "x", "--config", cfg)
+	assert.Contains(t, out, "pinned", "pinned snapshots are marked")
+	_, err = runCmd(t, "backup", "unpin", "x", id, "--config", cfg)
+	require.NoError(t, err)
+	out, err = runCmd(t, "backup", "prune", "--dry-run", "--config", cfg)
+	assert.NoError(t, err, "one snapshot is within the policy: %s", out)
+	assert.NotContains(t, out, "would prune", "one snapshot is within the policy")
 
 	// a path restore, then a full restore, with the instance not running (no systemd here)
 	lcFlags := []string{"--command", "false"} // `false is-active` fails: the unit is not active
 	args := append([]string{"restore", "x", id, "--path", "mpmissions/empty.m/storage_1", "--config", cfg}, lcFlags...)
-	if out, err := runCmd(t, args...); err != nil || !strings.Contains(out, "restored") {
-		t.Fatalf("restore --path: %v\n%s", err, out)
-	}
-	if b, _ := os.ReadFile(storage); string(b) != "player data v1" {
-		t.Errorf("the path must be back: %q", b)
-	}
+	out, err = runCmd(t, args...)
+	require.NoError(t, err, "restore --path: %s", out)
+	require.Contains(t, out, "restored", "restore --path")
+	b, _ := os.ReadFile(storage)
+	assert.Equal(t, "player data v1", string(b), "the path must be back")
 	writeFile(t, filepath.Join(root, "marker"), "live")
 	args = append([]string{"restore", "x", id, "--config", cfg}, lcFlags...)
-	if out, err := runCmd(t, args...); err != nil {
-		t.Fatalf("restore: %v\n%s", err, out)
-	}
-	if _, err := os.Stat(filepath.Join(root, "marker")); !os.IsNotExist(err) {
-		t.Error("a full restore brings back the backup")
-	}
-	if ok, _ := btrfs.IsSubvolume(root); !ok {
-		t.Error("the restored instance is a subvolume")
-	}
+	out, err = runCmd(t, args...)
+	require.NoError(t, err, "restore: %s", out)
+	_, err = os.Stat(filepath.Join(root, "marker"))
+	assert.ErrorIs(t, err, os.ErrNotExist, "a full restore brings back the backup")
+	ok, _ = btrfs.IsSubvolume(root)
+	assert.True(t, ok, "the restored instance is a subvolume")
 	out, _ = runCmd(t, "backup", "list", "x", "--config", cfg)
 	for _, reason := range []string{"pre_restore", "replaced"} {
-		if !strings.Contains(out, reason) {
-			t.Errorf("a restore leaves a %s snapshot:\n%s", reason, out)
-		}
+		assert.Contains(t, out, reason, "a restore leaves a %s snapshot", reason)
 	}
-	if _, err := runCmd(t, "backup", "create", "x", "--reason", "bogus", "--config", cfg); err == nil {
-		t.Error("an unknown reason must fail")
-	}
+	_, err = runCmd(t, "backup", "create", "x", "--reason", "bogus", "--config", cfg)
+	assert.Error(t, err, "an unknown reason must fail")
 }
 
 func TestRenderTakesTheSnapshotsThePolicyAsks(t *testing.T) {
@@ -129,18 +117,17 @@ func TestRenderTakesTheSnapshotsThePolicyAsks(t *testing.T) {
 	writeFile(t, site, string(b)+"backup: {before: [render, mission_update]}\n")
 
 	out, err := runCmd(t, "instance", "render", "x", "--config", cfg)
-	if err != nil || strings.Contains(out, "snapshot ") {
-		t.Fatalf("the first render has nothing to protect: %v\n%s", err, out)
-	}
-	if out, err = runCmd(t, "instance", "render", "x", "--config", cfg); err != nil || strings.Count(out, "snapshot ") != 1 {
-		t.Fatalf("a later render takes the render snapshot: %v\n%s", err, out)
-	}
-	if out, err = runCmd(t, "instance", "render", "x", "--config", cfg, "--update-pristine"); err != nil || strings.Count(out, "snapshot ") != 2 {
-		t.Fatalf("--update-pristine adds the mission_update snapshot: %v\n%s", err, out)
-	}
-	if out, err = runCmd(t, "instance", "render", "x", "--config", cfg, "--dry-run"); err != nil || strings.Contains(out, "snapshot ") {
-		t.Fatalf("a dry run changes nothing: %v\n%s", err, out)
-	}
+	require.NoError(t, err, "the first render has nothing to protect: %s", out)
+	require.NotContains(t, out, "snapshot ", "the first render has nothing to protect")
+	out, err = runCmd(t, "instance", "render", "x", "--config", cfg)
+	require.NoError(t, err, "a later render: %s", out)
+	require.Equal(t, 1, strings.Count(out, "snapshot "), "a later render takes the render snapshot: %s", out)
+	out, err = runCmd(t, "instance", "render", "x", "--config", cfg, "--update-pristine")
+	require.NoError(t, err, "--update-pristine: %s", out)
+	require.Equal(t, 2, strings.Count(out, "snapshot "), "--update-pristine adds the mission_update snapshot: %s", out)
+	out, err = runCmd(t, "instance", "render", "x", "--config", cfg, "--dry-run")
+	require.NoError(t, err, "a dry run: %s", out)
+	require.NotContains(t, out, "snapshot ", "a dry run changes nothing")
 }
 
 func TestBackupNeedsBtrfs(t *testing.T) {
@@ -148,10 +135,8 @@ func TestBackupNeedsBtrfs(t *testing.T) {
 	if ok, _ := btrfs.IsBtrfs(filepath.Dir(cfg)); ok {
 		t.Skip("the temp dir is on btrfs")
 	}
-	if out, err := runCmd(t, "instance", "render", "x", "--config", cfg); err != nil {
-		t.Fatalf("a render works without btrfs: %v\n%s", err, out)
-	}
-	if _, err := runCmd(t, "backup", "create", "x", "--config", cfg); err == nil || !strings.Contains(err.Error(), "btrfs") {
-		t.Errorf("a backup without btrfs must say so: %v", err)
-	}
+	out, err := runCmd(t, "instance", "render", "x", "--config", cfg)
+	require.NoError(t, err, "a render works without btrfs: %s", out)
+	_, err = runCmd(t, "backup", "create", "x", "--config", cfg)
+	assert.ErrorContains(t, err, "btrfs", "a backup without btrfs must say so")
 }

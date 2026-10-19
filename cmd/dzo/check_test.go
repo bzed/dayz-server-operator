@@ -11,6 +11,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/bzed/dayz-server-operator/internal/monitor"
 )
 
@@ -23,12 +26,8 @@ func TestCheckRemoteInstanceOK(t *testing.T) {
 	defer server.Close()
 
 	out, err := runCmd(t, "check", "remote", "--url", server.URL, "--instance", "deerisle")
-	if err != nil {
-		t.Fatalf("check remote: %v", err)
-	}
-	if !strings.HasPrefix(out, "OK:") {
-		t.Errorf("output = %q", out)
-	}
+	require.NoError(t, err, "check remote")
+	assert.True(t, strings.HasPrefix(out, "OK:"), "output = %q", out)
 }
 
 func TestCheckRemoteInstanceCritical(t *testing.T) {
@@ -38,19 +37,11 @@ func TestCheckRemoteInstanceCritical(t *testing.T) {
 	defer server.Close()
 
 	out, err := runCmd(t, "check", "remote", "--url", server.URL, "--instance", "deerisle")
-	if err == nil {
-		t.Fatal("expected a non-nil error for a CRITICAL check result")
-	}
+	require.Error(t, err, "expected a non-nil error for a CRITICAL check result")
 	var exitErr *checkExitErr
-	if ce, ok := err.(*checkExitErr); ok {
-		exitErr = ce
-	}
-	if exitErr == nil || exitErr.code != 2 {
-		t.Fatalf("err = %v, want a *checkExitErr with code 2", err)
-	}
-	if !strings.HasPrefix(out, "CRITICAL:") {
-		t.Errorf("output = %q", out)
-	}
+	require.ErrorAs(t, err, &exitErr, "want a *checkExitErr with code 2")
+	require.Equal(t, 2, exitErr.code)
+	assert.True(t, strings.HasPrefix(out, "CRITICAL:"), "output = %q", out)
 }
 
 func TestCheckRemoteGlobalOK(t *testing.T) {
@@ -60,57 +51,36 @@ func TestCheckRemoteGlobalOK(t *testing.T) {
 	defer server.Close()
 
 	out, err := runCmd(t, "check", "remote", "--url", server.URL)
-	if err != nil {
-		t.Fatalf("check remote: %v", err)
-	}
-	if !strings.HasPrefix(out, "OK:") {
-		t.Errorf("output = %q", out)
-	}
+	require.NoError(t, err, "check remote")
+	assert.True(t, strings.HasPrefix(out, "OK:"), "output = %q", out)
 }
 
 func TestCheckRemoteUnknownOnFetchFailure(t *testing.T) {
 	conn, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("listen: %v", err)
-	}
+	require.NoError(t, err, "listen")
 	addr := conn.Addr().String()
 	_ = conn.Close()
 
 	out, err := runCmd(t, "check", "remote", "--url", "http://"+addr, "--timeout", "300ms")
-	if err == nil {
-		t.Fatal("expected an error")
-	}
+	require.Error(t, err)
 	var exitErr *checkExitErr
-	if ce, ok := err.(*checkExitErr); ok {
-		exitErr = ce
-	}
-	if exitErr == nil || exitErr.code != 3 {
-		t.Fatalf("err = %v, want a *checkExitErr with code 3 (UNKNOWN)", err)
-	}
-	if !strings.HasPrefix(out, "UNKNOWN:") {
-		t.Errorf("output = %q", out)
-	}
+	require.ErrorAs(t, err, &exitErr, "want a *checkExitErr with code 3 (UNKNOWN)")
+	require.Equal(t, 3, exitErr.code)
+	assert.True(t, strings.HasPrefix(out, "UNKNOWN:"), "output = %q", out)
 }
 
 func TestCheckRemoteRequiresURL(t *testing.T) {
-	if _, err := runCmd(t, "check", "remote"); err == nil {
-		t.Fatal("expected an error for missing --url")
-	}
+	_, err := runCmd(t, "check", "remote")
+	require.Error(t, err, "expected an error for missing --url")
 }
 
 func TestCheckA2SCmd(t *testing.T) {
 	conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 0})
-	if err != nil {
-		t.Fatalf("listen: %v", err)
-	}
+	require.NoError(t, err, "listen")
 	addr := conn.LocalAddr().String()
 	_ = conn.Close() // closed on purpose: nothing answers, expect CRITICAL
 
 	out, err := runCmd(t, "check", "a2s", addr, "--timeout", "300ms")
-	if err == nil {
-		t.Fatal("expected an error for an unreachable query port")
-	}
-	if !strings.HasPrefix(out, "CRITICAL:") {
-		t.Errorf("output = %q", out)
-	}
+	require.Error(t, err, "expected an error for an unreachable query port")
+	assert.True(t, strings.HasPrefix(out, "CRITICAL:"), "output = %q", out)
 }

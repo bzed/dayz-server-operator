@@ -7,8 +7,10 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestNotifyTestSendsMessage(t *testing.T) {
@@ -22,21 +24,14 @@ func TestNotifyTestSendsMessage(t *testing.T) {
 	defer server.Close()
 
 	out, err := runCmd(t, "notify", "test", "--url", server.URL, "--message", "hello dzo")
-	if err != nil {
-		t.Fatalf("notify test: %v", err)
-	}
-	if !strings.Contains(out, "sent") {
-		t.Errorf("output = %q", out)
-	}
-	if gotContent != "hello dzo" {
-		t.Errorf("posted content = %q", gotContent)
-	}
+	require.NoError(t, err, "notify test")
+	assert.Contains(t, out, "sent")
+	assert.Equal(t, "hello dzo", gotContent, "posted content")
 }
 
 func TestNotifyTestRequiresURL(t *testing.T) {
-	if _, err := runCmd(t, "notify", "test"); err == nil {
-		t.Fatal("expected an error for missing --url")
-	}
+	_, err := runCmd(t, "notify", "test")
+	require.Error(t, err, "expected an error for missing --url")
 }
 
 func TestNotifyTestHTTPFailure(t *testing.T) {
@@ -45,7 +40,6 @@ func TestNotifyTestHTTPFailure(t *testing.T) {
 	}))
 	defer server.Close()
 
-	if _, err := runCmd(t, "notify", "test", "--url", server.URL); err == nil {
-		t.Fatal("expected an error for a non-2xx webhook response")
-	}
+	_, err := runCmd(t, "notify", "test", "--url", server.URL)
+	require.Error(t, err, "expected an error for a non-2xx webhook response")
 }

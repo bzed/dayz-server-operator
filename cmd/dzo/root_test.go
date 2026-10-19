@@ -7,13 +7,14 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/spf13/cobra"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-func runCmd(t *testing.T, args ...string) (string, error) {
+func runCmd(t testing.TB, args ...string) (string, error) {
 	t.Helper()
 	cmd := newRootCmd()
 	var out bytes.Buffer
@@ -26,84 +27,53 @@ func runCmd(t *testing.T, args ...string) (string, error) {
 
 func TestVersionCmd(t *testing.T) {
 	out, err := runCmd(t, "version")
-	if err != nil {
-		t.Fatalf("version: %v", err)
-	}
-	if !strings.Contains(out, "dev") {
-		t.Errorf("version output = %q, want it to mention the dev version", out)
-	}
+	require.NoError(t, err, "version")
+	assert.Contains(t, out, "dev", "version output should mention the dev version")
 }
 
 func TestConfigValidateCmd(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.yaml")
-	if err := os.WriteFile(path, []byte("paths:\n  data: "+dir+"\n"), 0o600); err != nil {
-		t.Fatalf("write fixture: %v", err)
-	}
+	require.NoError(t, os.WriteFile(path, []byte("paths:\n  data: "+dir+"\n"), 0o600), "write fixture")
 	out, err := runCmd(t, "config", "validate", "--config", path)
-	if err != nil {
-		t.Fatalf("config validate: %v\n%s", err, out)
-	}
-	if !strings.Contains(out, "is valid") {
-		t.Errorf("output = %q", out)
-	}
+	require.NoError(t, err, "config validate: %s", out)
+	assert.Contains(t, out, "is valid")
 }
 
 func TestConfigValidateCmdMissingFile(t *testing.T) {
 	_, err := runCmd(t, "config", "validate", "--config", "/nonexistent/config.yaml")
-	if err == nil {
-		t.Fatal("expected an error for a missing config file")
-	}
+	require.Error(t, err, "expected an error for a missing config file")
 }
 
 func TestServerCfgShowAndDiff(t *testing.T) {
 	dir := t.TempDir()
 	oldPath := filepath.Join(dir, "old.cfg")
 	newPath := filepath.Join(dir, "new.cfg")
-	if err := os.WriteFile(oldPath, []byte(`hostname = "old"; maxPlayers = 40;`), 0o600); err != nil {
-		t.Fatalf("write old.cfg: %v", err)
-	}
-	if err := os.WriteFile(newPath, []byte(`hostname = "new"; maxPlayers = 40;`), 0o600); err != nil {
-		t.Fatalf("write new.cfg: %v", err)
-	}
+	require.NoError(t, os.WriteFile(oldPath, []byte(`hostname = "old"; maxPlayers = 40;`), 0o600), "write old.cfg")
+	require.NoError(t, os.WriteFile(newPath, []byte(`hostname = "new"; maxPlayers = 40;`), 0o600), "write new.cfg")
 
 	out, err := runCmd(t, "servercfg", "show", oldPath)
-	if err != nil {
-		t.Fatalf("show: %v", err)
-	}
-	if !strings.Contains(out, `hostname = "old";`) {
-		t.Errorf("show output = %q", out)
-	}
+	require.NoError(t, err, "show")
+	assert.Contains(t, out, `hostname = "old";`)
 
 	out, err = runCmd(t, "servercfg", "diff", oldPath, newPath)
-	if err != nil {
-		t.Fatalf("diff: %v", err)
-	}
-	if !strings.Contains(out, "hostname") {
-		t.Errorf("diff output = %q", out)
-	}
+	require.NoError(t, err, "diff")
+	assert.Contains(t, out, "hostname")
 }
 
 func TestServerCfgShowMissingFile(t *testing.T) {
 	_, err := runCmd(t, "servercfg", "show", "/nonexistent/serverDZ.cfg")
-	if err == nil {
-		t.Fatal("expected an error for a missing file")
-	}
+	require.Error(t, err, "expected an error for a missing file")
 }
 
 func TestServerCfgDiffParseError(t *testing.T) {
 	dir := t.TempDir()
 	badPath := filepath.Join(dir, "bad.cfg")
-	if err := os.WriteFile(badPath, []byte("not valid"), 0o600); err != nil {
-		t.Fatalf("write bad.cfg: %v", err)
-	}
+	require.NoError(t, os.WriteFile(badPath, []byte("not valid"), 0o600), "write bad.cfg")
 	goodPath := filepath.Join(dir, "good.cfg")
-	if err := os.WriteFile(goodPath, []byte(`hostname = "ok";`), 0o600); err != nil {
-		t.Fatalf("write good.cfg: %v", err)
-	}
-	if _, err := runCmd(t, "servercfg", "diff", badPath, goodPath); err == nil {
-		t.Fatal("expected a parse error")
-	}
+	require.NoError(t, os.WriteFile(goodPath, []byte(`hostname = "ok";`), 0o600), "write good.cfg")
+	_, err := runCmd(t, "servercfg", "diff", badPath, goodPath)
+	require.Error(t, err, "expected a parse error")
 }
 
 func TestMain(m *testing.M) {
@@ -116,9 +86,7 @@ func TestRefuseRoot(t *testing.T) {
 	root := newRootCmd()
 	find := func(args ...string) *cobra.Command {
 		c, _, err := root.Find(args)
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 		return c
 	}
 	for _, tc := range []struct {
@@ -139,8 +107,10 @@ func TestRefuseRoot(t *testing.T) {
 		{nil, 0, "", false},
 	} {
 		err := refuseRoot(find(tc.args...), tc.euid, tc.override)
-		if (err != nil) != tc.refused {
-			t.Errorf("%v euid %d override %q: err = %v, want refused %v", tc.args, tc.euid, tc.override, err, tc.refused)
+		if tc.refused {
+			assert.Error(t, err, "%v euid %d override %q should be refused", tc.args, tc.euid, tc.override)
+		} else {
+			assert.NoError(t, err, "%v euid %d override %q should not be refused", tc.args, tc.euid, tc.override)
 		}
 	}
 }
