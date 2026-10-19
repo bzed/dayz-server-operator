@@ -731,6 +731,12 @@
     return elIcon('mi-wrap', root);
   }
 
+  // A marker with a ttl expires in that many seconds; a territory flag says so when its refresher is used up.
+  function ttlText(m) {
+    if ((m.props || []).some(function (kv) { return kv.k === 'refresher' && kv.v === 'expired'; })) { return 'goes down now'; }
+    return m.ttl > 0 ? 'goes down in ' + span(m.ttl) : '';
+  }
+
   function onMarkers(list) {
     Object.keys(markerLayers).forEach(function (k) { markerLayers[k].clearLayers(); });
     list.forEach(function (m) {
@@ -744,7 +750,10 @@
       var glyph = m.shape && m.shape !== 'point' ? '' : iconClass(m.icon);
       var shape;
       if (m.shape === 'circle') {
-        shape = L.circle(ll(m), { radius: m.radius || 50, color: color, weight: 2, fillOpacity: 0.15 });
+        // An Expansion territory is a thin outline, so that the map stays readable under it.
+        shape = m.source === 'territory'
+          ? L.circle(ll(m), { radius: m.radius || 50, color: color, weight: 1, opacity: 0.9, fillOpacity: 0.04 })
+          : L.circle(ll(m), { radius: m.radius || 50, color: color, weight: 2, fillOpacity: 0.15 });
       } else if ((m.shape === 'polygon' || m.shape === 'polyline') && m.points && m.points.length) {
         var pts = m.points.map(function (p) { return [p.z, p.x]; });
         shape = m.shape === 'polygon' ? L.polygon(pts, { color: color }) : L.polyline(pts, { color: color });
@@ -754,10 +763,13 @@
       } else {
         shape = L.circleMarker(ll(m), { radius: 5, color: color, fillOpacity: 0.9 });
       }
-      var lines = (m.props || []).map(function (kv) { return kv.k + ': ' + kv.v; });
+      var lines = (m.props || []).filter(function (kv) { return kv.k !== 'refresher'; }).map(function (kv) { return kv.k + ': ' + kv.v; });
+      var left = ttlText(m);
+      if (left) { lines.unshift(left); }
       var title = m.label || m.id;
       bindTip(shape, title, lines);
-      onMenu(shape, function () { return plainSpec(title, lines.concat(posText(m)), m, m.shape === 'circle' ? m.radius : 0); });
+      // A territory is big and often under other things: it has the tooltip, and a click on it goes to the map.
+      if (m.source !== 'territory') { onMenu(shape, function () { return plainSpec(title, lines.concat(posText(m)), m, m.shape === 'circle' ? m.radius : 0); }); }
       shape.addTo(group);
     });
   }

@@ -238,6 +238,12 @@ func TestMapAndAudit(t *testing.T) {
 	if c, js, _ := e.get("/static/map.js"); c != 200 || !strings.Contains(js, "EventSource") {
 		t.Fatalf("map.js: %d", c)
 	}
+	// Flags show the time they have left, Expansion territories are drawn thin.
+	for _, want := range []string{"function ttlText", "goes down in", "goes down now", "m.source === 'territory'"} {
+		if _, js, _ := e.get("/static/map.js"); !strings.Contains(js, want) {
+			t.Errorf("map.js lacks %q", want)
+		}
+	}
 	if c, svg, _ := e.get("/static/icons/helicopter.svg"); c != 200 || !strings.Contains(svg, "Font Awesome Free") {
 		t.Fatalf("the helicopter icon is not served: %d", c)
 	}
