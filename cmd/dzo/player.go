@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -87,7 +88,8 @@ func newPlayerCmd() *cobra.Command {
 		},
 	})
 
-	var style string
+	var style, notifyType, title string
+	var seconds int
 	msg := &cobra.Command{
 		Use: "msg <instance> <steamid|all> <text>", Short: "Send a message to a player, or to everyone", Args: cobra.MinimumNArgs(3),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -95,18 +97,27 @@ func newPlayerCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if notifyType != "" && style != "expansion" {
+				return fmt.Errorf("--type needs --style expansion")
+			}
+			if style == "expansion" && notifyType != "" && !slices.Contains(admin.NotifyTypes, notifyType) {
+				return fmt.Errorf("unknown --type %q (want %s)", notifyType, strings.Join(admin.NotifyTypes, ", "))
+			}
 			id := args[1]
 			if id == "all" {
 				id = ""
 			}
-			r, err := c.Message(ctxOf(cmd), args[0], id, api.MessageBody{Text: strings.Join(args[2:], " "), Style: style})
+			r, err := c.Message(ctxOf(cmd), args[0], id, api.MessageBody{Text: strings.Join(args[2:], " "), Style: style, NotifyType: notifyType, Title: title, Seconds: seconds})
 			if err != nil {
 				return err
 			}
 			return printResult(cmd, r)
 		},
 	}
-	msg.Flags().StringVar(&style, "style", "chat", "chat (yellow), important (red), friendly (green), blue or notification")
+	msg.Flags().StringVar(&style, "style", "chat", "how it reaches the players: chat (yellow), important (red), friendly (green), blue, notification (on screen), expansion (Expansion notification, see --type), rcon (BattlEye say, everyone only)")
+	msg.Flags().StringVar(&notifyType, "type", "", "Expansion notification type with --style expansion: "+strings.Join(admin.NotifyTypes, ", ")+" (default toast)")
+	msg.Flags().StringVar(&title, "title", "", "heading of a notification (default Server)")
+	msg.Flags().IntVar(&seconds, "seconds", 0, "how long a notification stays on screen (default 10, at most 60)")
 
 	kick := &cobra.Command{
 		Use: "kick <instance> <steamid> <reason...>", Short: "Kick a player; the reason (at most 64 bytes) is shown to them", Args: cobra.MinimumNArgs(3),
