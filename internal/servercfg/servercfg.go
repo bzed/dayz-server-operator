@@ -394,7 +394,9 @@ func (p *parser) parseValue() (Item, error) {
 	for !p.eof() && !strings.ContainsRune(",;}", rune(p.src[p.pos])) {
 		p.pos++
 	}
-	raw := strings.TrimSpace(p.src[start:p.pos])
+	// Trim only what skipSpaceAndComments skips: with TrimSpace's wider set a value such as
+	// "\v/*" would lose its \v and be written back as the start of a comment.
+	raw := strings.Trim(p.src[start:p.pos], " \t\r\n")
 	if raw == "" {
 		return Item{}, fmt.Errorf("empty bare value at offset %d", start)
 	}
