@@ -13,6 +13,14 @@
       document.querySelectorAll('.rowpanel').forEach(function (r) { r.remove(); });
     }
   });
+  // Forms that reset (data-reset) or close their dialog (data-close-dialog) once the request went through. The
+  // CSP has no 'unsafe-eval', which htmx's hx-on needs to compile its handler, so the page says it with attributes.
+  document.addEventListener('htmx:afterRequest', function (e) {
+    var form = e.detail.elt;
+    if (!e.detail.successful || !form.matches || !form.matches('form')) { return; }
+    if (form.hasAttribute('data-reset')) { form.reset(); }
+    if (form.hasAttribute('data-close-dialog')) { form.closest('dialog').close(); }
+  });
   // The Expansion notification type is asked for only with the Expansion way.
   document.addEventListener('change', function (e) {
     if (!e.target.hasAttribute('data-msgstyle')) { return; }
