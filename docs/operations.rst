@@ -107,7 +107,7 @@ How the countdown reaches the players is ``announce.ways`` (in ``restarts.announ
 Notifications go through ``dzo-admin`` and the API of ``dzo serve``: the restart needs an API token, ``$DZO_TOKEN`` or
 the file ``announce.token`` in the secrets directory. ``dzo instance apply`` (and ``dzo units sync``) creates that file with a token of the ``announcer`` role (it can only read the instance's status and broadcast) whenever an instance runs ``dzo-admin`` and the file is missing, or its token was revoked or has expired (tokens last a year, so run ``apply`` again by then). If the mod is not
 connected, the API or the token is missing, or the message is refused, the same text goes out over RCon ``say`` and the
-restart continues on time. ``expansion`` becomes a plain notification when the mod does not report Expansion.
+restart continues on time. ``expansion`` becomes a plain notification when the mod does not report Expansion. A ``dzo-admin`` from before these ways (it runs until its instance is restarted onto the new mod) reports no features: the on-screen notifications still arrive, as plain notifications of ten seconds titled "Server", and the title and duration of a rule are ignored.
 
 dzo talks to the server over its own BattlEye RCon client. The restart itself
 goes through the unit's stop (see :ref:`stopping-the-server`). If RCon does not

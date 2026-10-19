@@ -18,11 +18,13 @@
 # from the Steam workshop) and checks the Expansion notification types of dzo-admin, with a screenshot of each in
 # $DZO_SHOTS_DIR (default: the work directory, kept); it stops after those checks (the player is still choosing a
 # spawn point).
-# Usage: scripts/test-client.sh [--exp] [--keep] [--no-client] [--bans] [--expansion]
+# --old-mod runs the dzo-admin that main pins (before the message ways) with this dzo, as on a host whose
+# instances were not restarted yet, and checks that the notification the restart countdown sends still arrives.
+# Usage: scripts/test-client.sh [--exp] [--keep] [--no-client] [--bans] [--expansion] [--old-mod]
 set -euo pipefail
 cd "$(dirname "$0")/.."
 dev=${DAYZ_DEV_SCRIPTS:-$HOME/.claude/skills/dayz-dev/scripts}
-exp=() keep=0 noclient=0 bans=0 expansion=0 product=stable
+exp=() keep=0 noclient=0 bans=0 expansion=0 oldmod=0 product=stable
 for a in "$@"; do
 	case $a in
 	--exp) exp=(-e) product=experimental ;;
@@ -30,7 +32,8 @@ for a in "$@"; do
 	--no-client) noclient=1 ;;
 	--bans) bans=1 ;;
 	--expansion) expansion=1 ;;
-	*) echo "usage: $0 [--exp] [--keep] [--no-client] [--bans] [--expansion]" >&2; exit 2 ;;
+	--old-mod) oldmod=1 ;;
+	*) echo "usage: $0 [--exp] [--keep] [--no-client] [--bans] [--expansion] [--old-mod]" >&2; exit 2 ;;
 	esac
 done
 [ -x "$dev/dayz-client-headless.sh" ] || { echo "dayz-dev scripts not found in $dev (DAYZ_DEV_SCRIPTS)" >&2; exit 2; }
@@ -186,7 +189,14 @@ verdict "gas zone: with the radius of the zone (120 m)" $s
 
 
 go build -o "$work/dzo" ./cmd/dzo
-"$work/dzo" servermods build --src servermods --out "$work/built" >/dev/null
+if [ "$oldmod" = 1 ]; then
+	mkdir -p "$work/oldsrc/dzo-admin"
+	git -C servermods/dzo-admin archive "$(git rev-parse main:servermods/dzo-admin)" | tar -x -C "$work/oldsrc/dzo-admin"
+	git -C "$work/oldsrc/dzo-admin" init -q && git -C "$work/oldsrc/dzo-admin" add -A && git -C "$work/oldsrc/dzo-admin" -c user.name=t -c user.email=t@t commit -qm old
+	"$work/dzo" servermods build --src "$work/oldsrc" --out "$work/built" >/dev/null
+else
+	"$work/dzo" servermods build --src servermods --out "$work/built" >/dev/null
+fi
 mkdir "$work/tsrc" && cp -r testmods/dzo-client-probe "$work/tsrc/" && git -C "$work/tsrc/dzo-client-probe" init -q && git -C "$work/tsrc/dzo-client-probe" add -A && git -C "$work/tsrc/dzo-client-probe" -c user.name=t -c user.email=t@t commit -qm probe # dzo-be-test is built with armake2, not by dzo
 "$work/dzo" servermods build --src "$work/tsrc" --out "$work/tbuilt" >/dev/null
 
@@ -393,6 +403,22 @@ done
 s=0
 dzo player msg t1 all "to everyone" | grep -q ok || s=1
 verdict "message to all" $s
+if [ "$oldmod" = 1 ]; then
+	# What the restart countdown sends (apiNotifier): a notification to everyone; the old mod ignores the new fields.
+	s=0
+	dzo player msg t1 all "Server restart in 5 minutes" --style notification | grep -q ok || s=1
+	verdict "old mod: the countdown's notification is accepted" $s
+	sleep 2
+	"$dev/dayz-client-headless.sh" "${exp[@]}" shot "$work/client" "${DZO_SHOTS_DIR:-$work}/old-mod-notification.png" >/dev/null 2>&1 || true
+	s=1
+	out=$(dzo player msg t1 all "x" --style expansion --type toast 2>&1 || true)
+	grep -q 'not available' <<<"$out" && s=0
+	verdict "old mod: expansion is refused, so the countdown sends a notification" $s
+	echo "== $pass passed, $fail failed (old mod stage)"
+	[ -n "${DZO_SHOTS_DIR:-}" ] || keep=1
+	[ "$fail" = 0 ]
+	exit
+fi
 # Notification fields: a title and a duration; Expansion is not loaded here, so the way is refused
 # (the mod's hello carries its features, see the mod's own log line).
 s=0
