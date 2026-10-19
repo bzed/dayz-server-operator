@@ -80,7 +80,7 @@ func newBrowser(t *testing.T) *browser {
 	}
 	timeout, cancelTimeout := context.WithTimeout(t.Context(), 30*time.Second)
 	alloc, cancelAlloc := chromedp.NewExecAllocator(timeout, opts...)
-	ctx, _ := chromedp.NewContext(alloc) //nolint:govet // stopped by chromedp.Cancel below, which also waits for the browser
+	ctx, _ := chromedp.NewContext(alloc, chromedp.WithErrorf(t.Logf)) //nolint:govet // stopped by chromedp.Cancel below, which also waits for the browser
 	// Cleanups run last in, first out: the problem report below runs before the browser is stopped.
 	t.Cleanup(func() {
 		// Cancel waits for Chrome to exit; it writes to the profile directory until then.
@@ -147,3 +147,17 @@ func (b *browser) run(t *testing.T, actions ...chromedp.Action) {
 }
 
 func (e *env) url(path string) string { return e.web.URL + path }
+
+// clickUntil clicks sel until done reports the click's effect. htmx binds the elements it has just swapped in
+// a moment after they are visible, and a click before that does nothing; the clicks it is used for are
+// idempotent (opening a panel, a dialog, answering a dismissed confirmation).
+func (b *browser) clickUntil(t *testing.T, sel string, done func() bool) {
+	t.Helper()
+	require.Eventually(t, func() bool {
+		if done() {
+			return true
+		}
+		_ = chromedp.Run(b.ctx, chromedp.Click(sel, chromedp.ByQuery))
+		return false
+	}, 15*time.Second, 300*time.Millisecond, "clicking %s had no effect", sel)
+}
