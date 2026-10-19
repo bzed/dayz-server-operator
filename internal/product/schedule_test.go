@@ -7,73 +7,54 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/bzed/dayz-server-operator/internal/site"
 )
 
-func mustParse(t *testing.T, s string) time.Time {
+func mustParse(t testing.TB, s string) time.Time {
 	t.Helper()
 	tm, err := time.Parse("2006-01-02T15:04:05", s)
-	if err != nil {
-		t.Fatalf("parse %q: %v", s, err)
-	}
+	require.NoError(t, err, "parse %q", s)
 	return tm
 }
 
 func TestEvaluateScheduleNothingPending(t *testing.T) {
 	d, err := EvaluateSchedule(site.UpdatesConfig{}, ScheduleInput{Now: mustParse(t, "2026-01-01T12:00:00")})
-	if err != nil {
-		t.Fatalf("EvaluateSchedule: %v", err)
-	}
-	if d.Apply {
-		t.Errorf("Apply = true, want false: %s", d.Reason)
-	}
+	require.NoError(t, err, "EvaluateSchedule")
+	assert.False(t, d.Apply, "Apply = true, want false: %s", d.Reason)
 }
 
 func TestEvaluateScheduleNoConstraintsAppliesImmediately(t *testing.T) {
 	now := mustParse(t, "2026-01-01T12:00:00")
 	d, err := EvaluateSchedule(site.UpdatesConfig{}, ScheduleInput{PendingSince: now, Now: now})
-	if err != nil {
-		t.Fatalf("EvaluateSchedule: %v", err)
-	}
-	if !d.Apply {
-		t.Errorf("Apply = false, want true: %s", d.Reason)
-	}
+	require.NoError(t, err, "EvaluateSchedule")
+	assert.True(t, d.Apply, "Apply = false, want true: %s", d.Reason)
 }
 
 func TestEvaluateScheduleQuietHoursBlocks(t *testing.T) {
 	cfg := site.UpdatesConfig{QuietHours: []string{"18:00-24:00"}}
 	now := mustParse(t, "2026-01-01T20:00:00")
 	d, err := EvaluateSchedule(cfg, ScheduleInput{PendingSince: now, Now: now})
-	if err != nil {
-		t.Fatalf("EvaluateSchedule: %v", err)
-	}
-	if d.Apply {
-		t.Errorf("Apply = true, want false (quiet hours): %s", d.Reason)
-	}
+	require.NoError(t, err, "EvaluateSchedule")
+	assert.False(t, d.Apply, "Apply = true, want false (quiet hours): %s", d.Reason)
 }
 
 func TestEvaluateScheduleOutsideWindowBlocks(t *testing.T) {
 	cfg := site.UpdatesConfig{Window: []string{"06:00-10:00", "14:00-16:00"}}
 	now := mustParse(t, "2026-01-01T12:00:00")
 	d, err := EvaluateSchedule(cfg, ScheduleInput{PendingSince: now, Now: now})
-	if err != nil {
-		t.Fatalf("EvaluateSchedule: %v", err)
-	}
-	if d.Apply {
-		t.Errorf("Apply = true, want false (outside window): %s", d.Reason)
-	}
+	require.NoError(t, err, "EvaluateSchedule")
+	assert.False(t, d.Apply, "Apply = true, want false (outside window): %s", d.Reason)
 }
 
 func TestEvaluateScheduleInsideWindowApplies(t *testing.T) {
 	cfg := site.UpdatesConfig{Window: []string{"06:00-10:00", "14:00-16:00"}}
 	now := mustParse(t, "2026-01-01T15:00:00")
 	d, err := EvaluateSchedule(cfg, ScheduleInput{PendingSince: now, Now: now})
-	if err != nil {
-		t.Fatalf("EvaluateSchedule: %v", err)
-	}
-	if !d.Apply {
-		t.Errorf("Apply = false, want true (inside window): %s", d.Reason)
-	}
+	require.NoError(t, err, "EvaluateSchedule")
+	assert.True(t, d.Apply, "Apply = false, want true (inside window): %s", d.Reason)
 }
 
 func TestEvaluateScheduleWindowSpanningMidnight(t *testing.T) {
@@ -86,12 +67,8 @@ func TestEvaluateScheduleWindowSpanningMidnight(t *testing.T) {
 	for ts, want := range cases {
 		now := mustParse(t, ts)
 		d, err := EvaluateSchedule(cfg, ScheduleInput{PendingSince: now, Now: now})
-		if err != nil {
-			t.Fatalf("EvaluateSchedule(%s): %v", ts, err)
-		}
-		if d.Apply != want {
-			t.Errorf("EvaluateSchedule(%s).Apply = %v, want %v (%s)", ts, d.Apply, want, d.Reason)
-		}
+		require.NoError(t, err, "EvaluateSchedule(%s)", ts)
+		assert.Equal(t, want, d.Apply)
 	}
 }
 
@@ -103,12 +80,8 @@ func TestEvaluateScheduleMinRestartIntervalBlocks(t *testing.T) {
 		LastRestartAt: now.Add(-1 * time.Hour),
 		Now:           now,
 	})
-	if err != nil {
-		t.Fatalf("EvaluateSchedule: %v", err)
-	}
-	if d.Apply {
-		t.Errorf("Apply = true, want false (min_restart_interval): %s", d.Reason)
-	}
+	require.NoError(t, err, "EvaluateSchedule")
+	assert.False(t, d.Apply, "Apply = true, want false (min_restart_interval): %s", d.Reason)
 }
 
 func TestEvaluateScheduleMinRestartIntervalElapsedApplies(t *testing.T) {
@@ -119,12 +92,8 @@ func TestEvaluateScheduleMinRestartIntervalElapsedApplies(t *testing.T) {
 		LastRestartAt: now.Add(-5 * time.Hour),
 		Now:           now,
 	})
-	if err != nil {
-		t.Fatalf("EvaluateSchedule: %v", err)
-	}
-	if !d.Apply {
-		t.Errorf("Apply = false, want true: %s", d.Reason)
-	}
+	require.NoError(t, err, "EvaluateSchedule")
+	assert.True(t, d.Apply, "Apply = false, want true: %s", d.Reason)
 }
 
 func TestEvaluateScheduleBatchDelayBlocks(t *testing.T) {
@@ -134,12 +103,8 @@ func TestEvaluateScheduleBatchDelayBlocks(t *testing.T) {
 		PendingSince: now.Add(-5 * time.Minute),
 		Now:          now,
 	})
-	if err != nil {
-		t.Fatalf("EvaluateSchedule: %v", err)
-	}
-	if d.Apply {
-		t.Errorf("Apply = true, want false (batch_delay): %s", d.Reason)
-	}
+	require.NoError(t, err, "EvaluateSchedule")
+	assert.False(t, d.Apply, "Apply = true, want false (batch_delay): %s", d.Reason)
 }
 
 func TestEvaluateScheduleBatchDelayElapsedApplies(t *testing.T) {
@@ -149,12 +114,8 @@ func TestEvaluateScheduleBatchDelayElapsedApplies(t *testing.T) {
 		PendingSince: now.Add(-30 * time.Minute),
 		Now:          now,
 	})
-	if err != nil {
-		t.Fatalf("EvaluateSchedule: %v", err)
-	}
-	if !d.Apply {
-		t.Errorf("Apply = false, want true: %s", d.Reason)
-	}
+	require.NoError(t, err, "EvaluateSchedule")
+	assert.True(t, d.Apply, "Apply = false, want true: %s", d.Reason)
 }
 
 func TestEvaluateScheduleDeferredToScheduledRestart(t *testing.T) {
@@ -165,12 +126,8 @@ func TestEvaluateScheduleDeferredToScheduledRestart(t *testing.T) {
 		NextScheduledRestart: now.Add(1 * time.Hour),
 		Now:                  now,
 	})
-	if err != nil {
-		t.Fatalf("EvaluateSchedule: %v", err)
-	}
-	if d.Apply {
-		t.Errorf("Apply = true, want false (deferred to scheduled restart): %s", d.Reason)
-	}
+	require.NoError(t, err, "EvaluateSchedule")
+	assert.False(t, d.Apply, "Apply = true, want false (deferred to scheduled restart): %s", d.Reason)
 }
 
 func TestEvaluateScheduleMaxDelayOverridesEverything(t *testing.T) {
@@ -186,48 +143,35 @@ func TestEvaluateScheduleMaxDelayOverridesEverything(t *testing.T) {
 		LastRestartAt: now.Add(-1 * time.Minute),
 		Now:           now,
 	})
-	if err != nil {
-		t.Fatalf("EvaluateSchedule: %v", err)
-	}
-	if !d.Apply {
-		t.Errorf("Apply = false, want true (max_delay override): %s", d.Reason)
-	}
+	require.NoError(t, err, "EvaluateSchedule")
+	assert.True(t, d.Apply, "Apply = false, want true (max_delay override): %s", d.Reason)
 }
 
 func TestEvaluateScheduleInvalidWindowErrors(t *testing.T) {
 	cfg := site.UpdatesConfig{Window: []string{"not-a-range"}}
 	now := mustParse(t, "2026-01-01T12:00:00")
 	_, err := EvaluateSchedule(cfg, ScheduleInput{PendingSince: now, Now: now})
-	if err == nil {
-		t.Fatal("expected an error for an invalid window range")
-	}
+	require.Error(t, err)
 }
 
 func TestEvaluateScheduleInvalidQuietHoursErrors(t *testing.T) {
 	cfg := site.UpdatesConfig{QuietHours: []string{"25:00-26:00"}}
 	now := mustParse(t, "2026-01-01T12:00:00")
 	_, err := EvaluateSchedule(cfg, ScheduleInput{PendingSince: now, Now: now})
-	if err == nil {
-		t.Fatal("expected an error for an invalid quiet_hours range")
-	}
+	require.Error(t, err)
 }
 
 func TestParseClockAcceptsTwentyFourZeroZero(t *testing.T) {
 	d, err := parseClock("24:00")
-	if err != nil {
-		t.Fatalf("parseClock: %v", err)
-	}
-	if d != 24*time.Hour {
-		t.Errorf("parseClock(24:00) = %v, want 24h", d)
-	}
+	require.NoError(t, err, "parseClock")
+	assert.Equal(t, 24*time.Hour, d)
 }
 
 func TestParseClockRejectsInvalid(t *testing.T) {
 	cases := []string{"24:30", "abc", "12", "12:60", "-1:00"}
 	for _, c := range cases {
-		if _, err := parseClock(c); err == nil {
-			t.Errorf("parseClock(%q): expected an error", c)
-		}
+		_, err := parseClock(c)
+		require.Error(t, err)
 	}
 }
 
@@ -235,12 +179,8 @@ func TestEvaluateScheduleDefaultsNowWhenZero(t *testing.T) {
 	// A zero ScheduleInput.Now must not be treated as a real timestamp
 	// (year 1); EvaluateSchedule should fall back to time.Now().
 	d, err := EvaluateSchedule(site.UpdatesConfig{}, ScheduleInput{PendingSince: time.Now()})
-	if err != nil {
-		t.Fatalf("EvaluateSchedule: %v", err)
-	}
-	if !d.Apply {
-		t.Errorf("Apply = false, want true: %s", d.Reason)
-	}
+	require.NoError(t, err, "EvaluateSchedule")
+	assert.True(t, d.Apply, "Apply = false, want true: %s", d.Reason)
 }
 
 func TestEvaluateScheduleUpdateSlot(t *testing.T) {
@@ -261,11 +201,7 @@ func TestEvaluateScheduleUpdateSlot(t *testing.T) {
 	} {
 		now := mustParse(t, c.now)
 		d, err := EvaluateSchedule(site.UpdatesConfig{RestartMinute: c.minute, RestartAnnounce: ann}, ScheduleInput{PendingSince: now.Add(-time.Hour), Now: now})
-		if err != nil {
-			t.Fatal(err)
-		}
-		if d.Apply != c.apply {
-			t.Errorf("minute %v at %s: Apply = %v (%s), want %v", c.minute, c.now, d.Apply, d.Reason, c.apply)
-		}
+		require.NoError(t, err)
+		assert.Equal(t, c.apply, d.Apply)
 	}
 }

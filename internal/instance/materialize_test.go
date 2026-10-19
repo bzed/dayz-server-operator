@@ -6,8 +6,10 @@ package instance
 import (
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/bzed/dayz-server-operator/internal/quadlet"
 )
@@ -17,32 +19,22 @@ func TestWriteContainerUnit(t *testing.T) {
 	spec := quadlet.ContainerSpec{Name: "dzo-deerisle", Image: "localhost/dzo-runtime:latest", Network: quadlet.NetworkHost}
 
 	path, err := WriteContainerUnit(dir, spec)
-	if err != nil {
-		t.Fatalf("WriteContainerUnit: %v", err)
-	}
-	if path != filepath.Join(dir, "dzo-deerisle.container") {
-		t.Errorf("path = %q", path)
-	}
+	require.NoError(t, err, "WriteContainerUnit")
+	assert.Equal(t, filepath.Join(dir, "dzo-deerisle.container"), path)
 	data, err := os.ReadFile(path) //nolint:gosec // test fixture path under t.TempDir()
-	if err != nil {
-		t.Fatalf("read: %v", err)
-	}
-	if !strings.Contains(string(data), "Image=localhost/dzo-runtime:latest") {
-		t.Errorf("content = %q", data)
-	}
+	require.NoError(t, err, "read")
+	assert.Contains(t, string(data), "Image=localhost/dzo-runtime:latest")
 }
 
 func TestWriteContainerUnitInvalidSpecErrors(t *testing.T) {
-	if _, err := WriteContainerUnit(t.TempDir(), quadlet.ContainerSpec{}); err == nil {
-		t.Fatal("expected an error for an invalid spec")
-	}
+	_, err := WriteContainerUnit(t.TempDir(), quadlet.ContainerSpec{})
+	require.Error(t, err)
 }
 
 func TestWriteContainerUnitMissingDirErrors(t *testing.T) {
 	spec := quadlet.ContainerSpec{Name: "dzo-x", Image: "img", Network: quadlet.NetworkHost}
-	if _, err := WriteContainerUnit(filepath.Join(t.TempDir(), "missing"), spec); err == nil {
-		t.Fatal("expected an error for a missing directory")
-	}
+	_, err := WriteContainerUnit(filepath.Join(t.TempDir(), "missing"), spec)
+	require.Error(t, err)
 }
 
 func TestWriteContainerUnitOverwritesExisting(t *testing.T) {
@@ -51,19 +43,12 @@ func TestWriteContainerUnitOverwritesExisting(t *testing.T) {
 	spec2 := quadlet.ContainerSpec{Name: "dzo-x", Image: "img2", Network: quadlet.NetworkHost}
 
 	path, err := WriteContainerUnit(dir, spec1)
-	if err != nil {
-		t.Fatalf("WriteContainerUnit: %v", err)
-	}
-	if _, err := WriteContainerUnit(dir, spec2); err != nil {
-		t.Fatalf("WriteContainerUnit (overwrite): %v", err)
-	}
+	require.NoError(t, err, "WriteContainerUnit")
+	_, err = WriteContainerUnit(dir, spec2)
+	require.NoError(t, err, "WriteContainerUnit (overwrite)")
 	data, err := os.ReadFile(path) //nolint:gosec // test fixture path under t.TempDir()
-	if err != nil {
-		t.Fatalf("read: %v", err)
-	}
-	if !strings.Contains(string(data), "img2") {
-		t.Errorf("content should reflect the overwrite: %q", data)
-	}
+	require.NoError(t, err, "read")
+	assert.Contains(t, string(data), "img2")
 }
 
 func TestTimerUnitRenderAndWrite(t *testing.T) {
@@ -76,29 +61,19 @@ func TestTimerUnitRenderAndWrite(t *testing.T) {
 		Persistent:  false,
 	}
 	timerPath, servicePath, err := WriteTimerUnit(dir, unit)
-	if err != nil {
-		t.Fatalf("WriteTimerUnit: %v", err)
-	}
+	require.NoError(t, err, "WriteTimerUnit")
 
 	timerData, err := os.ReadFile(timerPath) //nolint:gosec // test fixture path under t.TempDir()
-	if err != nil {
-		t.Fatalf("read timer: %v", err)
-	}
-	if !strings.Contains(string(timerData), "OnCalendar=Mon..Fri 04:00") ||
-		!strings.Contains(string(timerData), "OnCalendar=Sat,Sun 06:00") ||
-		!strings.Contains(string(timerData), "Persistent=false") ||
-		!strings.Contains(string(timerData), "WantedBy=timers.target") {
-		t.Errorf("timer content = %q", timerData)
-	}
+	require.NoError(t, err, "read timer")
+	require.Contains(t, string(timerData), "OnCalendar=Mon..Fri 04:00")
+	require.Contains(t, string(timerData), "OnCalendar=Sat,Sun 06:00")
+	require.Contains(t, string(timerData), "Persistent=false")
+	assert.Contains(t, string(timerData), "WantedBy=timers.target")
 
 	serviceData, err := os.ReadFile(servicePath) //nolint:gosec // test fixture path under t.TempDir()
-	if err != nil {
-		t.Fatalf("read service: %v", err)
-	}
-	if !strings.Contains(string(serviceData), "Type=oneshot") ||
-		!strings.Contains(string(serviceData), "ExecStart=/usr/local/bin/dzo restart deerisle --graceful") {
-		t.Errorf("service content = %q", serviceData)
-	}
+	require.NoError(t, err, "read service")
+	require.Contains(t, string(serviceData), "Type=oneshot")
+	assert.Contains(t, string(serviceData), "ExecStart=/usr/local/bin/dzo restart deerisle --graceful")
 }
 
 func TestTimerUnitValidate(t *testing.T) {
@@ -108,30 +83,23 @@ func TestTimerUnitValidate(t *testing.T) {
 		{Name: "x", ExecStart: "cmd"},
 	}
 	for _, u := range cases {
-		if err := u.Validate(); err == nil {
-			t.Errorf("Validate(%+v): expected an error", u)
-		}
+		err := u.Validate()
+		require.Error(t, err)
 	}
 	ok := TimerUnit{Name: "x", ExecStart: "cmd", OnCalendar: []string{"daily"}}
-	if err := ok.Validate(); err != nil {
-		t.Errorf("Validate(%+v): unexpected error %v", ok, err)
-	}
+	err := ok.Validate()
+	require.NoError(t, err)
 }
 
 func TestWriteTimerUnitMissingDirErrors(t *testing.T) {
 	unit := TimerUnit{Name: "x", ExecStart: "cmd", OnCalendar: []string{"daily"}}
-	if _, _, err := WriteTimerUnit(filepath.Join(t.TempDir(), "missing"), unit); err == nil {
-		t.Fatal("expected an error for a missing directory")
-	}
+	_, _, err := WriteTimerUnit(filepath.Join(t.TempDir(), "missing"), unit)
+	require.Error(t, err)
 }
 
 func TestTimerUnitNoDescriptionOmitsUnitSection(t *testing.T) {
 	unit := TimerUnit{Name: "x", ExecStart: "cmd", OnCalendar: []string{"daily"}}
 	timer, err := unit.RenderTimer()
-	if err != nil {
-		t.Fatalf("RenderTimer: %v", err)
-	}
-	if strings.Contains(timer, "[Unit]") {
-		t.Errorf("timer = %q, want no [Unit] section without a Description", timer)
-	}
+	require.NoError(t, err, "RenderTimer")
+	assert.NotContains(t, timer, "[Unit]")
 }

@@ -12,21 +12,22 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/bzed/dayz-server-operator/internal/site"
 )
 
-func stagingTree(t *testing.T) string {
+func stagingTree(t testing.TB) string {
 	t.Helper()
 	d := t.TempDir()
 	put := func(rel, body string) {
 		t.Helper()
 		p := filepath.Join(d, rel)
-		if err := os.MkdirAll(filepath.Dir(p), 0o750); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(p, []byte(body), 0o600); err != nil {
-			t.Fatal(err)
-		}
+		err := os.MkdirAll(filepath.Dir(p), 0o750)
+		require.NoError(t, err)
+		err = os.WriteFile(p, []byte(body), 0o600)
+		require.NoError(t, err)
 	}
 	put("cfgeconomycore.xml", `<economycore><ce folder="db"><file name="types.xml" type="types"/></ce></economycore>`)
 	put("db/types.xml", `<types/>`)
@@ -37,12 +38,10 @@ func stagingTree(t *testing.T) string {
 	return d
 }
 
-func readStaging(t *testing.T, d, rel string) string {
+func readStaging(t testing.TB, d, rel string) string {
 	t.Helper()
 	b, err := os.ReadFile(filepath.Join(d, rel)) //nolint:gosec // test fixture
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	return string(b)
 }
 
@@ -52,27 +51,20 @@ func TestIntegrateRegistersCEFoldersInOrder(t *testing.T) {
 		{Name: "mod 1", Folder: "mod_1", Files: []ContribFile{{Name: "types.xml", Data: []byte(`<types><type name="A"/></types>`)}, {Name: "cfgspawnabletypes.xml", Data: []byte(`<spawnabletypes/>`)}}},
 		{Name: "mod 2", Folder: "mod_2", Files: []ContribFile{{Name: "events.xml", Data: []byte(`<events/>`)}}},
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	core := readStaging(t, d, "cfgeconomycore.xml")
 	i1, i2 := strings.Index(core, `folder="mod_1"`), strings.Index(core, `folder="mod_2"`)
-	if i1 < 0 || i2 < i1 {
-		t.Errorf("mod_1 must be registered before mod_2:\n%s", core)
-	}
-	if !strings.Contains(core, `type="spawnabletypes"`) {
-		t.Errorf("file types missing:\n%s", core)
-	}
-	if err := ValidateStaging(d, res.Touched); err != nil {
-		t.Errorf("a clean merge must validate: %v", err)
-	}
+	require.GreaterOrEqual(t, i1, 0, "mod_1 must be registered before mod_2:\n%s", core)
+	assert.GreaterOrEqual(t, i2, i1, "mod_1 must be registered before mod_2:\n%s", core)
+	assert.Contains(t, core, `type="spawnabletypes"`)
+	err = ValidateStaging(d, res.Touched)
+	require.NoError(t, err, "a clean merge must validate")
 	// A registered file that is gone fails the validation.
-	if err := os.Remove(filepath.Join(d, "mod_1", "types.xml")); err != nil {
-		t.Fatal(err)
-	}
-	if err := ValidateStaging(d, res.Touched); err == nil || !strings.Contains(err.Error(), "mod_1") {
-		t.Errorf("a missing CE file must be reported: %v", err)
-	}
+	err = os.Remove(filepath.Join(d, "mod_1", "types.xml"))
+	require.NoError(t, err)
+	err = ValidateStaging(d, res.Touched)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "mod_1")
 }
 
 func TestIntegrateMergesXMLAndJSON(t *testing.T) {
@@ -83,19 +75,18 @@ func TestIntegrateMergesXMLAndJSON(t *testing.T) {
 			{Name: "cfggameplay.json", Data: []byte(`{"WorldsData":{"objectSpawnersArr":["base.json","mod.json"]},"x":1}`)},
 		}},
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	m := readStaging(t, d, "mapgrouppos.xml")
 	// mapgrouppos.xml has many groups of one name, one per position: a group is replaced only when
 	// name and position are the same, a group of the same name elsewhere is added
-	if strings.Count(m, `name="A"`) != 2 || !strings.Contains(m, `pos="9 9 9"`) || !strings.Contains(m, `a="7"`) || !strings.Contains(m, `name="B"`) {
-		t.Errorf("a group is replaced by name and position, others are appended:\n%s", m)
-	}
+	require.Equal(t, 2, strings.Count(m, `name="A"`))
+	require.Contains(t, m, `pos="9 9 9"`)
+	require.Contains(t, m, `a="7"`)
+	assert.Contains(t, m, `name="B"`)
 	g := readStaging(t, d, "cfggameplay.json")
-	if strings.Count(g, "base.json") != 1 || !strings.Contains(g, "mod.json") || !strings.Contains(g, `"x": 1`) {
-		t.Errorf("gameplay merge:\n%s", g)
-	}
+	require.Equal(t, 1, strings.Count(g, "base.json"))
+	require.Contains(t, g, "mod.json")
+	assert.Contains(t, g, `"x": 1`)
 }
 
 func TestIntegrateOverlayReferencesAndExtras(t *testing.T) {
@@ -107,21 +98,17 @@ func TestIntegrateOverlayReferencesAndExtras(t *testing.T) {
 		},
 		Overlay: site.OverlayManifest{SpawnGearPresets: []string{"vanilla_*.json"}, ObjectSpawners: []string{"spawns/*.json"}},
 	}})
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	for _, f := range []string{"custom_loadout/spawns/a.json", "custom_loadout/vanilla_loadout.json", "custom_loadout/notes.txt"} {
-		if _, err := os.Stat(filepath.Join(d, f)); err != nil {
-			t.Errorf("extra file %s missing: %v", f, err)
-		}
+		_, err := os.Stat(filepath.Join(d, f))
+		require.NoError(t, err)
 	}
 	g := readStaging(t, d, "cfggameplay.json")
-	if !strings.Contains(g, "custom_loadout/vanilla_loadout.json") || !strings.Contains(g, "custom_loadout/spawns/a.json") || !strings.Contains(g, "base.json") {
-		t.Errorf("the declared files must be referenced with their path, the base kept:\n%s", g)
-	}
-	if _, err := Integrate(d, []Contribution{{Name: "bad", Folder: "custom_b", Files: []ContribFile{{Name: "a.json", Data: []byte("{}")}}, Overlay: site.OverlayManifest{ObjectSpawners: []string{"["}}}}); err == nil {
-		t.Error("a malformed pattern must be an error")
-	}
+	require.Contains(t, g, "custom_loadout/vanilla_loadout.json")
+	require.Contains(t, g, "custom_loadout/spawns/a.json")
+	assert.Contains(t, g, "base.json")
+	_, err = Integrate(d, []Contribution{{Name: "bad", Folder: "custom_b", Files: []ContribFile{{Name: "a.json", Data: []byte("{}")}}, Overlay: site.OverlayManifest{ObjectSpawners: []string{"["}}}})
+	require.Error(t, err, "a malformed pattern must be an error")
 }
 
 func TestIntegrateReplaceReportsConflicts(t *testing.T) {
@@ -130,48 +117,33 @@ func TestIntegrateReplaceReportsConflicts(t *testing.T) {
 		{Name: "mod 1", Folder: "mod_1", Files: []ContribFile{{Name: "cfgweather.xml", Data: []byte(`<weather a="1"/>`)}, {Name: "messages.xml", Data: []byte(`<messages a="1"/>`)}}},
 		{Name: "mod 2", Folder: "mod_2", Files: []ContribFile{{Name: "cfgweather.xml", Data: []byte(`<weather a="2"/>`)}}},
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := readStaging(t, d, "cfgweather.xml"); !strings.Contains(got, `a="2"`) {
-		t.Errorf("the later contributor wins: %s", got)
-	}
-	if got := readStaging(t, d, "db/messages.xml"); got != site.EmptyMessagesXML {
-		t.Errorf("messages.xml goes to db/ and stays empty: %s", got)
-	}
-	if len(res.Conflicts) != 1 || !strings.Contains(res.Conflicts[0], "mod 2") {
-		t.Errorf("conflicts = %v", res.Conflicts)
-	}
+	require.NoError(t, err)
+	got := readStaging(t, d, "cfgweather.xml")
+	assert.Contains(t, got, `a="2"`)
+	got = readStaging(t, d, "db/messages.xml")
+	assert.Equal(t, site.EmptyMessagesXML, got)
+	require.Len(t, res.Conflicts, 1)
+	assert.Contains(t, res.Conflicts[0], "mod 2")
 }
 
 func TestIntegrateGlobalsAndUnsafeNames(t *testing.T) {
 	d := stagingTree(t)
-	if err := os.WriteFile(filepath.Join(d, "db/globals.xml"), []byte(`<variables><var name="A" type="0" value="1"/><var name="B" type="0" value="1"/></variables>`), 0o600); err != nil {
-		t.Fatal(err)
-	}
+	err := os.WriteFile(filepath.Join(d, "db/globals.xml"), []byte(`<variables><var name="A" type="0" value="1"/><var name="B" type="0" value="1"/></variables>`), 0o600)
+	require.NoError(t, err)
 	res, err := Integrate(d, []Contribution{
 		{Name: "m1", Folder: "mod_1", Files: []ContribFile{{Name: "globals.xml", Data: []byte(`<variables><var name="B" type="0" value="2"/></variables>`)}}},
 		{Name: "m2", Folder: "mod_2", Files: []ContribFile{{Name: "globals.xml", Data: []byte(`<variables><var name="C" type="0" value="3"/></variables>`)}}},
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	g := readStaging(t, d, "db/globals.xml")
 	for _, want := range []string{`name="A"`, `name="B" type="0" value="2"`, `name="C"`} {
-		if !strings.Contains(g, want) {
-			t.Errorf("db/globals.xml lacks %s:\n%s", want, g)
-		}
+		assert.Contains(t, g, want)
 	}
-	if !slices.Contains(res.Touched, "db/globals.xml") {
-		t.Errorf("touched = %v", res.Touched)
-	}
-	if strings.Contains(readStaging(t, d, "cfgeconomycore.xml"), "mod_1") {
-		t.Error("globals.xml must not be registered as a CE file")
-	}
+	assert.True(t, slices.Contains(res.Touched, "db/globals.xml"), "touched = %v", res.Touched)
+	assert.NotContains(t, readStaging(t, d, "cfgeconomycore.xml"), "mod_1", "globals.xml must not be registered as a CE file")
 	for _, bad := range []string{"../x.xml", "/etc/passwd", ""} {
-		if _, err := Integrate(d, []Contribution{{Name: "m", Folder: "mod_1", Files: []ContribFile{{Name: bad, Data: []byte("x")}}}}); err == nil {
-			t.Errorf("name %q must be rejected", bad)
-		}
+		_, err := Integrate(d, []Contribution{{Name: "m", Folder: "mod_1", Files: []ContribFile{{Name: bad, Data: []byte("x")}}}})
+		require.Error(t, err, "name %q must be rejected", bad)
 	}
 }
 
@@ -179,25 +151,20 @@ func TestIntegrateAfterMergeAndErrors(t *testing.T) {
 	d := stagingTree(t)
 	var seen string
 	_, err := Integrate(d, []Contribution{{Name: "m", Folder: "mod_1", AfterMerge: func(s string) error { seen = s; return nil }}})
-	if err != nil || seen != d {
-		t.Fatalf("AfterMerge: err=%v saw %q", err, seen)
-	}
-	if _, err := Integrate(d, []Contribution{{Name: "m", Folder: "mod_1", AfterMerge: func(string) error { return errors.New("no") }}}); err == nil || !strings.Contains(err.Error(), "post_merge") {
-		t.Errorf("a failing hook must fail the merge: %v", err)
-	}
-	if _, err := Integrate(d, []Contribution{{Name: "m", Folder: "mod_1", Files: []ContribFile{{Name: "cfggameplay.json", Data: []byte("{")}}}}); err == nil {
-		t.Error("malformed JSON must fail the merge")
-	}
-	if err := ValidateStaging(d, []string{"cfggameplay.json", "nope.xml"}); err == nil {
-		t.Error("a touched file that is missing must fail the validation")
-	}
+	require.NoError(t, err, "AfterMerge: err=%v saw %q", err, seen)
+	require.Equal(t, d, seen, "AfterMerge: err=%v saw %q", err, seen)
+	_, err = Integrate(d, []Contribution{{Name: "m", Folder: "mod_1", AfterMerge: func(string) error { return errors.New("no") }}})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "post_merge")
+	_, err = Integrate(d, []Contribution{{Name: "m", Folder: "mod_1", Files: []ContribFile{{Name: "cfggameplay.json", Data: []byte("{")}}}})
+	require.Error(t, err, "malformed JSON must fail the merge")
+	err = ValidateStaging(d, []string{"cfggameplay.json", "nope.xml"})
+	require.Error(t, err)
 	bad := filepath.Join(d, "broken.xml")
-	if err := os.WriteFile(bad, []byte("<a>"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if err := ValidateStaging(d, []string{"broken.xml"}); err == nil {
-		t.Error("broken XML must fail the validation")
-	}
+	err = os.WriteFile(bad, []byte("<a>"), 0o600)
+	require.NoError(t, err)
+	err = ValidateStaging(d, []string{"broken.xml"})
+	require.Error(t, err, "broken XML must fail the validation")
 }
 
 func TestIntegratePatchesInitC(t *testing.T) {
@@ -206,21 +173,16 @@ func TestIntegratePatchesInitC(t *testing.T) {
 	}
 	d := stagingTree(t)
 	diff := "--- init.c\n+++ init.c\n@@ -1,3 +1,4 @@\n void main()\n {\n+\tPrint(\"hello\");\n }\n"
-	if _, err := Integrate(d, []Contribution{{Name: "m", Folder: "mod_1", Files: []ContribFile{{Name: "init.c", Data: []byte(diff)}}}}); err != nil {
-		t.Fatal(err)
-	}
-	if got := readStaging(t, d, "init.c"); !strings.Contains(got, `Print("hello");`) {
-		t.Errorf("init.c = %q", got)
-	}
-	if _, err := Integrate(d, []Contribution{{Name: "m", Folder: "mod_1", Files: []ContribFile{{Name: "init.c", Data: []byte("not a patch\n")}}}}); err == nil {
-		t.Error("a diff that does not apply must fail the merge")
-	}
-	if err := os.Remove(filepath.Join(d, "init.c")); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := Integrate(d, []Contribution{{Name: "m", Folder: "mod_1", Files: []ContribFile{{Name: "init.c", Data: []byte(diff)}}}}); err == nil {
-		t.Error("a mission without init.c cannot be patched")
-	}
+	_, err := Integrate(d, []Contribution{{Name: "m", Folder: "mod_1", Files: []ContribFile{{Name: "init.c", Data: []byte(diff)}}}})
+	require.NoError(t, err)
+	got := readStaging(t, d, "init.c")
+	assert.Contains(t, got, `Print("hello");`)
+	_, err = Integrate(d, []Contribution{{Name: "m", Folder: "mod_1", Files: []ContribFile{{Name: "init.c", Data: []byte("not a patch\n")}}}})
+	require.Error(t, err, "a diff that does not apply must fail the merge")
+	err = os.Remove(filepath.Join(d, "init.c"))
+	require.NoError(t, err)
+	_, err = Integrate(d, []Contribution{{Name: "m", Folder: "mod_1", Files: []ContribFile{{Name: "init.c", Data: []byte(diff)}}}})
+	require.Error(t, err, "a mission without init.c cannot be patched")
 }
 
 func TestIntegrateStrategiesOnlyApplyAtTheTop(t *testing.T) {
@@ -229,33 +191,23 @@ func TestIntegrateStrategiesOnlyApplyAtTheTop(t *testing.T) {
 		{Name: "spawns/types.xml", Data: []byte("<types/>")},
 		{Name: "env/zombie_territories.xml", Data: []byte(`<territory-type><territory name="Z"/></territory-type>`)},
 	}}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := os.Stat(filepath.Join(d, "custom_o", "spawns", "types.xml")); err != nil {
-		t.Errorf("a nested types.xml is an extra file: %v", err)
-	}
-	if strings.Contains(readStaging(t, d, "cfgeconomycore.xml"), "custom_o") {
-		t.Error("a nested types.xml must not be registered as CE data")
-	}
-	if got := readStaging(t, d, "env/zombie_territories.xml"); !strings.Contains(got, `name="Z"`) {
-		t.Errorf("env/zombie_territories.xml merges into its mission file: %s", got)
-	}
-	if len(res.Touched) == 0 {
-		t.Error("touched files must be listed")
-	}
+	require.NoError(t, err)
+	_, err = os.Stat(filepath.Join(d, "custom_o", "spawns", "types.xml"))
+	require.NoError(t, err, "a nested types.xml is an extra file")
+	assert.NotContains(t, readStaging(t, d, "cfgeconomycore.xml"), "custom_o", "a nested types.xml must not be registered as CE data")
+	got := readStaging(t, d, "env/zombie_territories.xml")
+	assert.Contains(t, got, `name="Z"`)
+	assert.NotEmpty(t, res.Touched, "touched files must be listed")
 }
 
 func TestMessagesXMLStaysEmpty(t *testing.T) {
 	d := stagingTree(t)
 	full := []byte("<messages><message><deadline>60</deadline><shutdown>1</shutdown><text>x</text></message></messages>")
-	if _, err := Integrate(d, []Contribution{
+	_, err := Integrate(d, []Contribution{
 		{Name: "instance messages.xml", Folder: "custom_instance", Files: []ContribFile{{Name: "messages.xml", Data: []byte(site.EmptyMessagesXML)}}},
 		{Name: "overlay o", Folder: "custom_o", Files: []ContribFile{{Name: "db/messages.xml", Data: full}}},
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if got := readStaging(t, d, "db/messages.xml"); got != site.EmptyMessagesXML {
-		t.Errorf("a contributed messages.xml is replaced by the empty one (dzo sends the messages): %s", got)
-	}
+	})
+	require.NoError(t, err)
+	got := readStaging(t, d, "db/messages.xml")
+	assert.Equal(t, site.EmptyMessagesXML, got)
 }

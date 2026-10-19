@@ -7,34 +7,29 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 // The presets the package ships must load as a site's integrations/maps.
 func TestShippedMapPresetsLoad(t *testing.T) {
 	site := t.TempDir()
 	dst := filepath.Join(site, "integrations", "maps")
-	if err := os.MkdirAll(dst, 0o750); err != nil {
-		t.Fatal(err)
-	}
+	err := os.MkdirAll(dst, 0o750)
+	require.NoError(t, err)
 	files, _ := filepath.Glob("../../contrib/presets/maps/*.yaml")
-	if len(files) != 3 {
-		t.Fatalf("want 3 presets, found %v", files)
-	}
+	require.Len(t, files, 3)
 	for _, f := range files {
 		b, err := os.ReadFile(f) //nolint:gosec // test fixture
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(filepath.Join(dst, filepath.Base(f)), b, 0o600); err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
+		err = os.WriteFile(filepath.Join(dst, filepath.Base(f)), b, 0o600)
+		require.NoError(t, err)
 	}
 	tree, err := LoadTree(site)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	p, ok := tree.Maps["vanilla-enoch"]
-	if !ok || p.Git == "" || p.Ref == "" || p.Path != "dayzOffline.enoch" {
-		t.Fatalf("presets = %+v", tree.Maps)
-	}
+	require.True(t, ok, "presets = %+v", tree.Maps)
+	require.NotEmpty(t, p.Git, "presets = %+v", tree.Maps)
+	require.NotEmpty(t, p.Ref, "presets = %+v", tree.Maps)
+	require.Equal(t, "dayzOffline.enoch", p.Path, "presets = %+v", tree.Maps)
 }

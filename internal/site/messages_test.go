@@ -6,6 +6,9 @@ package site
 import (
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestValidateMessages(t *testing.T) {
@@ -32,37 +35,33 @@ func TestValidateMessages(t *testing.T) {
 	}
 	for _, c := range cases {
 		err := ValidateMessages([]Message{c.m})
-		switch {
-		case c.want == "" && err != nil:
-			t.Errorf("%s: %v", c.name, err)
-		case c.want != "" && (err == nil || !strings.Contains(err.Error(), c.want)):
-			t.Errorf("%s: err = %v, want it to mention %q", c.name, err, c.want)
+		if c.want == "" {
+			require.NoError(t, err, c.name)
+		} else {
+			require.ErrorContains(t, err, c.want, c.name)
 		}
 	}
-	if err := ValidateMessages([]Message{{Text: "ok", Repeat: 1}, {Text: "bad"}}); err == nil || !strings.Contains(err.Error(), "messages[1]") {
-		t.Errorf("the error names the index: %v", err)
-	}
+	err := ValidateMessages([]Message{{Text: "ok", Repeat: 1}, {Text: "bad"}})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "messages[1]")
 }
 
 func TestMessageColor(t *testing.T) {
 	for _, c := range append([]string{""}, MessageColors...) {
-		if err := (Message{Text: "x", Repeat: 1, Color: c}).Validate(); err != nil {
-			t.Errorf("colour %q: %v", c, err)
-		}
+		err := (Message{Text: "x", Repeat: 1, Color: c}).Validate()
+		require.NoError(t, err, "colour %q", c)
 	}
-	if err := (Message{Text: "x", Repeat: 1, Color: "pink"}).Validate(); err == nil || !strings.Contains(err.Error(), "pink") {
-		t.Errorf("an unknown colour is refused: %v", err)
-	}
+	err := (Message{Text: "x", Repeat: 1, Color: "pink"}).Validate()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "pink")
 }
 
 func TestExpandMessage(t *testing.T) {
-	if got := ExpandMessage("Welcome to #name on #port, #name!", "dz1", 2302); got != "Welcome to dz1 on 2302, dz1!" {
-		t.Errorf("got %q", got)
-	}
+	got := ExpandMessage("Welcome to #name on #port, #name!", "dz1", 2302)
+	assert.Equal(t, "Welcome to dz1 on 2302, dz1!", got)
 }
 
 func TestEmptyMessagesXMLHasNoMessages(t *testing.T) {
-	if strings.Contains(EmptyMessagesXML, "<message>") || !strings.Contains(EmptyMessagesXML, "<messages>") {
-		t.Errorf("EmptyMessagesXML = %s", EmptyMessagesXML)
-	}
+	require.NotContains(t, EmptyMessagesXML, "<message>")
+	assert.Contains(t, EmptyMessagesXML, "<messages>")
 }

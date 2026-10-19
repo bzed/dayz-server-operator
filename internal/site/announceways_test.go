@@ -4,10 +4,11 @@
 package site
 
 import (
-	"reflect"
-	"strings"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"gopkg.in/yaml.v3"
 )
@@ -18,30 +19,26 @@ func TestEffectiveWaysDefault(t *testing.T) {
 		{Within: Duration(10 * time.Minute), Way: "notification", Every: Duration(time.Minute), Now: Duration(10 * time.Second)},
 	}
 	got := Announce{Minutes: 30}.EffectiveWays()
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("default ways = %+v, want %+v", got, want)
-	}
+	assert.Equal(t, want, got)
 	own := []AnnounceWay{{Way: "chat", Every: Duration(time.Minute)}}
-	if got := (Announce{Ways: own}).EffectiveWays(); !reflect.DeepEqual(got, own) {
-		t.Errorf("own ways = %+v", got)
-	}
+	got = (Announce{Ways: own}).EffectiveWays()
+	assert.Equal(t, own, got)
 }
 
 func TestWaysYAMLRoundTrip(t *testing.T) {
 	var a Announce
 	src := "minutes: 30\nlock: 7\nkick: 3\nways:\n  - {within: 10m, way: expansion, type: baguette, every: 1m, now: 10s}\n  - {way: rcon, at: [30m, 15m]}\n"
-	if err := yaml.Unmarshal([]byte(src), &a); err != nil {
-		t.Fatal(err)
-	}
-	if len(a.Ways) != 2 || a.Ways[0].Type != "baguette" || a.Ways[0].Now.Std() != 10*time.Second || len(a.Ways[1].At) != 2 || a.Ways[1].At[1].Std() != 15*time.Minute {
-		t.Fatalf("ways = %+v", a.Ways)
-	}
-	if err := a.ValidateWays(); err != nil {
-		t.Fatalf("valid ways rejected: %v", err)
-	}
-	if err := (Announce{}).ValidateWays(); err != nil {
-		t.Errorf("the defaults must validate: %v", err)
-	}
+	err := yaml.Unmarshal([]byte(src), &a)
+	require.NoError(t, err)
+	require.Len(t, a.Ways, 2)
+	require.Equal(t, "baguette", a.Ways[0].Type)
+	require.Equal(t, 10*time.Second, a.Ways[0].Now.Std())
+	require.Len(t, a.Ways[1].At, 2)
+	require.Equal(t, 15*time.Minute, a.Ways[1].At[1].Std())
+	err = a.ValidateWays()
+	require.NoError(t, err, "valid ways rejected")
+	err = (Announce{}).ValidateWays()
+	require.NoError(t, err, "the defaults must validate")
 }
 
 func TestValidateWaysRejects(t *testing.T) {
@@ -67,9 +64,8 @@ func TestValidateWaysRejects(t *testing.T) {
 		"negative within":        {[]AnnounceWay{{Within: -m(1), Way: "chat", Every: m(1)}}, "within"},
 	} {
 		err := Announce{Ways: tc.ways}.ValidateWays()
-		if err == nil || !strings.Contains(err.Error(), tc.want) {
-			t.Errorf("%s: err = %v, want it to mention %q", name, err, tc.want)
-		}
+		require.Error(t, err, "%s: err = %v, want it to mention %q", name, err, tc.want)
+		assert.Contains(t, err.Error(), tc.want, "%s: err = %v, want it to mention %q", name, err, tc.want)
 	}
 }
 
@@ -77,20 +73,19 @@ func TestInstanceValidatesTheWaysOfBothAnnouncements(t *testing.T) {
 	bad := []AnnounceWay{{Way: "smoke", Every: Duration(time.Minute)}}
 	i := validInstance()
 	i.Restarts.Announce.Ways = bad
-	if err := i.Validate(); err == nil || !strings.Contains(err.Error(), "restarts.announce.ways") {
-		t.Errorf("restarts: %v", err)
-	}
+	err := i.Validate()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "restarts.announce.ways")
 	i = validInstance()
 	i.Updates.RestartAnnounce.Ways = bad
-	if err := i.Validate(); err == nil || !strings.Contains(err.Error(), "updates.restart_announce.ways") {
-		t.Errorf("updates: %v", err)
-	}
+	err = i.Validate()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "updates.restart_announce.ways")
 }
 
 func TestValidateWaysRejectsAnAtMarkOutsideItsRule(t *testing.T) {
 	m := func(n int) Duration { return Duration(time.Duration(n) * time.Minute) }
 	err := Announce{Ways: []AnnounceWay{{Within: m(10), Way: "notification", At: []Duration{m(15)}}}}.ValidateWays()
-	if err == nil || !strings.Contains(err.Error(), "within") {
-		t.Errorf("err = %v, want at above within refused", err)
-	}
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "within")
 }

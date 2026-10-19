@@ -16,18 +16,21 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/bzed/dayz-server-operator/internal/admin"
 )
 
 type env struct {
-	t     *testing.T
+	t     testing.TB
 	srv   *Server
 	ts    *httptest.Server
 	hubs  *admin.Registry
 	alpha *admin.Hub
 }
 
-func newEnv(t *testing.T) *env {
+func newEnv(t testing.TB) *env {
 	t.Helper()
 	dir := t.TempDir()
 	hubs := admin.NewRegistry(dir)
@@ -42,9 +45,7 @@ func newEnv(t *testing.T) *env {
 func (e *env) token(role Role, instances []string, delegate bool) string {
 	e.t.Helper()
 	s, _, err := e.srv.Tokens.Create("t-"+string(role), role, instances, delegate, time.Hour)
-	if err != nil {
-		e.t.Fatal(err)
-	}
+	require.NoError(e.t, err)
 	return s
 }
 
@@ -58,9 +59,7 @@ func (e *env) do(method, path, token, body string, hdr ...string) (int, []byte) 
 		req.Header.Set(hdr[i], hdr[i+1])
 	}
 	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		e.t.Fatal(err)
-	}
+	require.NoError(e.t, err)
 	defer func() { _ = resp.Body.Close() }()
 	var buf bytes.Buffer
 	_, _ = buf.ReadFrom(resp.Body)
@@ -79,9 +78,11 @@ func (e *env) modAnswers(failWith string) (stop func()) {
 		Layers: []admin.Layer{{Name: "ufo", Visibility: "viewer"}, {Name: "secret"}},
 		Events: []admin.Event{{ID: "e", Name: "StaticHeliCrash"}},
 	})
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(e.t.Context())
 	go func() {
-		for ctx.Err() == nil {
+		tick := time.NewTicker(2 * time.Millisecond)
+		defer tick.Stop()
+		for {
 			rep := e.alpha.Sync(admin.SyncRequest{Proto: 1})
 			var res []admin.Result
 			for _, c := range rep.Commands {
@@ -90,7 +91,11 @@ func (e *env) modAnswers(failWith string) (stop func()) {
 			if len(res) > 0 {
 				e.alpha.Sync(admin.SyncRequest{Proto: 1, Results: res})
 			}
-			time.Sleep(2 * time.Millisecond)
+			select {
+			case <-ctx.Done():
+				return
+			case <-tick.C:
+			}
 		}
 	}()
 	return cancel
@@ -98,21 +103,21 @@ func (e *env) modAnswers(failWith string) (stop func()) {
 
 func TestAuthAndInfo(t *testing.T) {
 	e := newEnv(t)
-	if c, _ := e.do("GET", "/api/v1", "", ""); c != 401 {
-		t.Fatalf("no token: %d", c)
-	}
-	if c, _ := e.do("GET", "/api/v1", "dzo_nope", ""); c != 401 {
-		t.Fatalf("bad token: %d", c)
-	}
+	c, _ := e.do("GET", "/api/v1", "", "")
+	require.Equal(t, 401, c)
+	c, _ = e.do("GET", "/api/v1", "dzo_nope", "")
+	require.Equal(t, 401, c)
 	tok := e.token(RoleViewer, nil, false)
 	c, b := e.do("GET", "/api/v1", tok, "")
 	var info Info
-	if err := json.Unmarshal(b, &info); err != nil || c != 200 || info.Installation != "test-site" || info.APIVersion != 1 || info.Role != RoleViewer {
-		t.Fatalf("info = %s (%d)", b, c)
-	}
-	if c, _ := e.do("GET", "/healthz", "", ""); c != 200 {
-		t.Fatal("healthz must be public")
-	}
+	err := json.Unmarshal(b, &info)
+	require.NoError(t, err, "info = %s (%d)", b, c)
+	require.Equal(t, 200, c, "info = %s (%d)", b, c)
+	require.Equal(t, "test-site", info.Installation, "info = %s (%d)", b, c)
+	require.Equal(t, 1, info.APIVersion, "info = %s (%d)", b, c)
+	require.Equal(t, RoleViewer, info.Role, "info = %s (%d)", b, c)
+	c, _ = e.do("GET", "/healthz", "", "")
+	require.Equal(t, 200, c, "healthz must be public")
 }
 
 func TestInstanceScope(t *testing.T) {
@@ -121,18 +126,14 @@ func TestInstanceScope(t *testing.T) {
 	_, b := e.do("GET", "/api/v1/instances", tok, "")
 	var list []admin.Status
 	_ = json.Unmarshal(b, &list)
-	if len(list) != 1 || list[0].Instance != "beta" {
-		t.Fatalf("list = %s", b)
-	}
-	if c, _ := e.do("GET", "/api/v1/instances/alpha/players", tok, ""); c != 404 {
-		t.Fatalf("out of scope: %d", c)
-	}
-	if c, _ := e.do("GET", "/api/v1/instances/zzz", tok, ""); c != 404 {
-		t.Fatalf("unknown: %d", c)
-	}
-	if c, _ := e.do("GET", "/api/v1/instances/beta", tok, ""); c != 200 {
-		t.Fatalf("in scope: %d", c)
-	}
+	require.Len(t, list, 1, "list = %s", b)
+	require.Equal(t, "beta", list[0].Instance)
+	c, _ := e.do("GET", "/api/v1/instances/alpha/players", tok, "")
+	require.Equal(t, 404, c)
+	c, _ = e.do("GET", "/api/v1/instances/zzz", tok, "")
+	require.Equal(t, 404, c)
+	c, _ = e.do("GET", "/api/v1/instances/beta", tok, "")
+	require.Equal(t, 200, c)
 }
 
 func TestReadEndpointsAndVisibility(t *testing.T) {
@@ -142,12 +143,9 @@ func TestReadEndpointsAndVisibility(t *testing.T) {
 	get := func(tok, path string, v any) {
 		t.Helper()
 		c, b := e.do("GET", path, tok, "")
-		if c != 200 {
-			t.Fatalf("%s: %d %s", path, c, b)
-		}
-		if err := json.Unmarshal(b, v); err != nil {
-			t.Fatal(err)
-		}
+		require.Equal(t, 200, c)
+		err := json.Unmarshal(b, v)
+		require.NoError(t, err)
 	}
 	var players []admin.Player
 	get(viewer, "/api/v1/instances/alpha/players", &players)
@@ -155,35 +153,27 @@ func TestReadEndpointsAndVisibility(t *testing.T) {
 	get(viewer, "/api/v1/instances/alpha/vehicles", &vehicles)
 	var events []admin.Event
 	get(viewer, "/api/v1/instances/alpha/events", &events)
-	if len(players) != 1 || len(vehicles) != 1 || len(events) != 1 {
-		t.Fatal("state endpoints")
-	}
+	require.Len(t, players, 1)
+	require.Len(t, vehicles, 1)
+	require.Len(t, events, 1)
 	var vm, am []admin.Marker
 	get(viewer, "/api/v1/instances/alpha/map/markers", &vm)
 	get(admn, "/api/v1/instances/alpha/map/markers", &am)
-	if len(vm) != 1 || len(am) != 2 {
-		t.Fatalf("visibility: viewer %d admin %d", len(vm), len(am))
-	}
+	require.Len(t, vm, 1, "visibility: viewer %d admin %d", len(vm), len(am))
+	require.Len(t, am, 2, "visibility: viewer %d admin %d", len(vm), len(am))
 	get(admn, "/api/v1/instances/alpha/map/markers?layer=secret", &am)
-	if len(am) != 1 {
-		t.Fatal("layer filter")
-	}
+	require.Len(t, am, 1, "layer filter")
 	var vl, al []admin.Layer
 	get(viewer, "/api/v1/instances/alpha/layers", &vl)
 	get(admn, "/api/v1/instances/alpha/layers", &al)
-	if len(vl) != 1 || len(al) != 2 {
-		t.Fatalf("layers: viewer %d admin %d", len(vl), len(al))
-	}
+	require.Len(t, vl, 1, "layers: viewer %d admin %d", len(vl), len(al))
+	require.Len(t, al, 2, "layers: viewer %d admin %d", len(vl), len(al))
 	var st admin.Status
 	get(viewer, "/api/v1/instances/alpha", &st)
-	if !st.Connected {
-		t.Fatal("status")
-	}
+	require.True(t, st.Connected, "status")
 	var names []string
 	get(viewer, "/api/v1/instances/alpha/types?q=x&limit=3", &names)
-	if names == nil {
-		t.Fatal("types must be a list")
-	}
+	require.NotNil(t, names, "types must be a list")
 }
 
 func TestActions(t *testing.T) {
@@ -211,38 +201,40 @@ func TestActions(t *testing.T) {
 	for _, tc := range cases {
 		c, b := e.do(tc.method, tc.path, op, tc.body, "X-Dzo-Actor", "alice", "X-Dzo-Source", "web")
 		var r ActionResult
-		if err := json.Unmarshal(b, &r); err != nil || c != 200 || !r.OK || r.ID == "" {
-			t.Fatalf("%s %s: %d %s", tc.method, tc.path, c, b)
-		}
+		err := json.Unmarshal(b, &r)
+		require.NoError(t, err, "%s %s: %d %s", tc.method, tc.path, c, b)
+		require.Equal(t, 200, c, "%s %s: %d %s", tc.method, tc.path, c, b)
+		require.True(t, r.OK, "%s %s: %d %s", tc.method, tc.path, c, b)
+		require.NotEmpty(t, r.ID, "%s %s: %d %s", tc.method, tc.path, c, b)
 	}
 	entries, _ := e.srv.Audit.Tail("alpha", 100)
-	if len(entries) != len(cases) || entries[0].Actor != "t-operator:alice" || entries[0].Source != "web" || !entries[0].OK || entries[0].Action != "vehicle_delete" {
-		t.Fatalf("audit = %+v", entries)
-	}
+	require.Len(t, entries, len(cases))
+	require.Equal(t, "t-operator:alice", entries[0].Actor)
+	require.Equal(t, "web", entries[0].Source)
+	require.True(t, entries[0].OK, "audit = %+v", entries)
+	require.Equal(t, "vehicle_delete", entries[0].Action)
 	// The audit endpoint is admin only.
-	if c, _ := e.do("GET", "/api/v1/audit", op, ""); c != 403 {
-		t.Fatalf("operator reading audit: %d", c)
-	}
+	c, _ := e.do("GET", "/api/v1/audit", op, "")
+	require.Equal(t, 403, c)
 	c, b := e.do("GET", "/api/v1/audit?instance=alpha&limit=2", e.token(RoleAdmin, nil, false), "")
 	var got []admin.AuditEntry
-	if err := json.Unmarshal(b, &got); err != nil || c != 200 || len(got) != 2 {
-		t.Fatalf("audit endpoint: %d %s", c, b)
-	}
+	err := json.Unmarshal(b, &got)
+	require.NoError(t, err, "audit endpoint: %d %s", c, b)
+	require.Equal(t, 200, c, "audit endpoint: %d %s", c, b)
+	require.Len(t, got, 2, "audit endpoint: %d %s", c, b)
 }
 
 func TestActionFailures(t *testing.T) {
 	e := newEnv(t)
 	op := e.token(RoleOperator, nil, false)
 	// Mod not connected.
-	if c, _ := e.do("POST", "/api/v1/instances/alpha/message", op, `{"text":"x"}`); c != http.StatusServiceUnavailable {
-		t.Fatalf("offline: %d", c)
-	}
+	c, _ := e.do("POST", "/api/v1/instances/alpha/message", op, `{"text":"x"}`)
+	require.Equal(t, http.StatusServiceUnavailable, c)
 	stop := e.modAnswers("player not online")
 	defer stop()
 	c, b := e.do("POST", "/api/v1/instances/alpha/players/1/teleport", op, `{"x":1,"z":1}`)
-	if c != http.StatusUnprocessableEntity || !strings.Contains(string(b), "player not online") {
-		t.Fatalf("mod failure: %d %s", c, b)
-	}
+	require.Equal(t, http.StatusUnprocessableEntity, c)
+	require.Contains(t, string(b), "player not online", "mod failure: %d %s", c, b)
 	for _, tc := range []struct {
 		path, body string
 		want       int
@@ -254,36 +246,29 @@ func TestActionFailures(t *testing.T) {
 		{"/api/v1/instances/alpha/spawn-vehicle", `{"x":1,"z":2}`, 400},
 		{"/api/v1/instances/alpha/message?wait=abc", `{"text":"x"}`, 400},
 	} {
-		if c, b := e.do("POST", tc.path, op, tc.body); c != tc.want {
-			t.Fatalf("%s: %d %s", tc.path, c, b)
-		}
+		c, _ := e.do("POST", tc.path, op, tc.body)
+		require.Equal(t, tc.want, c)
 	}
-	if c, _ := e.do("POST", "/api/v1/instances/alpha/vehicles/v/repair", op, `{"scope":"x","extra":1}`); c != 400 {
-		t.Fatalf("unknown field: %d", c)
-	}
+	c, _ = e.do("POST", "/api/v1/instances/alpha/vehicles/v/repair", op, `{"scope":"x","extra":1}`)
+	require.Equal(t, 400, c)
 }
 
 func TestPermissions(t *testing.T) {
 	e := newEnv(t)
 	defer e.modAnswers("")()
 	mod, view := e.token(RoleModerator, nil, false), e.token(RoleViewer, nil, false)
-	if c, _ := e.do("POST", "/api/v1/instances/alpha/players/7656/message", mod, `{"text":"hi"}`); c != 200 {
-		t.Fatalf("moderator message: %d", c)
-	}
+	c, _ := e.do("POST", "/api/v1/instances/alpha/players/7656/message", mod, `{"text":"hi"}`)
+	require.Equal(t, 200, c)
 	for _, p := range []string{"/message", "/players/7656/teleport", "/players/7656/give", "/players/7656/kill", "/players/7656/heal", "/players/7656/fixgear", "/spawn", "/spawn-vehicle", "/vehicles/v1/repair"} {
-		if c, _ := e.do("POST", "/api/v1/instances/alpha"+p, mod, `{"text":"x"}`); c != 403 {
-			t.Fatalf("moderator %s: %d", p, c)
-		}
+		c, _ := e.do("POST", "/api/v1/instances/alpha"+p, mod, `{"text":"x"}`)
+		require.Equal(t, 403, c)
 	}
-	if c, _ := e.do("DELETE", "/api/v1/instances/alpha/vehicles/v1", view, ""); c != 403 {
-		t.Fatalf("viewer delete: %d", c)
-	}
+	c, _ = e.do("DELETE", "/api/v1/instances/alpha/vehicles/v1", view, "")
+	require.Equal(t, 403, c)
 	// A non-delegate token cannot change who the audit blames.
 	e.do("POST", "/api/v1/instances/alpha/message", e.token(RoleOperator, nil, false), `{"text":"x"}`, "X-Dzo-Actor", "mallory")
 	entries, _ := e.srv.Audit.Tail("alpha", 1)
-	if strings.Contains(entries[0].Actor, "mallory") {
-		t.Fatalf("actor spoofed: %q", entries[0].Actor)
-	}
+	require.NotContains(t, entries[0].Actor, "mallory")
 }
 
 func TestAsyncAndCommandLookup(t *testing.T) {
@@ -293,19 +278,18 @@ func TestAsyncAndCommandLookup(t *testing.T) {
 	c, b := e.do("POST", "/api/v1/instances/alpha/message?wait=0", op, `{"text":"x"}`)
 	var r ActionResult
 	_ = json.Unmarshal(b, &r)
-	if c != http.StatusAccepted || !r.Pending || r.ID == "" {
-		t.Fatalf("async: %d %s", c, b)
-	}
-	if c, _ := e.do("GET", "/api/v1/instances/alpha/commands/"+r.ID, op, ""); c != http.StatusAccepted {
-		t.Fatalf("pending lookup: %d", c)
-	}
+	require.Equal(t, http.StatusAccepted, c, "async: %d %s", c, b)
+	require.True(t, r.Pending, "async: %d %s", c, b)
+	require.NotEmpty(t, r.ID, "async: %d %s", c, b)
+	c, _ = e.do("GET", "/api/v1/instances/alpha/commands/"+r.ID, op, "")
+	require.Equal(t, http.StatusAccepted, c)
 	e.alpha.Sync(admin.SyncRequest{Proto: 1, Results: []admin.Result{{ID: r.ID, OK: true}}})
 	c, b = e.do("GET", "/api/v1/instances/alpha/commands/"+r.ID, op, "")
 	r = ActionResult{}
 	_ = json.Unmarshal(b, &r)
-	if c != 200 || !r.OK || r.Pending {
-		t.Fatalf("done lookup: %d %s", c, b)
-	}
+	require.Equal(t, 200, c, "done lookup: %d %s", c, b)
+	require.True(t, r.OK, "done lookup: %d %s", c, b)
+	require.False(t, r.Pending, "done lookup: %d %s", c, b)
 }
 
 func TestRateLimit(t *testing.T) {
@@ -318,31 +302,27 @@ func TestRateLimit(t *testing.T) {
 		c, _ := e.do("POST", "/api/v1/instances/alpha/players/1/message?wait=0", op, `{"text":"x"}`)
 		codes = append(codes, c)
 	}
-	if codes[0] != 202 || codes[1] != 202 || codes[2] != http.StatusTooManyRequests {
-		t.Fatalf("codes = %v", codes)
-	}
+	require.Equal(t, 202, codes[0])
+	require.Equal(t, 202, codes[1])
+	require.Equal(t, http.StatusTooManyRequests, codes[2])
 	entries, _ := e.srv.Audit.Tail("alpha", 1)
-	if entries[0].OK || !strings.Contains(entries[0].Result, "rate limit") {
-		t.Fatalf("denied actions must be audited: %+v", entries[0])
-	}
+	require.False(t, entries[0].OK, "denied actions must be audited: %+v", entries[0])
+	require.Contains(t, entries[0].Result, "rate limit")
 }
 
 func TestStream(t *testing.T) {
 	e := newEnv(t)
 	defer e.modAnswers("")()
 	tok := e.token(RoleViewer, nil, false)
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	req, _ := http.NewRequestWithContext(ctx, "GET", e.ts.URL+"/api/v1/instances/alpha/stream", nil)
 	req.Header.Set("Authorization", "Bearer "+tok)
 	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer func() { _ = resp.Body.Close() }()
-	if ct := resp.Header.Get("Content-Type"); ct != "text/event-stream" {
-		t.Fatalf("content type %q", ct)
-	}
+	ct := resp.Header.Get("Content-Type")
+	require.Equal(t, "text/event-stream", ct)
 	got := map[string]string{}
 	sc := bufio.NewScanner(resp.Body)
 	var kind string
@@ -368,16 +348,10 @@ func TestStream(t *testing.T) {
 			}
 		}
 	}
-	if !strings.Contains(got["players"], "new") && !strings.Contains(got["markers"], `"9"`) {
-		t.Fatalf("stream = %v", got)
-	}
-	if strings.Contains(got["markers"], `"8"`) {
-		t.Fatal("the stream leaked an admin-only marker to a viewer")
-	}
+	require.True(t, strings.Contains(got["players"], "new") || strings.Contains(got["markers"], `"9"`), "stream = %v", got)
+	require.NotContains(t, got["markers"], `"8"`, "the stream leaked an admin-only marker to a viewer")
 	for _, k := range []string{"status", "players", "vehicles", "markers", "events"} {
-		if got[k] == "" {
-			t.Fatalf("missing initial %s event", k)
-		}
+		require.NotEmpty(t, got[k])
 	}
 }
 
@@ -387,9 +361,8 @@ func TestQuantityOf(t *testing.T) {
 		in   *float64
 		want float64
 	}{{nil, admin.QuantityDefault}, {&zero, 0}, {&five, 5}} {
-		if got := quantityOf(tc.in); got != tc.want {
-			t.Errorf("quantityOf(%v) = %v, want %v", tc.in, got, tc.want)
-		}
+		got := quantityOf(tc.in)
+		assert.Equal(t, tc.want, got)
 	}
 }
 
@@ -397,13 +370,14 @@ func TestMessagePassesNotificationFieldsToTheMod(t *testing.T) {
 	e := newEnv(t)
 	e.alpha.Sync(admin.SyncRequest{Proto: 1, Hello: true, World: "w", Features: []string{"expansion"}})
 	op := e.token(RoleOperator, nil, false)
-	if c, b := e.do("POST", "/api/v1/instances/alpha/message?wait=0", op, `{"text":"x","style":"expansion","notify_type":"baguette","title":"T","seconds":5}`); c != 202 {
-		t.Fatalf("message: %d %s", c, b)
-	}
+	c, b := e.do("POST", "/api/v1/instances/alpha/message?wait=0", op, `{"text":"x","style":"expansion","notify_type":"baguette","title":"T","seconds":5}`)
+	require.Equal(t, 202, c, "%s", b)
 	cmds := e.alpha.Sync(admin.SyncRequest{Proto: 1}).Commands
-	if len(cmds) != 1 || cmds[0].NotifyType != "baguette" || cmds[0].Title != "T" || cmds[0].Seconds != 5 || cmds[0].Style != "expansion" {
-		t.Fatalf("command = %+v", cmds)
-	}
+	require.Len(t, cmds, 1)
+	require.Equal(t, "baguette", cmds[0].NotifyType)
+	require.Equal(t, "T", cmds[0].Title)
+	require.Equal(t, 5, cmds[0].Seconds)
+	require.Equal(t, "expansion", cmds[0].Style)
 }
 
 func TestMessageRConStyleUsesSay(t *testing.T) {
@@ -415,36 +389,34 @@ func TestMessageRConStyleUsesSay(t *testing.T) {
 	}
 	op := e.token(RoleOperator, nil, false)
 	// no mod connected: rcon does not need it
-	if c, b := e.do("POST", "/api/v1/instances/alpha/message", op, `{"text":"hello","style":"rcon"}`); c != 200 {
-		t.Fatalf("rcon message: %d %s", c, b)
-	}
-	if len(got) != 1 || got[0] != "alpha||hello" {
-		t.Fatalf("Say calls = %v", got)
-	}
-	if _, b := e.do("GET", "/api/v1/audit?instance=alpha", e.token(RoleAdmin, nil, false), ""); !strings.Contains(string(b), `"target":"all"`) {
-		t.Errorf("no audit entry for the rcon message: %s", b)
-	}
+	c, b := e.do("POST", "/api/v1/instances/alpha/message", op, `{"text":"hello","style":"rcon"}`)
+	require.Equal(t, 200, c)
+	require.Len(t, got, 1)
+	require.Equal(t, "alpha||hello", got[0])
+	_, b = e.do("GET", "/api/v1/audit?instance=alpha", e.token(RoleAdmin, nil, false), "")
+	assert.Contains(t, string(b), `"target":"all"`)
 	e.srv.Say = func(context.Context, string, string, string) error { return errors.New("boom") }
-	if c, _ := e.do("POST", "/api/v1/instances/alpha/message", op, `{"text":"hello","style":"rcon"}`); c != 502 {
-		t.Errorf("failing Say = %d, want 502", c)
-	}
+	c, _ = e.do("POST", "/api/v1/instances/alpha/message", op, `{"text":"hello","style":"rcon"}`)
+	assert.Equal(t, 502, c)
 }
 
 func TestMessageRConStyleWithoutHookIs503(t *testing.T) {
 	e := newEnv(t)
 	op := e.token(RoleOperator, nil, false)
-	if c, _ := e.do("POST", "/api/v1/instances/alpha/message", op, `{"text":"hello","style":"rcon"}`); c != 503 {
-		t.Fatalf("no hook = %d, want 503", c)
-	}
+	c, _ := e.do("POST", "/api/v1/instances/alpha/message", op, `{"text":"hello","style":"rcon"}`)
+	require.Equal(t, 503, c)
 }
 
 func TestMessageRConStyleToOnePlayerIsABadRequest(t *testing.T) {
 	e := newEnv(t)
-	e.srv.Say = func(context.Context, string, string, string) error { t.Error("Say called for one player"); return nil }
-	op := e.token(RoleOperator, nil, false)
-	if c, b := e.do("POST", "/api/v1/instances/alpha/players/7656/message", op, `{"text":"hi","style":"rcon"}`); c != 400 || !strings.Contains(string(b), "everyone") {
-		t.Fatalf("rcon to one player = %d %s, want 400", c, b)
+	e.srv.Say = func(context.Context, string, string, string) error {
+		assert.Fail(t, "Say called for one player")
+		return nil
 	}
+	op := e.token(RoleOperator, nil, false)
+	c, b := e.do("POST", "/api/v1/instances/alpha/players/7656/message", op, `{"text":"hi","style":"rcon"}`)
+	require.Equal(t, 400, c, "rcon to one player = %d %s, want 400", c, b)
+	require.Contains(t, string(b), "everyone", "rcon to one player = %d %s, want 400", c, b)
 }
 
 // Flags and territories are for operators: below that role neither the markers nor their layers are listed.
@@ -460,22 +432,17 @@ func TestFlagMarkersAreOperatorOnly(t *testing.T) {
 	count := func(role Role, path string) int {
 		t.Helper()
 		c, b := e.do("GET", "/api/v1/instances/alpha/"+path, e.token(role, nil, false), "")
-		if c != 200 {
-			t.Fatalf("%s as %s: %d %s", path, role, c, b)
-		}
+		require.Equal(t, 200, c)
 		var list []json.RawMessage
-		if err := json.Unmarshal(b, &list); err != nil {
-			t.Fatal(err)
-		}
+		err := json.Unmarshal(b, &list)
+		require.NoError(t, err)
 		return len(list)
 	}
 	for role, want := range map[Role]int{RoleViewer: 0, RoleModerator: 0, RoleOperator: 2, RoleAdmin: 2} {
-		if got := count(role, "map/markers"); got != want {
-			t.Errorf("%s: %d markers, want %d", role, got, want)
-		}
-		if got := count(role, "layers"); got != want {
-			t.Errorf("%s: %d layers, want %d", role, got, want)
-		}
+		got := count(role, "map/markers")
+		assert.Equal(t, want, got)
+		got = count(role, "layers")
+		assert.Equal(t, want, got)
 	}
 }
 
@@ -483,10 +450,8 @@ func TestFlagMarkersAreOperatorOnly(t *testing.T) {
 func TestRaiseFlagNeedsOperator(t *testing.T) {
 	e := newEnv(t)
 	defer e.modAnswers("")()
-	if c, _ := e.do("POST", "/api/v1/instances/alpha/flags/f1/raise", e.token(RoleModerator, nil, false), ""); c != 403 {
-		t.Fatalf("moderator: %d", c)
-	}
-	if c, b := e.do("POST", "/api/v1/instances/alpha/flags/f1/raise", e.token(RoleOperator, nil, false), ""); c != 200 {
-		t.Fatalf("operator: %d %s", c, b)
-	}
+	c, _ := e.do("POST", "/api/v1/instances/alpha/flags/f1/raise", e.token(RoleModerator, nil, false), "")
+	require.Equal(t, 403, c)
+	c, b := e.do("POST", "/api/v1/instances/alpha/flags/f1/raise", e.token(RoleOperator, nil, false), "")
+	require.Equal(t, 200, c, "%s", b)
 }

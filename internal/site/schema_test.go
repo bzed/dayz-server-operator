@@ -4,9 +4,11 @@
 package site
 
 import (
-	"strings"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"gopkg.in/yaml.v3"
 )
@@ -23,84 +25,74 @@ func validInstance() Instance {
 }
 
 func TestInstanceValidateOK(t *testing.T) {
-	if err := validInstance().Validate(); err != nil {
-		t.Fatalf("Validate: %v", err)
-	}
+	err := validInstance().Validate()
+	require.NoError(t, err, "Validate")
 }
 
 func TestInstanceValidateMissingFields(t *testing.T) {
 	i := Instance{}
 	err := i.Validate()
-	if err == nil {
-		t.Fatal("expected an error")
-	}
+	require.Error(t, err)
 	for _, want := range []string{"name is required", "product is required", "map is required", "ports.game is required"} {
-		if !strings.Contains(err.Error(), want) {
-			t.Errorf("error %q should contain %q", err, want)
-		}
+		assert.Contains(t, err.Error(), want)
 	}
 }
 
 func TestInstanceValidateBadNetwork(t *testing.T) {
 	i := validInstance()
 	i.Network = "bridge"
-	if err := i.Validate(); err == nil || !strings.Contains(err.Error(), "network must be") {
-		t.Fatalf("Validate() = %v", err)
-	}
+	err := i.Validate()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "network must be")
 }
 
 func TestInstanceValidateDuplicateMods(t *testing.T) {
 	i := validInstance()
 	i.Mods = []ModRef{{ID: 1}, {ID: 1}}
-	if err := i.Validate(); err == nil || !strings.Contains(err.Error(), "duplicate entry 1") {
-		t.Fatalf("Validate() = %v", err)
-	}
+	err := i.Validate()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "duplicate entry 1")
 }
 
 func TestInstanceValidateZeroModID(t *testing.T) {
 	i := validInstance()
 	i.Mods = []ModRef{{ID: 0}}
-	if err := i.Validate(); err == nil || !strings.Contains(err.Error(), "exactly one of id or local") {
-		t.Fatalf("Validate() = %v", err)
-	}
+	err := i.Validate()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "exactly one of id or local")
 }
 
 func TestInstanceValidateBadUpdatePolicy(t *testing.T) {
 	i := validInstance()
 	i.Updates.Policy = "sometimes"
-	if err := i.Validate(); err == nil || !strings.Contains(err.Error(), "updates.policy") {
-		t.Fatalf("Validate() = %v", err)
-	}
+	err := i.Validate()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "updates.policy")
 }
 
 func TestInstanceValidateAcceptsEmptyUpdatePolicy(t *testing.T) {
 	i := validInstance()
 	i.Updates.Policy = ""
-	if err := i.Validate(); err != nil {
-		t.Fatalf("Validate() = %v", err)
-	}
+	err := i.Validate()
+	require.NoError(t, err, "Validate()")
 }
 
 func TestInstanceDefaultMissionSource(t *testing.T) {
 	i := validInstance()
 	i.MissionSource = MissionSource{}
 	i.Map = "dayzOffline.chernarusplus"
-	if err := i.Validate(); err != nil {
-		t.Errorf("a Bohemia map needs no mission_source: %v", err)
-	}
+	err := i.Validate()
+	require.NoError(t, err, "a Bohemia map needs no mission_source")
 	i.MissionSource = MissionSource{Ref: "DZ_1.29"} // the default repository, pinned
-	if err := i.Validate(); err != nil {
-		t.Errorf("a ref alone must be allowed: %v", err)
-	}
+	err = i.Validate()
+	require.NoError(t, err, "a ref alone must be allowed")
 	i.MissionSource = MissionSource{}
 	i.Map = "empty.deerisle"
-	if err := i.Validate(); err == nil {
-		t.Error("a map the Central Economy repository does not ship needs a mission_source")
-	}
+	err = i.Validate()
+	require.Error(t, err, "a map the Central Economy repository does not ship needs a mission_source")
 	i.MissionSource = MissionSource{Path: "empty.deerisle"}
-	if err := i.Validate(); err != nil {
-		t.Errorf("an explicit path is a deliberate choice: %v", err)
-	}
+	err = i.Validate()
+	require.NoError(t, err, "an explicit path is a deliberate choice")
 }
 
 func TestMissionSourceValidateRequiresExactlyOne(t *testing.T) {
@@ -109,28 +101,23 @@ func TestMissionSourceValidateRequiresExactlyOne(t *testing.T) {
 		{Git: "g", Preset: "p"}, // both
 	}
 	for _, c := range cases {
-		if err := c.Validate(); err == nil {
-			t.Errorf("Validate(%+v) should fail", c)
-		}
+		err := c.Validate()
+		require.Error(t, err)
 	}
 }
 
 func TestMissionSourceValidateGitNeedsRefAndPath(t *testing.T) {
-	if err := (MissionSource{Git: "g"}).Validate(); err == nil {
-		t.Fatal("expected an error for missing ref/path")
-	}
-	if err := (MissionSource{Git: "g", Ref: "main"}).Validate(); err == nil {
-		t.Fatal("expected an error for missing path")
-	}
-	if err := (MissionSource{Git: "g", Ref: "main", Path: "p"}).Validate(); err != nil {
-		t.Fatalf("Validate() = %v", err)
-	}
+	err := (MissionSource{Git: "g"}).Validate()
+	require.Error(t, err)
+	err = (MissionSource{Git: "g", Ref: "main"}).Validate()
+	require.Error(t, err)
+	err = (MissionSource{Git: "g", Ref: "main", Path: "p"}).Validate()
+	require.NoError(t, err, "Validate()")
 }
 
 func TestMissionSourceValidatePresetAlone(t *testing.T) {
-	if err := (MissionSource{Preset: "deerisle"}).Validate(); err != nil {
-		t.Fatalf("Validate() = %v", err)
-	}
+	err := (MissionSource{Preset: "deerisle"}).Validate()
+	require.NoError(t, err, "Validate()")
 }
 
 func TestInstanceYAMLRoundTrip(t *testing.T) {
@@ -165,42 +152,31 @@ hooks:
   pre_start: ["hooks/traderstocks.sh"]
 `
 	var i Instance
-	if err := yaml.Unmarshal([]byte(doc), &i); err != nil {
-		t.Fatalf("Unmarshal: %v", err)
-	}
-	if err := i.Validate(); err != nil {
-		t.Fatalf("Validate: %v", err)
-	}
-	if i.Name != "deerisle" || i.Ports.RCon != 8303 || i.Params.CPUCount != "auto" {
-		t.Errorf("Instance = %+v", i)
-	}
-	if len(i.Mods) != 2 || i.Mods[1].Server != true {
-		t.Fatalf("Mods = %+v", i.Mods)
-	}
-	if i.Updates.CheckInterval.Std().String() != "1h0m0s" {
-		t.Errorf("CheckInterval = %v", i.Updates.CheckInterval.Std())
-	}
-	if i.Notify.Discord == nil || len(*i.Notify.Discord) != 2 {
-		t.Fatalf("Notify.Discord = %+v", i.Notify.Discord)
-	}
+	err := yaml.Unmarshal([]byte(doc), &i)
+	require.NoError(t, err, "Unmarshal")
+	err = i.Validate()
+	require.NoError(t, err, "Validate")
+	require.Equal(t, "deerisle", i.Name)
+	require.Equal(t, 8303, i.Ports.RCon)
+	assert.Equal(t, "auto", i.Params.CPUCount)
+	require.Len(t, i.Mods, 2)
+	require.True(t, i.Mods[1].Server, "Mods = %+v", i.Mods)
+	assert.Equal(t, "1h0m0s", i.Updates.CheckInterval.Std().String())
+	require.NotNil(t, i.Notify.Discord)
+	require.Len(t, *i.Notify.Discord, 2)
 }
 
 func TestNotifyDiscordOmittedVsEmpty(t *testing.T) {
 	var withNil Instance
-	if err := yaml.Unmarshal([]byte("name: a\n"), &withNil); err != nil {
-		t.Fatalf("Unmarshal: %v", err)
-	}
-	if withNil.Notify.Discord != nil {
-		t.Errorf("expected nil Discord when omitted, got %+v", withNil.Notify.Discord)
-	}
+	err := yaml.Unmarshal([]byte("name: a\n"), &withNil)
+	require.NoError(t, err, "Unmarshal")
+	assert.Nil(t, withNil.Notify.Discord)
 
 	var withEmpty Instance
-	if err := yaml.Unmarshal([]byte("name: a\nnotify: {discord: []}\n"), &withEmpty); err != nil {
-		t.Fatalf("Unmarshal: %v", err)
-	}
-	if withEmpty.Notify.Discord == nil || len(*withEmpty.Notify.Discord) != 0 {
-		t.Errorf("expected a non-nil empty Discord slice, got %+v", withEmpty.Notify.Discord)
-	}
+	err = yaml.Unmarshal([]byte("name: a\nnotify: {discord: []}\n"), &withEmpty)
+	require.NoError(t, err, "Unmarshal")
+	require.NotNil(t, withEmpty.Notify.Discord)
+	assert.Empty(t, *withEmpty.Notify.Discord)
 }
 
 func TestIntegrationValidateOK(t *testing.T) {
@@ -211,15 +187,13 @@ func TestIntegrationValidateOK(t *testing.T) {
 			"types.xml": {Source: "local", Path: "files/types.xml"},
 		},
 	}
-	if err := i.Validate(); err != nil {
-		t.Fatalf("Validate: %v", err)
-	}
+	err := i.Validate()
+	require.NoError(t, err, "Validate")
 }
 
 func TestIntegrationValidateMissingFields(t *testing.T) {
-	if err := (Integration{}).Validate(); err == nil {
-		t.Fatal("expected an error")
-	}
+	err := (Integration{}).Validate()
+	require.Error(t, err)
 }
 
 func TestFileSourceValidate(t *testing.T) {
@@ -240,14 +214,11 @@ func TestFileSourceValidate(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			err := c.f.Validate("key")
 			if c.wantErr == "" {
-				if err != nil {
-					t.Fatalf("Validate() = %v, want nil", err)
-				}
+				require.NoError(t, err)
 				return
 			}
-			if err == nil || !strings.Contains(err.Error(), c.wantErr) {
-				t.Fatalf("Validate() = %v, want containing %q", err, c.wantErr)
-			}
+			require.Error(t, err, "Validate() = %v, want containing %q", err, c.wantErr)
+			require.Contains(t, err.Error(), c.wantErr)
 		})
 	}
 }
@@ -267,18 +238,14 @@ hooks:
 aliases: [2291785546]
 `
 	var i Integration
-	if err := yaml.Unmarshal([]byte(doc), &i); err != nil {
-		t.Fatalf("Unmarshal: %v", err)
-	}
-	if err := i.Validate(); err != nil {
-		t.Fatalf("Validate: %v", err)
-	}
-	if len(i.Files) != 4 || len(i.Aliases) != 1 || i.Aliases[0] != 2291785546 {
-		t.Errorf("Integration = %+v", i)
-	}
-	if i.Files["cfgeventspawns.xml"].Maps[0] != "dayzOffline.chernarusplus" {
-		t.Errorf("Files[cfgeventspawns.xml] = %+v", i.Files["cfgeventspawns.xml"])
-	}
+	err := yaml.Unmarshal([]byte(doc), &i)
+	require.NoError(t, err, "Unmarshal")
+	err = i.Validate()
+	require.NoError(t, err, "Validate")
+	require.Len(t, i.Files, 4)
+	require.Len(t, i.Aliases, 1)
+	assert.Equal(t, uint64(2291785546), i.Aliases[0])
+	assert.Equal(t, "dayzOffline.chernarusplus", i.Files["cfgeventspawns.xml"].Maps[0])
 }
 
 func TestOverlayManifestYAML(t *testing.T) {
@@ -287,41 +254,30 @@ object_spawners: ["custom_lost_bmps/LOSTBMPS.json"]
 spawn_gear_presets: ["presets/loadout.json"]
 `
 	var o OverlayManifest
-	if err := yaml.Unmarshal([]byte(doc), &o); err != nil {
-		t.Fatalf("Unmarshal: %v", err)
-	}
-	if len(o.ObjectSpawners) != 1 || len(o.SpawnGearPresets) != 1 {
-		t.Errorf("OverlayManifest = %+v", o)
-	}
+	err := yaml.Unmarshal([]byte(doc), &o)
+	require.NoError(t, err, "Unmarshal")
+	require.Len(t, o.ObjectSpawners, 1)
+	assert.Len(t, o.SpawnGearPresets, 1)
 }
 
 func TestDurationInvalid(t *testing.T) {
 	var d Duration
 	err := yaml.Unmarshal([]byte(`"not a duration"`), &d)
-	if err == nil {
-		t.Fatal("expected an error")
-	}
+	require.Error(t, err)
 }
 
 func TestDurationEmpty(t *testing.T) {
 	var d Duration
-	if err := yaml.Unmarshal([]byte(`""`), &d); err != nil {
-		t.Fatalf("Unmarshal: %v", err)
-	}
-	if d != 0 {
-		t.Errorf("Duration = %v, want 0", d)
-	}
+	err := yaml.Unmarshal([]byte(`""`), &d)
+	require.NoError(t, err, "Unmarshal")
+	assert.Equal(t, Duration(0), d)
 }
 
 func TestDurationMarshal(t *testing.T) {
 	d := Duration(90 * 1e9) // 90s in nanoseconds
 	out, err := yaml.Marshal(d)
-	if err != nil {
-		t.Fatalf("Marshal: %v", err)
-	}
-	if !strings.Contains(string(out), "1m30s") {
-		t.Errorf("Marshal() = %q", out)
-	}
+	require.NoError(t, err, "Marshal")
+	assert.Contains(t, string(out), "1m30s")
 }
 
 func TestModRefValidate(t *testing.T) {
@@ -343,8 +299,10 @@ func TestModRefValidate(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := tt.ref.Validate()
-			if tt.wantErr == "" && err != nil || tt.wantErr != "" && (err == nil || !strings.Contains(err.Error(), tt.wantErr)) {
-				t.Fatalf("Validate() = %v, want %q", err, tt.wantErr)
+			if tt.wantErr == "" {
+				require.NoError(t, err)
+			} else {
+				require.ErrorContains(t, err, tt.wantErr)
 			}
 		})
 	}
@@ -353,9 +311,9 @@ func TestModRefValidate(t *testing.T) {
 func TestInstanceDuplicateLocalMods(t *testing.T) {
 	i := validInstance()
 	i.Mods = []ModRef{{Local: "a", Server: true}, {Local: "a", Server: true}}
-	if err := i.Validate(); err == nil || !strings.Contains(err.Error(), "duplicate entry a") {
-		t.Fatalf("Validate() = %v", err)
-	}
+	err := i.Validate()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "duplicate entry a")
 }
 
 func TestAdminConfigYAMLAndValidate(t *testing.T) {
@@ -367,28 +325,28 @@ admin_map:
   watch:
     - {layer: fire, classes: [FireplaceBase], icon: fire, cluster: 50, max: 100}
 `
-	if err := yaml.Unmarshal([]byte(src), &inst); err != nil {
-		t.Fatal(err)
-	}
-	if inst.Admin.PlayersS != 2 || inst.Admin.AllowSpawn == nil || *inst.Admin.AllowSpawn || len(inst.AdminMap.Watch) != 1 || inst.AdminMap.Watch[0].Cluster != 50 {
-		t.Fatalf("parsed = %+v", inst)
-	}
+	err := yaml.Unmarshal([]byte(src), &inst)
+	require.NoError(t, err)
+	require.Equal(t, 2, inst.Admin.PlayersS)
+	require.NotNil(t, inst.Admin.AllowSpawn)
+	require.False(t, *inst.Admin.AllowSpawn, "parsed = %+v", inst)
+	require.Len(t, inst.AdminMap.Watch, 1)
+	require.Equal(t, 50, inst.AdminMap.Watch[0].Cluster)
 	v := validInstance()
 	v.Admin = inst.Admin
 	v.AdminMap = inst.AdminMap
-	if err := v.Validate(); err != nil {
-		t.Fatal(err)
-	}
+	err = v.Validate()
+	require.NoError(t, err)
 	v.Admin.VehiclesS = -1
-	if err := v.Validate(); err == nil || !strings.Contains(err.Error(), "vehicles_s") {
-		t.Fatalf("negative interval: %v", err)
-	}
+	err = v.Validate()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "vehicles_s")
 	v = validInstance()
 	v.AdminMap.Watch = append(v.AdminMap.Watch, inst.AdminMap.Watch[0])
 	v.AdminMap.Watch[0].OnlyIf = "burning"
-	if err := v.Validate(); err == nil || !strings.Contains(err.Error(), "only_if") {
-		t.Fatalf("only_if must be rejected: %v", err)
-	}
+	err = v.Validate()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "only_if")
 }
 
 func TestAgeParsesDaysAndDurations(t *testing.T) {
@@ -397,24 +355,20 @@ func TestAgeParsesDaysAndDurations(t *testing.T) {
 		B Age `yaml:"b"`
 		C Age `yaml:"c"`
 	}
-	if err := yaml.Unmarshal([]byte("a: 30d\nb: 90m\nc: \"\"\n"), &s); err != nil {
-		t.Fatal(err)
-	}
-	if s.A.Std() != 30*24*time.Hour || s.B.Std() != 90*time.Minute || s.C != 0 {
-		t.Errorf("ages = %v %v %v", s.A.Std(), s.B.Std(), s.C.Std())
-	}
+	err := yaml.Unmarshal([]byte("a: 30d\nb: 90m\nc: \"\"\n"), &s)
+	require.NoError(t, err)
+	require.Equal(t, 30*24*time.Hour, s.A.Std(), "ages = %v %v %v", s.A.Std(), s.B.Std(), s.C.Std())
+	require.Equal(t, 90*time.Minute, s.B.Std(), "ages = %v %v %v", s.A.Std(), s.B.Std(), s.C.Std())
+	assert.Equal(t, Age(0), s.C, "ages = %v %v %v", s.A.Std(), s.B.Std(), s.C.Std())
 	for _, bad := range []string{"a: xd", "a: -3d", "a: soon"} {
-		if err := yaml.Unmarshal([]byte(bad), &s); err == nil {
-			t.Errorf("%q must be rejected", bad)
-		}
+		err := yaml.Unmarshal([]byte(bad), &s)
+		require.Error(t, err, "%q must be rejected", bad)
 	}
 }
 
 func TestAdminConfigVehicleKinds(t *testing.T) {
-	if err := (AdminConfig{VehicleKinds: map[string][]string{"bicycle": {"Tandem*"}, "helicopter": {"Heli_*"}}}).Validate(); err != nil {
-		t.Fatal(err)
-	}
-	if err := (AdminConfig{VehicleKinds: map[string][]string{"rocket": {"X"}}}).Validate(); err == nil {
-		t.Fatal("an unknown kind must fail: its icon would not exist")
-	}
+	err := (AdminConfig{VehicleKinds: map[string][]string{"bicycle": {"Tandem*"}, "helicopter": {"Heli_*"}}}).Validate()
+	require.NoError(t, err)
+	err = (AdminConfig{VehicleKinds: map[string][]string{"rocket": {"X"}}}).Validate()
+	require.Error(t, err, "an unknown kind must fail: its icon would not exist")
 }

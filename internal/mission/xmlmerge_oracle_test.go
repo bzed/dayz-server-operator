@@ -11,18 +11,20 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/beevik/etree"
 )
 
 // canonChildren lists the children of the root as "tag name=<name>" -> canonical content (spaces
 // and line breaks between elements removed), in document order.
-func canonChildren(t *testing.T, data []byte) ([]string, map[string]string) {
+func canonChildren(t testing.TB, data []byte) ([]string, map[string]string) {
 	t.Helper()
 	doc := etree.NewDocument()
 	doc.ReadSettings.PreserveCData = true
-	if err := doc.ReadFromBytes(data); err != nil {
-		t.Fatalf("parse: %v", err)
-	}
+	err := doc.ReadFromBytes(data)
+	require.NoError(t, err, "parse")
 	var keys []string
 	content := map[string]string{}
 	for _, c := range doc.Root().ChildElements() {
@@ -64,9 +66,7 @@ func TestAgainstXmlmergeOracle(t *testing.T) {
 				t.Skip(err)
 			}
 			modData, err := os.ReadFile(modFile) //nolint:gosec // an operator-supplied fixture
-			if err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err)
 			out := filepath.Join(t.TempDir(), "legacy.xml")
 			cmd := exec.Command("xmlmerge", "-o", out, modFile, base) // the legacy order: the mod file first
 			if o, err := cmd.CombinedOutput(); err != nil {
@@ -77,17 +77,15 @@ func TestAgainstXmlmergeOracle(t *testing.T) {
 			if err := etree.NewDocument().ReadFromBytes(baseData); err != nil {
 				t.Skipf("the Central Economy file itself is not well-formed XML (%v)", err)
 			}
-			if err := WriteFile(staging, c.file, baseData); err != nil {
-				t.Fatal(err)
-			}
+			err = WriteFile(staging, c.file, baseData)
+			require.NoError(t, err)
 			fragment := !strings.Contains(string(modData), "<"+c.root)
 			overlay := modData
 			if fragment { // no root element: wrap it, as a normalisation would
 				overlay = []byte("<" + c.root + ">" + string(modData) + "</" + c.root + ">")
 			}
-			if err := MergeXMLFile(staging, c.file, c.root, overlay, "name"); err != nil {
-				t.Fatal(err)
-			}
+			err = MergeXMLFile(staging, c.file, c.root, overlay, "name")
+			require.NoError(t, err)
 			ours, _ := os.ReadFile(filepath.Join(staging, c.file)) //nolint:gosec // our own output
 			oursKeys, oursContent := canonChildren(t, ours)
 			legacy, err := os.ReadFile(out) //nolint:gosec // the oracle's output
@@ -113,18 +111,14 @@ func TestAgainstXmlmergeOracle(t *testing.T) {
 				return strings.Join(out, "\n")
 			}
 			t.Logf("children: ours %d, xmlmerge %d (it keeps duplicates, we keep the last one by name)", len(oursKeys), len(legacyKeys))
-			if set(oursKeys) != set(legacyKeys) {
-				t.Errorf("the set of children differs\nours:     %v\nxmlmerge: %v", oursKeys, legacyKeys)
-			}
+			assert.Equal(t, set(legacyKeys), set(oursKeys))
 			// What the mod contributes arrives unchanged (the last definition of a name wins).
 			_, modContent := canonChildren(t, overlay)
 			for k, v := range modContent {
 				if strings.HasSuffix(k, " ") {
 					continue // unnamed elements (territories, ...) cannot be told apart by key
 				}
-				if oursContent[k] != v {
-					t.Errorf("mod child %q was changed by the merge:\nours: %.200s\nmod:  %.200s", k, oursContent[k], v)
-				}
+				assert.Equal(t, v, oursContent[k])
 			}
 			_ = legacyContent
 		})

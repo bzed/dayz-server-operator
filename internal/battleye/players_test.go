@@ -7,22 +7,23 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestParsePlayersOfTheLiveCapture(t *testing.T) {
 	b, err := os.ReadFile("../moderation/testdata/v2/players.out")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	pair, err := os.ReadFile("../moderation/testdata/v2/pair.txt")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	guid := strings.Fields(string(pair))[1]
 	ps := ParsePlayers(string(b))
-	if len(ps) != 1 || ps[0].Name != "dzotester" || ps[0].GUID != guid || ps[0].IP == "" || ps[0].Port == 0 {
-		t.Fatalf("ParsePlayers = %+v", ps)
-	}
+	require.Len(t, ps, 1)
+	require.Equal(t, "dzotester", ps[0].Name)
+	require.Equal(t, guid, ps[0].GUID)
+	require.NotEmpty(t, ps[0].IP)
+	require.NotEqual(t, 0, ps[0].Port)
 }
 
 func TestParsePlayersVariants(t *testing.T) {
@@ -31,13 +32,16 @@ func TestParsePlayersVariants(t *testing.T) {
 		"12  192.0.2.7:41939       -1   fedcba9876543210fedcba9876543210(?) bob with spaces\n" +
 		"3   garbage line\n(2 players in total)\n"
 	ps := ParsePlayers(raw)
-	if len(ps) != 2 {
-		t.Fatalf("%+v", ps)
-	}
-	if p := ps[0]; p.ID != 0 || p.IP != "10.0.0.3" || p.Port != 2304 || !p.Verified || p.Name != "alice" {
-		t.Errorf("alice %+v", p)
-	}
-	if p := ps[1]; p.ID != 12 || p.Ping != -1 || p.Verified || p.Name != "bob with spaces" {
-		t.Errorf("bob %+v", p)
-	}
+	require.Len(t, ps, 2)
+	p := ps[0]
+	require.Equal(t, 0, p.ID)
+	require.Equal(t, "10.0.0.3", p.IP)
+	require.Equal(t, 2304, p.Port)
+	require.True(t, p.Verified, "alice %+v", p)
+	assert.Equal(t, "alice", p.Name)
+	p = ps[1]
+	require.Equal(t, 12, p.ID)
+	require.Equal(t, -1, p.Ping)
+	require.False(t, p.Verified, "bob %+v", p)
+	assert.Equal(t, "bob with spaces", p.Name)
 }

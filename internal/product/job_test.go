@@ -4,10 +4,12 @@
 package product
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // writeFakeSteamcmd writes a shell script that scripts steamcmd for a job
@@ -22,24 +24,22 @@ import (
 // plan's record of the legacy tool's own detection logic, and the
 // app_update line is widely documented steamcmd usage - see the package
 // doc comment.
-func writeFakeSteamcmd(t *testing.T, script string) string {
+func writeFakeSteamcmd(t testing.TB, script string) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "fake-steamcmd.sh")
-	if err := os.WriteFile(path, []byte("#!/bin/sh\necho \"Waiting for user info...OK\"\n"+script), 0o755); err != nil { //nolint:gosec // test fixture, fixed 0755 mode
-		t.Fatalf("write fake steamcmd: %v", err)
-	}
+	err := os.WriteFile(path, []byte("#!/bin/sh\necho \"Waiting for user info...OK\"\n"+script), 0o755)
+	require.NoError(t, err, "write fake steamcmd")
 	return path
 }
 
 // writeFakeSteamcmdNoLogin is like writeFakeSteamcmd but for scripts that
 // need to control the login line themselves (e.g. simulating a rejected
 // cached session).
-func writeFakeSteamcmdNoLogin(t *testing.T, script string) string {
+func writeFakeSteamcmdNoLogin(t testing.TB, script string) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "fake-steamcmd.sh")
-	if err := os.WriteFile(path, []byte("#!/bin/sh\n"+script), 0o755); err != nil { //nolint:gosec // test fixture, fixed 0755 mode
-		t.Fatalf("write fake steamcmd: %v", err)
-	}
+	err := os.WriteFile(path, []byte("#!/bin/sh\n"+script), 0o755)
+	require.NoError(t, err, "write fake steamcmd")
 	return path
 }
 
@@ -49,15 +49,12 @@ case "$*" in
   *app_update*) echo "Success! App '223350' fully installed." ;;
 esac
 `)
-	result, err := RunAppUpdate(context.Background(), AppUpdateOptions{
+	result, err := RunAppUpdate(t.Context(), AppUpdateOptions{
 		Command: script, Account: "bob", AppID: 223350, InstallDir: t.TempDir(), Validate: true,
 	})
-	if err != nil {
-		t.Fatalf("RunAppUpdate: %v", err)
-	}
-	if !result.Success || result.AuthRequired {
-		t.Fatalf("result = %+v", result)
-	}
+	require.NoError(t, err, "RunAppUpdate")
+	require.True(t, result.Success, "result = %+v", result)
+	require.False(t, result.AuthRequired, "result = %+v", result)
 }
 
 func TestRunAppUpdateAuthRequired(t *testing.T) {
@@ -69,21 +66,17 @@ func TestRunAppUpdateAuthRequired(t *testing.T) {
 	script := writeFakeSteamcmdNoLogin(t, `
 echo "FAILED (Invalid Password)"
 `)
-	result, err := RunAppUpdate(context.Background(), AppUpdateOptions{
+	result, err := RunAppUpdate(t.Context(), AppUpdateOptions{
 		Command: script, Account: "bob", AppID: 223350, InstallDir: t.TempDir(),
 	})
-	if err != nil {
-		t.Fatalf("RunAppUpdate: %v", err)
-	}
-	if !result.AuthRequired || result.Success {
-		t.Fatalf("result = %+v, want AuthRequired", result)
-	}
+	require.NoError(t, err, "RunAppUpdate")
+	require.True(t, result.AuthRequired, "result = %+v, want AuthRequired", result)
+	require.False(t, result.Success, "result = %+v, want AuthRequired", result)
 }
 
 func TestRunAppUpdateMissingOptionsErrors(t *testing.T) {
-	if _, err := RunAppUpdate(context.Background(), AppUpdateOptions{}); err == nil {
-		t.Fatal("expected an error for missing options")
-	}
+	_, err := RunAppUpdate(t.Context(), AppUpdateOptions{})
+	require.Error(t, err)
 }
 
 func TestRunAppUpdateFailureWithoutSuccessMarker(t *testing.T) {
@@ -95,15 +88,12 @@ case "$*" in
     ;;
 esac
 `)
-	result, err := RunAppUpdate(context.Background(), AppUpdateOptions{
+	result, err := RunAppUpdate(t.Context(), AppUpdateOptions{
 		Command: script, Account: "bob", AppID: 223350, InstallDir: t.TempDir(),
 	})
-	if err != nil {
-		t.Fatalf("RunAppUpdate: %v", err)
-	}
-	if result.Success || result.AuthRequired {
-		t.Fatalf("result = %+v, want a plain (non-auth) failure", result)
-	}
+	require.NoError(t, err, "RunAppUpdate")
+	require.False(t, result.Success, "result = %+v, want a plain (non-auth) failure", result)
+	require.False(t, result.AuthRequired, "result = %+v, want a plain (non-auth) failure", result)
 }
 
 func TestRunAppUpdateBetaBranch(t *testing.T) {
@@ -117,25 +107,17 @@ case "$*" in
 esac
 `)
 	dir := filepath.Dir(script)
-	result, err := RunAppUpdate(context.Background(), AppUpdateOptions{
+	result, err := RunAppUpdate(t.Context(), AppUpdateOptions{
 		Command: script, Account: "bob", AppID: 1042420, InstallDir: t.TempDir(),
 		BetaBranch: "experimental", BetaPassword: "s3cr3t",
 	})
-	if err != nil {
-		t.Fatalf("RunAppUpdate: %v", err)
-	}
-	if !result.Success {
-		t.Fatalf("result = %+v", result)
-	}
+	require.NoError(t, err, "RunAppUpdate")
+	require.True(t, result.Success, "result = %+v", result)
 	data, err := os.ReadFile(filepath.Join(dir, "args.txt")) //nolint:gosec // test fixture path under t.TempDir()
-	if err != nil {
-		t.Fatalf("read args.txt: %v", err)
-	}
+	require.NoError(t, err, "read args.txt")
 	gotArgs = string(data)
 	for _, want := range []string{"-beta", "experimental", "-betapassword", "s3cr3t"} {
-		if !contains(gotArgs, want) {
-			t.Errorf("args = %q, want it to contain %q", gotArgs, want)
-		}
+		assert.True(t, contains(gotArgs, want), "args = %q, want it to contain %q", gotArgs, want)
 	}
 }
 
@@ -150,15 +132,12 @@ case "$*" in
     ;;
 esac
 `)
-	result, err := RunWorkshopDownload(context.Background(), WorkshopDownloadOptions{
+	result, err := RunWorkshopDownload(t.Context(), WorkshopDownloadOptions{
 		Command: script, Account: "bob", WorkshopAppID: 221100, ItemIDs: []uint64{111111, 222222},
 	})
-	if err != nil {
-		t.Fatalf("RunWorkshopDownload: %v", err)
-	}
-	if !result.Success || len(result.FailedItems) != 0 {
-		t.Fatalf("result = %+v", result)
-	}
+	require.NoError(t, err, "RunWorkshopDownload")
+	require.True(t, result.Success, "result = %+v", result)
+	require.Empty(t, result.FailedItems)
 }
 
 func TestRunWorkshopDownloadPartialFailure(t *testing.T) {
@@ -170,21 +149,16 @@ case "$*" in
     ;;
 esac
 `)
-	result, err := RunWorkshopDownload(context.Background(), WorkshopDownloadOptions{
+	result, err := RunWorkshopDownload(t.Context(), WorkshopDownloadOptions{
 		Command: script, Account: "bob", WorkshopAppID: 221100, ItemIDs: []uint64{111111, 222222},
 	})
-	if err != nil {
-		t.Fatalf("RunWorkshopDownload: %v", err)
-	}
-	if result.Success {
-		t.Fatalf("result = %+v, want Success=false", result)
-	}
-	if msg, ok := result.FailedItems[222222]; !ok || msg == "" {
-		t.Errorf("FailedItems[222222] = %q, ok=%v", msg, ok)
-	}
-	if _, ok := result.FailedItems[111111]; ok {
-		t.Errorf("111111 should not be in FailedItems: %+v", result.FailedItems)
-	}
+	require.NoError(t, err, "RunWorkshopDownload")
+	require.False(t, result.Success, "result = %+v, want Success=false", result)
+	msg, ok := result.FailedItems[222222]
+	require.True(t, ok, "FailedItems[222222] = %q, ok=%v", msg, ok)
+	assert.NotEmpty(t, msg, "FailedItems[222222] = %q, ok=%v", msg, ok)
+	_, ok = result.FailedItems[111111]
+	assert.False(t, ok, "111111 should not be in FailedItems: %+v", result.FailedItems)
 }
 
 func TestRunWorkshopDownloadMissingResultLineCountsAsFailed(t *testing.T) {
@@ -193,59 +167,44 @@ case "$*" in
   *workshop_download_item*) echo "Success. Downloaded item 111111 to..." ;;
 esac
 `)
-	result, err := RunWorkshopDownload(context.Background(), WorkshopDownloadOptions{
+	result, err := RunWorkshopDownload(t.Context(), WorkshopDownloadOptions{
 		Command: script, Account: "bob", WorkshopAppID: 221100, ItemIDs: []uint64{111111, 333333},
 	})
-	if err != nil {
-		t.Fatalf("RunWorkshopDownload: %v", err)
-	}
-	if result.Success {
-		t.Fatalf("result = %+v, want Success=false", result)
-	}
-	if _, ok := result.FailedItems[333333]; !ok {
-		t.Errorf("expected 333333 (no result line) to be marked failed: %+v", result.FailedItems)
-	}
+	require.NoError(t, err, "RunWorkshopDownload")
+	require.False(t, result.Success, "result = %+v, want Success=false", result)
+	_, ok := result.FailedItems[333333]
+	assert.True(t, ok, "expected 333333 (no result line) to be marked failed: %+v", result.FailedItems)
 }
 
 func TestRunWorkshopDownloadAuthRequired(t *testing.T) {
 	script := writeFakeSteamcmdNoLogin(t, `
 echo "FAILED (Invalid Password)"
 `)
-	result, err := RunWorkshopDownload(context.Background(), WorkshopDownloadOptions{
+	result, err := RunWorkshopDownload(t.Context(), WorkshopDownloadOptions{
 		Command: script, Account: "bob", WorkshopAppID: 221100, ItemIDs: []uint64{111111},
 	})
-	if err != nil {
-		t.Fatalf("RunWorkshopDownload: %v", err)
-	}
-	if !result.AuthRequired {
-		t.Fatalf("result = %+v, want AuthRequired", result)
-	}
+	require.NoError(t, err, "RunWorkshopDownload")
+	require.True(t, result.AuthRequired, "result = %+v, want AuthRequired", result)
 }
 
 func TestRunWorkshopDownloadMissingOptionsErrors(t *testing.T) {
-	if _, err := RunWorkshopDownload(context.Background(), WorkshopDownloadOptions{}); err == nil {
-		t.Fatal("expected an error for missing options")
-	}
+	_, err := RunWorkshopDownload(t.Context(), WorkshopDownloadOptions{})
+	require.Error(t, err)
 }
 
 func TestRunAppUpdateMissingBinaryErrors(t *testing.T) {
-	_, err := RunAppUpdate(context.Background(), AppUpdateOptions{
+	_, err := RunAppUpdate(t.Context(), AppUpdateOptions{
 		Command: filepath.Join(t.TempDir(), "does-not-exist"), Account: "bob", AppID: 1, InstallDir: t.TempDir(),
 	})
-	if err == nil {
-		t.Fatal("expected an error for a missing steamcmd binary")
-	}
+	require.Error(t, err)
 }
 
 func TestExtractItemID(t *testing.T) {
 	id, ok := extractItemID("success. downloaded item 123456 to /foo", "downloaded item")
-	if !ok || id != 123456 {
-		t.Errorf("id=%d ok=%v, want 123456/true", id, ok)
-	}
-	if _, ok := extractItemID("no marker here", "downloaded item"); ok {
-		t.Error("expected ok=false when marker is absent")
-	}
-	if _, ok := extractItemID("downloaded item notanumber", "downloaded item"); ok {
-		t.Error("expected ok=false when what follows isn't numeric")
-	}
+	require.True(t, ok, "id=%d ok=%v, want 123456/true", id, ok)
+	assert.Equal(t, uint64(123456), id, "id=%d ok=%v, want 123456/true", id, ok)
+	_, ok = extractItemID("no marker here", "downloaded item")
+	assert.False(t, ok, "expected ok=false when marker is absent")
+	_, ok = extractItemID("downloaded item notanumber", "downloaded item")
+	assert.False(t, ok, "expected ok=false when what follows isn't numeric")
 }

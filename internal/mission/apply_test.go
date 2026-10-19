@@ -8,14 +8,15 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-func readString(t *testing.T, path string) string {
+func readString(t testing.TB, path string) string {
 	t.Helper()
 	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("read %s: %v", path, err)
-	}
+	require.NoError(t, err, "read %s", path)
 	return string(data)
 }
 
@@ -27,22 +28,13 @@ func TestApplyWritesNewFiles(t *testing.T) {
 
 	m := NewManifest()
 	plan, err := Classify(staging, live, m, nil)
-	if err != nil {
-		t.Fatalf("Classify: %v", err)
-	}
+	require.NoError(t, err, "Classify")
 	report, err := Apply(plan, staging, live, filehistory, m, Options{})
-	if err != nil {
-		t.Fatalf("Apply: %v", err)
-	}
-	if len(report.Written) != 1 {
-		t.Fatalf("Written = %+v", report.Written)
-	}
-	if got := readString(t, filepath.Join(live, "db/types.xml")); got != "content-v1" {
-		t.Errorf("live content = %q", got)
-	}
-	if m.Entries["db/types.xml"].SourceHash != HashBytes([]byte("content-v1")) {
-		t.Errorf("manifest not updated: %+v", m.Entries["db/types.xml"])
-	}
+	require.NoError(t, err, "Apply")
+	require.Len(t, report.Written, 1)
+	got := readString(t, filepath.Join(live, "db/types.xml"))
+	assert.Equal(t, "content-v1", got)
+	assert.Equal(t, HashBytes([]byte("content-v1")), m.Entries["db/types.xml"].SourceHash)
 }
 
 func TestApplyNewFileHasNothingToBackUp(t *testing.T) {
@@ -53,19 +45,12 @@ func TestApplyNewFileHasNothingToBackUp(t *testing.T) {
 
 	m := NewManifest()
 	plan, err := Classify(staging, live, m, nil)
-	if err != nil {
-		t.Fatalf("Classify: %v", err)
-	}
-	if _, err := Apply(plan, staging, live, filehistory, m, Options{}); err != nil {
-		t.Fatalf("Apply: %v", err)
-	}
+	require.NoError(t, err, "Classify")
+	_, err = Apply(plan, staging, live, filehistory, m, Options{})
+	require.NoError(t, err, "Apply")
 	entries, err := os.ReadDir(filehistory)
-	if err != nil {
-		t.Fatalf("ReadDir: %v", err)
-	}
-	if len(entries) != 0 {
-		t.Errorf("expected no filehistory entries for a brand-new file, got %v", entries)
-	}
+	require.NoError(t, err, "ReadDir")
+	assert.Empty(t, entries)
 }
 
 func TestApplyBacksUpDriftedFileBeforeOverwriting(t *testing.T) {
@@ -82,34 +67,21 @@ func TestApplyBacksUpDriftedFileBeforeOverwriting(t *testing.T) {
 	m.Entries["db/types.xml"] = Entry{Origin: OriginPristine, SourceHash: hash, WrittenHash: hash}
 
 	plan, err := Classify(staging, live, m, nil)
-	if err != nil {
-		t.Fatalf("Classify: %v", err)
-	}
+	require.NoError(t, err, "Classify")
 	report, err := Apply(plan, staging, live, filehistory, m, Options{Now: func() time.Time { return time.Unix(1000000000, 0) }})
-	if err != nil {
-		t.Fatalf("Apply: %v", err)
-	}
-	if len(report.Drifted) != 1 {
-		t.Fatalf("Drifted = %+v", report.Drifted)
-	}
+	require.NoError(t, err, "Apply")
+	require.Len(t, report.Drifted, 1)
 
 	// The drifted content must be preserved in filehistory before being overwritten.
 	tsDirs, err := os.ReadDir(filehistory)
-	if err != nil {
-		t.Fatalf("ReadDir: %v", err)
-	}
-	if len(tsDirs) != 1 {
-		t.Fatalf("expected exactly one filehistory generation, got %v", tsDirs)
-	}
+	require.NoError(t, err, "ReadDir")
+	require.Len(t, tsDirs, 1)
 	backedUp := readString(t, filepath.Join(filehistory, tsDirs[0].Name(), "db/types.xml"))
-	if backedUp != "modified-by-something-else" {
-		t.Errorf("backed-up content = %q, want the pre-overwrite drifted content", backedUp)
-	}
+	assert.Equal(t, "modified-by-something-else", backedUp)
 
 	// And the live file now has the staging content.
-	if got := readString(t, filepath.Join(live, "db/types.xml")); got != original {
-		t.Errorf("live content = %q, want %q", got, original)
-	}
+	got := readString(t, filepath.Join(live, "db/types.xml"))
+	assert.Equal(t, original, got)
 }
 
 func TestApplyObsoleteNeverTouchesDisk(t *testing.T) {
@@ -122,24 +94,16 @@ func TestApplyObsoleteNeverTouchesDisk(t *testing.T) {
 	m.Entries["mod_999/types.xml"] = Entry{Origin: OriginGenerated, SourceHash: "h", WrittenHash: "h"}
 
 	plan, err := Classify(staging, live, m, nil)
-	if err != nil {
-		t.Fatalf("Classify: %v", err)
-	}
+	require.NoError(t, err, "Classify")
 	report, err := Apply(plan, staging, live, filehistory, m, Options{})
-	if err != nil {
-		t.Fatalf("Apply: %v", err)
-	}
-	if len(report.Obsolete) != 1 {
-		t.Fatalf("Obsolete = %+v", report.Obsolete)
-	}
+	require.NoError(t, err, "Apply")
+	require.Len(t, report.Obsolete, 1)
 	// The file itself is untouched on disk.
-	if got := readString(t, filepath.Join(live, "mod_999/types.xml")); got != "still here" {
-		t.Errorf("live content = %q, obsolete files must never be modified/deleted", got)
-	}
+	got := readString(t, filepath.Join(live, "mod_999/types.xml"))
+	assert.Equal(t, "still here", got)
 	// But it's gone from the manifest (no longer "managed").
-	if _, ok := m.Entries["mod_999/types.xml"]; ok {
-		t.Error("obsolete entry should have been dropped from the manifest")
-	}
+	_, ok := m.Entries["mod_999/types.xml"]
+	assert.False(t, ok, "obsolete entry should have been dropped from the manifest")
 }
 
 func TestApplyUnchangedDoesNotRewriteFile(t *testing.T) {
@@ -156,29 +120,17 @@ func TestApplyUnchangedDoesNotRewriteFile(t *testing.T) {
 
 	livePath := filepath.Join(live, "db/types.xml")
 	before, err := os.Stat(livePath)
-	if err != nil {
-		t.Fatalf("stat: %v", err)
-	}
+	require.NoError(t, err, "stat")
 
 	plan, err := Classify(staging, live, m, nil)
-	if err != nil {
-		t.Fatalf("Classify: %v", err)
-	}
+	require.NoError(t, err, "Classify")
 	report, err := Apply(plan, staging, live, filehistory, m, Options{})
-	if err != nil {
-		t.Fatalf("Apply: %v", err)
-	}
-	if len(report.Written) != 0 {
-		t.Fatalf("Written = %+v, want none", report.Written)
-	}
+	require.NoError(t, err, "Apply")
+	require.Empty(t, report.Written)
 
 	after, err := os.Stat(livePath)
-	if err != nil {
-		t.Fatalf("stat: %v", err)
-	}
-	if !before.ModTime().Equal(after.ModTime()) {
-		t.Error("an unchanged file must not be rewritten (mtime changed)")
-	}
+	require.NoError(t, err, "stat")
+	assert.True(t, before.ModTime().Equal(after.ModTime()), "an unchanged file must not be rewritten (mtime changed)")
 }
 
 func TestApplyNeverWritesOutsidePlan(t *testing.T) {
@@ -194,15 +146,11 @@ func TestApplyNeverWritesOutsidePlan(t *testing.T) {
 	})
 
 	plan, err := Classify(staging, live, NewManifest(), nil)
-	if err != nil {
-		t.Fatalf("Classify: %v", err)
-	}
-	if _, err := Apply(plan, staging, live, filehistory, NewManifest(), Options{}); err != nil {
-		t.Fatalf("Apply: %v", err)
-	}
-	if got := readString(t, filepath.Join(live, "storage_1/player.bin")); got != "foreign game data" {
-		t.Fatalf("foreign file was modified: %q", got)
-	}
+	require.NoError(t, err, "Classify")
+	_, err = Apply(plan, staging, live, filehistory, NewManifest(), Options{})
+	require.NoError(t, err, "Apply")
+	got := readString(t, filepath.Join(live, "storage_1/player.bin"))
+	require.Equal(t, "foreign game data", got)
 }
 
 func TestApplyPrunesOldFileHistory(t *testing.T) {
@@ -223,22 +171,15 @@ func TestApplyPrunesOldFileHistory(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		writeTree(t, live, map[string]string{"db/types.xml": "drifted"}) // force drift each round
 		plan, err := Classify(staging, live, m, nil)
-		if err != nil {
-			t.Fatalf("Classify: %v", err)
-		}
+		require.NoError(t, err, "Classify")
 		now := base.Add(time.Duration(i) * time.Hour)
-		if _, err := Apply(plan, staging, live, filehistory, m, Options{KeepFileHistory: 2, Now: func() time.Time { return now }}); err != nil {
-			t.Fatalf("Apply: %v", err)
-		}
+		_, err = Apply(plan, staging, live, filehistory, m, Options{KeepFileHistory: 2, Now: func() time.Time { return now }})
+		require.NoError(t, err, "Apply")
 	}
 
 	entries, err := os.ReadDir(filehistory)
-	if err != nil {
-		t.Fatalf("ReadDir: %v", err)
-	}
-	if len(entries) != 2 {
-		t.Fatalf("expected 2 retained filehistory generations, got %d: %v", len(entries), entries)
-	}
+	require.NoError(t, err, "ReadDir")
+	require.Len(t, entries, 2)
 }
 
 func TestApplyMissingStagingFileErrors(t *testing.T) {
@@ -249,9 +190,8 @@ func TestApplyMissingStagingFileErrors(t *testing.T) {
 	// Craft a plan entry that doesn't actually exist in staging, to
 	// exercise the error path (Classify itself would never produce this).
 	plan := Plan{Entries: []PlanEntry{{Path: "missing.xml", Action: ActionNew, Origin: OriginPristine, StagingHash: "x"}}}
-	if _, err := Apply(plan, staging, live, filehistory, NewManifest(), Options{}); err == nil {
-		t.Fatal("expected an error when the staging file doesn't exist")
-	}
+	_, err := Apply(plan, staging, live, filehistory, NewManifest(), Options{})
+	require.Error(t, err)
 }
 
 func TestApplyWriteFailsWhenLiveDirBlockedByFile(t *testing.T) {
@@ -261,18 +201,14 @@ func TestApplyWriteFailsWhenLiveDirBlockedByFile(t *testing.T) {
 	writeTree(t, staging, map[string]string{"db/types.xml": "v1"})
 
 	plan, err := Classify(staging, live, NewManifest(), nil)
-	if err != nil {
-		t.Fatalf("Classify: %v", err)
-	}
+	require.NoError(t, err, "Classify")
 	// Only now block "live/db" with a plain file, after Classify has
 	// already produced its plan against the (still-empty) live dir - this
 	// isolates the failure to Apply's write step.
-	if err := os.WriteFile(filepath.Join(live, "db"), []byte("blocker"), 0o600); err != nil {
-		t.Fatalf("write blocker: %v", err)
-	}
-	if _, err := Apply(plan, staging, live, filehistory, NewManifest(), Options{}); err == nil {
-		t.Fatal("expected an error when the live directory path is blocked by a file")
-	}
+	err = os.WriteFile(filepath.Join(live, "db"), []byte("blocker"), 0o600)
+	require.NoError(t, err, "write blocker")
+	_, err = Apply(plan, staging, live, filehistory, NewManifest(), Options{})
+	require.Error(t, err)
 }
 
 func TestApplyEmptyPlanIsNoOp(t *testing.T) {
@@ -280,17 +216,10 @@ func TestApplyEmptyPlanIsNoOp(t *testing.T) {
 	live := t.TempDir()
 	filehistory := t.TempDir()
 	report, err := Apply(Plan{}, staging, live, filehistory, NewManifest(), Options{})
-	if err != nil {
-		t.Fatalf("Apply: %v", err)
-	}
-	if len(report.Written) != 0 || len(report.Obsolete) != 0 {
-		t.Fatalf("report = %+v", report)
-	}
+	require.NoError(t, err, "Apply")
+	require.Empty(t, report.Written)
+	require.Empty(t, report.Obsolete)
 	entries, err := os.ReadDir(filehistory)
-	if err != nil {
-		t.Fatalf("ReadDir: %v", err)
-	}
-	if len(entries) != 0 {
-		t.Error("an empty plan must not create a filehistory generation")
-	}
+	require.NoError(t, err, "ReadDir")
+	assert.Empty(t, entries, "an empty plan must not create a filehistory generation")
 }

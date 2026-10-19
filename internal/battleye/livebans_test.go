@@ -12,6 +12,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 // TestLiveBans captures how a real DayZ server's BattlEye stores bans (spike V1 of the ban design). It
@@ -24,30 +26,24 @@ func TestLiveBans(t *testing.T) {
 	if addr == "" || pw == "" || dir == "" || out == "" {
 		t.Skip("set DZO_LIVE_BE_ADDR, DZO_LIVE_BE_PASSWORD, DZO_LIVE_BE_DIR and DZO_LIVE_CAPTURE")
 	}
-	if err := os.MkdirAll(out, 0o750); err != nil {
-		t.Fatal(err)
-	}
+	err := os.MkdirAll(out, 0o750)
+	require.NoError(t, err)
 	c, err := Dial(addr, pw)
-	if err != nil {
-		t.Fatalf("Dial: %v", err)
-	}
+	require.NoError(t, err, "Dial")
 	defer func() { _ = c.Close() }()
 	run := func(cmd string) string {
 		t.Helper()
-		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
 		defer cancel()
 		res, err := c.Command(ctx, cmd)
 		t.Logf("%q -> err=%v\n%s", cmd, err, res)
-		if err != nil {
-			t.Fatalf("%s: %v", cmd, err)
-		}
+		require.NoError(t, err, "%s", cmd)
 		return res
 	}
 	save := func(name, content string) {
 		t.Helper()
-		if err := os.WriteFile(filepath.Join(out, name), []byte(content), 0o600); err != nil {
-			t.Fatal(err)
-		}
+		err := os.WriteFile(filepath.Join(out, name), []byte(content), 0o600)
+		require.NoError(t, err)
 	}
 	readFile := func() string {
 		b, err := os.ReadFile(filepath.Join(dir, "bans.txt")) //nolint:gosec // the test server's own file
@@ -78,14 +74,17 @@ func TestLiveBans(t *testing.T) {
 	// Q6: a file in our format with a comment line, loaded with loadBans.
 	expiry := time.Now().Add(90 * time.Second).Unix()
 	own := fmt.Sprintf("// written by the dzo V1 test\n%s -1 own permanent\n%s %d own timed\n198.51.100.9 -1 own ip\n", g1, g4, expiry)
-	if err := os.WriteFile(filepath.Join(dir, "bans.txt"), []byte(own), 0o600); err != nil {
-		t.Fatal(err)
-	}
+	err = os.WriteFile(filepath.Join(dir, "bans.txt"), []byte(own), 0o600)
+	require.NoError(t, err)
 	run("loadBans")
 	save("bans-after-load.out", run("bans"))
 
 	// Q7: is the timed ban listed after its expiry, and does writeBans drop it?
-	time.Sleep(time.Until(time.Unix(expiry+5, 0))) // a live capture: the server's clock decides, nothing to poll
+	// A live capture: the server's clock decides, there is nothing to poll.
+	select {
+	case <-t.Context().Done():
+	case <-time.After(time.Until(time.Unix(expiry+5, 0))):
+	}
 	save("bans-after-expiry.out", run("bans"))
 	run("writeBans")
 	save("bans.txt.after-expiry", readFile())

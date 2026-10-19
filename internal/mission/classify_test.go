@@ -7,29 +7,30 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-func writeTree(t *testing.T, root string, files map[string]string) {
+func writeTree(t testing.TB, root string, files map[string]string) {
 	t.Helper()
 	for path, content := range files {
 		full := filepath.Join(root, filepath.FromSlash(path))
-		if err := os.MkdirAll(filepath.Dir(full), 0o750); err != nil {
-			t.Fatalf("mkdir: %v", err)
-		}
-		if err := os.WriteFile(full, []byte(content), 0o640); err != nil {
-			t.Fatalf("write %s: %v", path, err)
-		}
+		err := os.MkdirAll(filepath.Dir(full), 0o750)
+		require.NoError(t, err, "mkdir")
+		err = os.WriteFile(full, []byte(content), 0o640)
+		require.NoError(t, err, "write %s", path)
 	}
 }
 
-func findEntry(t *testing.T, plan Plan, path string) PlanEntry {
+func findEntry(t testing.TB, plan Plan, path string) PlanEntry {
 	t.Helper()
 	for _, e := range plan.Entries {
 		if e.Path == path {
 			return e
 		}
 	}
-	t.Fatalf("no plan entry for %q in %+v", path, plan.Entries)
+	require.Failf(t, "no plan entry", "for %q in %+v", path, plan.Entries)
 	return PlanEntry{}
 }
 
@@ -42,19 +43,11 @@ func TestClassifyFirstRenderIsAllNew(t *testing.T) {
 	})
 
 	plan, err := Classify(staging, live, NewManifest(), nil)
-	if err != nil {
-		t.Fatalf("Classify: %v", err)
-	}
-	if len(plan.Changed()) != 2 {
-		t.Fatalf("Changed() = %+v", plan.Changed())
-	}
+	require.NoError(t, err, "Classify")
+	require.Len(t, plan.Changed(), 2)
 	for _, e := range plan.Changed() {
-		if e.Action != ActionNew {
-			t.Errorf("entry %s: action = %v, want New", e.Path, e.Action)
-		}
-		if e.Origin != OriginPristine {
-			t.Errorf("entry %s: origin = %v, want pristine", e.Path, e.Origin)
-		}
+		assert.Equal(t, ActionNew, e.Action)
+		assert.Equal(t, OriginPristine, e.Origin)
 	}
 }
 
@@ -67,18 +60,10 @@ func TestClassifyGeneratedOrigin(t *testing.T) {
 		"EditorFiles/a.dze":        "z",
 	})
 	plan, err := Classify(staging, live, NewManifest(), nil)
-	if err != nil {
-		t.Fatalf("Classify: %v", err)
-	}
-	if findEntry(t, plan, "mod_123/types.xml").Origin != OriginGenerated {
-		t.Error("mod_123/types.xml should be Origin=generated")
-	}
-	if findEntry(t, plan, "custom_loadout/gear.json").Origin != OriginGenerated {
-		t.Error("custom_loadout/gear.json should be Origin=generated")
-	}
-	if findEntry(t, plan, "EditorFiles/a.dze").Origin != OriginGenerated {
-		t.Error("EditorFiles/a.dze should be Origin=generated")
-	}
+	require.NoError(t, err, "Classify")
+	assert.Equal(t, OriginGenerated, findEntry(t, plan, "mod_123/types.xml").Origin)
+	assert.Equal(t, OriginGenerated, findEntry(t, plan, "custom_loadout/gear.json").Origin)
+	assert.Equal(t, OriginGenerated, findEntry(t, plan, "EditorFiles/a.dze").Origin)
 }
 
 func TestClassifyUnchanged(t *testing.T) {
@@ -93,15 +78,9 @@ func TestClassifyUnchanged(t *testing.T) {
 	m.Entries["db/types.xml"] = Entry{Origin: OriginPristine, SourceHash: hash, WrittenHash: hash}
 
 	plan, err := Classify(staging, live, m, nil)
-	if err != nil {
-		t.Fatalf("Classify: %v", err)
-	}
-	if !plan.Empty() {
-		t.Fatalf("expected an empty plan, got %+v", plan.Entries)
-	}
-	if findEntry(t, plan, "db/types.xml").Action != ActionUnchanged {
-		t.Error("expected ActionUnchanged")
-	}
+	require.NoError(t, err, "Classify")
+	require.True(t, plan.Empty(), "expected an empty plan, got %+v", plan.Entries)
+	assert.Equal(t, ActionUnchanged, findEntry(t, plan, "db/types.xml").Action)
 }
 
 func TestClassifyUpdateWhenStagingChangesButLiveUntouched(t *testing.T) {
@@ -117,12 +96,8 @@ func TestClassifyUpdateWhenStagingChangesButLiveUntouched(t *testing.T) {
 	m.Entries["db/types.xml"] = Entry{Origin: OriginPristine, SourceHash: oldHash, WrittenHash: oldHash}
 
 	plan, err := Classify(staging, live, m, nil)
-	if err != nil {
-		t.Fatalf("Classify: %v", err)
-	}
-	if findEntry(t, plan, "db/types.xml").Action != ActionUpdate {
-		t.Errorf("expected ActionUpdate, got %+v", plan.Entries)
-	}
+	require.NoError(t, err, "Classify")
+	assert.Equal(t, ActionUpdate, findEntry(t, plan, "db/types.xml").Action)
 }
 
 func TestClassifyDriftWhenLiveChangedUnderneath(t *testing.T) {
@@ -137,12 +112,8 @@ func TestClassifyDriftWhenLiveChangedUnderneath(t *testing.T) {
 	m.Entries["db/types.xml"] = Entry{Origin: OriginPristine, SourceHash: hash, WrittenHash: hash}
 
 	plan, err := Classify(staging, live, m, nil)
-	if err != nil {
-		t.Fatalf("Classify: %v", err)
-	}
-	if findEntry(t, plan, "db/types.xml").Action != ActionDrift {
-		t.Errorf("expected ActionDrift, got %+v", plan.Entries)
-	}
+	require.NoError(t, err, "Classify")
+	assert.Equal(t, ActionDrift, findEntry(t, plan, "db/types.xml").Action)
 }
 
 func TestClassifyNewWhenLiveFileMissingDespiteManifest(t *testing.T) {
@@ -156,12 +127,8 @@ func TestClassifyNewWhenLiveFileMissingDespiteManifest(t *testing.T) {
 	m.Entries["db/types.xml"] = Entry{Origin: OriginPristine, SourceHash: hash, WrittenHash: hash}
 
 	plan, err := Classify(staging, live, m, nil)
-	if err != nil {
-		t.Fatalf("Classify: %v", err)
-	}
-	if findEntry(t, plan, "db/types.xml").Action != ActionNew {
-		t.Errorf("expected ActionNew when the live file is missing, got %+v", plan.Entries)
-	}
+	require.NoError(t, err, "Classify")
+	assert.Equal(t, ActionNew, findEntry(t, plan, "db/types.xml").Action)
 }
 
 func TestClassifyObsoleteWhenRemovedFromStaging(t *testing.T) {
@@ -173,16 +140,11 @@ func TestClassifyObsoleteWhenRemovedFromStaging(t *testing.T) {
 	m.Entries["mod_999/types.xml"] = Entry{Origin: OriginGenerated, SourceHash: "h", WrittenHash: "h"}
 
 	plan, err := Classify(staging, live, m, nil)
-	if err != nil {
-		t.Fatalf("Classify: %v", err)
-	}
-	if len(plan.Obsolete()) != 1 || plan.Obsolete()[0].Path != "mod_999/types.xml" {
-		t.Fatalf("Obsolete() = %+v", plan.Obsolete())
-	}
+	require.NoError(t, err, "Classify")
+	require.Len(t, plan.Obsolete(), 1)
+	require.Equal(t, "mod_999/types.xml", plan.Obsolete()[0].Path)
 	// Never counted as something to write.
-	if len(plan.Changed()) != 0 {
-		t.Fatalf("Changed() = %+v, want none", plan.Changed())
-	}
+	require.Empty(t, plan.Changed())
 }
 
 func TestClassifyHardExcludesStorage(t *testing.T) {
@@ -194,17 +156,11 @@ func TestClassifyHardExcludesStorage(t *testing.T) {
 	})
 
 	plan, err := Classify(staging, live, NewManifest(), nil)
-	if err != nil {
-		t.Fatalf("Classify: %v", err)
-	}
+	require.NoError(t, err, "Classify")
 	for _, e := range plan.Entries {
-		if e.Path == "storage_1/base.pbo" {
-			t.Fatalf("storage_1/* must never appear in the plan, got %+v", e)
-		}
+		require.NotEqual(t, "storage_1/base.pbo", e.Path)
 	}
-	if len(plan.Entries) != 1 {
-		t.Fatalf("plan.Entries = %+v, want only db/types.xml", plan.Entries)
-	}
+	require.Len(t, plan.Entries, 1)
 }
 
 func TestClassifyRespectsConfiguredUnmanaged(t *testing.T) {
@@ -216,17 +172,11 @@ func TestClassifyRespectsConfiguredUnmanaged(t *testing.T) {
 	})
 
 	plan, err := Classify(staging, live, NewManifest(), []string{"expansion/**"})
-	if err != nil {
-		t.Fatalf("Classify: %v", err)
-	}
+	require.NoError(t, err, "Classify")
 	for _, e := range plan.Entries {
-		if e.Path == "expansion/traders/config.json" {
-			t.Fatalf("unmanaged path must never appear in the plan, got %+v", e)
-		}
+		require.NotEqual(t, "expansion/traders/config.json", e.Path)
 	}
-	if len(plan.Entries) != 1 {
-		t.Fatalf("plan.Entries = %+v, want only db/types.xml", plan.Entries)
-	}
+	require.Len(t, plan.Entries, 1)
 }
 
 func TestClassifyUnmanagedPathDroppedFromManifestBecomesObsoleteNotForeignSilently(t *testing.T) {
@@ -243,29 +193,20 @@ func TestClassifyUnmanagedPathDroppedFromManifestBecomesObsoleteNotForeignSilent
 	m.Entries["expansion/traders/config.json"] = Entry{Origin: OriginPristine, SourceHash: hash, WrittenHash: hash}
 
 	plan, err := Classify(staging, live, m, []string{"expansion/**"})
-	if err != nil {
-		t.Fatalf("Classify: %v", err)
-	}
-	if len(plan.Obsolete()) != 1 || plan.Obsolete()[0].Path != "expansion/traders/config.json" {
-		t.Fatalf("Obsolete() = %+v", plan.Obsolete())
-	}
+	require.NoError(t, err, "Classify")
+	require.Len(t, plan.Obsolete(), 1)
+	require.Equal(t, "expansion/traders/config.json", plan.Obsolete()[0].Path)
 }
 
 func TestClassifyEmptyStagingAndLive(t *testing.T) {
 	plan, err := Classify(t.TempDir(), t.TempDir(), NewManifest(), nil)
-	if err != nil {
-		t.Fatalf("Classify: %v", err)
-	}
-	if !plan.Empty() {
-		t.Fatalf("expected an empty plan, got %+v", plan.Entries)
-	}
+	require.NoError(t, err, "Classify")
+	require.True(t, plan.Empty(), "expected an empty plan, got %+v", plan.Entries)
 }
 
 func TestClassifyMissingStagingDirErrors(t *testing.T) {
 	_, err := Classify(filepath.Join(t.TempDir(), "nope"), t.TempDir(), NewManifest(), nil)
-	if err == nil {
-		t.Fatal("expected an error for a missing staging dir")
-	}
+	require.Error(t, err)
 }
 
 func TestActionString(t *testing.T) {
@@ -278,8 +219,7 @@ func TestActionString(t *testing.T) {
 		Action(99):      "unknown",
 	}
 	for a, want := range cases {
-		if got := a.String(); got != want {
-			t.Errorf("Action(%d).String() = %q, want %q", a, got, want)
-		}
+		got := a.String()
+		assert.Equal(t, want, got)
 	}
 }

@@ -4,8 +4,9 @@
 package product
 
 import (
-	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestValidateMod(t *testing.T) {
@@ -31,8 +32,10 @@ func TestValidateMod(t *testing.T) {
 			dir := t.TempDir()
 			writeTree(t, dir, tt.files)
 			err := ValidateMod(dir, tt.local)
-			if tt.wantErr == "" && err != nil || tt.wantErr != "" && (err == nil || !strings.Contains(err.Error(), tt.wantErr)) {
-				t.Fatalf("ValidateMod() = %v, want %q", err, tt.wantErr)
+			if tt.wantErr == "" {
+				require.NoError(t, err)
+			} else {
+				require.ErrorContains(t, err, tt.wantErr)
 			}
 		})
 	}

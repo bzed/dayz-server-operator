@@ -3,7 +3,11 @@
 
 package mission
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+)
 
 func TestMatchGlobDoubleStarSuffix(t *testing.T) {
 	cases := map[string]bool{
@@ -14,45 +18,28 @@ func TestMatchGlobDoubleStarSuffix(t *testing.T) {
 		"other/expansion/x":    false,
 	}
 	for path, want := range cases {
-		if got := MatchGlob("expansion/**", path); got != want {
-			t.Errorf("MatchGlob(%q, %q) = %v, want %v", "expansion/**", path, got, want)
-		}
+		got := MatchGlob("expansion/**", path)
+		assert.Equal(t, want, got)
 	}
 }
 
 func TestMatchGlobSingleSegmentWildcard(t *testing.T) {
-	if !MatchGlob("custom_*/keys/*.bikey", "custom_loadout/keys/x.bikey") {
-		t.Error("expected a match")
-	}
-	if MatchGlob("custom_*/keys/*.bikey", "custom_loadout/sub/keys/x.bikey") {
-		t.Error("single * must not cross a path separator")
-	}
+	assert.True(t, MatchGlob("custom_*/keys/*.bikey", "custom_loadout/keys/x.bikey"), "expected a match")
+	assert.False(t, MatchGlob("custom_*/keys/*.bikey", "custom_loadout/sub/keys/x.bikey"), "single * must not cross a path separator")
 }
 
 func TestMatchGlobExact(t *testing.T) {
-	if !MatchGlob("db/messages.xml", "db/messages.xml") {
-		t.Error("expected an exact match")
-	}
-	if MatchGlob("db/messages.xml", "db/other.xml") {
-		t.Error("expected no match")
-	}
+	assert.True(t, MatchGlob("db/messages.xml", "db/messages.xml"), "expected an exact match")
+	assert.False(t, MatchGlob("db/messages.xml", "db/other.xml"), "expected no match")
 }
 
 func TestMatchAny(t *testing.T) {
 	patterns := []string{"expansion/**", "*.bak"}
-	if !MatchAny(patterns, "expansion/x") {
-		t.Error("expected a match on the first pattern")
-	}
-	if !MatchAny(patterns, "foo.bak") {
-		t.Error("expected a match on the second pattern")
-	}
-	if MatchAny(patterns, "foo.xml") {
-		t.Error("expected no match")
-	}
+	assert.True(t, MatchAny(patterns, "expansion/x"), "expected a match on the first pattern")
+	assert.True(t, MatchAny(patterns, "foo.bak"), "expected a match on the second pattern")
+	assert.False(t, MatchAny(patterns, "foo.xml"), "expected no match")
 }
 
 func TestMatchAnyEmpty(t *testing.T) {
-	if MatchAny(nil, "anything") {
-		t.Error("no patterns should never match")
-	}
+	assert.False(t, MatchAny(nil, "anything"), "no patterns should never match")
 }
