@@ -27,5 +27,12 @@ dayz-server-operator (0.1.0-1) UNRELEASED; urgency=medium
   * servermods.lock pins the servermod commits and PBO hashes; CI checks it.
   * The web interface ships a helicopter icon (Font Awesome Free 6.7.2,
     CC BY 4.0) that fonts-fork-awesome lacks; debian/copyright lists it.
+  * Message ways: dzo player msg, the API and the web interface send by
+    chat colour, on-screen notification, DayZ Expansion notification
+    (six types) or RCon say; dzo-admin 0.3.0 (the packaged PBO changes)
+    reports Expansion in its hello. New restarts.announce.ways and
+    updates.restart_announce.ways: the countdown uses on-screen
+    notifications once a minute in the last ten minutes by default, with
+    RCon say as the fallback (API token: $DZO_TOKEN or announce.token).
 
  -- Bernd Zeimetz <bernd@bzed.de>  Sat, 26 Sep 2026 15:00:00 +0000

@@ -173,7 +173,7 @@ instance.yaml
      restart_announce: {minutes: 12, lock: 5, kick: 2, text: "MOD UPDATE! Restart"}
    restarts:
      schedule: ["04:00", "Sat 16:00"]   # restart times; Mon,Thu 04:00 for some weekdays
-     announce: {minutes: 30, lock: 7, kick: 3}
+     announce: {minutes: 30, lock: 7, kick: 3}   # ways: how it reaches the players, see operations
    welcome: "Welcome to #name!"    # the default; "" for no welcome message
    messages:                       # more server messages, sent by dzo serve
      - {text: "Homepage: example.org, rules: example.org/rules", on_connect: true, delay: 1}

@@ -215,8 +215,11 @@ installation (default: the local ``serve.listen``). They need the
 
    * - ``dzo player list <instance>``
      - online players
-   * - ``dzo player msg <instance> <steamid|all> <text> [--style chat|important|friendly|blue|notification]``
-     - message one player or everyone
+   * - ``dzo player msg <instance> <steamid|all> <text> [--style chat|important|friendly|blue|notification|expansion|rcon] [--type toast|baguette|activity|killfeed|market|garage] [--title <text>] [--seconds <n>]``
+     - message one player or everyone. ``chat``, ``important``, ``friendly`` and ``blue`` are coloured chat lines; ``notification`` is
+       the on-screen notification of the game (``--title``, default "Server", and ``--seconds``, default 10, at most 60);
+       ``expansion`` is an Expansion notification of ``--type`` (default ``toast``) and needs DayZ Expansion on the server;
+       ``rcon`` is BattlEye's ``say``, to everyone only
    * - ``dzo player kick <instance> <steamid> <reason...>``
      - kick a player; the reason (at most 64 bytes) is shown to them
    * - ``dzo player heal <instance> <steamid>``, ``dzo player fixgear <instance> <steamid>``

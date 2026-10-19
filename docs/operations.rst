@@ -70,13 +70,44 @@ A graceful restart runs on a timeline. Every number is minutes before the restar
    when the restart time is reached.
 
 The countdown: the first message when it starts, then at 20 and 15 minutes
-left, every minute from 10 minutes left on, and in the
-last minute at 30, 15, 10, 5, 4, 3, 2 and 1 seconds, all counted down to the
-kick. With 30/7/3 the first message reads "in 27 minutes". Each message is
-``<text> in <time>``; the lock is announced as well. The kick tries up to three
-passes, then kicks everyone. The countdown is dzo's own and runs over RCon; the server's
+left over RCon (``say``), and from 10 minutes left on once a minute as an on-screen notification, plus
+"<text> NOW" 10 seconds before the kick. All times count down to the kick. With 30/7/3 the first message reads "in 27 minutes".
+Each message is ``<text> in <time>``; the lock is announced as well (in the same notification when
+one is due then). The kick tries up to three passes, then kicks everyone. The countdown is dzo's own; the server's
 built-in countdown and shutdown of ``messages.xml`` are never used (see ``messages`` in
 :doc:`configuration`).
+
+How the countdown reaches the players is ``announce.ways`` (in ``restarts.announce`` and in ``updates.restart_announce``), a list of rules:
+
+.. code-block:: yaml
+
+   restarts:
+     announce:
+       minutes: 30
+       lock: 7
+       kick: 3
+       ways:
+         - {way: rcon, at: [30m, 20m, 15m]}                              # the default, above 10 minutes
+         - {within: 10m, way: notification, every: 1m, now: 10s}         # the default, the last 10 minutes
+         # or, with DayZ Expansion: {within: 10m, way: expansion, type: baguette, every: 1m, now: 10s}
+
+``way``
+   ``rcon`` (BattlEye ``say``, works without ``dzo-admin``), ``chat`` (a red chat line through ``dzo-admin``),
+   ``notification`` (the on-screen notification of the game) or ``expansion`` (an Expansion notification;
+   ``type`` is ``toast``, ``baguette``, ``activity``, ``killfeed``, ``market`` or ``garage``).
+``within``
+   the rule applies while at most this much is left until the kick. Without it, the rule covers the whole
+   countdown, above the other rules' ``within``.
+``every`` or ``at``
+   the interval, or the exact times left (not both). On screen (``notification``, ``expansion``) the
+   announcements must be at least a minute apart.
+``now``
+   one more announcement "<text> NOW" this long before the kick; only one rule may set it.
+
+Notifications go through ``dzo-admin`` and the API of ``dzo serve``: the restart needs an API token, ``$DZO_TOKEN`` or
+the file ``announce.token`` in the secrets directory (``dzo token create announce --role operator``). If the mod is not
+connected, the API or the token is missing, or the message is refused, the same text goes out over RCon ``say`` and the
+restart continues on time. ``expansion`` becomes a plain notification when the mod does not report Expansion.
 
 dzo talks to the server over its own BattlEye RCon client. The restart itself
 goes through the unit's stop (see :ref:`stopping-the-server`). If RCon does not

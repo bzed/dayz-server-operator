@@ -92,12 +92,16 @@ Acting
    * - Request and JSON body
      - Needs
      - Does
-   * - ``POST /instances/<i>/message`` ``{"text", "style"}``
+   * - ``POST /instances/<i>/message`` ``{"text", "style", "notify_type", "title", "seconds"}``
      - ``operator``
      - message to everyone
-   * - ``POST /instances/<i>/players/<steamid>/message`` ``{"text", "style"}``
+   * - ``POST /instances/<i>/players/<steamid>/message`` ``{"text", "style", "notify_type", "title", "seconds"}``
      - ``moderator``
-     - direct message (``style``: ``chat`` (yellow), ``important`` (red), ``friendly`` (green), ``blue``, ``notification``)
+     - direct message. ``style``: ``chat`` (yellow), ``important`` (red), ``friendly`` (green), ``blue``, ``notification`` (on screen),
+       ``expansion`` (an Expansion notification of ``notify_type``: ``toast`` (default), ``baguette``, ``activity``, ``killfeed``,
+       ``market``, ``garage``; refused unless the instance's ``dzo-admin`` reports Expansion, see ``hello.features`` of the instance status),
+       and for the message to everyone ``rcon`` (BattlEye ``say``, no mod needed). ``title`` (at most 64 bytes, default ``Server``) and
+       ``seconds`` (default 10, at most 60) shape the two notification styles
    * - ``POST /instances/<i>/players/<steamid>/kick`` ``{"reason"}``
      - ``moderator``
      - kick an online player through BattlEye; the reason is shown to them (1 to 64 bytes). ``404`` if they are not online
