@@ -21,11 +21,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/bzed/dayz-server-operator/internal/api"
 	"github.com/bzed/dayz-server-operator/internal/backup"
 	"github.com/bzed/dayz-server-operator/internal/config"
 	"github.com/bzed/dayz-server-operator/internal/instance"
 	"github.com/bzed/dayz-server-operator/internal/quadlet"
 	"github.com/bzed/dayz-server-operator/internal/resolve"
+	"github.com/bzed/dayz-server-operator/internal/serve"
 	"github.com/bzed/dayz-server-operator/internal/site"
 )
 
@@ -400,6 +402,14 @@ func Sync(ctx context.Context, o Options, tree *site.Tree, lc instance.Lifecycle
 	if dryRun {
 		return res, nil
 	}
+	if want[filepath.Join(o.dir(Systemd), "dzo-serve.service")] {
+		made, err := ensureAnnounceToken(o.Cfg)
+		if err != nil {
+			res.Warnings = append(res.Warnings, "announce.token: "+err.Error())
+		} else if made {
+			res.Written = append(res.Written, filepath.Join(o.Cfg.Paths.Secrets, "announce.token"))
+		}
+	}
 	for _, name := range tree.InstanceNames() {
 		inst, err := resolve.Resolve(o.Cfg, tree, name)
 		if err == nil && len(inst.Missing) == 0 && !held["dzo-"+name] {
@@ -425,6 +435,28 @@ func Sync(ctx context.Context, o Options, tree *site.Tree, lc instance.Lifecycle
 		}
 	}
 	return res, nil
+}
+
+// ensureAnnounceToken makes sure ${paths.secrets}/announce.token holds a token that dzo serve
+// accepts, so the restart countdown can send its notifications through the API. A missing,
+// revoked or expired token is replaced by a new one with the announcer role, which can only read
+// the status and broadcast. It reports whether it wrote one.
+func ensureAnnounceToken(cfg *config.Config) (bool, error) {
+	path := filepath.Join(cfg.Paths.Secrets, "announce.token")
+	store := api.NewTokenStore(serve.APITokens(cfg))
+	if b, err := os.ReadFile(path); err == nil { //nolint:gosec // dzo's own secrets dir
+		if _, ok := store.Lookup(strings.TrimSpace(string(b))); ok {
+			return false, nil
+		}
+	}
+	if err := os.MkdirAll(cfg.Paths.Secrets, 0o750); err != nil {
+		return false, err
+	}
+	secret, _, err := store.Create("announce", api.RoleAnnouncer, nil, false, 0)
+	if err != nil {
+		return false, err
+	}
+	return true, writeAtomic(path, []byte(secret+"\n"), 0o600)
 }
 
 func writeAtomic(path string, b []byte, mode os.FileMode) error {

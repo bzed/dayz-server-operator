@@ -33,6 +33,8 @@ dayz-server-operator (0.1.0-1) UNRELEASED; urgency=medium
     reports Expansion in its hello. New restarts.announce.ways and
     updates.restart_announce.ways: the countdown uses on-screen
     notifications once a minute in the last ten minutes by default, with
-    RCon say as the fallback (API token: $DZO_TOKEN or announce.token).
+    RCon say as the fallback (API token: $DZO_TOKEN or announce.token, which dzo instance
+    apply / dzo units sync create with the announcer role when an
+    instance runs dzo-admin).
 
  -- Bernd Zeimetz <bernd@bzed.de>  Sat, 26 Sep 2026 15:00:00 +0000

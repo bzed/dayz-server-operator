@@ -18,8 +18,8 @@ import (
 )
 
 // announceClient is the API client the restart countdown sends its notifications with: dzo serve
-// on this host, with the token of $DZO_TOKEN, or else of ${paths.secrets}/announce.token (created
-// with `dzo token create announce --role operator`).
+// on this host, with the token of $DZO_TOKEN, or else of ${paths.secrets}/announce.token (made by
+// `dzo instance apply` with the announcer role).
 func announceClient(cfg *config.Config) (*apiclient.Client, error) {
 	token := strings.TrimSpace(os.Getenv("DZO_TOKEN"))
 	if token == "" {

@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/bzed/dayz-server-operator/internal/api"
 	"github.com/bzed/dayz-server-operator/internal/config"
 	"github.com/bzed/dayz-server-operator/internal/instance"
 	"github.com/bzed/dayz-server-operator/internal/product"
@@ -438,5 +439,79 @@ mods:
 	e.opts.Cfg.Serve.Enabled = &no
 	if _, ok := unitNames(t, e)["dzo-serve.service"]; ok {
 		t.Error("serve.enabled: false switches the unit off")
+	}
+}
+
+func adminEnv(t *testing.T) *env {
+	t.Helper()
+	e := newEnv(t)
+	write(t, filepath.Join(e.data, "site", "site.yaml"), "image: localhost/dzo-runtime:test\nlocal_mods:\n  tools: {path: "+filepath.Join(e.data, "toolsrc")+"}\n  dzo-admin: {path: "+filepath.Join(e.data, "toolsrc")+"}\n")
+	write(t, filepath.Join(e.data, "site", "instances", "y", "instance.yaml"), `name: y
+product: dayz-experimental
+map: m
+mission_source: {git: g, ref: r, path: p}
+ports: {game: 2402, rcon: 2406, query: 27026}
+network: host
+mods:
+  - {local: dzo-admin, server: true}
+`)
+	return e
+}
+
+func TestSyncCreatesTheAnnounceToken(t *testing.T) {
+	e := adminEnv(t)
+	tree, err := site.LoadTree(filepath.Join(e.data, "site"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(e.opts.Cfg.Paths.Secrets, "announce.token")
+	if _, err := Sync(context.Background(), e.opts, tree, e.lc, true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(path); err == nil {
+		t.Fatal("a dry run must not create the token")
+	}
+	if _, err := Sync(context.Background(), e.opts, tree, e.lc, false); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(path)
+	if err != nil || info.Mode().Perm() != 0o600 {
+		t.Fatalf("announce.token: %v %v", info, err)
+	}
+	first, _ := os.ReadFile(path)
+	store := api.NewTokenStore(filepath.Join(e.opts.Cfg.Paths.Secrets, "api-tokens.json"))
+	p, ok := store.Lookup(strings.TrimSpace(string(first)))
+	if !ok || p.Token.Role != api.RoleAnnouncer {
+		t.Fatalf("token = %+v %v, want a valid announcer token", p, ok)
+	}
+	if _, err := Sync(context.Background(), e.opts, tree, e.lc, false); err != nil {
+		t.Fatal(err)
+	}
+	if again, _ := os.ReadFile(path); string(again) != string(first) {
+		t.Error("a valid token must be kept")
+	}
+	toks, _ := store.List()
+	if err := store.Revoke(toks[0].ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Sync(context.Background(), e.opts, tree, e.lc, false); err != nil {
+		t.Fatal(err)
+	}
+	if again, _ := os.ReadFile(path); string(again) == string(first) {
+		t.Error("a revoked token must be replaced")
+	}
+}
+
+func TestSyncWithoutTheAdminModMakesNoAnnounceToken(t *testing.T) {
+	e := newEnv(t)
+	tree, err := site.LoadTree(filepath.Join(e.data, "site"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Sync(context.Background(), e.opts, tree, e.lc, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(e.opts.Cfg.Paths.Secrets, "announce.token")); err == nil {
+		t.Error("no instance runs dzo-admin: no token needed")
 	}
 }
