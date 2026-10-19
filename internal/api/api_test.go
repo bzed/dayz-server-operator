@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -388,5 +389,50 @@ func TestQuantityOf(t *testing.T) {
 		if got := quantityOf(tc.in); got != tc.want {
 			t.Errorf("quantityOf(%v) = %v, want %v", tc.in, got, tc.want)
 		}
+	}
+}
+
+func TestMessagePassesNotificationFieldsToTheMod(t *testing.T) {
+	e := newEnv(t)
+	e.alpha.Sync(admin.SyncRequest{Proto: 1, Hello: true, World: "w", Features: []string{"expansion"}})
+	op := e.token(RoleOperator, nil, false)
+	if c, b := e.do("POST", "/api/v1/instances/alpha/message?wait=0", op, `{"text":"x","style":"expansion","notify_type":"baguette","title":"T","seconds":5}`); c != 202 {
+		t.Fatalf("message: %d %s", c, b)
+	}
+	cmds := e.alpha.Sync(admin.SyncRequest{Proto: 1}).Commands
+	if len(cmds) != 1 || cmds[0].NotifyType != "baguette" || cmds[0].Title != "T" || cmds[0].Seconds != 5 || cmds[0].Style != "expansion" {
+		t.Fatalf("command = %+v", cmds)
+	}
+}
+
+func TestMessageRConStyleUsesSay(t *testing.T) {
+	e := newEnv(t)
+	var got []string
+	e.srv.Say = func(_ context.Context, instance, steamID, text string) error {
+		got = append(got, instance+"|"+steamID+"|"+text)
+		return nil
+	}
+	op := e.token(RoleOperator, nil, false)
+	// no mod connected: rcon does not need it
+	if c, b := e.do("POST", "/api/v1/instances/alpha/message", op, `{"text":"hello","style":"rcon"}`); c != 200 {
+		t.Fatalf("rcon message: %d %s", c, b)
+	}
+	if len(got) != 1 || got[0] != "alpha||hello" {
+		t.Fatalf("Say calls = %v", got)
+	}
+	if _, b := e.do("GET", "/api/v1/audit?instance=alpha", e.token(RoleAdmin, nil, false), ""); !strings.Contains(string(b), `"target":"all"`) {
+		t.Errorf("no audit entry for the rcon message: %s", b)
+	}
+	e.srv.Say = func(context.Context, string, string, string) error { return errors.New("boom") }
+	if c, _ := e.do("POST", "/api/v1/instances/alpha/message", op, `{"text":"hello","style":"rcon"}`); c != 502 {
+		t.Errorf("failing Say = %d, want 502", c)
+	}
+}
+
+func TestMessageRConStyleWithoutHookIs503(t *testing.T) {
+	e := newEnv(t)
+	op := e.token(RoleOperator, nil, false)
+	if c, _ := e.do("POST", "/api/v1/instances/alpha/message", op, `{"text":"hello","style":"rcon"}`); c != 503 {
+		t.Fatalf("no hook = %d, want 503", c)
 	}
 }

@@ -185,12 +185,12 @@ func (c *Client) Audit(ctx context.Context, instance string, limit int) (out []a
 }
 
 // Message sends text to one player, or to everyone if steamID is empty.
-func (c *Client) Message(ctx context.Context, name, steamID, text, style string) (api.ActionResult, error) {
+func (c *Client) Message(ctx context.Context, name, steamID string, m api.MessageBody) (api.ActionResult, error) {
 	path := inst(name) + "/message"
 	if steamID != "" {
 		path = inst(name) + "/players/" + url.PathEscape(steamID) + "/message"
 	}
-	return c.action(ctx, http.MethodPost, path, map[string]string{"text": text, "style": style})
+	return c.action(ctx, http.MethodPost, path, m)
 }
 
 // Teleport moves a player to a position, or to another player if to is set.

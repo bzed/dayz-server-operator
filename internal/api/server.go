@@ -44,6 +44,9 @@ type Server struct {
 	Moderation Moderation
 	// GeoIP locates the players' addresses (flags and the connection info); nil shows none.
 	GeoIP *geoip.DB
+	// Say sends text over the instance's RCon (style rcon of a message): to everyone when steamID
+	// is empty. nil answers the rcon style 503.
+	Say func(ctx context.Context, instance, steamID, text string) error
 
 	now     func() time.Time
 	actions *admin.Limiter
@@ -439,13 +442,17 @@ func decode(w http.ResponseWriter, r *http.Request, v any) bool {
 	return true
 }
 
-type messageBody struct {
-	Text  string `json:"text"`
-	Style string `json:"style"`
+// MessageBody is the body of the message routes.
+type MessageBody struct {
+	Text       string `json:"text"`
+	Style      string `json:"style"`
+	NotifyType string `json:"notify_type,omitempty"`
+	Title      string `json:"title,omitempty"`
+	Seconds    int    `json:"seconds,omitempty"`
 }
 
 func (s *Server) message(w http.ResponseWriter, r *http.Request, c *call) {
-	var b messageBody
+	var b MessageBody
 	if !decode(w, r, &b) {
 		return
 	}
@@ -454,7 +461,40 @@ func (s *Server) message(w http.ResponseWriter, r *http.Request, c *call) {
 	if id == "" {
 		target = "all"
 	}
-	s.run(w, r, c, admin.Command{Kind: admin.KindMessage, SteamID: id, Text: b.Text, Style: b.Style}, "message", target)
+	cmd := admin.Command{Kind: admin.KindMessage, SteamID: id, Text: b.Text, Style: b.Style, NotifyType: b.NotifyType, Title: b.Title, Seconds: b.Seconds}
+	if b.Style == "rcon" {
+		s.say(w, r, c, cmd, target)
+		return
+	}
+	s.run(w, r, c, cmd, "message", target)
+}
+
+// say is the rcon way of a message: no mod, no queue, the answer is the RCon command's.
+func (s *Server) say(w http.ResponseWriter, r *http.Request, c *call, cmd admin.Command, target string) {
+	entry := admin.AuditEntry{Actor: c.actor, Source: c.src, Instance: c.hub.Name, Action: "message", Target: target, Detail: detail(cmd)}
+	deny := func(code int, err error) {
+		entry.Result = err.Error()
+		_ = s.Audit.Log(entry)
+		fail(w, code, "%v", err)
+	}
+	switch {
+	case s.Say == nil:
+		deny(http.StatusServiceUnavailable, errors.New("rcon is not available"))
+	case cmd.Text == "" || len(cmd.Text) > 400:
+		deny(http.StatusBadRequest, errors.New("message needs text of at most 400 bytes"))
+	case !s.actions.Allow(c.who.Token.ID) || !s.targets.Allow(c.hub.Name+"/"+target):
+		deny(http.StatusTooManyRequests, errors.New("rate limit reached, try again in a minute"))
+	default:
+		ctx, cancel := context.WithTimeout(r.Context(), maxWait)
+		defer cancel()
+		if err := s.Say(ctx, c.hub.Name, cmd.SteamID, cmd.Text); err != nil {
+			deny(http.StatusBadGateway, err)
+			return
+		}
+		entry.OK = true
+		_ = s.Audit.Log(entry)
+		writeJSON(w, http.StatusOK, ActionResult{OK: true})
+	}
 }
 
 // playerAction runs a command that needs only the player: kill, heal and fix gear.

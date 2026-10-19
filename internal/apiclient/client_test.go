@@ -90,8 +90,8 @@ func TestActions(t *testing.T) {
 	defer answer(t, hub, true)()
 	ctx := context.Background()
 	for name, f := range map[string]func() (api.ActionResult, error){
-		"broadcast": func() (api.ActionResult, error) { return c.Message(ctx, "alpha", "", "hi", "") },
-		"message":   func() (api.ActionResult, error) { return c.Message(ctx, "alpha", "1", "hi", "important") },
+		"broadcast": func() (api.ActionResult, error) { return c.Message(ctx, "alpha", "", api.MessageBody{Text: "hi"}) },
+		"message":   func() (api.ActionResult, error) { return c.Message(ctx, "alpha", "1", api.MessageBody{Text: "hi", Style: "important"}) },
 		"tp":        func() (api.ActionResult, error) { return c.Teleport(ctx, "alpha", "1", 10, 20, "") },
 		"tp-player": func() (api.ActionResult, error) { return c.Teleport(ctx, "alpha", "1", 0, 0, "2") },
 		"heal":      func() (api.ActionResult, error) { return c.Heal(ctx, "alpha", "1") },
@@ -121,7 +121,7 @@ func TestActions(t *testing.T) {
 func TestActionRefused(t *testing.T) {
 	c, hub, _ := setup(t)
 	defer answer(t, hub, false)()
-	r, err := c.Message(context.Background(), "alpha", "1", "x", "")
+	r, err := c.Message(context.Background(), "alpha", "1", api.MessageBody{Text: "x"})
 	if err != nil || r.OK || r.Message != "refused" {
 		t.Fatalf("r = %+v err = %v", r, err)
 	}
@@ -172,5 +172,19 @@ func TestTileRejectsABadPathAndRelaysTheAnswer(t *testing.T) {
 func TestErrorText(t *testing.T) {
 	if got := (&apiclient.Error{Status: 404, Message: "no such instance"}).Error(); got != "api: 404 no such instance" {
 		t.Errorf("Error() = %q", got)
+	}
+}
+
+func TestMessageSendsTheWholeBody(t *testing.T) {
+	c, hub, _ := setup(t)
+	hub.Sync(admin.SyncRequest{Proto: 1, Hello: true, World: "w", Features: []string{"expansion"}})
+	stop := answer(t, hub, true)
+	defer stop()
+	r, err := c.Message(context.Background(), "alpha", "", api.MessageBody{Text: "x", Style: "expansion", NotifyType: "market", Title: "T", Seconds: 7})
+	if err != nil || !r.OK {
+		t.Fatalf("Message = %+v, %v", r, err)
+	}
+	if _, err := c.Message(context.Background(), "alpha", "1", api.MessageBody{Text: "x", Style: "expansion", NotifyType: "popup"}); err == nil {
+		t.Error("an unknown type was accepted")
 	}
 }

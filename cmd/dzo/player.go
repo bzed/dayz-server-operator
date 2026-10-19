@@ -99,7 +99,7 @@ func newPlayerCmd() *cobra.Command {
 			if id == "all" {
 				id = ""
 			}
-			r, err := c.Message(ctxOf(cmd), args[0], id, strings.Join(args[2:], " "), style)
+			r, err := c.Message(ctxOf(cmd), args[0], id, api.MessageBody{Text: strings.Join(args[2:], " "), Style: style})
 			if err != nil {
 				return err
 			}

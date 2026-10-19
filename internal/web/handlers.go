@@ -413,7 +413,10 @@ func quantity(r *http.Request) (float64, error) {
 }
 
 func actMessage(r *http.Request, c *apiclient.Client, inst string) (api.ActionResult, error) {
-	return c.Message(r.Context(), inst, r.PathValue("steamid"), r.PostFormValue("text"), r.PostFormValue("style"))
+	seconds, _ := strconv.Atoi(strings.TrimSpace(r.PostFormValue("seconds")))
+	return c.Message(r.Context(), inst, r.PathValue("steamid"), api.MessageBody{
+		Text: r.PostFormValue("text"), Style: r.PostFormValue("style"), NotifyType: r.PostFormValue("notify_type"),
+		Title: strings.TrimSpace(r.PostFormValue("title")), Seconds: seconds})
 }
 
 func actTeleport(r *http.Request, c *apiclient.Client, inst string) (api.ActionResult, error) {
