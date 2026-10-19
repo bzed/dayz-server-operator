@@ -10,9 +10,11 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -75,6 +77,13 @@ func newBrowser(t *testing.T) *browser {
 	opts := append([]chromedp.ExecAllocatorOption{}, chromedp.DefaultExecAllocatorOptions[:]...)
 	profile := filepath.Join(t.TempDir(), "profile")
 	opts = append(opts, chromedp.UserDataDir(profile))
+	// Chrome's helper processes outlive the main one; their own process group lets the cleanup stop them all.
+	opts = append(opts, chromedp.ModifyCmdFunc(func(cmd *exec.Cmd) {
+		if cmd.SysProcAttr == nil {
+			cmd.SysProcAttr = &syscall.SysProcAttr{}
+		}
+		cmd.SysProcAttr.Setpgid = true
+	}))
 	if p := os.Getenv(e2eChromeEnv); p != "" {
 		opts = append(opts, chromedp.ExecPath(p))
 	}
@@ -82,9 +91,13 @@ func newBrowser(t *testing.T) *browser {
 	alloc, cancelAlloc := chromedp.NewExecAllocator(timeout, opts...)
 	ctx, _ := chromedp.NewContext(alloc, chromedp.WithErrorf(t.Logf)) //nolint:govet // stopped by chromedp.Cancel below, which also waits for the browser
 	// Cleanups run last in, first out: the problem report below runs before the browser is stopped.
+	var pgid int
 	t.Cleanup(func() {
-		// Cancel waits for Chrome to exit; it writes to the profile directory until then.
+		// Cancel waits for the main process; the helpers are stopped with their process group.
 		_ = chromedp.Cancel(ctx)
+		if pgid > 0 {
+			_ = syscall.Kill(-pgid, syscall.SIGKILL)
+		}
 		cancelAlloc()
 		cancelTimeout()
 		// Chrome's helper processes can still hold files for a moment; t.TempDir's own removal does not retry.
@@ -137,6 +150,9 @@ func newBrowser(t *testing.T) *browser {
 
 	if err := chromedp.Run(ctx, log.Enable(), runtime.Enable()); err != nil {
 		require.NoError(t, err, "no Chrome/Chromium found; install one or set %s", e2eChromeEnv)
+	}
+	if c := chromedp.FromContext(ctx); c != nil && c.Browser != nil && c.Browser.Process() != nil {
+		pgid = c.Browser.Process().Pid
 	}
 	return &browser{ctx: ctx, dialogs: answers}
 }
