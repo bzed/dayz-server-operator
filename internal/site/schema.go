@@ -124,6 +124,8 @@ type Announce struct {
 	Lock    int    `yaml:"lock"`
 	Kick    int    `yaml:"kick"`
 	Text    string `yaml:"text,omitempty"`
+	// Ways says how the countdown reaches the players and when; see EffectiveWays for the default.
+	Ways []AnnounceWay `yaml:"ways,omitempty"`
 }
 
 // UpdatesConfig controls the mod update pipeline for one instance (§C7).
@@ -514,6 +516,9 @@ func (i Instance) Validate() error {
 	}
 	if err := i.Backup.Validate(); err != nil {
 		return err
+	}
+	if err := i.Updates.RestartAnnounce.validateWays("updates.restart_announce.ways"); err != nil {
+		errs = append(errs, err.Error())
 	}
 	if err := i.Restarts.Validate(); err != nil {
 		errs = append(errs, err.Error())

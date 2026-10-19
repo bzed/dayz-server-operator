@@ -145,7 +145,7 @@ func (c RestartsConfig) Validate() error {
 	if a.Minutes < 0 || a.Lock < 0 || a.Kick < 0 || (a.Minutes > 0 && (a.Kick > a.Lock || a.Lock > a.Minutes)) {
 		return fmt.Errorf("restarts.announce: want minutes >= lock >= kick >= 0 (minutes before the restart), got %d, %d, %d", a.Minutes, a.Lock, a.Kick)
 	}
-	return nil
+	return a.validateWays("restarts.announce.ways")
 }
 
 // Next returns the first time after `after` that matches the entry, in the location of `after`
