@@ -14,9 +14,12 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-func exporterSite(t *testing.T, extra string) string {
+func exporterSite(t testing.TB, extra string) string {
 	t.Helper()
 	dir := t.TempDir()
 	cfg := filepath.Join(dir, "config.yaml")
@@ -38,84 +41,78 @@ func TestExporterServesMetricsAndStatus(t *testing.T) {
 	root.SetOut(&out)
 	root.SetErr(&out)
 	root.SetArgs([]string{"exporter", "--config", cfg})
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	done := make(chan error, 1)
 	go func() { done <- root.ExecuteContext(ctx) }()
 
 	var addr string
-	for deadline := time.Now().Add(10 * time.Second); addr == "" && time.Now().Before(deadline); time.Sleep(20 * time.Millisecond) {
-		if m := regexp.MustCompile(`exporter on (\S+)`).FindStringSubmatch(out.String()); m != nil {
-			addr = m[1]
+	startRE := regexp.MustCompile(`exporter on (\S+)`)
+	require.Eventually(t, func() bool {
+		m := startRE.FindStringSubmatch(out.String())
+		if m == nil {
+			return false
 		}
-	}
-	if addr == "" {
-		t.Fatalf("the exporter did not start:\n%s", out.String())
-	}
+		addr = m[1]
+		return true
+	}, 10*time.Second, 20*time.Millisecond, "the exporter did not start:\n%s", out.String())
 	get := func(path string) (int, string) {
-		resp, err := http.Get("http://" + addr + path)
-		if err != nil {
-			t.Fatal(err)
-		}
+		req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "http://"+addr+path, nil)
+		require.NoError(t, err)
+		resp, err := http.DefaultClient.Do(req)
+		require.NoError(t, err)
 		defer func() { _ = resp.Body.Close() }()
 		b, _ := io.ReadAll(resp.Body)
 		return resp.StatusCode, string(b)
 	}
-	if code, body := get("/metrics"); code != 200 || !strings.Contains(body, `dzo_instance_up{instance="x"} 0`) || !strings.Contains(body, "dzo_build_info") {
-		t.Errorf("metrics: %d\n%s", code, body)
-	}
-	if code, body := get("/status/x"); code != 200 || !strings.Contains(body, `"name": "x"`) {
-		t.Errorf("status: %d %s", code, body)
-	}
-	if code, _ := get("/status/nope"); code != 404 {
-		t.Errorf("unknown instance: %d", code)
-	}
+	code, body := get("/metrics")
+	assert.Equal(t, http.StatusOK, code, "metrics: %s", body)
+	assert.Contains(t, body, `dzo_instance_up{instance="x"} 0`, "metrics")
+	assert.Contains(t, body, "dzo_build_info", "metrics")
+	code, body = get("/status/x")
+	assert.Equal(t, http.StatusOK, code, "status: %s", body)
+	assert.Contains(t, body, `"name": "x"`, "status")
+	code, _ = get("/status/nope")
+	assert.Equal(t, http.StatusNotFound, code, "unknown instance")
 	cancel()
-	if err := <-done; err != nil {
-		t.Errorf("the exporter must stop cleanly: %v", err)
-	}
+	assert.NoError(t, <-done, "the exporter must stop cleanly")
 }
 
 func TestExporterNeedsItsTokenAndRefusesBadConfig(t *testing.T) {
 	cfg := exporterSite(t, "  bearer_token_file: /nonexistent\n")
-	if _, err := runCmd(t, "exporter", "--config", cfg); err == nil || !strings.Contains(err.Error(), "bearer_token_file") {
-		t.Errorf("a missing token file: %v", err)
-	}
+	_, err := runCmd(t, "exporter", "--config", cfg)
+	assert.ErrorContains(t, err, "bearer_token_file", "a missing token file")
 	bad := filepath.Join(t.TempDir(), "c.yaml")
 	writeFile(t, bad, "exporter:\n  allow: [nonsense]\n")
-	if _, err := runCmd(t, "exporter", "--config", bad); err == nil || !strings.Contains(err.Error(), "CIDR") {
-		t.Errorf("a bad allow-list is a config error: %v", err)
-	}
+	_, err = runCmd(t, "exporter", "--config", bad)
+	assert.ErrorContains(t, err, "CIDR", "a bad allow-list is a config error")
 	writeFile(t, bad, "exporter:\n  tls: {cert_file: /a}\n")
-	if _, err := runCmd(t, "exporter", "--config", bad); err == nil || !strings.Contains(err.Error(), "go together") {
-		t.Errorf("a certificate without a key: %v", err)
-	}
+	_, err = runCmd(t, "exporter", "--config", bad)
+	assert.ErrorContains(t, err, "go together", "a certificate without a key")
 }
 
 func TestStatusCommand(t *testing.T) {
 	cfg := exporterSite(t, "")
 	out, err := runCmd(t, "status", "--config", cfg)
-	if err != nil || !strings.HasPrefix(out, "x: ") {
-		t.Fatalf("status: %v\n%s", err, out)
-	}
+	require.NoError(t, err, "status: %s", out)
+	require.True(t, strings.HasPrefix(out, "x: "), "status: %s", out)
 	out, err = runCmd(t, "status", "x", "--json", "--config", cfg)
+	require.NoError(t, err, "status x --json: %s", out)
 	var i struct{ Name, Product string }
-	if err != nil || json.Unmarshal([]byte(out), &i) != nil || i.Name != "x" || i.Product != "dayz-stable" {
-		t.Fatalf("status x --json: %v\n%s", err, out)
-	}
+	require.NoError(t, json.Unmarshal([]byte(out), &i), "status x --json: %s", out)
+	require.Equal(t, "x", i.Name)
+	require.Equal(t, "dayz-stable", i.Product)
 	dir := filepath.Join(t.TempDir(), "status")
-	if _, err := runCmd(t, "status", "--write", dir, "--config", cfg); err != nil {
-		t.Fatal(err)
-	}
+	_, err = runCmd(t, "status", "--write", dir, "--config", cfg)
+	require.NoError(t, err)
 	for _, f := range []string{"x.json", "global.json"} {
 		b, err := os.ReadFile(filepath.Join(dir, f))
-		if err != nil || !json.Valid(b) {
-			t.Errorf("%s: %v", f, err)
+		if assert.NoError(t, err, f) {
+			assert.True(t, json.Valid(b), "%s is not valid JSON", f)
 		}
 	}
-	if _, err := runCmd(t, "status", "nope", "--config", cfg); err == nil {
-		t.Error("an unknown instance")
-	}
-	if out, err := runCmd(t, "status", "--json", "--config", cfg); err != nil || !strings.Contains(out, `"global"`) {
-		t.Errorf("status --json: %v\n%s", err, out)
-	}
+	_, err = runCmd(t, "status", "nope", "--config", cfg)
+	assert.Error(t, err, "an unknown instance")
+	out, err = runCmd(t, "status", "--json", "--config", cfg)
+	assert.NoError(t, err, "status --json: %s", out)
+	assert.Contains(t, out, `"global"`, "status --json")
 }

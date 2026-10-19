@@ -8,26 +8,22 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
-func fakeProcRoot(t *testing.T) string {
+func fakeProcRoot(t testing.TB) string {
 	t.Helper()
 	root := t.TempDir()
-	if err := os.Mkdir(filepath.Join(root, "1234"), 0o755); err != nil {
-		t.Fatalf("mkdir: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(root, "1234", "comm"), []byte("DayZServer\n"), 0o600); err != nil {
-		t.Fatalf("write comm: %v", err)
-	}
+	require.NoError(t, os.Mkdir(filepath.Join(root, "1234"), 0o755), "mkdir")
+	require.NoError(t, os.WriteFile(filepath.Join(root, "1234", "comm"), []byte("DayZServer\n"), 0o600), "write comm")
 	return root
 }
 
-func fakeA2SForCLI(t *testing.T) string {
+func fakeA2SForCLI(t testing.TB) string {
 	t.Helper()
 	conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 0})
-	if err != nil {
-		t.Fatalf("listen: %v", err)
-	}
+	require.NoError(t, err, "listen")
 	t.Cleanup(func() { _ = conn.Close() })
 	go func() {
 		buf := make([]byte, 4096)
@@ -53,15 +49,12 @@ func TestHealthStartupSuccess(t *testing.T) {
 		"--proc-root", fakeProcRoot(t),
 		"--timeout", "2s",
 	)
-	if err != nil {
-		t.Fatalf("health startup: %v", err)
-	}
+	require.NoError(t, err, "health startup")
 }
 
 func TestHealthStartupMissingQuery(t *testing.T) {
-	if _, err := runCmd(t, "health", "startup", "--proc-root", fakeProcRoot(t)); err == nil {
-		t.Fatal("expected an error for missing --query")
-	}
+	_, err := runCmd(t, "health", "startup", "--proc-root", fakeProcRoot(t))
+	require.Error(t, err, "expected an error for missing --query")
 }
 
 func TestHealthLiveProcessNotRunning(t *testing.T) {
@@ -70,7 +63,5 @@ func TestHealthLiveProcessNotRunning(t *testing.T) {
 		"--proc-root", t.TempDir(),
 		"--timeout", "500ms",
 	)
-	if err == nil {
-		t.Fatal("expected an error when the process isn't running")
-	}
+	require.Error(t, err, "expected an error when the process isn't running")
 }

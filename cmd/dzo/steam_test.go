@@ -9,18 +9,19 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-func writeFakeSteamcmdCmd(t *testing.T, script string) string {
+func writeFakeSteamcmdCmd(t testing.TB, script string) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "fake-steamcmd.sh")
-	if err := os.WriteFile(path, []byte("#!/bin/sh\n"+script), 0o755); err != nil { //nolint:gosec // test fixture, fixed 0755 mode
-		t.Fatalf("write fake steamcmd: %v", err)
-	}
+	require.NoError(t, os.WriteFile(path, []byte("#!/bin/sh\n"+script), 0o755), "write fake steamcmd") //nolint:gosec // test fixture, fixed 0755 mode
 	return path
 }
 
-func runCmdWithStdin(t *testing.T, stdin string, args ...string) (string, error) {
+func runCmdWithStdin(t testing.TB, stdin string, args ...string) (string, error) {
 	t.Helper()
 	cmd := newRootCmd()
 	var out bytes.Buffer
@@ -43,20 +44,13 @@ echo "Waiting for user info...OK"
 
 	out, err := runCmdWithStdin(t, "s3cr3t\n", "steam", "login",
 		"--user", "bob", "--command", script, "--status-file", statusFile)
-	if err != nil {
-		t.Fatalf("steam login: %v\n%s", err, out)
-	}
-	if !strings.Contains(out, "login OK") {
-		t.Errorf("output = %q", out)
-	}
+	require.NoError(t, err, "steam login: %s", out)
+	assert.Contains(t, out, "login OK")
 
 	statusOut, err := runCmdWithStdin(t, "", "steam", "status", "--status-file", statusFile)
-	if err != nil {
-		t.Fatalf("steam status: %v\n%s", err, statusOut)
-	}
-	if !strings.Contains(statusOut, "account:       bob") || !strings.Contains(statusOut, "auth required: false") {
-		t.Errorf("status output = %q", statusOut)
-	}
+	require.NoError(t, err, "steam status: %s", statusOut)
+	assert.Contains(t, statusOut, "account:       bob", "status output")
+	assert.Contains(t, statusOut, "auth required: false", "status output")
 }
 
 func TestSteamLoginFailureSetsAuthRequired(t *testing.T) {
@@ -70,42 +64,28 @@ echo "FAILED (Invalid Password)"
 
 	_, err := runCmdWithStdin(t, "wrong\n", "steam", "login",
 		"--user", "bob", "--command", script, "--status-file", statusFile)
-	if err == nil {
-		t.Fatal("expected an error for a failed login")
-	}
+	require.Error(t, err, "expected an error for a failed login")
 
 	statusOut, err := runCmdWithStdin(t, "", "steam", "status", "--status-file", statusFile)
-	if err != nil {
-		t.Fatalf("steam status: %v\n%s", err, statusOut)
-	}
-	if !strings.Contains(statusOut, "auth required: true") {
-		t.Errorf("status output = %q, want auth required: true", statusOut)
-	}
-	if !strings.Contains(statusOut, "invalid_password") {
-		t.Errorf("status output = %q, want the failure reason", statusOut)
-	}
+	require.NoError(t, err, "steam status: %s", statusOut)
+	assert.Contains(t, statusOut, "auth required: true", "status output")
+	assert.Contains(t, statusOut, "invalid_password", "status output, want the failure reason")
 }
 
 func TestSteamStatusNoLoginRecorded(t *testing.T) {
 	out, err := runCmdWithStdin(t, "", "steam", "status", "--status-file", filepath.Join(t.TempDir(), "missing.json"))
-	if err != nil {
-		t.Fatalf("steam status: %v", err)
-	}
-	if !strings.Contains(out, "no login recorded yet") {
-		t.Errorf("output = %q", out)
-	}
+	require.NoError(t, err, "steam status")
+	assert.Contains(t, out, "no login recorded yet")
 }
 
 func TestSteamLoginRequiresUser(t *testing.T) {
-	if _, err := runCmdWithStdin(t, "", "steam", "login", "--status-file", filepath.Join(t.TempDir(), "status.json")); err == nil {
-		t.Fatal("expected an error for a missing --user flag")
-	}
+	_, err := runCmdWithStdin(t, "", "steam", "login", "--status-file", filepath.Join(t.TempDir(), "status.json"))
+	require.Error(t, err, "expected an error for a missing --user flag")
 }
 
 func TestSteamStatusFallsBackToConfigWithoutStatusFile(t *testing.T) {
-	if _, err := runCmdWithStdin(t, "", "steam", "status", "--config", "/nonexistent/config.yaml"); err == nil {
-		t.Fatal("expected an error resolving the status path from a missing config file")
-	}
+	_, err := runCmdWithStdin(t, "", "steam", "status", "--config", "/nonexistent/config.yaml")
+	require.Error(t, err, "expected an error resolving the status path from a missing config file")
 }
 
 func TestSteamLoginGuardCode(t *testing.T) {
@@ -122,12 +102,8 @@ echo "Waiting for user info...OK"
 
 	out, err := runCmdWithStdin(t, "s3cr3t\n123456\n", "steam", "login",
 		"--user", "bob", "--command", script, "--status-file", statusFile)
-	if err != nil {
-		t.Fatalf("steam login: %v\n%s", err, out)
-	}
-	if !strings.Contains(out, "login OK") {
-		t.Errorf("output = %q", out)
-	}
+	require.NoError(t, err, "steam login: %s", out)
+	assert.Contains(t, out, "login OK")
 }
 
 // A login whose final output the marker table does not recognise is confirmed against the cached
@@ -149,12 +125,9 @@ echo "something steamcmd never said before"
 
 	out, err := runCmdWithStdin(t, "s3cr3t\n", "steam", "login",
 		"--user", "bob", "--command", script, "--status-file", statusFile)
-	if err != nil {
-		t.Fatalf("steam login: %v\n%s", err, out)
-	}
-	if !strings.Contains(out, "login OK") || strings.Contains(out, "login failed") {
-		t.Errorf("output = %q", out)
-	}
+	require.NoError(t, err, "steam login: %s", out)
+	assert.Contains(t, out, "login OK")
+	assert.NotContains(t, out, "login failed")
 }
 
 func TestSteamLoginAppConfirmWaiting(t *testing.T) {
@@ -170,12 +143,8 @@ echo "Waiting for user info...OK"
 
 	out, err := runCmdWithStdin(t, "s3cr3t\n", "steam", "login",
 		"--user", "bob", "--command", script, "--status-file", statusFile)
-	if err != nil {
-		t.Fatalf("steam login: %v\n%s", err, out)
-	}
-	if !strings.Contains(out, "waiting") {
-		t.Errorf("output = %q, want the app-confirmation notice", out)
-	}
+	require.NoError(t, err, "steam login: %s", out)
+	assert.Contains(t, out, "waiting", "want the app-confirmation notice")
 }
 
 func TestSteamLoginPassthrough(t *testing.T) {
@@ -185,19 +154,13 @@ echo "Waiting for user info...OK"
 `)
 	out, err := runCmdWithStdin(t, "", "steam", "login",
 		"--user", "bob", "--command", script, "--passthrough")
-	if err != nil {
-		t.Fatalf("steam login --passthrough: %v\n%s", err, out)
-	}
-	if !strings.Contains(out, "Waiting for user info...OK") {
-		t.Errorf("output = %q, want steamcmd's raw output copied through", out)
-	}
+	require.NoError(t, err, "steam login --passthrough: %s", out)
+	assert.Contains(t, out, "Waiting for user info...OK", "want steamcmd's raw output copied through")
 }
 
 func TestSteamLoginMissingCommandErrors(t *testing.T) {
 	statusFile := filepath.Join(t.TempDir(), "status.json")
 	_, err := runCmdWithStdin(t, "s3cr3t\n", "steam", "login",
 		"--user", "bob", "--command", filepath.Join(t.TempDir(), "does-not-exist"), "--status-file", statusFile)
-	if err == nil {
-		t.Fatal("expected an error for a missing steamcmd binary")
-	}
+	require.Error(t, err, "expected an error for a missing steamcmd binary")
 }

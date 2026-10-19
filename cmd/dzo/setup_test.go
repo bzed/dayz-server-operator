@@ -6,8 +6,10 @@ package main
 import (
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestSetupDryRunCommand(t *testing.T) {
@@ -22,16 +24,13 @@ func TestSetupDryRunCommand(t *testing.T) {
 		t.Skip("dzo setup refuses to run as root")
 	}
 	out, err := runCmd(t, "setup", "--dry-run", "--config", cfg, "--images-dir", images, "--unit-dir", filepath.Join(dir, "units"))
-	if err != nil && !strings.Contains(out, "podman is not installed") {
-		t.Fatalf("setup --dry-run: %v\n%s", err, out)
+	if err != nil {
+		require.Contains(t, out, "podman is not installed", "setup --dry-run: %v", err)
 	}
-	if !strings.Contains(out, "todo  create paths.data") || !strings.Contains(out, "dzo-image-refresh.timer") {
-		t.Errorf("output:\n%s", out)
-	}
-	if _, err := os.Stat(filepath.Join(dir, "data")); !os.IsNotExist(err) {
-		t.Error("--dry-run created the data directory")
-	}
-	if _, err := runCmd(t, "setup", "--config", filepath.Join(dir, "none.yaml")); err == nil {
-		t.Error("a missing config must fail")
-	}
+	assert.Contains(t, out, "todo  create paths.data")
+	assert.Contains(t, out, "dzo-image-refresh.timer")
+	_, err = os.Stat(filepath.Join(dir, "data"))
+	assert.ErrorIs(t, err, os.ErrNotExist, "--dry-run created the data directory")
+	_, err = runCmd(t, "setup", "--config", filepath.Join(dir, "none.yaml"))
+	assert.Error(t, err, "a missing config must fail")
 }

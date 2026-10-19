@@ -4,15 +4,16 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/bzed/dayz-server-operator/internal/admin"
 	"github.com/bzed/dayz-server-operator/internal/api"
@@ -21,7 +22,7 @@ import (
 )
 
 // fakeAPI answers the status of "alpha" and every message with ok, recording the messages.
-func fakeAPI(t *testing.T, status admin.Status, messageCode int) (*apiclient.Client, *[]api.MessageBody) {
+func fakeAPI(t testing.TB, status admin.Status, messageCode int) (*apiclient.Client, *[]api.MessageBody) {
 	t.Helper()
 	var got []api.MessageBody
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -50,47 +51,39 @@ func connected(features ...string) admin.Status {
 func TestAPINotifierMapsWays(t *testing.T) {
 	c, got := fakeAPI(t, connected("expansion"), 200)
 	n := apiNotifier(c, "alpha")
-	ctx := context.Background()
+	ctx := t.Context()
 	for _, call := range []struct {
 		way, typ string
 	}{{"chat", ""}, {"notification", ""}, {"expansion", "market"}} {
-		if err := n(ctx, call.way, call.typ, "Restart in 5 minutes", 10); err != nil {
-			t.Fatalf("%s: %v", call.way, err)
-		}
+		require.NoError(t, n(ctx, call.way, call.typ, "Restart in 5 minutes", 10), call.way)
 	}
 	want := []api.MessageBody{
 		{Text: "Restart in 5 minutes", Style: "important", Seconds: 10},
 		{Text: "Restart in 5 minutes", Style: "notification", Seconds: 10},
 		{Text: "Restart in 5 minutes", Style: "expansion", NotifyType: "market", Seconds: 10},
 	}
-	if len(*got) != 3 || (*got)[0] != want[0] || (*got)[1] != want[1] || (*got)[2] != want[2] {
-		t.Errorf("bodies = %+v, want %+v", *got, want)
-	}
+	assert.Equal(t, want, *got, "bodies")
 }
 
 func TestAPINotifierSendsExpansionAsNotificationWithoutTheFeature(t *testing.T) {
 	c, got := fakeAPI(t, connected(), 200)
-	if err := apiNotifier(c, "alpha")(context.Background(), "expansion", "baguette", "x", 10); err != nil {
-		t.Fatal(err)
-	}
-	if len(*got) != 1 || (*got)[0].Style != "notification" || (*got)[0].NotifyType != "" {
-		t.Errorf("bodies = %+v", *got)
-	}
+	require.NoError(t, apiNotifier(c, "alpha")(t.Context(), "expansion", "baguette", "x", 10))
+	require.Len(t, *got, 1)
+	assert.Equal(t, "notification", (*got)[0].Style)
+	assert.Empty(t, (*got)[0].NotifyType)
 }
 
 func TestAPINotifierFailsWhenTheModIsNotConnected(t *testing.T) {
 	c, got := fakeAPI(t, admin.Status{Instance: "alpha"}, 200)
-	err := apiNotifier(c, "alpha")(context.Background(), "notification", "", "x", 10)
-	if err == nil || !strings.Contains(err.Error(), "not connected") || len(*got) != 0 {
-		t.Errorf("err = %v, messages %d", err, len(*got))
-	}
+	err := apiNotifier(c, "alpha")(t.Context(), "notification", "", "x", 10)
+	assert.ErrorContains(t, err, "not connected")
+	assert.Empty(t, *got, "messages")
 }
 
 func TestAPINotifierReportsARefusal(t *testing.T) {
 	c, _ := fakeAPI(t, connected(), http.StatusUnprocessableEntity)
-	if err := apiNotifier(c, "alpha")(context.Background(), "notification", "", "x", 10); err == nil {
-		t.Error("a refused message must be an error, so the countdown falls back to RCon")
-	}
+	err := apiNotifier(c, "alpha")(t.Context(), "notification", "", "x", 10)
+	assert.Error(t, err, "a refused message must be an error, so the countdown falls back to RCon")
 }
 
 func TestAnnounceClientNeedsAToken(t *testing.T) {
@@ -99,20 +92,17 @@ func TestAnnounceClientNeedsAToken(t *testing.T) {
 	cfg.Paths.Secrets = dir
 	cfg.Serve.Listen = "127.0.0.1:1"
 	t.Setenv("DZO_TOKEN", "")
-	if _, err := announceClient(cfg); err == nil || !strings.Contains(err.Error(), "no API token") {
-		t.Fatalf("err = %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(dir, "announce.token"), []byte("dzo_file\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
+	_, err := announceClient(cfg)
+	require.ErrorContains(t, err, "no API token")
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "announce.token"), []byte("dzo_file\n"), 0o600))
 	c, err := announceClient(cfg)
-	if err != nil || c.Token != "dzo_file" || c.Base != "http://127.0.0.1:1" {
-		t.Fatalf("file token: %+v, %v", c, err)
-	}
+	require.NoError(t, err, "file token")
+	require.Equal(t, "dzo_file", c.Token, "file token")
+	require.Equal(t, "http://127.0.0.1:1", c.Base, "file token")
 	t.Setenv("DZO_TOKEN", "dzo_env")
-	if c, err = announceClient(cfg); err != nil || c.Token != "dzo_env" {
-		t.Fatalf("env token: %+v, %v", c, err)
-	}
+	c, err = announceClient(cfg)
+	require.NoError(t, err, "env token")
+	require.Equal(t, "dzo_env", c.Token, "env token")
 }
 
 func TestLazyNotifierWithoutATokenFailsSoTheCountdownFallsBack(t *testing.T) {
@@ -122,8 +112,6 @@ func TestLazyNotifierWithoutATokenFailsSoTheCountdownFallsBack(t *testing.T) {
 	t.Setenv("DZO_TOKEN", "")
 	n := lazyNotifier(cfg, "alpha")
 	for range 2 {
-		if err := n(context.Background(), "notification", "", "x", 10); err == nil || !strings.Contains(err.Error(), "no API token") {
-			t.Fatalf("err = %v", err)
-		}
+		require.ErrorContains(t, n(t.Context(), "notification", "", "x", 10), "no API token")
 	}
 }

@@ -7,8 +7,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestServermodsBuildChecksAndUpdatesTheLock(t *testing.T) {
@@ -18,26 +19,23 @@ func TestServermodsBuildChecksAndUpdatesTheLock(t *testing.T) {
 	writeFile(t, filepath.Join(mod, "src", "Demo", "config.cpp"), "class CfgPatches {};\n")
 	writeFile(t, filepath.Join(mod, "src", "Demo", "scripts", "3_Game", "Demo", "A.c"), "class A {}\n")
 	for _, args := range [][]string{{"init", "-q"}, {"add", "."}, {"-c", "user.name=t", "-c", "user.email=t@example.invalid", "commit", "-q", "-m", "x"}} {
-		if out, err := exec.Command("git", append([]string{"-C", mod}, args...)...).CombinedOutput(); err != nil { //nolint:gosec // test
-			t.Fatalf("git %v: %v\n%s", args, err, out)
-		}
+		out, err := exec.Command("git", append([]string{"-C", mod}, args...)...).CombinedOutput() //nolint:gosec // test
+		require.NoError(t, err, "git %v: %s", args, out)
 	}
 	lock := filepath.Join(dir, "servermods.lock")
 	build := func(extra ...string) (string, error) {
 		return runCmd(t, append([]string{"servermods", "build", "--src", filepath.Join(dir, "servermods"), "--out", filepath.Join(dir, "dist"), "--lock", lock}, extra...)...)
 	}
-	if _, err := build(); err == nil || !strings.Contains(err.Error(), "make servermods-lock") {
-		t.Fatalf("without a lock file: %v", err)
-	}
-	if out, err := build("--update-lock"); err != nil || !strings.Contains(out, "wrote") {
-		t.Fatalf("update: %v\n%s", err, out)
-	}
-	if out, err := build(); err != nil || !strings.Contains(out, "matches the build") {
-		t.Fatalf("check: %v\n%s", err, out)
-	}
+	_, err := build()
+	require.ErrorContains(t, err, "make servermods-lock", "without a lock file")
+	out, err := build("--update-lock")
+	require.NoError(t, err, "update: %s", out)
+	require.Contains(t, out, "wrote", "update")
+	out, err = build()
+	require.NoError(t, err, "check: %s", out)
+	require.Contains(t, out, "matches the build", "check")
 	writeFile(t, filepath.Join(mod, "src", "Demo", "scripts", "3_Game", "Demo", "A.c"), "class A { int x; }\n")
-	if _, err := build(); err == nil || !strings.Contains(err.Error(), "differ") {
-		t.Fatalf("a changed mod: %v", err)
-	}
+	_, err = build()
+	require.ErrorContains(t, err, "differ", "a changed mod")
 	_ = os.Remove(lock)
 }

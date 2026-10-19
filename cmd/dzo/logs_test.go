@@ -6,9 +6,11 @@ package main
 import (
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestLogsRotateArchiveAndCrashSummary(t *testing.T) {
@@ -18,45 +20,34 @@ func TestLogsRotateArchiveAndCrashSummary(t *testing.T) {
 	old := time.Now().Add(-5 * time.Hour)
 	for _, n := range []string{"script_1.log", "script_2.log"} {
 		writeFile(t, filepath.Join(prof, n), "line of "+n+"\n")
-		if err := os.Chtimes(filepath.Join(prof, n), old, old); err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, os.Chtimes(filepath.Join(prof, n), old, old))
 	}
-	if err := os.Chtimes(filepath.Join(prof, "script_2.log"), old.Add(time.Hour), old.Add(time.Hour)); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, os.Chtimes(filepath.Join(prof, "script_2.log"), old.Add(time.Hour), old.Add(time.Hour)))
 	out, err := runCmd(t, "logs", "rotate", "x", "--dry-run", "--config", cfg)
-	if err != nil || !strings.Contains(out, "move script_1.log") {
-		t.Fatalf("dry run: %v\n%s", err, out)
-	}
-	if _, err := os.Stat(filepath.Join(prof, "script_1.log")); err != nil {
-		t.Fatal("a dry run moved a file")
-	}
-	if _, err := runCmd(t, "logs", "rotate", "--config", cfg); err == nil {
-		t.Error("rotate needs a name or --all")
-	}
+	require.NoError(t, err, "dry run: %s", out)
+	require.Contains(t, out, "move script_1.log", "dry run")
+	_, err = os.Stat(filepath.Join(prof, "script_1.log"))
+	require.NoError(t, err, "a dry run moved a file")
+	_, err = runCmd(t, "logs", "rotate", "--config", cfg)
+	assert.Error(t, err, "rotate needs a name or --all")
 	out, err = runCmd(t, "logs", "rotate", "--all", "--config", cfg)
-	if err != nil || !strings.Contains(out, "archived 1 log file") {
-		t.Fatalf("rotate: %v\n%s", err, out)
-	}
+	require.NoError(t, err, "rotate: %s", out)
+	require.Contains(t, out, "archived 1 log file", "rotate")
 	out, err = runCmd(t, "logs", "archive", "x", "--since", "1d", "--match", "script", "--config", cfg)
-	if err != nil || !strings.Contains(out, "script_1.log.gz") {
-		t.Fatalf("archive: %v\n%s", err, out)
-	}
-	if _, err := runCmd(t, "logs", "archive", "x", "--since", "xx", "--config", cfg); err == nil {
-		t.Error("a bad --since must fail")
-	}
-	if _, err := runCmd(t, "logs", "archive", "x", "--match", "(", "--config", cfg); err == nil {
-		t.Error("a bad --match must fail")
-	}
+	require.NoError(t, err, "archive: %s", out)
+	require.Contains(t, out, "script_1.log.gz", "archive")
+	_, err = runCmd(t, "logs", "archive", "x", "--since", "xx", "--config", cfg)
+	assert.Error(t, err, "a bad --since must fail")
+	_, err = runCmd(t, "logs", "archive", "x", "--match", "(", "--config", cfg)
+	assert.Error(t, err, "a bad --match must fail")
 
 	t.Setenv("SERVICE_RESULT", "success")
-	if out, err = runCmd(t, "logs", "crash-summary", "x", "--config", cfg); err != nil || out != "" {
-		t.Fatalf("a clean stop prints nothing: %v %q", err, out)
-	}
+	out, err = runCmd(t, "logs", "crash-summary", "x", "--config", cfg)
+	require.NoError(t, err, "a clean stop prints nothing")
+	require.Empty(t, out, "a clean stop prints nothing")
 	t.Setenv("SERVICE_RESULT", "exit-code")
 	out, err = runCmd(t, "logs", "crash-summary", "x", "--config", cfg)
-	if err != nil || !strings.Contains(out, "script_2.log") || !strings.Contains(out, "line of script_2.log") {
-		t.Fatalf("crash summary: %v\n%s", err, out)
-	}
+	require.NoError(t, err, "crash summary: %s", out)
+	require.Contains(t, out, "script_2.log", "crash summary")
+	require.Contains(t, out, "line of script_2.log", "crash summary")
 }

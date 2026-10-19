@@ -7,21 +7,19 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-func writeFile(t *testing.T, path, content string) {
+func writeFile(t testing.TB, path, content string) {
 	t.Helper()
-	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o750))
+	require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
 }
 
-func commitAll(t *testing.T, dir string) {
+func commitAll(t testing.TB, dir string) {
 	t.Helper()
 	for _, args := range [][]string{
 		{"init", "-q", "-b", "main"}, {"add", "-A"},
@@ -29,22 +27,21 @@ func commitAll(t *testing.T, dir string) {
 	} {
 		c := exec.Command("git", args...)
 		c.Dir = dir
-		if out, err := c.CombinedOutput(); err != nil {
-			t.Fatalf("git %v: %v\n%s", args, err, out)
-		}
+		out, err := c.CombinedOutput()
+		require.NoError(t, err, "git %v: %s", args, out)
 	}
 }
 
 // renderSetup builds a data dir with a one-instance site repo whose mission
 // source is a local git repo, plus an installed product build that ships a
 // fallback mission. It returns the config path and the instance root.
-func renderSetup(t *testing.T) (cfg, instRoot, missionRepo string) {
+func renderSetup(t testing.TB) (cfg, instRoot, missionRepo string) {
 	t.Helper()
 	return renderSetupIn(t, t.TempDir())
 }
 
 // renderSetupIn is renderSetup with the data directory chosen by the caller.
-func renderSetupIn(t *testing.T, data string) (cfg, instRoot, missionRepo string) {
+func renderSetupIn(t testing.TB, data string) (cfg, instRoot, missionRepo string) {
 	t.Helper()
 	missionRepo = filepath.Join(t.TempDir(), "mission")
 	writeFile(t, filepath.Join(missionRepo, "empty.m", "init.c"), "init")
@@ -63,9 +60,7 @@ network: host
 	build := filepath.Join(data, "cache", "products", "dayz-stable", "1")
 	writeFile(t, filepath.Join(build, "mpmissions", "dayzOffline.fb", "cfgweather.xml"), "weather")
 	writeFile(t, filepath.Join(build, "keys", "dayz.bikey"), "bikey")
-	if err := os.Symlink("1", filepath.Join(data, "cache", "products", "dayz-stable", "current")); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, os.Symlink("1", filepath.Join(data, "cache", "products", "dayz-stable", "current")))
 	cfg = filepath.Join(data, "config.yaml")
 	writeFile(t, cfg, "paths:\n  data: "+data+"\n")
 	return cfg, filepath.Join(data, "instances", "x"), missionRepo
@@ -76,93 +71,71 @@ func TestInstanceRender(t *testing.T) {
 	live := filepath.Join(root, "mpmissions", "empty.m")
 
 	out, err := runCmd(t, "instance", "render", "x", "--config", cfg, "--dry-run")
-	if err != nil {
-		t.Fatalf("render --dry-run: %v\n%s", err, out)
-	}
-	if !strings.Contains(out, "+ init.c (new)") || strings.Contains(out, "written:") {
-		t.Errorf("dry-run output = %s", out)
-	}
-	if _, err := os.Stat(live); !os.IsNotExist(err) {
-		t.Fatal("dry-run must not create the live mission")
-	}
+	require.NoError(t, err, "render --dry-run: %s", out)
+	assert.Contains(t, out, "+ init.c (new)", "dry-run output")
+	assert.NotContains(t, out, "written:", "dry-run output")
+	_, err = os.Stat(live)
+	require.ErrorIs(t, err, os.ErrNotExist, "dry-run must not create the live mission")
 
 	out, err = runCmd(t, "instance", "render", "x", "--config", cfg)
-	if err != nil {
-		t.Fatalf("render: %v\n%s", err, out)
-	}
-	if !strings.Contains(out, "written: 4") { // init.c, types.xml, cfgweather.xml from the fallback, the generated messages.xml
-		t.Errorf("output = %s", out)
-	}
-	if b, _ := os.ReadFile(filepath.Join(live, "db", "messages.xml")); strings.Contains(string(b), "<message>") {
-		t.Errorf("a render writes an empty messages.xml, dzo sends the messages itself: %s", b)
-	}
-	if b, _ := os.ReadFile(filepath.Join(live, "cfgweather.xml")); string(b) != "weather" {
-		t.Errorf("fallback file = %q", b)
-	}
+	require.NoError(t, err, "render: %s", out)
+	assert.Contains(t, out, "written: 4", "init.c, types.xml, cfgweather.xml from the fallback, the generated messages.xml")
+	b, _ := os.ReadFile(filepath.Join(live, "db", "messages.xml"))
+	assert.NotContains(t, string(b), "<message>", "a render writes an empty messages.xml, dzo sends the messages itself")
+	b, _ = os.ReadFile(filepath.Join(live, "cfgweather.xml"))
+	assert.Equal(t, "weather", string(b), "fallback file")
 	// the files the start needs besides the mission
-	if b, _ := os.ReadFile(filepath.Join(root, "runtime", "serverDZ.cfg")); !strings.Contains(string(b), `template = "empty.m";`) || !strings.Contains(string(b), "steamQueryPort = 27016;") {
-		t.Errorf("runtime/serverDZ.cfg = %s", b)
-	}
-	if b, _ := os.ReadFile(filepath.Join(root, "runtime", "keys", "dayz.bikey")); string(b) != "bikey" {
-		t.Errorf("runtime/keys/dayz.bikey = %q", b)
-	}
-	if b, _ := os.ReadFile(filepath.Join(root, "profiles", "battleye", "beserver_x64.cfg")); !strings.Contains(string(b), "RConPort 2306") {
-		t.Errorf("BattlEye seed = %s", b)
-	}
+	b, _ = os.ReadFile(filepath.Join(root, "runtime", "serverDZ.cfg"))
+	assert.Contains(t, string(b), `template = "empty.m";`, "runtime/serverDZ.cfg")
+	assert.Contains(t, string(b), "steamQueryPort = 27016;", "runtime/serverDZ.cfg")
+	b, _ = os.ReadFile(filepath.Join(root, "runtime", "keys", "dayz.bikey"))
+	assert.Equal(t, "bikey", string(b), "runtime/keys/dayz.bikey")
+	b, _ = os.ReadFile(filepath.Join(root, "profiles", "battleye", "beserver_x64.cfg"))
+	assert.Contains(t, string(b), "RConPort 2306", "BattlEye seed")
 
 	// The mission repo moves on; a plain render must not fetch, --update-pristine must.
 	writeFile(t, filepath.Join(repo, "empty.m", "init.c"), "init2")
 	commitAll2(t, repo)
-	if out, err = runCmd(t, "instance", "render", "x", "--config", cfg); err != nil || !strings.Contains(out, "no changes") {
-		t.Fatalf("plain render = %v\n%s", err, out)
-	}
-	if out, err = runCmd(t, "instance", "render", "x", "--config", cfg, "--update-pristine"); err != nil || !strings.Contains(out, "~ init.c (update)") {
-		t.Fatalf("--update-pristine render = %v\n%s", err, out)
-	}
-	if b, _ := os.ReadFile(filepath.Join(live, "init.c")); string(b) != "init2" {
-		t.Errorf("init.c = %q", b)
-	}
+	out, err = runCmd(t, "instance", "render", "x", "--config", cfg)
+	require.NoError(t, err, "plain render: %s", out)
+	require.Contains(t, out, "no changes", "plain render")
+	out, err = runCmd(t, "instance", "render", "x", "--config", cfg, "--update-pristine")
+	require.NoError(t, err, "--update-pristine render: %s", out)
+	require.Contains(t, out, "~ init.c (update)", "--update-pristine render")
+	b, _ = os.ReadFile(filepath.Join(live, "init.c"))
+	assert.Equal(t, "init2", string(b), "init.c")
 }
 
-func commitAll2(t *testing.T, dir string) {
+func commitAll2(t testing.TB, dir string) {
 	t.Helper()
 	c := exec.Command("git", "-c", "user.name=t", "-c", "user.email=t@example.invalid", "commit", "-qam", "y")
 	c.Dir = dir
-	if out, err := c.CombinedOutput(); err != nil {
-		t.Fatalf("git commit: %v\n%s", err, out)
-	}
+	out, err := c.CombinedOutput()
+	require.NoError(t, err, "git commit: %s", out)
 }
 
 func TestInstanceRenderFailures(t *testing.T) {
 	cfg, _, repo := renderSetup(t)
-	if _, err := runCmd(t, "instance", "render", "nope", "--config", cfg); err == nil {
-		t.Error("unknown instance must fail")
-	}
-	if err := os.RemoveAll(repo); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := runCmd(t, "instance", "render", "x", "--config", cfg); err == nil {
-		t.Error("unfetchable pristine must fail")
-	}
+	_, err := runCmd(t, "instance", "render", "nope", "--config", cfg)
+	assert.Error(t, err, "unknown instance must fail")
+	require.NoError(t, os.RemoveAll(repo))
+	_, err = runCmd(t, "instance", "render", "x", "--config", cfg)
+	assert.Error(t, err, "unfetchable pristine must fail")
 }
 
 func TestInstanceRenderNeedsServerCfgBeforeTouchingTheMission(t *testing.T) {
 	cfg, root, _ := renderSetup(t)
 	data := filepath.Dir(cfg)
-	if err := os.Remove(filepath.Join(data, "site", "instances", "x", "serverDZ.cfg")); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, os.Remove(filepath.Join(data, "site", "instances", "x", "serverDZ.cfg")))
 	for _, args := range [][]string{{"--dry-run"}, {}} {
 		out, err := runCmd(t, append([]string{"instance", "render", "x", "--config", cfg}, args...)...)
-		if err == nil || !strings.Contains(out+err.Error(), "serverDZ.cfg is missing") {
-			t.Errorf("render %v without serverDZ.cfg must fail: %v\n%s", args, err, out)
+		if assert.Error(t, err, "render %v without serverDZ.cfg must fail: %s", args, out) {
+			assert.Contains(t, out+err.Error(), "serverDZ.cfg is missing", "render %v without serverDZ.cfg", args)
 		}
 	}
-	if _, err := os.Stat(filepath.Join(root, "mpmissions")); !os.IsNotExist(err) {
-		t.Error("the live mission must not be touched when the start would fail anyway")
-	}
+	_, err := os.Stat(filepath.Join(root, "mpmissions"))
+	assert.ErrorIs(t, err, os.ErrNotExist, "the live mission must not be touched when the start would fail anyway")
 	writeFile(t, filepath.Join(data, "site", "instances", "x", "serverDZ.cfg"), "not a config")
-	if _, err := runCmd(t, "instance", "render", "x", "--config", cfg); err == nil {
-		t.Error("a serverDZ.cfg that does not parse must fail")
-	}
+	_, err = runCmd(t, "instance", "render", "x", "--config", cfg)
+	assert.Error(t, err, "a serverDZ.cfg that does not parse must fail")
 }
