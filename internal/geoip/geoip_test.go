@@ -9,9 +9,10 @@ import (
 	"net/netip"
 	"os"
 	"path/filepath"
-	"reflect"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 // trie is a binary search tree over address bits, the shape of both database
@@ -48,7 +49,7 @@ func (t *trie) insert(addr netip.Addr, bits, value int) {
 }
 
 // legacyFile writes a country database with the given address -> country index entries.
-func legacyFile(t *testing.T, path string, entries map[string]int) {
+func legacyFile(t testing.TB, path string, entries map[string]int) {
 	t.Helper()
 	tr := newTrie()
 	for p, idx := range entries {
@@ -69,7 +70,7 @@ func legacyFile(t *testing.T, path string, entries map[string]int) {
 			}
 		}
 	}
-	must(t, os.WriteFile(path, out, 0o600))
+	require.NoError(t, os.WriteFile(path, out, 0o600))
 }
 
 func countryIndex(code string) int {
@@ -82,11 +83,11 @@ func countryIndex(code string) int {
 }
 
 func TestLegacyCountries(t *testing.T) {
-	eq(t, 256, len(legacyCountries))
-	eq(t, "--", legacyCountries[0])
-	eq(t, "US", legacyCountries[countryIndex("US")])
-	eq(t, 225, countryIndex("US")) // libGeoIP's order
-	eq(t, 56, countryIndex("DE"))
+	require.Len(t, legacyCountries, 256)
+	require.Equal(t, "--", legacyCountries[0])
+	require.Equal(t, "US", legacyCountries[countryIndex("US")])
+	require.Equal(t, 225, countryIndex("US")) // libGeoIP's order
+	require.Equal(t, 56, countryIndex("DE"))
 }
 
 func TestLegacyFallbackReadsCountryOnly(t *testing.T) {
@@ -96,13 +97,13 @@ func TestLegacyFallbackReadsCountryOnly(t *testing.T) {
 	db := Open(t.TempDir(), leg)
 	defer db.Close()
 
-	isTrue(t, db.Available())
-	eq(t, Info{Country: "DE"}, db.Lookup("77.1.2.3"))
-	eq(t, Info{Country: "US"}, db.Lookup("8.8.8.8"))
-	eq(t, Info{Country: "US"}, db.Lookup("2001:4860:4860::8888"))
-	eq(t, Info{Country: "DE"}, db.Lookup("::ffff:77.1.2.3"), "an IPv4-mapped address uses the IPv4 database")
-	isTrue(t, db.Lookup("9.9.9.9").Empty(), "not in the tree")
-	isTrue(t, db.Lookup("2606:4700::1").Empty())
+	require.True(t, db.Available())
+	require.Equal(t, Info{Country: "DE"}, db.Lookup("77.1.2.3"))
+	require.Equal(t, Info{Country: "US"}, db.Lookup("8.8.8.8"))
+	require.Equal(t, Info{Country: "US"}, db.Lookup("2001:4860:4860::8888"))
+	require.Equal(t, Info{Country: "DE"}, db.Lookup("::ffff:77.1.2.3"), "an IPv4-mapped address uses the IPv4 database")
+	require.True(t, db.Lookup("9.9.9.9").Empty(), "not in the tree")
+	require.True(t, db.Lookup("2606:4700::1").Empty())
 }
 
 func TestLookupRefusesNonPublicAndGarbage(t *testing.T) {
@@ -111,29 +112,29 @@ func TestLookupRefusesNonPublicAndGarbage(t *testing.T) {
 	db := Open(t.TempDir(), leg)
 	defer db.Close()
 	for _, ip := range []string{"", "nonsense", "10.0.0.1", "192.168.1.1", "127.0.0.1", "169.254.1.1", "::1", "fe80::1", "0.0.0.0"} {
-		isTrue(t, db.Lookup(ip).Empty(), ip)
+		require.True(t, db.Lookup(ip).Empty(), ip)
 	}
-	eq(t, "DE", db.Lookup(" 77.1.2.3 ").Country)
+	require.Equal(t, "DE", db.Lookup(" 77.1.2.3 ").Country)
 }
 
 func TestNilAndEmptyDB(t *testing.T) {
 	var nilDB *DB
-	isTrue(t, nilDB.Lookup("8.8.8.8").Empty())
-	isFalse(t, nilDB.Available())
+	require.True(t, nilDB.Lookup("8.8.8.8").Empty())
+	require.False(t, nilDB.Available())
 	db := Open(t.TempDir(), t.TempDir())
 	defer db.Close()
-	isFalse(t, db.Available())
-	isTrue(t, db.Lookup("8.8.8.8").Empty())
+	require.False(t, db.Available())
+	require.True(t, db.Lookup("8.8.8.8").Empty())
 }
 
 func TestBrokenLegacyFileIsIgnored(t *testing.T) {
 	leg := t.TempDir()
-	must(t, os.WriteFile(filepath.Join(leg, "GeoIP.dat"), []byte("xx"), 0o600))
-	must(t, os.WriteFile(filepath.Join(leg, "GeoIPv6.dat"), make([]byte, 60), 0o600)) // all nodes point at node 0
+	require.NoError(t, os.WriteFile(filepath.Join(leg, "GeoIP.dat"), []byte("xx"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(leg, "GeoIPv6.dat"), make([]byte, 60), 0o600)) // all nodes point at node 0
 	db := Open(t.TempDir(), leg)
 	defer db.Close()
-	isTrue(t, db.Lookup("8.8.8.8").Empty())
-	isTrue(t, db.Lookup("2001:db8::1").Empty() || true)
+	require.True(t, db.Lookup("8.8.8.8").Empty())
+	_ = db.Lookup("2001:db8::1") // must not panic
 }
 
 func TestMMDBGivesCityLocationAndASN(t *testing.T) {
@@ -146,18 +147,18 @@ func TestMMDBGivesCityLocationAndASN(t *testing.T) {
 	defer db.Close()
 
 	got := db.Lookup("8.8.8.8")
-	eq(t, "US", got.Country)
-	eq(t, "United States", got.CountryName)
-	eq(t, "Mountain View", got.City)
-	notNil(t, got.Lat)
-	near(t, 37.386, *got.Lat, 1e-9)
-	near(t, -122.0838, *got.Lon, 1e-9)
-	eq(t, uint(15169), got.ASN)
-	eq(t, "Google LLC", got.ASOrg)
-	eq(t, Info{Country: "US", CountryName: "United States"}, got.CountryOnly())
+	require.Equal(t, "US", got.Country)
+	require.Equal(t, "United States", got.CountryName)
+	require.Equal(t, "Mountain View", got.City)
+	require.NotNil(t, got.Lat)
+	require.InDelta(t, 37.386, *got.Lat, 1e-9)
+	require.InDelta(t, -122.0838, *got.Lon, 1e-9)
+	require.Equal(t, uint(15169), got.ASN)
+	require.Equal(t, "Google LLC", got.ASOrg)
+	require.Equal(t, Info{Country: "US", CountryName: "United States"}, got.CountryOnly())
 
 	// GeoLite2 does not know 9.9.9.9; the legacy database does, and it has no ASN.
-	eq(t, Info{Country: "NL"}, db.Lookup("9.9.9.9"))
+	require.Equal(t, Info{Country: "NL"}, db.Lookup("9.9.9.9"))
 }
 
 func TestCountryMMDBWithoutCity(t *testing.T) {
@@ -165,7 +166,7 @@ func TestCountryMMDBWithoutCity(t *testing.T) {
 	countryDB(t, filepath.Join(dir, "GeoLite2-Country.mmdb"))
 	db := Open(dir, t.TempDir())
 	defer db.Close()
-	eq(t, Info{Country: "US", CountryName: "United States"}, db.Lookup("8.8.8.8"))
+	require.Equal(t, Info{Country: "US", CountryName: "United States"}, db.Lookup("8.8.8.8"))
 }
 
 func TestFilesAreReopenedOnChange(t *testing.T) {
@@ -174,19 +175,19 @@ func TestFilesAreReopenedOnChange(t *testing.T) {
 	db := Open(dir, leg)
 	defer db.Close()
 	db.now = func() time.Time { return now }
-	isTrue(t, db.Lookup("8.8.8.8").Empty())
+	require.True(t, db.Lookup("8.8.8.8").Empty())
 
 	cityDB(t, filepath.Join(dir, "GeoLite2-City.mmdb")) // geoipupdate ran
-	isTrue(t, db.Lookup("8.8.8.8").Empty(), "not looked at again before the interval")
+	require.True(t, db.Lookup("8.8.8.8").Empty(), "not looked at again before the interval")
 	now = now.Add(2 * recheck)
-	eq(t, "US", db.Lookup("8.8.8.8").Country)
+	require.Equal(t, "US", db.Lookup("8.8.8.8").Country)
 
 	now = now.Add(2 * recheck) // nothing changed: the same readers stay
-	eq(t, "US", db.Lookup("8.8.8.8").Country)
+	require.Equal(t, "US", db.Lookup("8.8.8.8").Country)
 
-	must(t, os.Remove(filepath.Join(dir, "GeoLite2-City.mmdb")))
+	require.NoError(t, os.Remove(filepath.Join(dir, "GeoLite2-City.mmdb")))
 	now = now.Add(2 * recheck)
-	isTrue(t, db.Lookup("8.8.8.8").Empty())
+	require.True(t, db.Lookup("8.8.8.8").Empty())
 }
 
 // --- a minimal MaxMind DB writer: IPv4 tree, 24-bit records ---
@@ -226,7 +227,7 @@ func mmdbDouble(f float64) []byte {
 }
 
 // writeMMDB stores one record for 8.0.0.0/8.
-func writeMMDB(t *testing.T, path, dbType string, record []byte) {
+func writeMMDB(t testing.TB, path, dbType string, record []byte) {
 	t.Helper()
 	tr := newTrie()
 	tr.insert(netip.MustParseAddr("8.0.0.0"), 8, 0) // leaf 0 = the data at offset 0
@@ -256,7 +257,7 @@ func writeMMDB(t *testing.T, path, dbType string, record []byte) {
 		mmdbString("description"), mmdbMap(),
 	)
 	file := append(append(append(tree, make([]byte, 16)...), record...), []byte("\xab\xcd\xefMaxMind.com")...)
-	must(t, os.WriteFile(path, append(file, meta...), 0o600))
+	require.NoError(t, os.WriteFile(path, append(file, meta...), 0o600))
 }
 
 func names(en string) []byte {
@@ -267,9 +268,9 @@ func countryRec() []byte {
 	return mmdbMap(mmdbString("country"), mmdbMap(mmdbString("iso_code"), mmdbString("US"), mmdbString("names"), mmdbMap(mmdbString("en"), mmdbString("United States"))))
 }
 
-func countryDB(t *testing.T, path string) { writeMMDB(t, path, "GeoLite2-Country", countryRec()) }
+func countryDB(t testing.TB, path string) { writeMMDB(t, path, "GeoLite2-Country", countryRec()) }
 
-func cityDB(t *testing.T, path string) {
+func cityDB(t testing.TB, path string) {
 	rec := mmdbMap(
 		mmdbString("city"), names("Mountain View"),
 		mmdbString("country"), mmdbMap(mmdbString("iso_code"), mmdbString("US"), mmdbString("names"), mmdbMap(mmdbString("en"), mmdbString("United States"))),
@@ -278,46 +279,9 @@ func cityDB(t *testing.T, path string) {
 	writeMMDB(t, path, "GeoLite2-City", rec)
 }
 
-func asnDB(t *testing.T, path string) {
+func asnDB(t testing.TB, path string) {
 	writeMMDB(t, path, "GeoLite2-ASN", mmdbMap(
 		mmdbString("autonomous_system_number"), mmdbUint(6, 15169),
 		mmdbString("autonomous_system_organization"), mmdbString("Google LLC"),
 	))
-}
-
-func must(t *testing.T, err error) {
-	t.Helper()
-	if err != nil {
-		t.Fatal(err)
-	}
-}
-
-func eq(t *testing.T, want, got any, msg ...any) {
-	t.Helper()
-	if !reflect.DeepEqual(want, got) {
-		t.Fatalf("want %#v, got %#v %v", want, got, msg)
-	}
-}
-
-func isTrue(t *testing.T, v bool, msg ...any) {
-	t.Helper()
-	if !v {
-		t.Fatal(msg...)
-	}
-}
-
-func isFalse(t *testing.T, v bool, msg ...any) { t.Helper(); isTrue(t, !v, msg...) }
-
-func notNil[T any](t *testing.T, p *T) {
-	t.Helper()
-	if p == nil {
-		t.Fatal("nil")
-	}
-}
-
-func near(t *testing.T, want, got, delta float64) {
-	t.Helper()
-	if math.Abs(want-got) > delta {
-		t.Fatalf("want %v, got %v", want, got)
-	}
 }

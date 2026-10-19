@@ -8,17 +8,15 @@ import (
 	"testing"
 
 	"github.com/bzed/dayz-server-operator/internal/site"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestNormalizerNamesAgree(t *testing.T) {
 	for _, n := range site.NormalizerNames {
-		if !KnownNormalizer(n) {
-			t.Errorf("%s is not implemented", n)
-		}
+		assert.True(t, KnownNormalizer(n), "%s is not implemented", n)
 	}
-	if KnownNormalizer("nope") {
-		t.Error("nope is known")
-	}
+	assert.False(t, KnownNormalizer("nope"))
 }
 
 func TestNormalize(t *testing.T) {
@@ -26,50 +24,41 @@ func TestNormalize(t *testing.T) {
 	all := []string{NormEventPosDefRoot, NormWrapRoot, NormXMLDecl}
 
 	out, err := Normalize("events.xml", bare, all)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	s := string(out)
-	if !strings.HasPrefix(s, "<?xml version") || !strings.Contains(s, "<events>\n<event name=\"A\">") || !strings.HasSuffix(s, "</events>\n") {
-		t.Errorf("bare list:\n%s", s)
-	}
+	assert.True(t, strings.HasPrefix(s, "<?xml version"), "bare list:\n%s", s)
+	assert.Contains(t, s, "<events>\n<event name=\"A\">")
+	assert.True(t, strings.HasSuffix(s, "</events>\n"), "bare list:\n%s", s)
 
 	// a proper file stays the same except for the declaration
 	ok := []byte("<types><type name=\"X\"/></types>")
 	out, _ = Normalize("types.xml", ok, []string{NormWrapRoot})
-	if string(out) != string(ok) {
-		t.Errorf("a single root must not be wrapped: %s", out)
-	}
+	assert.Equal(t, string(ok), string(out), "a single root must not be wrapped")
 	out, _ = Normalize("types.xml", append([]byte("\xef\xbb\xbf"), ok...), []string{NormXMLDecl})
-	if !strings.HasPrefix(string(out), "<?xml") || strings.Contains(string(out), "\xef\xbb\xbf") {
-		t.Errorf("declaration / BOM: %q", out)
-	}
+	assert.True(t, strings.HasPrefix(string(out), "<?xml"), "declaration: %q", out)
+	assert.NotContains(t, string(out), "\xef\xbb\xbf", "BOM")
 	again, _ := Normalize("types.xml", out, []string{NormXMLDecl})
-	if string(again) != string(out) {
-		t.Error("the declaration must not be added twice")
-	}
+	assert.Equal(t, string(out), string(again), "the declaration must not be added twice")
 
 	// <events> to <eventposdef>, keeping the declaration
 	spawns := []byte(`<?xml version="1.0"?><events><event name="A"><pos x="1"/></event></events>`)
 	out, _ = Normalize("cfgeventspawns.xml", spawns, []string{NormEventPosDefRoot})
-	if !strings.HasPrefix(string(out), "<?xml") || !strings.Contains(string(out), "<eventposdef><event") || !strings.Contains(string(out), "</eventposdef>") || strings.Contains(string(out), "<events") {
-		t.Errorf("eventposdef root: %s", out)
-	}
-	if out, _ = Normalize("events.xml", spawns, []string{NormEventPosDefRoot}); string(out) != string(spawns) {
-		t.Error("only cfgeventspawns.xml is renamed")
-	}
+	assert.True(t, strings.HasPrefix(string(out), "<?xml"), "eventposdef root: %s", out)
+	assert.Contains(t, string(out), "<eventposdef><event")
+	assert.Contains(t, string(out), "</eventposdef>")
+	assert.NotContains(t, string(out), "<events")
+	out, _ = Normalize("events.xml", spawns, []string{NormEventPosDefRoot})
+	assert.Equal(t, string(spawns), string(out), "only cfgeventspawns.xml is renamed")
 
 	// not XML, unknown normalizer, no known root, broken input
 	js := []byte("{}")
-	if out, err = Normalize("cfg.json", js, all); err != nil || string(out) != "{}" {
-		t.Errorf("json: %v %s", err, out)
-	}
-	if _, err = Normalize("types.xml", ok, []string{"x"}); err == nil {
-		t.Error("an unknown normalizer must fail")
-	}
-	if _, err = Normalize("custom.xml", bare, []string{NormWrapRoot}); err == nil {
-		t.Error("a bare list in a file of unknown kind must fail")
-	}
+	out, err = Normalize("cfg.json", js, all)
+	require.NoError(t, err)
+	assert.Equal(t, "{}", string(out))
+	_, err = Normalize("types.xml", ok, []string{"x"})
+	require.Error(t, err, "an unknown normalizer must fail")
+	_, err = Normalize("custom.xml", bare, []string{NormWrapRoot})
+	require.Error(t, err, "a bare list in a file of unknown kind must fail")
 	if _, err = Normalize("types.xml", []byte("<a><b></a>"), []string{NormWrapRoot}); err != nil {
 		t.Logf("broken xml: %v", err) // tolerated either way: the validation after the merge finds it
 	}

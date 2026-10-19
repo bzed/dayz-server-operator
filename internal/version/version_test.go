@@ -3,15 +3,15 @@
 
 package version
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+)
 
 func TestString(t *testing.T) {
 	Version, Commit, Date = "1.2.3", "abcdef", "2026-01-01"
 	t.Cleanup(func() { Version, Commit, Date = "dev", "unknown", "unknown" })
 
-	got := String()
-	want := "1.2.3 (abcdef, 2026-01-01)"
-	if got != want {
-		t.Fatalf("String() = %q, want %q", got, want)
-	}
+	assert.Equal(t, "1.2.3 (abcdef, 2026-01-01)", String())
 }

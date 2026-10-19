@@ -4,12 +4,12 @@
 package resolve
 
 import (
-	"reflect"
 	"testing"
 	"time"
 
 	"github.com/bzed/dayz-server-operator/internal/instance"
 	"github.com/bzed/dayz-server-operator/internal/site"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestAnnouncementOfCopiesTheTimelineAndRules(t *testing.T) {
@@ -22,14 +22,11 @@ func TestAnnouncementOfCopiesTheTimelineAndRules(t *testing.T) {
 		{Within: 10 * time.Minute, Way: "expansion", Type: "baguette", Every: time.Minute, Now: 10 * time.Second},
 		{Way: "rcon", At: []time.Duration{30 * time.Minute}},
 	}}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("AnnouncementOf = %+v, want %+v", got, want)
-	}
+	assert.Equal(t, want, got)
 }
 
 func TestAnnouncementOfWithoutWaysLeavesTheDefaultToTheCountdown(t *testing.T) {
 	got := AnnouncementOf(site.Announce{Minutes: 5}, "")
-	if got.Rules != nil || got.Minutes != 5 {
-		t.Errorf("AnnouncementOf = %+v", got)
-	}
+	assert.Nil(t, got.Rules)
+	assert.Equal(t, 5, got.Minutes)
 }

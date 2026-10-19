@@ -5,8 +5,10 @@ package monitor
 
 import (
 	"bytes"
-	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func sampleSnapshot() Snapshot {
@@ -40,9 +42,8 @@ func sampleSnapshot() Snapshot {
 
 func TestWriteMetricsContainsExpectedSeries(t *testing.T) {
 	var buf bytes.Buffer
-	if err := WriteMetrics(&buf, sampleSnapshot()); err != nil {
-		t.Fatalf("WriteMetrics: %v", err)
-	}
+	err := WriteMetrics(&buf, sampleSnapshot())
+	require.NoError(t, err, "WriteMetrics")
 	out := buf.String()
 
 	for _, want := range []string{
@@ -63,34 +64,25 @@ func TestWriteMetricsContainsExpectedSeries(t *testing.T) {
 		"# TYPE dzo_instance_up gauge",
 		"# TYPE dzo_jobs_failed_total counter",
 	} {
-		if !strings.Contains(out, want) {
-			t.Errorf("output missing %q\nfull output:\n%s", want, out)
-		}
+		assert.Contains(t, out, want)
 	}
 }
 
 func TestWriteMetricsDeterministic(t *testing.T) {
 	snap := sampleSnapshot()
 	var b1, b2 bytes.Buffer
-	if err := WriteMetrics(&b1, snap); err != nil {
-		t.Fatalf("WriteMetrics: %v", err)
-	}
-	if err := WriteMetrics(&b2, snap); err != nil {
-		t.Fatalf("WriteMetrics: %v", err)
-	}
-	if b1.String() != b2.String() {
-		t.Fatalf("WriteMetrics is not deterministic:\n%s\nvs\n%s", b1.String(), b2.String())
-	}
+	err := WriteMetrics(&b1, snap)
+	require.NoError(t, err, "WriteMetrics")
+	err = WriteMetrics(&b2, snap)
+	require.NoError(t, err, "WriteMetrics")
+	require.Equal(t, b2.String(), b1.String())
 }
 
 func TestWriteMetricsEmptySnapshot(t *testing.T) {
 	var buf bytes.Buffer
-	if err := WriteMetrics(&buf, Snapshot{}); err != nil {
-		t.Fatalf("WriteMetrics: %v", err)
-	}
-	if !strings.Contains(buf.String(), "dzo_build_info") {
-		t.Error("even an empty snapshot should render the always-present global metrics")
-	}
+	err := WriteMetrics(&buf, Snapshot{})
+	require.NoError(t, err, "WriteMetrics")
+	assert.Contains(t, buf.String(), "dzo_build_info")
 }
 
 func TestEscapeLabelValue(t *testing.T) {
@@ -100,14 +92,12 @@ func TestEscapeLabelValue(t *testing.T) {
 		"new\nline":  `new\nline`,
 	}
 	for in, want := range cases {
-		if got := escapeLabelValue(in); got != want {
-			t.Errorf("escapeLabelValue(%q) = %q, want %q", in, got, want)
-		}
+		got := escapeLabelValue(in)
+		assert.Equal(t, want, got)
 	}
 }
 
 func TestFormatLabelsEmpty(t *testing.T) {
-	if got := formatLabels(nil); got != "" {
-		t.Errorf("formatLabels(nil) = %q, want empty", got)
-	}
+	got := formatLabels(nil)
+	assert.Empty(t, got)
 }

@@ -16,6 +16,8 @@ import (
 
 	"github.com/bzed/dayz-server-operator/internal/config"
 	"github.com/bzed/dayz-server-operator/internal/steam"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 type fake struct {
@@ -59,132 +61,93 @@ type env struct {
 	out    bytes.Buffer
 }
 
-func newEnv(t *testing.T) *env {
+func newEnv(t testing.TB) *env {
 	t.Helper()
 	root := t.TempDir()
 	cfg, err := config.Parse([]byte("paths:\n  data: " + filepath.Join(root, "data") + "\n"))
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	images := filepath.Join(root, "images")
 	for _, i := range Images {
-		if err := os.MkdirAll(filepath.Join(images, i.Dir), 0o750); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(filepath.Join(images, i.Dir, "Containerfile"), []byte("FROM scratch\n"), 0o600); err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, os.MkdirAll(filepath.Join(images, i.Dir), 0o750))
+		require.NoError(t, os.WriteFile(filepath.Join(images, i.Dir, "Containerfile"), []byte("FROM scratch\n"), 0o600))
 	}
 	return &env{cfg: cfg, images: images, units: filepath.Join(root, "units"), f: &fake{exists: map[string]bool{}, fail: map[string]bool{}}}
 }
 
-func (e *env) run(t *testing.T, mod func(*Options)) error {
+func (e *env) run(t testing.TB, mod func(*Options)) error {
 	t.Helper()
 	e.out.Reset()
 	o := Options{Cfg: e.cfg, ImagesDir: e.images, UnitDir: e.units, DzoBinary: "/usr/bin/dzo", Out: &e.out, Exec: e.f.run, Geteuid: func() int { return 1000 }}
 	if mod != nil {
 		mod(&o)
 	}
-	return Run(context.Background(), o)
+	return Run(t.Context(), o)
 }
 
 func TestDryRunChangesNothing(t *testing.T) {
 	e := newEnv(t)
-	if err := e.run(t, func(o *Options) { o.DryRun = true }); err != nil {
-		t.Fatalf("%v\n%s", err, e.out.String())
-	}
-	if _, err := os.Stat(e.cfg.Paths.Data); !os.IsNotExist(err) {
-		t.Error("a dry run must not create directories")
-	}
-	if _, err := os.Stat(e.units); !os.IsNotExist(err) {
-		t.Error("a dry run must not write units")
-	}
-	if e.f.ran("podman build") != 0 || e.f.ran("systemctl") != 0 {
-		t.Errorf("a dry run must not build or enable anything: %v", e.f.calls)
-	}
+	require.NoError(t, e.run(t, func(o *Options) { o.DryRun = true }), e.out.String())
+	assert.NoDirExists(t, e.cfg.Paths.Data, "a dry run must not create directories")
+	assert.NoDirExists(t, e.units, "a dry run must not write units")
+	assert.Zero(t, e.f.ran("podman build"), "a dry run must not build anything: %v", e.f.calls)
+	assert.Zero(t, e.f.ran("systemctl"), "a dry run must not enable anything: %v", e.f.calls)
 	for _, want := range []string{"todo  create paths.instances", "todo  build image localhost/dzo-runtime:latest", "todo  build image localhost/dzo-steamcmd:latest", "todo  install dzo-image-refresh.timer", "warn  steam.account", "warn  site.remote"} {
-		if !strings.Contains(e.out.String(), want) {
-			t.Errorf("missing %q in:\n%s", want, e.out.String())
-		}
+		assert.Contains(t, e.out.String(), want)
 	}
 }
 
 func TestSetupCreatesBuildsAndIsIdempotent(t *testing.T) {
 	e := newEnv(t)
-	if err := e.run(t, nil); err != nil {
-		t.Fatalf("%v\n%s", err, e.out.String())
-	}
+	require.NoError(t, e.run(t, nil), e.out.String())
 	fi, err := os.Stat(e.cfg.Paths.Secrets)
-	if err != nil || fi.Mode().Perm() != 0o700 {
-		t.Errorf("secrets must be 0700: %v %v", fi, err)
-	}
-	if fi, err = os.Stat(e.cfg.Paths.Instances); err != nil || fi.Mode().Perm() != 0o750 {
-		t.Errorf("instances must be 0750: %v %v", fi, err)
-	}
-	if e.f.ran("podman build --pull=newer -t localhost/dzo-runtime:latest") != 1 || e.f.ran("podman build --pull=newer -t localhost/dzo-steamcmd:latest") != 1 {
-		t.Errorf("both images must be built once: %v", e.f.calls)
-	}
+	require.NoError(t, err)
+	assert.Equal(t, os.FileMode(0o700), fi.Mode().Perm(), "secrets must be 0700")
+	fi, err = os.Stat(e.cfg.Paths.Instances)
+	require.NoError(t, err)
+	assert.Equal(t, os.FileMode(0o750), fi.Mode().Perm(), "instances must be 0750")
+	assert.Equal(t, 1, e.f.ran("podman build --pull=newer -t localhost/dzo-runtime:latest"), "both images must be built once: %v", e.f.calls)
+	assert.Equal(t, 1, e.f.ran("podman build --pull=newer -t localhost/dzo-steamcmd:latest"), "both images must be built once: %v", e.f.calls)
 	timer, err := os.ReadFile(filepath.Join(e.units, "dzo-image-refresh.timer"))
-	if err != nil || !strings.Contains(string(timer), "OnCalendar=weekly") {
-		t.Errorf("timer: %v\n%s", err, timer)
-	}
+	require.NoError(t, err)
+	assert.Contains(t, string(timer), "OnCalendar=weekly")
 	service, _ := os.ReadFile(filepath.Join(e.units, "dzo-image-refresh.service"))
-	if !strings.Contains(string(service), "ExecStart=/usr/bin/dzo setup --images-only") {
-		t.Errorf("service:\n%s", service)
-	}
-	if e.f.ran("systemctl --user daemon-reload") != 1 || e.f.ran("systemctl --user enable --now dzo-image-refresh.timer") != 1 {
-		t.Errorf("the timer must be enabled: %v", e.f.calls)
-	}
+	assert.Contains(t, string(service), "ExecStart=/usr/bin/dzo setup --images-only")
+	assert.Equal(t, 1, e.f.ran("systemctl --user daemon-reload"), "the timer must be enabled: %v", e.f.calls)
+	assert.Equal(t, 1, e.f.ran("systemctl --user enable --now dzo-image-refresh.timer"), "the timer must be enabled: %v", e.f.calls)
 
 	// a second run: the images exist, nothing is built
 	e.f.exists["localhost/dzo-runtime:latest"], e.f.exists["localhost/dzo-steamcmd:latest"] = true, true
 	e.f.calls = nil
-	if err := e.run(t, nil); err != nil {
-		t.Fatal(err)
-	}
-	if e.f.ran("podman build") != 0 || !strings.Contains(e.out.String(), "ok    image localhost/dzo-runtime:latest exists") {
-		t.Errorf("existing images must be left alone: %v\n%s", e.f.calls, e.out.String())
-	}
+	require.NoError(t, e.run(t, nil))
+	assert.Zero(t, e.f.ran("podman build"), "existing images must be left alone: %v", e.f.calls)
+	assert.Contains(t, e.out.String(), "ok    image localhost/dzo-runtime:latest exists")
 }
 
 func TestImagesOnlyRebuildsAndPrunes(t *testing.T) {
 	e := newEnv(t)
 	e.f.exists["localhost/dzo-runtime:latest"], e.f.exists["localhost/dzo-steamcmd:latest"] = true, true
-	if err := e.run(t, func(o *Options) { o.ImagesOnly = true }); err != nil {
-		t.Fatalf("%v\n%s", err, e.out.String())
-	}
-	if e.f.ran("podman build") != 2 || e.f.ran("podman image prune -f") != 1 {
-		t.Errorf("both images must be rebuilt and the old ones pruned: %v", e.f.calls)
-	}
-	if _, err := os.Stat(e.cfg.Paths.Data); !os.IsNotExist(err) {
-		t.Error("--images-only must not touch anything else")
-	}
+	require.NoError(t, e.run(t, func(o *Options) { o.ImagesOnly = true }), e.out.String())
+	assert.Equal(t, 2, e.f.ran("podman build"), "both images must be rebuilt: %v", e.f.calls)
+	assert.Equal(t, 1, e.f.ran("podman image prune -f"), "the old ones must be pruned: %v", e.f.calls)
+	assert.NoDirExists(t, e.cfg.Paths.Data, "--images-only must not touch anything else")
 }
 
 func TestSetupRefusesRoot(t *testing.T) {
 	e := newEnv(t)
-	if err := e.run(t, func(o *Options) { o.Geteuid = func() int { return 0 } }); err == nil || !strings.Contains(e.out.String(), "not as root") {
-		t.Fatalf("root must be refused: %v\n%s", err, e.out.String())
-	}
-	if len(e.f.calls) != 0 {
-		t.Errorf("nothing may run as root: %v", e.f.calls)
-	}
+	err := e.run(t, func(o *Options) { o.Geteuid = func() int { return 0 } })
+	require.Error(t, err, "root must be refused")
+	require.Contains(t, e.out.String(), "not as root")
+	assert.Empty(t, e.f.calls, "nothing may run as root")
 }
 
 func TestSetupReportsProblems(t *testing.T) {
 	e := newEnv(t)
-	if err := os.Remove(filepath.Join(e.images, "runtime", "Containerfile")); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, os.Remove(filepath.Join(e.images, "runtime", "Containerfile")))
 	e.f.fail["podman build --pull=newer -t localhost/dzo-steamcmd"] = true
 	err := e.run(t, nil)
-	if err == nil || !strings.Contains(err.Error(), "2 problem") {
-		t.Fatalf("want two problems, got %v\n%s", err, e.out.String())
-	}
+	require.ErrorContains(t, err, "2 problem", e.out.String())
 	for _, want := range []string{"error runtime/Containerfile is missing", "error build image localhost/dzo-steamcmd:latest", "it broke"} {
-		if !strings.Contains(strings.ReplaceAll(e.out.String(), e.images+"/", ""), want) {
-			t.Errorf("missing %q in:\n%s", want, e.out.String())
-		}
+		assert.Contains(t, strings.ReplaceAll(e.out.String(), e.images+"/", ""), want)
 	}
 
 	// no podman at all
@@ -193,38 +156,28 @@ func TestSetupReportsProblems(t *testing.T) {
 	err = e.run(t, func(o *Options) {
 		o.Exec = func(context.Context, string, ...string) ([]byte, error) { return nil, exec.ErrNotFound }
 	})
-	if err == nil || !strings.Contains(e.out.String(), "podman is not installed") {
-		t.Errorf("a missing podman must be an error: %v\n%s", err, e.out.String())
-	}
+	require.Error(t, err, "a missing podman must be an error")
+	assert.Contains(t, e.out.String(), "podman is not installed")
 }
 
 func TestSetupWarnsWhenSystemdIsUnavailable(t *testing.T) {
 	e := newEnv(t)
 	e.f.fail["systemctl"] = true
-	if err := e.run(t, nil); err != nil {
-		t.Fatalf("a missing user session is a warning, not an error: %v", err)
-	}
-	if !strings.Contains(e.out.String(), "warn  wrote the dzo-image-refresh units") {
-		t.Errorf("output:\n%s", e.out.String())
-	}
+	require.NoError(t, e.run(t, nil), "a missing user session is a warning, not an error")
+	assert.Contains(t, e.out.String(), "warn  wrote the dzo-image-refresh units")
 }
 
 func TestSetupSteamHandOff(t *testing.T) {
 	e := newEnv(t)
 	e.cfg.Steam.Account = "bob"
-	if err := e.run(t, func(o *Options) { o.DryRun = true }); err != nil || !strings.Contains(e.out.String(), "todo  log in to Steam") || !strings.Contains(e.out.String(), "dzo steam login --user bob") {
-		t.Fatalf("not logged in must hand off: %v\n%s", err, e.out.String())
-	}
+	require.NoError(t, e.run(t, func(o *Options) { o.DryRun = true }), "not logged in must hand off")
+	require.Contains(t, e.out.String(), "todo  log in to Steam")
+	require.Contains(t, e.out.String(), "dzo steam login --user bob")
 	now := time.Now()
-	if err := os.MkdirAll(e.cfg.Paths.Secrets, 0o700); err != nil {
-		t.Fatal(err)
-	}
-	if err := (steam.Status{Account: "bob", LastSuccessAt: &now}).Save(filepath.Join(e.cfg.Paths.Secrets, "steam-status.json")); err != nil {
-		t.Fatal(err)
-	}
-	if err := e.run(t, func(o *Options) { o.DryRun = true }); err != nil || !strings.Contains(e.out.String(), "ok    steam account bob is logged in") {
-		t.Fatalf("a logged-in account is fine: %v\n%s", err, e.out.String())
-	}
+	require.NoError(t, os.MkdirAll(e.cfg.Paths.Secrets, 0o700))
+	require.NoError(t, (steam.Status{Account: "bob", LastSuccessAt: &now}).Save(filepath.Join(e.cfg.Paths.Secrets, "steam-status.json")))
+	require.NoError(t, e.run(t, func(o *Options) { o.DryRun = true }), "a logged-in account is fine")
+	require.Contains(t, e.out.String(), "ok    steam account bob is logged in")
 }
 
 func TestSetupClonesTheSiteRepo(t *testing.T) {
@@ -234,47 +187,34 @@ func TestSetupClonesTheSiteRepo(t *testing.T) {
 		{"init", "-q", "-b", "main", origin},
 		{"-C", origin, "-c", "user.name=t", "-c", "user.email=t@example.invalid", "commit", "-q", "--allow-empty", "-m", "x"},
 	} {
-		if out, err := exec.Command("git", args...).CombinedOutput(); err != nil { //nolint:gosec // test
-			t.Fatalf("git %v: %v\n%s", args, err, out)
-		}
+		out, err := exec.CommandContext(t.Context(), "git", args...).CombinedOutput() //nolint:gosec // test
+		require.NoError(t, err, "git %v: %s", args, out)
 	}
 	e.cfg.Site.Remote = origin
-	if err := e.run(t, func(o *Options) { o.DryRun = true }); err != nil || !strings.Contains(e.out.String(), "todo  clone") {
-		t.Fatalf("dry run: %v\n%s", err, e.out.String())
-	}
-	if err := e.run(t, nil); err != nil || !strings.Contains(e.out.String(), "ok    cloned the site repo") {
-		t.Fatalf("clone: %v\n%s", err, e.out.String())
-	}
-	if err := e.run(t, nil); err != nil || !strings.Contains(e.out.String(), "ok    site repo") {
-		t.Fatalf("second run: %v\n%s", err, e.out.String())
-	}
+	require.NoError(t, e.run(t, func(o *Options) { o.DryRun = true }), "dry run")
+	require.Contains(t, e.out.String(), "todo  clone")
+	require.NoError(t, e.run(t, nil), "clone")
+	require.Contains(t, e.out.String(), "ok    cloned the site repo")
+	require.NoError(t, e.run(t, nil), "second run")
+	require.Contains(t, e.out.String(), "ok    site repo")
 	e.cfg.Site.Remote = filepath.Join(t.TempDir(), "nothing")
 	e.cfg.Paths.Site = filepath.Join(t.TempDir(), "other")
-	if err := e.run(t, nil); err == nil || !strings.Contains(e.out.String(), "error clone the site repo") {
-		t.Fatalf("a failing clone must be an error: %v\n%s", err, e.out.String())
-	}
+	require.Error(t, e.run(t, nil), "a failing clone must be an error")
+	require.Contains(t, e.out.String(), "error clone the site repo")
 }
 
 func TestPathsProblems(t *testing.T) {
 	e := newEnv(t)
-	if err := os.MkdirAll(filepath.Dir(e.cfg.Paths.Cache), 0o750); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(e.cfg.Paths.Cache, []byte("x"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if err := e.run(t, func(o *Options) { o.DryRun = true }); err == nil || !strings.Contains(e.out.String(), "paths.cache") || !strings.Contains(e.out.String(), "is not a directory") {
-		t.Fatalf("a file where a directory belongs must be an error: %v\n%s", err, e.out.String())
-	}
-	if e := newEnv(t); true {
-		if os.Geteuid() != 0 {
-			if err := os.MkdirAll(e.cfg.Paths.Data, 0o500); err != nil {
-				t.Fatal(err)
-			}
-			if err := e.run(t, nil); err == nil || !strings.Contains(e.out.String(), "not writable") && !strings.Contains(e.out.String(), "create paths") {
-				t.Fatalf("a read-only data dir must be an error: %v\n%s", err, e.out.String())
-			}
-		}
+	require.NoError(t, os.MkdirAll(filepath.Dir(e.cfg.Paths.Cache), 0o750))
+	require.NoError(t, os.WriteFile(e.cfg.Paths.Cache, []byte("x"), 0o600))
+	require.Error(t, e.run(t, func(o *Options) { o.DryRun = true }), "a file where a directory belongs must be an error")
+	require.Contains(t, e.out.String(), "paths.cache")
+	require.Contains(t, e.out.String(), "is not a directory")
+	if os.Geteuid() != 0 {
+		e := newEnv(t)
+		require.NoError(t, os.MkdirAll(e.cfg.Paths.Data, 0o500))
+		require.Error(t, e.run(t, nil), "a read-only data dir must be an error")
+		assert.True(t, strings.Contains(e.out.String(), "not writable") || strings.Contains(e.out.String(), "create paths"), e.out.String())
 	}
 }
 
@@ -292,9 +232,7 @@ func TestRefreshCommand(t *testing.T) {
 		{"percent", runner{Options: Options{ImagesDir: DefaultImagesDir, ConfigPath: "/x/100%.yaml"}}, `/usr/bin/dzo setup --images-only --config "/x/100%%.yaml"`},
 	}
 	for _, c := range cases {
-		if got := c.r.refreshCommand("/usr/bin/dzo"); got != c.want {
-			t.Errorf("%s: %q, want %q", c.name, got, c.want)
-		}
+		assert.Equal(t, c.want, c.r.refreshCommand("/usr/bin/dzo"), c.name)
 	}
 }
 
@@ -311,14 +249,10 @@ func TestSetupChecksTheUserCanReadItsJournal(t *testing.T) {
 		{"system user in adm", 998, []string{"adm"}, "member of adm"},
 	} {
 		e := newEnv(t)
-		if err := e.run(t, func(o *Options) {
+		require.NoError(t, e.run(t, func(o *Options) {
 			o.Geteuid = func() int { return c.uid }
 			o.Groups = func() []string { return c.groups }
-		}); err != nil {
-			t.Fatalf("%s: %v\n%s", c.name, err, e.out.String())
-		}
-		if !strings.Contains(e.out.String(), c.want) {
-			t.Errorf("%s: output lacks %q:\n%s", c.name, c.want, e.out.String())
-		}
+		}), "%s: %s", c.name, e.out.String())
+		assert.Contains(t, e.out.String(), c.want, c.name)
 	}
 }

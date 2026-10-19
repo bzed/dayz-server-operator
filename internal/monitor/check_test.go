@@ -4,7 +4,6 @@
 package monitor
 
 import (
-	"context"
 	"encoding/json"
 	"net"
 	"net/http"
@@ -12,99 +11,75 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestEvaluateInstanceDown(t *testing.T) {
 	r := EvaluateInstance(InstanceStatus{Name: "x", Up: false})
-	if r.Status != StatusCritical {
-		t.Errorf("Status = %v, want Critical", r.Status)
-	}
+	assert.Equal(t, StatusCritical, r.Status)
 }
 
 func TestEvaluateInstanceUnhealthy(t *testing.T) {
 	r := EvaluateInstance(InstanceStatus{Name: "x", Up: true, Health: HealthUnhealthy})
-	if r.Status != StatusCritical {
-		t.Errorf("Status = %v, want Critical", r.Status)
-	}
+	assert.Equal(t, StatusCritical, r.Status)
 }
 
 func TestEvaluateInstanceStarting(t *testing.T) {
 	r := EvaluateInstance(InstanceStatus{Name: "x", Up: true, Health: HealthStarting})
-	if r.Status != StatusWarning {
-		t.Errorf("Status = %v, want Warning", r.Status)
-	}
+	assert.Equal(t, StatusWarning, r.Status)
 }
 
 func TestEvaluateInstanceRenderFailed(t *testing.T) {
 	r := EvaluateInstance(InstanceStatus{Name: "x", Up: true, Health: HealthHealthy, LastRenderSuccess: false})
-	if r.Status != StatusWarning {
-		t.Errorf("Status = %v, want Warning", r.Status)
-	}
+	assert.Equal(t, StatusWarning, r.Status)
 }
 
 func TestEvaluateInstanceOK(t *testing.T) {
 	r := EvaluateInstance(InstanceStatus{Name: "x", Up: true, Health: HealthHealthy, LastRenderSuccess: true, Players: 3, MaxPlayers: 60})
-	if r.Status != StatusOK {
-		t.Errorf("Status = %v, want OK", r.Status)
-	}
-	if !strings.Contains(r.Output(), "3/60") {
-		t.Errorf("Output() = %q", r.Output())
-	}
+	assert.Equal(t, StatusOK, r.Status)
+	assert.Contains(t, r.Output(), "3/60")
 }
 
 func TestEvaluateGlobalSteamAuthRequired(t *testing.T) {
 	r := EvaluateGlobal(GlobalStatus{SteamAuthRequired: true})
-	if r.Status != StatusWarning {
-		t.Errorf("Status = %v, want Warning", r.Status)
-	}
+	assert.Equal(t, StatusWarning, r.Status)
 }
 
 func TestEvaluateGlobalSteamSessionInvalid(t *testing.T) {
 	r := EvaluateGlobal(GlobalStatus{SteamSessionValid: false})
-	if r.Status != StatusWarning {
-		t.Errorf("Status = %v, want Warning", r.Status)
-	}
+	assert.Equal(t, StatusWarning, r.Status)
 }
 
 func TestEvaluateGlobalOK(t *testing.T) {
 	r := EvaluateGlobal(GlobalStatus{SteamSessionValid: true})
-	if r.Status != StatusOK {
-		t.Errorf("Status = %v, want OK", r.Status)
-	}
+	assert.Equal(t, StatusOK, r.Status)
 }
 
 func TestCheckResultOutputFormat(t *testing.T) {
 	r := CheckResult{Status: StatusOK, Message: "all good", Perf: []PerfDatum{{Label: "players", Value: 5}}}
 	out := r.Output()
-	if !strings.HasPrefix(out, "OK: all good | ") {
-		t.Errorf("Output() = %q", out)
-	}
-	if !strings.Contains(out, "'players'=5") {
-		t.Errorf("Output() = %q", out)
-	}
+	assert.True(t, strings.HasPrefix(out, "OK: all good | "), "Output() = %q", out)
+	assert.Contains(t, out, "'players'=5")
 }
 
 func TestCheckResultOutputNoPerf(t *testing.T) {
 	r := CheckResult{Status: StatusCritical, Message: "down"}
-	if r.Output() != "CRITICAL: down" {
-		t.Errorf("Output() = %q", r.Output())
-	}
+	assert.Equal(t, "CRITICAL: down", r.Output())
 }
 
 func TestPerfDatumWithThresholds(t *testing.T) {
 	warn, crit := 10.0, 20.0
 	p := PerfDatum{Label: "x", Value: 5, Warn: &warn, Crit: &crit}
-	if got := p.String(); got != "'x'=5;10;20" {
-		t.Errorf("String() = %q", got)
-	}
+	assert.Equal(t, "'x'=5;10;20", p.String())
 }
 
 func TestStatusExitCodes(t *testing.T) {
 	cases := map[Status]int{StatusOK: 0, StatusWarning: 1, StatusCritical: 2, StatusUnknown: 3}
 	for s, want := range cases {
-		if got := s.ExitCode(); got != want {
-			t.Errorf("%v.ExitCode() = %d, want %d", s, got, want)
-		}
+		got := s.ExitCode()
+		assert.Equal(t, want, got)
 	}
 }
 
@@ -114,13 +89,9 @@ func TestCheckRemoteInstance(t *testing.T) {
 	}))
 	defer server.Close()
 
-	result, err := CheckRemoteInstance(context.Background(), server.URL, time.Second)
-	if err != nil {
-		t.Fatalf("CheckRemoteInstance: %v", err)
-	}
-	if result.Status != StatusOK {
-		t.Errorf("Status = %v", result.Status)
-	}
+	result, err := CheckRemoteInstance(t.Context(), server.URL, time.Second)
+	require.NoError(t, err, "CheckRemoteInstance")
+	assert.Equal(t, StatusOK, result.Status)
 }
 
 func TestCheckRemoteGlobal(t *testing.T) {
@@ -129,13 +100,9 @@ func TestCheckRemoteGlobal(t *testing.T) {
 	}))
 	defer server.Close()
 
-	result, err := CheckRemoteGlobal(context.Background(), server.URL, time.Second)
-	if err != nil {
-		t.Fatalf("CheckRemoteGlobal: %v", err)
-	}
-	if result.Status != StatusOK {
-		t.Errorf("Status = %v", result.Status)
-	}
+	result, err := CheckRemoteGlobal(t.Context(), server.URL, time.Second)
+	require.NoError(t, err, "CheckRemoteGlobal")
+	assert.Equal(t, StatusOK, result.Status)
 }
 
 func TestCheckRemoteHTTPError(t *testing.T) {
@@ -144,9 +111,8 @@ func TestCheckRemoteHTTPError(t *testing.T) {
 	}))
 	defer server.Close()
 
-	if _, err := CheckRemoteInstance(context.Background(), server.URL, time.Second); err == nil {
-		t.Fatal("expected an error for a non-200 response")
-	}
+	_, err := CheckRemoteInstance(t.Context(), server.URL, time.Second)
+	require.Error(t, err, "expected an error for a non-200 response")
 }
 
 func TestCheckRemoteInvalidJSON(t *testing.T) {
@@ -155,29 +121,23 @@ func TestCheckRemoteInvalidJSON(t *testing.T) {
 	}))
 	defer server.Close()
 
-	if _, err := CheckRemoteInstance(context.Background(), server.URL, time.Second); err == nil {
-		t.Fatal("expected an error for invalid JSON")
-	}
+	_, err := CheckRemoteInstance(t.Context(), server.URL, time.Second)
+	require.Error(t, err, "expected an error for invalid JSON")
 }
 
 func TestCheckRemoteUnreachable(t *testing.T) {
 	conn, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("listen: %v", err)
-	}
+	require.NoError(t, err, "listen")
 	addr := conn.Addr().String()
 	_ = conn.Close()
 
-	if _, err := CheckRemoteInstance(context.Background(), "http://"+addr, 500*time.Millisecond); err == nil {
-		t.Fatal("expected an error for an unreachable server")
-	}
+	_, err = CheckRemoteInstance(t.Context(), "http://"+addr, 500*time.Millisecond)
+	require.Error(t, err, "expected an error for an unreachable server")
 }
 
 func TestCheckA2SSuccess(t *testing.T) {
 	udpConn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 0})
-	if err != nil {
-		t.Fatalf("listen: %v", err)
-	}
+	require.NoError(t, err, "listen")
 	defer func() { _ = udpConn.Close() }()
 	go func() {
 		buf := make([]byte, 4096)
@@ -196,21 +156,15 @@ func TestCheckA2SSuccess(t *testing.T) {
 	}()
 
 	result := CheckA2S(udpConn.LocalAddr().String(), 2*time.Second)
-	if result.Status != StatusOK {
-		t.Errorf("Status = %v, message = %q", result.Status, result.Message)
-	}
+	assert.Equal(t, StatusOK, result.Status)
 }
 
 func TestCheckA2SFailure(t *testing.T) {
 	conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 0})
-	if err != nil {
-		t.Fatalf("listen: %v", err)
-	}
+	require.NoError(t, err, "listen")
 	addr := conn.LocalAddr().String()
 	_ = conn.Close()
 
 	result := CheckA2S(addr, 300*time.Millisecond)
-	if result.Status != StatusCritical {
-		t.Errorf("Status = %v, want Critical", result.Status)
-	}
+	assert.Equal(t, StatusCritical, result.Status)
 }

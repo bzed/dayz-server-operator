@@ -6,65 +6,52 @@ package a2s
 import (
 	"bytes"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestInfoRequestNoChallenge(t *testing.T) {
 	req := InfoRequest(nil)
-	if !bytes.HasPrefix(req, []byte{0xFF, 0xFF, 0xFF, 0xFF, 'T'}) {
-		t.Fatalf("request header = %v", req[:5])
-	}
-	if !bytes.Contains(req, []byte("Source Engine Query\x00")) {
-		t.Errorf("request missing query string: %v", req)
-	}
+	require.True(t, bytes.HasPrefix(req, []byte{0xFF, 0xFF, 0xFF, 0xFF, 'T'}), "request header = %v", req[:5])
+	assert.Contains(t, string(req), "Source Engine Query\x00", "request missing query string")
 }
 
 func TestInfoRequestWithChallenge(t *testing.T) {
 	req := InfoRequest([]byte{1, 2, 3, 4})
-	if !bytes.HasSuffix(req, []byte{1, 2, 3, 4}) {
-		t.Errorf("request should end with the challenge bytes: %v", req)
-	}
+	assert.True(t, bytes.HasSuffix(req, []byte{1, 2, 3, 4}), "request should end with the challenge bytes: %v", req)
 }
 
 func TestPacketKind(t *testing.T) {
 	packet := append([]byte{0xFF, 0xFF, 0xFF, 0xFF, 'I'}, []byte("body")...)
 	kind, body, err := PacketKind(packet)
-	if err != nil {
-		t.Fatalf("PacketKind: %v", err)
-	}
-	if kind != 'I' || string(body) != "body" {
-		t.Errorf("kind=%c body=%q", kind, body)
-	}
+	require.NoError(t, err, "PacketKind")
+	assert.Equal(t, byte('I'), kind)
+	assert.Equal(t, "body", string(body))
 }
 
 func TestPacketKindRejectsShort(t *testing.T) {
-	if _, _, err := PacketKind([]byte{0xFF, 0xFF}); err == nil {
-		t.Fatal("expected an error for a too-short packet")
-	}
+	_, _, err := PacketKind([]byte{0xFF, 0xFF})
+	require.Error(t, err, "expected an error for a too-short packet")
 }
 
 func TestPacketKindRejectsBadHeader(t *testing.T) {
-	if _, _, err := PacketKind([]byte{0, 0, 0, 0, 'I'}); err == nil {
-		t.Fatal("expected an error for a bad header")
-	}
+	_, _, err := PacketKind([]byte{0, 0, 0, 0, 'I'})
+	require.Error(t, err, "expected an error for a bad header")
 }
 
 func TestChallengeNumber(t *testing.T) {
 	c, err := ChallengeNumber([]byte{9, 8, 7, 6, 0xFF})
-	if err != nil {
-		t.Fatalf("ChallengeNumber: %v", err)
-	}
-	if !bytes.Equal(c, []byte{9, 8, 7, 6}) {
-		t.Errorf("ChallengeNumber = %v", c)
-	}
+	require.NoError(t, err, "ChallengeNumber")
+	assert.Equal(t, []byte{9, 8, 7, 6}, c)
 }
 
 func TestChallengeNumberTooShort(t *testing.T) {
-	if _, err := ChallengeNumber([]byte{1, 2}); err == nil {
-		t.Fatal("expected an error for a too-short challenge body")
-	}
+	_, err := ChallengeNumber([]byte{1, 2})
+	require.Error(t, err, "expected an error for a too-short challenge body")
 }
 
-func buildInfoBody(t *testing.T, info InfoResponse) []byte {
+func buildInfoBody(t testing.TB, info InfoResponse) []byte {
 	t.Helper()
 	var b bytes.Buffer
 	b.WriteByte(info.Protocol)
@@ -99,26 +86,20 @@ func TestParseInfoResponse(t *testing.T) {
 		Version: "1.29.123456",
 	}
 	got, err := ParseInfoResponse(buildInfoBody(t, want))
-	if err != nil {
-		t.Fatalf("ParseInfoResponse: %v", err)
-	}
-	if got != want {
-		t.Errorf("ParseInfoResponse() = %+v, want %+v", got, want)
-	}
+	require.NoError(t, err, "ParseInfoResponse")
+	assert.Equal(t, want, got)
 }
 
 func TestParseInfoResponseTruncated(t *testing.T) {
 	full := buildInfoBody(t, InfoResponse{Name: "x", Map: "y", Folder: "z", Game: "w", Version: "1"})
 	for cut := 0; cut < len(full); cut++ {
-		if _, err := ParseInfoResponse(full[:cut]); err == nil {
-			t.Errorf("cut=%d: expected an error for truncated input", cut)
-		}
+		_, err := ParseInfoResponse(full[:cut])
+		assert.Error(t, err, "cut=%d: expected an error for truncated input", cut)
 	}
 }
 
 func TestParseInfoResponseUnterminatedString(t *testing.T) {
 	// Protocol byte + an unterminated name string.
-	if _, err := ParseInfoResponse([]byte{17, 'h', 'i'}); err == nil {
-		t.Fatal("expected an error for an unterminated string")
-	}
+	_, err := ParseInfoResponse([]byte{17, 'h', 'i'})
+	require.Error(t, err, "expected an error for an unterminated string")
 }

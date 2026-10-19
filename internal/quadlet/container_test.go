@@ -7,6 +7,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestRenderContainerRestartLimit(t *testing.T) {
@@ -15,26 +18,16 @@ func TestRenderContainerRestartLimit(t *testing.T) {
 		RestartLimitBurst: 5, RestartLimitInterval: 30 * time.Minute,
 	}
 	out, err := RenderContainer(spec)
-	if err != nil {
-		t.Fatalf("RenderContainer: %v", err)
-	}
-	if !strings.Contains(out, "StartLimitBurst=5") {
-		t.Errorf("output missing StartLimitBurst: %s", out)
-	}
-	if !strings.Contains(out, "StartLimitIntervalSec=30m") {
-		t.Errorf("output missing StartLimitIntervalSec: %s", out)
-	}
+	require.NoError(t, err)
+	assert.Contains(t, out, "StartLimitBurst=5")
+	assert.Contains(t, out, "StartLimitIntervalSec=30m")
 }
 
 func TestRenderContainerOmitsRestartLimitWhenZero(t *testing.T) {
 	spec := ContainerSpec{Name: "dzo-deerisle", Image: "localhost/dzo-runtime:latest", Network: NetworkHost}
 	out, err := RenderContainer(spec)
-	if err != nil {
-		t.Fatalf("RenderContainer: %v", err)
-	}
-	if strings.Contains(out, "StartLimit") {
-		t.Errorf("output should omit StartLimit* when unset: %s", out)
-	}
+	require.NoError(t, err)
+	assert.NotContains(t, out, "StartLimit", "should omit StartLimit* when unset")
 }
 
 func TestRenderContainerHostNetwork(t *testing.T) {
@@ -62,9 +55,7 @@ func TestRenderContainerHostNetwork(t *testing.T) {
 	}
 
 	out, err := RenderContainer(spec)
-	if err != nil {
-		t.Fatalf("RenderContainer: %v", err)
-	}
+	require.NoError(t, err)
 
 	for _, want := range []string{
 		"[Unit]",
@@ -92,17 +83,15 @@ func TestRenderContainerHostNetwork(t *testing.T) {
 		"[Install]",
 		"WantedBy=default.target",
 	} {
-		if !strings.Contains(out, want) {
-			t.Errorf("output missing %q\nfull output:\n%s", want, out)
-		}
+		assert.Contains(t, out, want)
 	}
 
 	// Environment keys must be sorted (determinism, NFR-02).
 	aIdx := strings.Index(out, "Environment=A=1")
 	bIdx := strings.Index(out, "Environment=B=2")
-	if aIdx == -1 || bIdx == -1 || aIdx > bIdx {
-		t.Errorf("Environment lines not in sorted order:\n%s", out)
-	}
+	require.NotEqual(t, -1, aIdx)
+	require.NotEqual(t, -1, bIdx)
+	assert.Less(t, aIdx, bIdx, "Environment lines not in sorted order")
 }
 
 func TestRenderContainerPublishNetwork(t *testing.T) {
@@ -116,18 +105,10 @@ func TestRenderContainerPublishNetwork(t *testing.T) {
 		},
 	}
 	out, err := RenderContainer(spec)
-	if err != nil {
-		t.Fatalf("RenderContainer: %v", err)
-	}
-	if !strings.Contains(out, "PublishPort=3302:2302/udp\n") {
-		t.Errorf("missing udp port mapping:\n%s", out)
-	}
-	if !strings.Contains(out, "PublishPort=3303:2303/tcp\n") {
-		t.Errorf("missing default-tcp port mapping:\n%s", out)
-	}
-	if strings.Contains(out, "Network=host") {
-		t.Errorf("publish network should not set Network=host:\n%s", out)
-	}
+	require.NoError(t, err)
+	assert.Contains(t, out, "PublishPort=3302:2302/udp\n", "udp port mapping")
+	assert.Contains(t, out, "PublishPort=3303:2303/tcp\n", "default-tcp port mapping")
+	assert.NotContains(t, out, "Network=host", "publish network should not set Network=host")
 }
 
 func TestRenderContainerMinimalOmitsEmptySections(t *testing.T) {
@@ -137,15 +118,9 @@ func TestRenderContainerMinimalOmitsEmptySections(t *testing.T) {
 		Network: NetworkHost,
 	}
 	out, err := RenderContainer(spec)
-	if err != nil {
-		t.Fatalf("RenderContainer: %v", err)
-	}
-	if strings.Contains(out, "HealthCmd") {
-		t.Errorf("no health config was set, should not appear:\n%s", out)
-	}
-	if strings.Contains(out, "Description=") {
-		t.Errorf("empty description section should be omitted:\n%s", out)
-	}
+	require.NoError(t, err)
+	assert.NotContains(t, out, "HealthCmd", "no health config was set")
+	assert.NotContains(t, out, "Description=", "empty description section should be omitted")
 }
 
 func TestRenderContainerDeterministic(t *testing.T) {
@@ -156,16 +131,10 @@ func TestRenderContainerDeterministic(t *testing.T) {
 		Environment: map[string]string{"Z": "1", "Y": "2", "X": "3"},
 	}
 	out1, err := RenderContainer(spec)
-	if err != nil {
-		t.Fatalf("RenderContainer: %v", err)
-	}
+	require.NoError(t, err)
 	out2, err := RenderContainer(spec)
-	if err != nil {
-		t.Fatalf("RenderContainer: %v", err)
-	}
-	if out1 != out2 {
-		t.Fatalf("RenderContainer is not deterministic:\n%s\nvs\n%s", out1, out2)
-	}
+	require.NoError(t, err)
+	require.Equal(t, out1, out2, "RenderContainer is not deterministic")
 }
 
 func TestValidateRejectsMissingFields(t *testing.T) {
@@ -176,16 +145,13 @@ func TestValidateRejectsMissingFields(t *testing.T) {
 		{Name: "n", Image: "img", Network: NetworkHost, Volumes: []Volume{{Source: ""}}},
 	}
 	for i, c := range cases {
-		if err := c.Validate(); err == nil {
-			t.Errorf("case %d: expected a validation error for %+v", i, c)
-		}
+		assert.Error(t, c.Validate(), "case %d: expected a validation error for %+v", i, c)
 	}
 }
 
 func TestRenderContainerValidatesFirst(t *testing.T) {
-	if _, err := RenderContainer(ContainerSpec{}); err == nil {
-		t.Fatal("expected an error for an empty spec")
-	}
+	_, err := RenderContainer(ContainerSpec{})
+	require.Error(t, err, "expected an error for an empty spec")
 }
 
 func TestFormatDurationUnits(t *testing.T) {
@@ -196,9 +162,7 @@ func TestFormatDurationUnits(t *testing.T) {
 		45 * time.Minute: "45m",
 	}
 	for d, want := range cases {
-		if got := formatDuration(d); got != want {
-			t.Errorf("formatDuration(%v) = %q, want %q", d, got, want)
-		}
+		assert.Equal(t, want, formatDuration(d), "formatDuration(%v)", d)
 	}
 }
 
@@ -215,9 +179,7 @@ func TestRenderContainerExecServiceAndNotify(t *testing.T) {
 		TimeoutStartSec: time.Hour,
 	}
 	out, err := RenderContainer(spec)
-	if err != nil {
-		t.Fatalf("RenderContainer: %v", err)
-	}
+	require.NoError(t, err)
 	for _, want := range []string{
 		"WorkingDir=/dayz\n",
 		`Exec=./DayZServer "-mod=@1;@2" "-name=a \"b\" 100%%" -p=$$X` + "\n",
@@ -226,25 +188,17 @@ func TestRenderContainerExecServiceAndNotify(t *testing.T) {
 		"RestartSec=15s\n",
 		"TimeoutStartSec=1h\n",
 	} {
-		if !strings.Contains(out, want) {
-			t.Errorf("output missing %q:\n%s", want, out)
-		}
+		assert.Contains(t, out, want)
 	}
-	if n := strings.Count(out, "Exec="); n != 1 {
-		t.Errorf("want exactly one Exec= line, got %d", n)
-	}
+	assert.Equal(t, 1, strings.Count(out, "Exec="), "want exactly one Exec= line")
 }
 
 func TestRenderContainerPostStop(t *testing.T) {
 	spec := ContainerSpec{Name: "dzo-x", Image: "localhost/dzo-runtime:latest", Network: NetworkHost}
 	spec.PostStop = []string{"/usr/bin/dzo instance hook x post_stop"}
 	out, err := RenderContainer(spec)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(out, "ExecStopPost=-/usr/bin/dzo instance hook x post_stop\n") {
-		t.Errorf("a post_stop hook must not fail the stop:\n%s", out)
-	}
+	require.NoError(t, err)
+	assert.Contains(t, out, "ExecStopPost=-/usr/bin/dzo instance hook x post_stop\n", "a post_stop hook must not fail the stop")
 }
 
 func TestRenderContainerPublishHostAddress(t *testing.T) {
@@ -255,31 +209,19 @@ func TestRenderContainerPublishHostAddress(t *testing.T) {
 			{HostIP: "::1", HostPort: 3304, ContainerPort: 3304, Protocol: "udp"},
 		},
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	for _, want := range []string{"PublishPort=127.0.0.1:3303:3303/udp\n", "PublishPort=[::1]:3304:3304/udp\n"} {
-		if !strings.Contains(out, want) {
-			t.Errorf("missing %q:\n%s", want, out)
-		}
+		assert.Contains(t, out, want)
 	}
 }
 
 func TestRenderContainerCoreDumps(t *testing.T) {
 	spec := ContainerSpec{Name: "dzo-deerisle", Image: "localhost/dzo-runtime:latest", Network: NetworkHost}
 	out, err := RenderContainer(spec)
-	if err != nil {
-		t.Fatalf("RenderContainer: %v", err)
-	}
-	if !strings.Contains(out, "Ulimit=core=0\n") {
-		t.Errorf("a crashing server must not dump core by default:\n%s", out)
-	}
+	require.NoError(t, err)
+	assert.Contains(t, out, "Ulimit=core=0\n", "a crashing server must not dump core by default")
 	spec.CoreDumps = true
 	out, err = RenderContainer(spec)
-	if err != nil {
-		t.Fatalf("RenderContainer: %v", err)
-	}
-	if strings.Contains(out, "Ulimit=") {
-		t.Errorf("CoreDumps must leave the core limit alone:\n%s", out)
-	}
+	require.NoError(t, err)
+	assert.NotContains(t, out, "Ulimit=", "CoreDumps must leave the core limit alone")
 }

@@ -3,13 +3,17 @@
 
 package steam
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
 
 func TestClassifyPasswordPrompt(t *testing.T) {
 	event, kind, _ := classify("Logging in user 'bob' to Steam Public...\npassword: ")
-	if event != EventPrompt || kind != PromptPassword {
-		t.Fatalf("event=%v kind=%v, want EventPrompt/PromptPassword", event, kind)
-	}
+	require.Equal(t, EventPrompt, event)
+	require.Equal(t, PromptPassword, kind)
 }
 
 func TestClassifyGuardCodePrompt(t *testing.T) {
@@ -20,17 +24,14 @@ func TestClassifyGuardCodePrompt(t *testing.T) {
 	}
 	for _, c := range cases {
 		event, kind, _ := classify(c)
-		if event != EventPrompt || kind != PromptGuardCode {
-			t.Errorf("classify(%q) = event=%v kind=%v, want EventPrompt/PromptGuardCode", c, event, kind)
-		}
+		require.Equal(t, EventPrompt, event)
+		assert.Equal(t, PromptGuardCode, kind)
 	}
 }
 
 func TestClassifyAppConfirmWaiting(t *testing.T) {
 	event, _, _ := classify("Please confirm this login in the Steam Mobile app...")
-	if event != EventAppConfirmWaiting {
-		t.Fatalf("event = %v, want EventAppConfirmWaiting", event)
-	}
+	require.Equal(t, EventAppConfirmWaiting, event)
 }
 
 func TestClassifySuccess(t *testing.T) {
@@ -40,9 +41,7 @@ func TestClassifySuccess(t *testing.T) {
 	}
 	for _, c := range cases {
 		event, _, _ := classify(c)
-		if event != EventSuccess {
-			t.Errorf("classify(%q) = %v, want EventSuccess", c, event)
-		}
+		assert.Equal(t, EventSuccess, event)
 	}
 }
 
@@ -53,9 +52,8 @@ func TestClassifySuccessWithColourCodes(t *testing.T) {
 		"Waiting for user info...\x1b[0mOK\n",
 	}
 	for _, c := range cases {
-		if event, _, _ := classify(c); event != EventSuccess {
-			t.Errorf("classify(%q) = %v, want EventSuccess", c, event)
-		}
+		event, _, _ := classify(c)
+		assert.Equal(t, EventSuccess, event)
 	}
 }
 
@@ -70,40 +68,35 @@ func TestClassifyFailures(t *testing.T) {
 	}
 	for input, want := range cases {
 		event, _, reason := classify(input)
-		if event != EventFailure {
-			t.Errorf("classify(%q) event = %v, want EventFailure", input, event)
+		if !assert.Equal(t, EventFailure, event, "classify(%q) event", input) {
 			continue
 		}
-		if reason != want {
-			t.Errorf("classify(%q) reason = %v, want %v", input, reason, want)
-		}
+		assert.Equal(t, want, reason)
 	}
 }
 
 func TestClassifyCachedCredentialsNotFoundIsNoFailure(t *testing.T) {
 	// Real steamcmd: the line is followed by the password prompt.
-	if event, _, _ := classify("Cached credentials not found.\n\n"); event != EventNone {
-		t.Fatalf("event = %v, want EventNone", event)
-	}
-	if event, kind, _ := classify("Cached credentials not found.\n\npassword: "); event != EventPrompt || kind != PromptPassword {
-		t.Fatalf("event=%v kind=%v, want the password prompt", event, kind)
-	}
+	event, _, _ := classify("Cached credentials not found.\n\n")
+	require.Equal(t, EventNone, event)
+	event, kind, _ := classify("Cached credentials not found.\n\npassword: ")
+	require.Equal(t, EventPrompt, event)
+	require.Equal(t, PromptPassword, kind)
 }
 
 func TestClassifyNoneOnUnrecognisedOutput(t *testing.T) {
 	event, kind, reason := classify("Redirecting stderr to '/root/Steam/logs/stderr.txt'\n")
-	if event != EventNone || kind != PromptNone || reason != "" {
-		t.Fatalf("event=%v kind=%v reason=%v, want all zero", event, kind, reason)
-	}
+	require.Equal(t, EventNone, event)
+	require.Equal(t, PromptNone, kind)
+	require.Empty(t, reason)
 }
 
 func TestClassifyRateLimitBeatsGenericFailure(t *testing.T) {
 	// "FAILED" alone would match the generic catch-all; rate limiting must
 	// win since it needs different handling (backoff, not a bad password).
 	event, _, reason := classify("FAILED (Rate Limit Exceeded)")
-	if event != EventFailure || reason != FailureRateLimited {
-		t.Fatalf("event=%v reason=%v, want EventFailure/FailureRateLimited", event, reason)
-	}
+	require.Equal(t, EventFailure, event)
+	require.Equal(t, FailureRateLimited, reason)
 }
 
 func TestPromptKindString(t *testing.T) {
@@ -114,8 +107,7 @@ func TestPromptKindString(t *testing.T) {
 		PromptKind(99):  "none",
 	}
 	for kind, want := range cases {
-		if got := kind.String(); got != want {
-			t.Errorf("PromptKind(%d).String() = %q, want %q", kind, got, want)
-		}
+		got := kind.String()
+		assert.Equal(t, want, got)
 	}
 }

@@ -7,6 +7,9 @@ import (
 	"bytes"
 	"encoding/binary"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // pboEntry is one file to embed via buildPBO.
@@ -24,7 +27,7 @@ type pboEntry struct {
 // fixture available in this environment to test against instead (see the
 // package doc comment); this construction follows the widely documented
 // PBO container layout.
-func buildPBO(t *testing.T, withVersEntry bool, entries []pboEntry) []byte {
+func buildPBO(t testing.TB, withVersEntry bool, entries []pboEntry) []byte {
 	t.Helper()
 	var buf bytes.Buffer
 
@@ -33,9 +36,8 @@ func buildPBO(t *testing.T, withVersEntry bool, entries []pboEntry) []byte {
 		buf.WriteByte(0)
 	}
 	writeUint32 := func(v uint32) {
-		if err := binary.Write(&buf, binary.LittleEndian, v); err != nil {
-			t.Fatalf("write uint32: %v", err)
-		}
+		err := binary.Write(&buf, binary.LittleEndian, v)
+		require.NoError(t, err, "write uint32")
 	}
 
 	if withVersEntry {
@@ -84,36 +86,20 @@ func TestOpenPBOAndReadEntry(t *testing.T) {
 		{name: "readme.txt", data: []byte("hello")},
 	})
 	pbo, err := OpenPBO(data)
-	if err != nil {
-		t.Fatalf("OpenPBO: %v", err)
-	}
-	if len(pbo.Entries) != 2 {
-		t.Fatalf("Entries = %d, want 2", len(pbo.Entries))
-	}
+	require.NoError(t, err, "OpenPBO")
+	require.Len(t, pbo.Entries, 2)
 
 	entry, ok := pbo.Find("config.cpp")
-	if !ok {
-		t.Fatal("config.cpp not found")
-	}
+	require.True(t, ok, "config.cpp not found")
 	got, err := pbo.ReadEntry(entry)
-	if err != nil {
-		t.Fatalf("ReadEntry: %v", err)
-	}
-	if !bytes.Contains(got, []byte("CfgPatches")) {
-		t.Errorf("got = %q", got)
-	}
+	require.NoError(t, err, "ReadEntry")
+	assert.True(t, bytes.Contains(got, []byte("CfgPatches")))
 
 	readme, ok := pbo.Find("readme.txt")
-	if !ok {
-		t.Fatal("readme.txt not found")
-	}
+	require.True(t, ok, "readme.txt not found")
 	got2, err := pbo.ReadEntry(readme)
-	if err != nil {
-		t.Fatalf("ReadEntry: %v", err)
-	}
-	if string(got2) != "hello" {
-		t.Errorf("got2 = %q", got2)
-	}
+	require.NoError(t, err, "ReadEntry")
+	assert.Equal(t, "hello", string(got2))
 }
 
 func TestOpenPBOWithVersEntry(t *testing.T) {
@@ -121,49 +107,31 @@ func TestOpenPBOWithVersEntry(t *testing.T) {
 		{name: "config.cpp", data: []byte("class X {};")},
 	})
 	pbo, err := OpenPBO(data)
-	if err != nil {
-		t.Fatalf("OpenPBO: %v", err)
-	}
-	if len(pbo.Entries) != 1 {
-		t.Fatalf("Entries = %d, want 1 (the Vers entry must not be listed)", len(pbo.Entries))
-	}
-	if pbo.Prefix != `dzo\test` {
-		t.Errorf("Prefix = %q", pbo.Prefix)
-	}
+	require.NoError(t, err, "OpenPBO")
+	require.Len(t, pbo.Entries, 1)
+	assert.Equal(t, `dzo\test`, pbo.Prefix)
 	entry, _ := pbo.Find("config.cpp")
 	got, err := pbo.ReadEntry(entry)
-	if err != nil {
-		t.Fatalf("ReadEntry: %v", err)
-	}
-	if string(got) != "class X {};" {
-		t.Errorf("got = %q", got)
-	}
+	require.NoError(t, err, "ReadEntry")
+	assert.Equal(t, "class X {};", string(got))
 }
 
 func TestOpenPBOFindMissing(t *testing.T) {
 	data := buildPBO(t, false, []pboEntry{{name: "a.txt", data: []byte("x")}})
 	pbo, err := OpenPBO(data)
-	if err != nil {
-		t.Fatalf("OpenPBO: %v", err)
-	}
-	if _, ok := pbo.Find("missing.txt"); ok {
-		t.Error("expected Find to report missing.txt as absent")
-	}
+	require.NoError(t, err, "OpenPBO")
+	_, ok := pbo.Find("missing.txt")
+	assert.False(t, ok)
 }
 
 func TestOpenPBOTruncatedDataErrors(t *testing.T) {
-	if _, err := OpenPBO([]byte{1, 2, 3}); err == nil {
-		t.Fatal("expected an error for truncated/invalid PBO data")
-	}
+	_, err := OpenPBO([]byte{1, 2, 3})
+	require.Error(t, err, "expected an error for truncated/invalid PBO data")
 }
 
 func TestOpenPBOEmptyArchive(t *testing.T) {
 	data := buildPBO(t, false, nil)
 	pbo, err := OpenPBO(data)
-	if err != nil {
-		t.Fatalf("OpenPBO: %v", err)
-	}
-	if len(pbo.Entries) != 0 {
-		t.Errorf("Entries = %d, want 0", len(pbo.Entries))
-	}
+	require.NoError(t, err, "OpenPBO")
+	assert.Empty(t, pbo.Entries)
 }

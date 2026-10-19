@@ -6,146 +6,101 @@ package notify
 import (
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestRenderDefaultTemplate(t *testing.T) {
 	ts, err := NewTemplateSet()
-	if err != nil {
-		t.Fatalf("NewTemplateSet: %v", err)
-	}
+	require.NoError(t, err, "NewTemplateSet")
 	msg, err := ts.Render(Event{
 		Kind:     KindHealthUnhealthy,
 		Instance: "deerisle",
 	})
-	if err != nil {
-		t.Fatalf("Render: %v", err)
-	}
-	if !strings.Contains(msg, "deerisle") || !strings.Contains(msg, "health check failing") {
-		t.Errorf("Render() = %q", msg)
-	}
+	require.NoError(t, err, "Render")
+	require.Contains(t, msg, "deerisle")
+	assert.Contains(t, msg, "health check failing")
 }
 
 func TestRenderWithData(t *testing.T) {
 	ts, err := NewTemplateSet()
-	if err != nil {
-		t.Fatalf("NewTemplateSet: %v", err)
-	}
+	require.NoError(t, err, "NewTemplateSet")
 	msg, err := ts.Render(Event{
 		Kind:     KindModUpdateDetected,
 		Instance: "hashima",
 		Data:     map[string]any{"Count": 3},
 	})
-	if err != nil {
-		t.Fatalf("Render: %v", err)
-	}
-	if !strings.Contains(msg, "hashima") || !strings.Contains(msg, "3 mod update") {
-		t.Errorf("Render() = %q", msg)
-	}
+	require.NoError(t, err, "Render")
+	require.Contains(t, msg, "hashima")
+	assert.Contains(t, msg, "3 mod update")
 }
 
 func TestRenderUnknownKindFallsBack(t *testing.T) {
 	ts, err := NewTemplateSet()
-	if err != nil {
-		t.Fatalf("NewTemplateSet: %v", err)
-	}
+	require.NoError(t, err, "NewTemplateSet")
 	msg, err := ts.Render(Event{Kind: Kind("custom_event"), Instance: "x", Data: map[string]any{"foo": "bar"}})
-	if err != nil {
-		t.Fatalf("Render: %v", err)
-	}
-	if !strings.Contains(msg, "custom_event") || !strings.Contains(msg, "x") {
-		t.Errorf("Render() = %q", msg)
-	}
+	require.NoError(t, err, "Render")
+	require.Contains(t, msg, "custom_event")
+	assert.Contains(t, msg, "x")
 }
 
 func TestOverrideTemplate(t *testing.T) {
 	ts, err := NewTemplateSet()
-	if err != nil {
-		t.Fatalf("NewTemplateSet: %v", err)
-	}
-	if err := ts.Override(KindHealthUnhealthy, "CUSTOM {{.Instance}}"); err != nil {
-		t.Fatalf("Override: %v", err)
-	}
+	require.NoError(t, err, "NewTemplateSet")
+	err = ts.Override(KindHealthUnhealthy, "CUSTOM {{.Instance}}")
+	require.NoError(t, err, "Override")
 	msg, err := ts.Render(Event{Kind: KindHealthUnhealthy, Instance: "y"})
-	if err != nil {
-		t.Fatalf("Render: %v", err)
-	}
-	if msg != "CUSTOM y" {
-		t.Errorf("Render() = %q, want CUSTOM y", msg)
-	}
+	require.NoError(t, err, "Render")
+	assert.Equal(t, "CUSTOM y", msg)
 }
 
 func TestOverrideInvalidTemplate(t *testing.T) {
 	ts, err := NewTemplateSet()
-	if err != nil {
-		t.Fatalf("NewTemplateSet: %v", err)
-	}
-	if err := ts.Override(KindHealthUnhealthy, "{{ .Broken "); err == nil {
-		t.Fatal("expected an error for invalid template syntax")
-	}
+	require.NoError(t, err, "NewTemplateSet")
+	err = ts.Override(KindHealthUnhealthy, "{{ .Broken ")
+	require.Error(t, err, "expected an error for invalid template syntax")
 }
 
 func TestRenderCoalescedSingleEventUsesNormalTemplate(t *testing.T) {
 	ts, err := NewTemplateSet()
-	if err != nil {
-		t.Fatalf("NewTemplateSet: %v", err)
-	}
+	require.NoError(t, err, "NewTemplateSet")
 	msg, err := ts.RenderCoalesced(KindHealthUnhealthy, []Event{{Kind: KindHealthUnhealthy, Instance: "z"}})
-	if err != nil {
-		t.Fatalf("RenderCoalesced: %v", err)
-	}
-	if !strings.Contains(msg, "z") {
-		t.Errorf("RenderCoalesced() = %q", msg)
-	}
+	require.NoError(t, err, "RenderCoalesced")
+	assert.Contains(t, msg, "z")
 }
 
 func TestRenderCoalescedWithTemplate(t *testing.T) {
 	ts, err := NewTemplateSet()
-	if err != nil {
-		t.Fatalf("NewTemplateSet: %v", err)
-	}
+	require.NoError(t, err, "NewTemplateSet")
 	events := []Event{
 		{Kind: KindModUpdateDetected, Instance: "a"},
 		{Kind: KindModUpdateDetected, Instance: "b"},
 		{Kind: KindModUpdateDetected, Instance: "a"}, // duplicate instance
 	}
 	msg, err := ts.RenderCoalesced(KindModUpdateDetected, events)
-	if err != nil {
-		t.Fatalf("RenderCoalesced: %v", err)
-	}
-	if !strings.Contains(msg, "3") || !strings.Contains(msg, "a, b") {
-		t.Errorf("RenderCoalesced() = %q", msg)
-	}
+	require.NoError(t, err, "RenderCoalesced")
+	require.Contains(t, msg, "3")
+	assert.Contains(t, msg, "a, b")
 }
 
 func TestRenderCoalescedFallsBackToJoinedLines(t *testing.T) {
 	ts, err := NewTemplateSet()
-	if err != nil {
-		t.Fatalf("NewTemplateSet: %v", err)
-	}
+	require.NoError(t, err, "NewTemplateSet")
 	events := []Event{
 		{Kind: KindDriftDetected, Instance: "a", Data: map[string]any{"Path": "p1"}},
 		{Kind: KindDriftDetected, Instance: "b", Data: map[string]any{"Path": "p2"}},
 	}
 	msg, err := ts.RenderCoalesced(KindDriftDetected, events)
-	if err != nil {
-		t.Fatalf("RenderCoalesced: %v", err)
-	}
+	require.NoError(t, err, "RenderCoalesced")
 	lines := strings.Split(msg, "\n")
-	if len(lines) != 2 {
-		t.Fatalf("RenderCoalesced() = %q, want 2 lines", msg)
-	}
+	require.Len(t, lines, 2)
 }
 
 func TestRenderCoalescedEmptyEvents(t *testing.T) {
 	ts, err := NewTemplateSet()
-	if err != nil {
-		t.Fatalf("NewTemplateSet: %v", err)
-	}
+	require.NoError(t, err, "NewTemplateSet")
 	msg, err := ts.RenderCoalesced(KindHealthUnhealthy, nil)
-	if err != nil {
-		t.Fatalf("RenderCoalesced: %v", err)
-	}
-	if msg != "" {
-		t.Errorf("RenderCoalesced(nil) = %q, want empty", msg)
-	}
+	require.NoError(t, err, "RenderCoalesced")
+	assert.Empty(t, msg)
 }

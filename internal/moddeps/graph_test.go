@@ -3,7 +3,12 @@
 
 package moddeps
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
 
 func TestValidateAllSatisfied(t *testing.T) {
 	mods := []Mod{
@@ -12,9 +17,7 @@ func TestValidateAllSatisfied(t *testing.T) {
 		{ID: 2, Patches: []Patch{{Name: "ModB", RequiredAddons: []string{"DZ_Data", "ModA"}}}},
 	}
 	result := Validate(mods)
-	if !result.OK() {
-		t.Errorf("Missing = %v, want none", result.Missing)
-	}
+	assert.True(t, result.OK(), "Missing = %v, want none", result.Missing)
 }
 
 func TestValidateMissingDependency(t *testing.T) {
@@ -23,25 +26,17 @@ func TestValidateMissingDependency(t *testing.T) {
 		{ID: 1, Patches: []Patch{{Name: "ModA", RequiredAddons: []string{"DZ_Data", "SomeMissingMod"}}}},
 	}
 	result := Validate(mods)
-	if result.OK() {
-		t.Fatal("expected a missing dependency")
-	}
-	if len(result.Missing) != 1 {
-		t.Fatalf("Missing = %+v, want 1 entry", result.Missing)
-	}
+	require.False(t, result.OK(), "expected a missing dependency")
+	require.Len(t, result.Missing, 1)
 	m := result.Missing[0]
-	if m.ModID != 1 || m.PatchName != "ModA" || m.RequiredBy != "SomeMissingMod" {
-		t.Errorf("Missing[0] = %+v", m)
-	}
-	if m.String() == "" {
-		t.Error("String() should not be empty")
-	}
+	require.Equal(t, uint64(1), m.ModID)
+	require.Equal(t, "ModA", m.PatchName)
+	assert.Equal(t, "SomeMissingMod", m.RequiredBy)
+	assert.NotEmpty(t, m.String())
 }
 
 func TestValidateEmptyMods(t *testing.T) {
-	if !Validate(nil).OK() {
-		t.Error("Validate(nil) should be OK")
-	}
+	assert.True(t, Validate(nil).OK(), "Validate(nil) should be OK")
 }
 
 func TestTopoSortOrdersByDependency(t *testing.T) {
@@ -51,16 +46,13 @@ func TestTopoSortOrdersByDependency(t *testing.T) {
 		{ID: 0, Patches: []Patch{{Name: "DZ_Data"}}},
 	}
 	sorted, err := TopoSort(mods)
-	if err != nil {
-		t.Fatalf("TopoSort: %v", err)
-	}
+	require.NoError(t, err, "TopoSort")
 	pos := map[uint64]int{}
 	for i, m := range sorted {
 		pos[m.ID] = i
 	}
-	if pos[0] >= pos[1] || pos[1] >= pos[2] {
-		t.Errorf("order = %v, want 0 before 1 before 2", idsInOrder(sorted))
-	}
+	assert.Less(t, pos[0], pos[1], "order = %v, want 0 before 1 before 2", idsInOrder(sorted))
+	assert.Less(t, pos[1], pos[2], "order = %v, want 0 before 1 before 2", idsInOrder(sorted))
 }
 
 func TestTopoSortDeterministicTieBreak(t *testing.T) {
@@ -70,12 +62,8 @@ func TestTopoSortDeterministicTieBreak(t *testing.T) {
 		{ID: 1, Patches: []Patch{{Name: "M1"}}},
 	}
 	sorted, err := TopoSort(mods)
-	if err != nil {
-		t.Fatalf("TopoSort: %v", err)
-	}
-	if idsInOrder(sorted)[0] != 1 || idsInOrder(sorted)[1] != 3 || idsInOrder(sorted)[2] != 5 {
-		t.Errorf("order = %v, want ascending ID for unconstrained mods", idsInOrder(sorted))
-	}
+	require.NoError(t, err, "TopoSort")
+	require.Equal(t, []uint64{1, 3, 5}, idsInOrder(sorted))
 }
 
 func TestTopoSortDetectsCycle(t *testing.T) {
@@ -84,16 +72,10 @@ func TestTopoSortDetectsCycle(t *testing.T) {
 		{ID: 2, Patches: []Patch{{Name: "ModB", RequiredAddons: []string{"ModA"}}}},
 	}
 	_, err := TopoSort(mods)
-	if err == nil {
-		t.Fatal("expected a cycle error")
-	}
+	require.Error(t, err, "expected a cycle error")
 	var cycleErr ErrCycle
-	if !asErrCycle(err, &cycleErr) {
-		t.Fatalf("err = %v (%T), want ErrCycle", err, err)
-	}
-	if cycleErr.Error() == "" {
-		t.Error("Error() should not be empty")
-	}
+	require.True(t, asErrCycle(err, &cycleErr), "err = %v (%T), want ErrCycle", err, err)
+	assert.NotEmpty(t, cycleErr.Error())
 }
 
 func TestTopoSortIgnoresUnsatisfiedRequirement(t *testing.T) {
@@ -104,31 +86,22 @@ func TestTopoSortIgnoresUnsatisfiedRequirement(t *testing.T) {
 		{ID: 1, Patches: []Patch{{Name: "ModA", RequiredAddons: []string{"NothingProvidesThis"}}}},
 	}
 	sorted, err := TopoSort(mods)
-	if err != nil {
-		t.Fatalf("TopoSort: %v", err)
-	}
-	if len(sorted) != 1 {
-		t.Fatalf("sorted = %+v", sorted)
-	}
+	require.NoError(t, err, "TopoSort")
+	require.Len(t, sorted, 1)
 }
 
 func TestTopoSortEmpty(t *testing.T) {
 	sorted, err := TopoSort(nil)
-	if err != nil {
-		t.Fatalf("TopoSort: %v", err)
-	}
-	if len(sorted) != 0 {
-		t.Errorf("sorted = %+v, want empty", sorted)
-	}
+	require.NoError(t, err, "TopoSort")
+	assert.Empty(t, sorted)
 }
 
 func TestTopoSortSelfReferenceIsNotAnEdge(t *testing.T) {
 	mods := []Mod{
 		{ID: 1, Patches: []Patch{{Name: "ModA", RequiredAddons: []string{"ModA"}}}},
 	}
-	if _, err := TopoSort(mods); err != nil {
-		t.Fatalf("TopoSort: %v (a patch requiring its own name should not create a self-loop)", err)
-	}
+	_, err := TopoSort(mods)
+	require.NoError(t, err)
 }
 
 func idsInOrder(mods []Mod) []uint64 {

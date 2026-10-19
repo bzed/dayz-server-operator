@@ -6,38 +6,36 @@ package admin
 import (
 	"os"
 	"path/filepath"
-	"slices"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestIconNamesAndUnknownIcons(t *testing.T) {
 	dir := t.TempDir()
 	css := filepath.Join(dir, "fork-awesome", "css")
-	if err := os.MkdirAll(css, 0o750); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(css, "fork-awesome.css"), []byte(".fa-fire:before{content:\"\\f06d\"}\n.fa-user-secret:before{content:\"\\f21b\"}\n.fa{display:inline-block}\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
+	err := os.MkdirAll(css, 0o750)
+	require.NoError(t, err)
+	err = os.WriteFile(filepath.Join(css, "fork-awesome.css"), []byte(".fa-fire:before{content:\"\\f06d\"}\n.fa-user-secret:before{content:\"\\f21b\"}\n.fa{display:inline-block}\n"), 0o600)
+	require.NoError(t, err)
 	names := IconNames(dir)
 	// helicopter is not in Fork Awesome; dzo ships it itself (web/static/icons).
-	if !names["fire"] || !names["user-secret"] || !names["helicopter"] || len(names) != 3 {
-		t.Fatalf("names = %v", names)
-	}
+	require.True(t, names["fire"])
+	require.True(t, names["user-secret"])
+	require.True(t, names["helicopter"])
+	require.Len(t, names, 3)
 	rules := []WatchRule{{Layer: "a", Icon: "fire"}, {Layer: "b", Icon: "fa-user-secret"}, {Layer: "c", Icon: "firee"}, {Layer: "d"}, {Layer: "e", Icon: "helicopter"}}
-	if got := UnknownIcons(rules, names); !slices.Equal(got, []string{"firee"}) {
-		t.Errorf("unknown = %v", got)
-	}
-	if IconNames(t.TempDir()) != nil || UnknownIcons(rules, nil) != nil {
-		t.Error("without the stylesheet nothing can be checked, and nothing is reported")
-	}
+	got := UnknownIcons(rules, names)
+	assert.Equal(t, []string{"firee"}, got)
+	require.Nil(t, IconNames(t.TempDir()))
+	assert.Nil(t, UnknownIcons(rules, nil))
 }
 
 func TestWatchRuleIconAndColorValidation(t *testing.T) {
 	ok := WatchRule{Layer: "l", Classes: []string{"X"}, Icon: "fire", Color: "#c0392b"}
-	if err := ok.Validate(); err != nil {
-		t.Error(err)
-	}
+	err := ok.Validate()
+	assert.NoError(t, err)
 	for _, w := range []WatchRule{
 		{Layer: "l", Classes: []string{"X"}, Icon: "Fire"},
 		{Layer: "l", Classes: []string{"X"}, Icon: "fa fa-fire"},
@@ -45,9 +43,7 @@ func TestWatchRuleIconAndColorValidation(t *testing.T) {
 		{Layer: "l", Classes: []string{"X"}, Color: "url(x)"},
 		{Layer: "l", Classes: []string{"X"}, Visibility: "root"},
 	} {
-		if w.Validate() == nil {
-			t.Errorf("%+v should be rejected", w)
-		}
+		assert.Error(t, w.Validate(), "%+v should be rejected", w)
 	}
 }
 
@@ -63,9 +59,9 @@ func TestHubFillsMarkerStyleFromTheLayer(t *testing.T) {
 		byID[m.ID] = m
 	}
 	for id, want := range map[string][2]string{"1": {"fire", "#e67e22"}, "2": {"fire", "red"}, "3": {"car", "blue"}, "4": {"", ""}} {
-		if m := byID[id]; m.Icon != want[0] || m.Color != want[1] {
-			t.Errorf("marker %s = icon %q color %q, want %v", id, m.Icon, m.Color, want)
-		}
+		m := byID[id]
+		require.Equal(t, want[0], m.Icon)
+		assert.Equal(t, want[1], m.Color)
 	}
 }
 
@@ -81,12 +77,12 @@ func TestHubAppliesTheVisibilityOfAWatchRule(t *testing.T) {
 	for _, m := range h.Markers("") {
 		got[m.ID] = m.Visibility
 	}
-	if got["1"] != "viewer" || got["2"] != "admin" || got["3"] != "admin" {
-		t.Errorf("visibilities = %v", got)
-	}
+	require.Equal(t, "viewer", got["1"])
+	require.Equal(t, "admin", got["2"])
+	assert.Equal(t, "admin", got["3"])
 	for _, l := range h.Layers() {
-		if l.Name == "events" && l.Visibility != "viewer" {
-			t.Errorf("layer events visibility = %q", l.Visibility)
+		if l.Name == "events" {
+			assert.Equal(t, "viewer", l.Visibility, "layer events visibility")
 		}
 	}
 }
