@@ -20,7 +20,7 @@ COVERAGE_MIN := 85
 GO           ?= go
 
 .PHONY: all cheatsheet docs build build-static test test-race cover coverage-check cover-html lint vet fmt fmt-check \
-        licenses reuse vulncheck fuzz check deb clean tidy generate servermods servermods-check servermods-lock test-findfile test-client
+        licenses reuse vulncheck fuzz e2e check deb clean tidy generate servermods servermods-check servermods-lock test-findfile test-client
 
 all: lint reuse test build
 
@@ -89,6 +89,12 @@ reuse:
 vulncheck:
 	$(GO) run golang.org/x/vuln/cmd/govulncheck@v1.7.0 ./...
 
+## e2e: browser tests of the web UI (chromedp, build tag e2e). Needs Chrome/Chromium and the JavaScript
+## assets of libjs-htmx, libjs-leaflet and fonts-fork-awesome; DZO_E2E_CHROME and DZO_E2E_ASSETS override
+## where they are (see docs/development.rst).
+e2e:
+	$(GO) test -tags e2e -count=1 -race -run '^TestE2E' ./internal/web/
+
 ## fuzz: run every fuzz target for FUZZTIME (default 10s) each; the seeds also run in `make test`.
 ## Go fuzzes one target per invocation. Fuzz longer with FUZZTIME=5m or one target by hand
 ## (see docs/development.rst); a crash leaves its input in testdata/fuzz/, commit it with the fix.
@@ -109,11 +115,12 @@ fuzz:
 	done
 
 ## check: everything to run before pushing (mirrors CI; see AGENTS.md).
-check: fmt-check vet lint reuse licenses vulncheck test-race fuzz coverage-check
+check: fmt-check vet lint reuse licenses vulncheck test-race e2e fuzz coverage-check
 
 ## vet: run go vet.
 vet:
 	$(GO) vet ./...
+	$(GO) vet -tags e2e ./internal/web/
 
 ## fmt: gofmt all Go sources in place.
 fmt:

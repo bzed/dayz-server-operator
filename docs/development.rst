@@ -216,6 +216,42 @@ and uploads the crashing input on failure. To fuzz one target longer::
 A crash is a real bug. Go leaves the input in ``testdata/fuzz/<Target>/``;
 commit that file together with the fix, it is the regression test.
 
+Browser end-to-end tests
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+``make e2e`` drives the web UI in a headless Chrome or Chromium with
+`chromedp <https://github.com/chromedp/chromedp>`_ (build tag ``e2e``, files
+``internal/web/e2e*_test.go``, tests ``TestE2E*``). chromedp is pure Go and
+talks the DevTools protocol to the browser that is installed anyway (the
+cheat sheet build needs one); Selenium needs a matching WebDriver binary and
+Playwright downloads its own browsers at test time. The cost is that only
+Chrome-based browsers are covered.
+
+The tests run against the fake backends of ``newEnv`` but with the JavaScript
+a dzo installation really serves: htmx, Leaflet and Fork Awesome from the
+Debian packages ``libjs-htmx``, ``libjs-leaflet`` and ``fonts-fork-awesome``.
+A missing browser or missing assets fail the test, they never skip it.
+
+``DZO_E2E_CHROME``
+   the browser binary; default: chromedp's lookup (``google-chrome``,
+   ``chromium``)
+
+``DZO_E2E_ASSETS``
+   the directory with ``htmx/``, ``leaflet/`` and ``fork-awesome/`` (default
+   ``/usr/share/javascript``)
+
+The browser reports every JavaScript exception, console error and CSP
+violation, and the test fails on any of them. An unexpected ``confirm()``
+dialog fails the test too; a test that expects one answers it through
+``browser.dialogs``. To watch a run while debugging, add
+``chromedp.Flag("headless", false)`` to the allocator options in
+``newBrowser``; never commit that.
+
+CI runs ``make e2e`` in a ``debian:trixie`` container with Debian's
+``chromium``, as an unprivileged user with the sandbox on. A second run in
+``debian:forky`` is allowed to fail: it warns early about the next htmx (4.0
+beta).
+
 Boot test with a real server
 ----------------------------
 
