@@ -129,6 +129,8 @@ func TestRconConsoleAndRotate(t *testing.T) {
 				continue
 			}
 			if n >= 9 && buf[7] == 0x01 {
+				// a server message first (type 0x02, sequence 7), then the answer: the console prints what the server says
+				_, _ = conn.WriteToUDP(bePacket(0x02, append([]byte{7}, []byte("Player #1 Survivor connected")...)...), remote)
 				_, _ = conn.WriteToUDP(commandOK(buf[8], "pong"), remote)
 			}
 		}
@@ -144,6 +146,7 @@ func TestRconConsoleAndRotate(t *testing.T) {
 	require.NoError(t, err, "console: %s", out)
 	require.Contains(t, out, "connected to x", "console")
 	require.Contains(t, out, "pong", "console")
+	require.Contains(t, out, "< Player #1 Survivor connected", "the console prints server events that arrived before it ended")
 
 	pwFile := filepath.Join(data, "secrets", "rcon", "x")
 	writeFile(t, pwFile, "old\n")

@@ -34,23 +34,8 @@ func newServeCmd() *cobra.Command {
 			}
 			ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
-			reload := make(chan struct{}, 1)
-			hup := make(chan os.Signal, 1)
-			signal.Notify(hup, syscall.SIGHUP)
-			defer signal.Stop(hup)
-			go func() {
-				for {
-					select {
-					case <-hup:
-						select {
-						case reload <- struct{}{}:
-						default:
-						}
-					case <-ctx.Done():
-						return
-					}
-				}
-			}()
+			reload, stopReload := reloadOnSIGHUP(ctx)
+			defer stopReload()
 			return serve.Run(ctx, cfg, serve.Options{
 				Version: version.String(), Reload: reload,
 				Load: func() (*site.Tree, error) { return site.LoadTree(cfg.Paths.Site) },

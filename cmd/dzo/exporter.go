@@ -48,23 +48,8 @@ func newExporterCmd() *cobra.Command {
 			defer stop()
 			col := newCollector(cfg)
 			col.Start(ctx)
-			reload := make(chan struct{}, 1)
-			hup := make(chan os.Signal, 1)
-			signal.Notify(hup, syscall.SIGHUP)
-			defer signal.Stop(hup)
-			go func() {
-				for {
-					select {
-					case <-hup:
-						select {
-						case reload <- struct{}{}:
-						default:
-						}
-					case <-ctx.Done():
-						return
-					}
-				}
-			}()
+			reload, stopReload := reloadOnSIGHUP(ctx)
+			defer stopReload()
 			errw := cmd.ErrOrStderr()
 			return exporter.Serve(ctx, cfg.Exporter, monitor.Handler(col), reload,
 				func(addr string) { _, _ = fmt.Fprintf(errw, "exporter on %s\n", addr) },
