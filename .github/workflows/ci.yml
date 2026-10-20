@@ -151,8 +151,8 @@ jobs:
         suite: [trixie, forky]
     container:
       image: debian:${{ matrix.suite }}
-      # Docker's default seccomp profile and the runner's AppArmor policy block the user namespaces Chromium's sandbox needs.
-      options: --security-opt seccomp=unconfined --security-opt apparmor=unconfined
+      # Chromium's sandbox needs namespaces: Docker's default seccomp profile, the runner's AppArmor policy and the missing CAP_SYS_ADMIN block them. The sandbox stays on.
+      options: --security-opt seccomp=unconfined --security-opt apparmor=unconfined --cap-add SYS_ADMIN
     steps:
       - name: Install the browser and the JavaScript assets
         run: |
