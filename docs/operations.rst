@@ -226,6 +226,8 @@ Logs
   of the newest ``error.log``, script log, crash log and RPT go to the journal and to Discord. It
   runs before the next start rotates the files.
 
+.. _profile-log-rotation:
+
 Profile log rotation
 ~~~~~~~~~~~~~~~~~~~~
 
@@ -244,6 +246,8 @@ the site defaults) is a list of regular expressions, matched against the path be
      keep_newest: 1          # per rule, the newest matches stay in place
      min_age: 10m            # a file changed more recently is never touched
      archive: {compress: gzip, max_age: 90d, max_size: 50GiB}
+
+A rule that needs no options can be a plain string: ``- '^RFMosquito_.*\.log$'`` is the same as ``- {match: '^RFMosquito_.*\.log$'}``.
 
 Per rule the newest ``keep_newest`` files stay (the server may still write them) and every older match is
 moved to ``<paths.logs>/<instance>/<date>/<path>.gz``: copied through gzip, synced, and only then removed.

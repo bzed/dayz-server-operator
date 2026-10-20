@@ -186,6 +186,11 @@ instance.yaml
      keep: 20
      schedule: ["00:00", "12:00"]  # periodic snapshots, same format as restarts.schedule
    notify: {discord: [default, admins]}
+   logs:                           # profile log rotation: added to the server's own files, see below
+     rotate:
+       - '^RFMosquito_.*\.log$'                    # a mod's log files (regular expression)
+       - {match: '\.mdmp$', max_age: 14d}          # with options
+     archive: {max_age: 90d, max_size: 50GiB}
    container:
      env: {}
      mounts: ["/var/lib/GeoIP:/var/lib/GeoIP:ro"]
@@ -243,6 +248,17 @@ Main keys:
    order is also the order of the ``-mod=`` and ``-servermod=`` arguments, and
    decides which mod wins when two mods change the same mission file. dzo does
    not sort mods or check their dependencies: list a mod after the mods it needs.
+
+``logs``
+   Which log files in ``profiles/`` are moved to the log archive (``paths.logs``), and how long the
+   archive is kept. ``rotate`` is a list of regular expressions matched against the path below
+   ``profiles/``; a rule is a plain string, or ``{match: ..., keep_newest: N, max_age: ...}``
+   for options. The rules are added to the server's own files (``*.RPT``, ``script_*.log``,
+   ``crash_*.log``, ``error_*.log``, ``warning_*.log``, ``*.ADM``, ``*.mdmp``) and to the rules
+   of ``defaults:`` in ``site.yaml``, so a mod's logs, which land anywhere in ``profiles/``, need a
+   rule here. ``dzo logs rotate <name> --dry-run`` lists the large files no rule matches. The
+   other keys, ``keep_newest``, ``min_age`` and ``archive``, replace the site's. Details in
+   :ref:`profile-log-rotation`.
 
 ``admin`` and ``admin_map``
    Settings of the :doc:`dzo-admin mod <admin-map>`, which an instance runs when

@@ -4,6 +4,7 @@
 package site
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -364,6 +365,23 @@ func TestAgeParsesDaysAndDurations(t *testing.T) {
 		err := yaml.Unmarshal([]byte(bad), &s)
 		require.Error(t, err, "%q must be rejected", bad)
 	}
+}
+
+func TestLogRuleTakesAPlainString(t *testing.T) {
+	var c LogsConfig
+	err := yaml.Unmarshal([]byte("rotate:\n  - '^RFMosquito_.*\\.log'\n  - {match: '\\.mdmp$', keep_newest: 2, max_age: 14d}\n"), &c)
+	require.NoError(t, err)
+	require.Len(t, c.Rotate, 2)
+	assert.Equal(t, `^RFMosquito_.*\.log`, c.Rotate[0].Match)
+	assert.Nil(t, c.Rotate[0].KeepNewest)
+	assert.Equal(t, `\.mdmp$`, c.Rotate[1].Match)
+	require.NotNil(t, c.Rotate[1].KeepNewest)
+	assert.Equal(t, 2, *c.Rotate[1].KeepNewest)
+	assert.Equal(t, 14*24*time.Hour, c.Rotate[1].MaxAge.Std())
+	dec := yaml.NewDecoder(strings.NewReader("rotate:\n  - {match: x, typo: 1}\n"))
+	dec.KnownFields(true)
+	err = dec.Decode(&c)
+	require.Error(t, err, "the mapping form still rejects unknown keys")
 }
 
 func TestAdminConfigVehicleKinds(t *testing.T) {

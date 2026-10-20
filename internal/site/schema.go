@@ -303,6 +303,22 @@ type LogRule struct {
 	MaxAge Age `yaml:"max_age,omitempty"`
 }
 
+// UnmarshalYAML implements yaml.Unmarshaler: a plain string is a rule with only a match.
+func (r *LogRule) UnmarshalYAML(unmarshal func(any) error) error {
+	var s string
+	if unmarshal(&s) == nil {
+		*r = LogRule{Match: s}
+		return nil
+	}
+	type plain LogRule
+	var p plain
+	if err := unmarshal(&p); err != nil {
+		return err
+	}
+	*r = LogRule(p)
+	return nil
+}
+
 // LogArchive says where rotated profile logs go and how long they stay.
 type LogArchive struct {
 	// Compress is "gzip" (default) or "none".
