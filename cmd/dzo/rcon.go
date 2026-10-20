@@ -7,9 +7,11 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -97,7 +99,7 @@ func newRconConsoleCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			out := cmd.OutOrStdout()
+			out := &lockedWriter{w: cmd.OutOrStdout()} // the event printer and the prompt loop both write
 			s := &battleye.Session{Addr: inst.RConAddr(), Password: pw}
 			s.Start()
 			stop, printed := make(chan struct{}), make(chan struct{})
@@ -108,7 +110,15 @@ func newRconConsoleCmd() *cobra.Command {
 					case ev := <-s.Events():
 						_, _ = fmt.Fprintf(out, "< %s\n", ev.Raw)
 					case <-stop:
-						return
+						// what arrived before the end is printed too
+						for {
+							select {
+							case ev := <-s.Events():
+								_, _ = fmt.Fprintf(out, "< %s\n", ev.Raw)
+							default:
+								return
+							}
+						}
 					}
 				}
 			}()
@@ -190,4 +200,16 @@ func newRconRotateCmd() *cobra.Command {
 	configFlag(c, &configPath)
 	c.Flags().BoolVar(&restart, "restart", false, "restart a running instance to apply it")
 	return c
+}
+
+// lockedWriter serialises the writes of the goroutines that share it.
+type lockedWriter struct {
+	mu sync.Mutex
+	w  io.Writer
+}
+
+func (l *lockedWriter) Write(p []byte) (int, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.w.Write(p)
 }
