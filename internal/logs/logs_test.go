@@ -59,6 +59,16 @@ func TestPlanKeepsNewestAndYoung(t *testing.T) {
 	require.Equal(t, "big.dat", p.Unmatched[0].Rel)
 }
 
+func TestLogzLogsAreNotReportedAsUnmatched(t *testing.T) {
+	root := t.TempDir()
+	put(t, root, "dzo/logz/logs/2026-10-05.log", strings.Repeat("x", unmatchedMin), 9*time.Hour)
+	put(t, root, "dzo/other/big.dat", strings.Repeat("x", unmatchedMin), 9*time.Hour)
+	p, err := MakePlan(root, site.LogsConfig{}, now)
+	require.NoError(t, err)
+	require.Len(t, p.Unmatched, 1)
+	require.Equal(t, "dzo/other/big.dat", p.Unmatched[0].Rel)
+}
+
 func TestDefaultRulesMatchBothRPTNames(t *testing.T) {
 	root := t.TempDir()
 	put(t, root, "DayZServer_2026-10-04_23-37-16.RPT", "1.30 old", 5*time.Hour)
@@ -68,6 +78,17 @@ func TestDefaultRulesMatchBothRPTNames(t *testing.T) {
 	p, err := MakePlan(root, site.LogsConfig{}, now)
 	require.NoError(t, err)
 	require.Equal(t, "DayZServer_2026-10-04_23-37-16.ADM,DayZServer_2026-10-04_23-37-16.RPT", rels(p.Move), "moves")
+}
+
+func TestDefaultRulesMatchErrorAndWarningLogs(t *testing.T) {
+	root := t.TempDir()
+	for _, kind := range []string{"error", "warning"} {
+		put(t, root, kind+"_2026-10-04_23-37-16.log", kind+" old", 5*time.Hour)
+		put(t, root, kind+"_2026-10-05_00-00-25.log", kind+" new", time.Hour)
+	}
+	p, err := MakePlan(root, site.LogsConfig{}, now)
+	require.NoError(t, err)
+	require.Equal(t, "error_2026-10-04_23-37-16.log,warning_2026-10-04_23-37-16.log", rels(p.Move), "moves")
 }
 
 func TestExcludedFilesAreNeverMoved(t *testing.T) {

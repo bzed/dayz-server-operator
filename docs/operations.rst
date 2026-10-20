@@ -249,13 +249,13 @@ Per rule the newest ``keep_newest`` files stay (the server may still write them)
 moved to ``<paths.logs>/<instance>/<date>/<path>.gz``: copied through gzip, synced, and only then removed.
 Only regular files below ``profiles/`` are touched, links are not followed, and ``serverDZ.cfg``, the
 BattlEye configs, ``dzo-admin/`` and every ``.json``/``.xml`` file are never moved, even if a rule matches
-them. The default rules are the ``*.RPT``, ``script_*.log``, ``crash_*.log`` and ``*.ADM`` of the server and
+them. The default rules are the ``*.RPT``, ``script_*.log``, ``crash_*.log``, ``error_*.log``, ``warning_*.log`` and ``*.ADM`` of the server and
 ``*.mdmp`` crash dumps (14 days).
 
 It runs before every start (``ExecStartPre``, a failure does not stop the start) and hourly for all
 instances (``dzo-logs.timer``), which also applies the archive's ``max_age`` and ``max_size`` (oldest
 first). ``dzo logs rotate <name> --dry-run`` lists what it would move and the large files no rule matches
-(new mod logs show up there); ``dzo logs archive <name> [--since 7d] [--match <regexp>]`` lists the archive.
+(new mod logs show up there, except those of ``dzo_logz`` in ``dzo/logz/logs/``); ``dzo logs archive <name> [--since 7d] [--match <regexp>]`` lists the archive.
 
 Instances
 ---------

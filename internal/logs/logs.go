@@ -31,6 +31,8 @@ func DefaultRules() []site.LogRule {
 		{Match: `^DayZServer(_x64)?_.*\.RPT$`},
 		{Match: `^script_.*\.log$`},
 		{Match: `^crash_.*\.log$`},
+		{Match: `^error_.*\.log$`},
+		{Match: `^warning_.*\.log$`},
 		{Match: `^DayZServer(_x64)?_.*\.ADM$`},
 		{Match: `\.mdmp$`, MaxAge: site.Age(14 * 24 * time.Hour)},
 	}
@@ -65,6 +67,10 @@ var excluded = []*regexp.Regexp{
 }
 
 const unmatchedMin = 1 << 20
+
+// logzLogs is where the dzo_logz mod writes its own logs, which its agent ships; they are no
+// unmatched files.
+const logzLogs = "dzo/logz/logs/"
 
 type compiled struct {
 	rule site.LogRule
@@ -146,7 +152,7 @@ func MakePlan(profiles string, cfg site.LogsConfig, now time.Time) (Plan, error)
 				return nil
 			}
 		}
-		if a.Size >= unmatchedMin && !isExcluded(rel) && !strings.HasPrefix(rel, "logs/") {
+		if a.Size >= unmatchedMin && !isExcluded(rel) && !strings.HasPrefix(rel, "logs/") && !strings.HasPrefix(rel, logzLogs) {
 			p.Unmatched = append(p.Unmatched, a)
 		}
 		return nil
