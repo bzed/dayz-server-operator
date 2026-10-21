@@ -22,7 +22,7 @@ func TestE2EBanFormFansOut(t *testing.T) {
 	b.run(t,
 		chromedp.Navigate(e.url("/b/main/bans/new?steam_id="+webSteam+"&instance=alpha")),
 		chromedp.WaitVisible(`form.banform`),
-		chromedp.SendKeys(`input[name=reason]`, "aimbot"),
+		chromedp.SendKeys(`textarea[name=reason]`, "aimbot"),
 		chromedp.SetValue(`select[name=duration]`, "7d"),
 		chromedp.Click(`input[name=also][value=other]`),
 		chromedp.Click(`form.banform button.danger`),

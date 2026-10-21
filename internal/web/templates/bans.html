@@ -44,19 +44,19 @@
 <form hx-post="/b/{{.Backend}}/bans" hx-target="#ban-result" class="banform">
   <label>Steam ID <input name="steam_id" value="{{.SteamID}}" size="20" pattern="7656119[0-9]{10}"></label>
   <label>or BattlEye GUID <input name="guid" size="34" pattern="[0-9a-f]{32}"></label>
-  <label>Reason (for admins) <input name="reason" required maxlength="1000" size="50"></label>
+  <label>Reason (for admins) <textarea name="reason" required maxlength="1000" rows="4" cols="50"></textarea></label>
   <label>Message (shown to the player, max 64 bytes) <input name="message" maxlength="64" size="50" placeholder="You are banned from this server"></label>
   <label>Duration
     <select name="duration">
-      <option value="1h">1 hour</option><option value="1d">1 day</option><option value="7d" selected>7 days</option>
-      <option value="30d">30 days</option><option value="permanent">permanent</option><option value="custom">custom…</option>
+      <option value="1h">1 hour</option><option value="1d">1 day</option><option value="7d">7 days</option>
+      <option value="30d">30 days</option><option value="permanent" selected>permanent</option><option value="custom">custom…</option>
     </select>
     <input name="duration_custom" placeholder="e.g. 3d or 12h" size="10">
   </label>
   <fieldset class="scope"><legend>Where does the ban apply?</legend>
-    {{if .Instance}}<label><input type="radio" name="scope_choice" value="this" checked> Only {{.Instance}}<input type="hidden" name="this_instance" value="{{.Instance}}"></label>{{end}}
-    {{if .CanGlobal}}<label><input type="radio" name="scope_choice" value="global"> Every instance of this installation</label>{{end}}
-    <label><input type="radio" name="scope_choice" value="chosen" {{if not .Instance}}checked{{end}}> Chosen instances:</label>
+    {{if .CanGlobal}}<label><input type="radio" name="scope_choice" value="global" checked> All instances of this installation</label>{{end}}
+    {{if .Instance}}<label><input type="radio" name="scope_choice" value="this" {{if not .CanGlobal}}checked{{end}}> Only {{.Instance}}<input type="hidden" name="this_instance" value="{{.Instance}}"></label>{{end}}
+    <label><input type="radio" name="scope_choice" value="chosen" {{if and (not .Instance) (not .CanGlobal)}}checked{{end}}> Chosen instances:</label>
     <span class="choices">{{range .Instances}}<label><input type="checkbox" name="instances" value="{{.Instance}}"> {{.Instance}}</label>{{end}}</span>
   </fieldset>
   {{if .Identities}}<fieldset><legend>Addresses (not banned unless ticked)</legend>
@@ -100,7 +100,7 @@
   {{range .IPs}}<label><input type="checkbox" name="ips" value="{{.}}" checked> IP {{.}}</label>{{end}}
   {{range .IPRefs}}<label><input type="checkbox" name="ip_refs" value="{{.}}" checked> IP address (hidden)</label>{{end}}
   {{range .Evidence}}<input type="hidden" name="evidence" value="{{.}}">{{end}}{{end}}
-  <label>Reason <input name="reason" value="{{$b.Reason}}" required maxlength="1000" size="50"></label>
+  <label>Reason <textarea name="reason" required maxlength="1000" rows="4" cols="50">{{$b.Reason}}</textarea></label>
   <label>Message <input name="message" value="{{$b.Message}}" maxlength="64" size="50"></label>
   <label>Duration <select name="duration"><option value="keep" selected>keep ({{expiry $b.ExpiresAt}})</option><option value="1d">1 day from now</option><option value="7d">7 days from now</option><option value="30d">30 days from now</option><option value="permanent">permanent</option><option value="custom">custom…</option></select>
     <input name="duration_custom" placeholder="e.g. 3d" size="8"></label>

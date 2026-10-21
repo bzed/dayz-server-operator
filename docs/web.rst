@@ -150,8 +150,9 @@ Bans
    history, an edit form and revoke. A player's panel has a **Ban…** button that opens the form with the
    Steam ID, the instance, the addresses the player was seen with (shown only with ``ip.history``, otherwise as
    "Address", with shared ones marked) and
-   the evidence filed against them. "Where does the ban apply?" offers only the instance the link came
-   from (the default), every instance of this installation (``ban.global``) or chosen instances. "Also send
+   the evidence filed against them. The reason is a multi-line field and the duration defaults to permanent.
+   "Where does the ban apply?" defaults to every instance of this installation (``ban.global``); the other
+   choices are the instance the link came from and chosen instances (the default for roles without ``ban.global``: the link's instance). "Also send
    to" repeats the ban on other installations. On the ban page, evidence is managed: add a note, log lines or
    a screenshot (filed against the banned player and linked to the ban), unlink an item, or link other
    evidence filed against the player. See :doc:`moderation`.

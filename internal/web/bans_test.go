@@ -185,11 +185,11 @@ func between(s, a, b string) string {
 	return s[:strings.Index(s, b)]
 }
 
-func TestBanFormDefaultsToThisInstanceOnly(t *testing.T) {
+func TestBanFormDefaultsToAllInstancesAndPermanent(t *testing.T) {
 	e := newEnv(t, api.RoleAdmin)
 	_, body, _ := e.get("/b/main/bans/new?steam_id=" + webSteam + "&instance=alpha")
-	for _, want := range []string{`name="scope_choice" value="this" checked`, `name="this_instance" value="alpha"`,
-		`name="scope_choice" value="global"`, `name="scope_choice" value="chosen"`} {
+	for _, want := range []string{`name="scope_choice" value="global" checked`, `name="this_instance" value="alpha"`,
+		`name="scope_choice" value="this" `, `name="scope_choice" value="chosen"`, `<option value="permanent" selected>`, `<textarea name="reason"`} {
 		require.Contains(t, body, want, "scope choices")
 	}
 	form := url.Values{"steam_id": {webSteam}, "reason": {"x"}, "duration": {"7d"}, "scope_choice": {"this"}, "this_instance": {"alpha"}}
@@ -206,7 +206,12 @@ func TestBanFormDefaultsToThisInstanceOnly(t *testing.T) {
 	// Without an instance in the link there is no "this instance" choice.
 	_, body, _ = e.get("/b/main/bans/new?steam_id=" + webSteam)
 	require.NotContains(t, body, `value="this"`, "form without an instance")
-	require.Contains(t, body, `name="scope_choice" value="chosen" checked`, "form without an instance")
+	require.Contains(t, body, `name="scope_choice" value="global" checked`, "form without an instance")
+	// Without the right to ban everywhere the link's instance is the default.
+	op := newEnv(t, api.RoleOperator)
+	_, body, _ = op.get("/b/main/bans/new?steam_id=" + webSteam + "&instance=alpha")
+	require.Contains(t, body, `name="scope_choice" value="this" checked`)
+	require.NotContains(t, body, `value="global"`)
 }
 
 func TestBanPageManagesEvidence(t *testing.T) {

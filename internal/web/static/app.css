@@ -238,7 +238,7 @@ table.bans td { vertical-align: top; }
 .banform, .evform, section form { max-width: 44rem; }
 .banform label, .evform label, section form label { display: grid; gap: .15rem; margin: .6rem 0; color: var(--muted); font-size: .9rem; }
 .banform label input:not([type=checkbox]):not([type=radio]), .banform label select, .evform label input:not([type=file]), .evform label select, .evform textarea { width: 100%; margin: 0; color: var(--ink); font-size: 1rem; }
-.evform textarea { font: inherit; border: 1px solid var(--ink); border-radius: var(--r); background: var(--surface); padding: .35rem .6rem; }
+.evform textarea, .banform textarea { font: inherit; width: 100%; margin: 0; border: 1px solid var(--ink); border-radius: var(--r); background: var(--surface); padding: .35rem .6rem; }
 fieldset { border: 1px solid var(--line); border-radius: var(--r); margin: 1rem 0; padding: .25rem 1rem .75rem; background: var(--surface); }
 legend { font: 600 1.15rem/1.2 var(--display); padding: 0 .4rem; }
 fieldset label { display: flex !important; align-items: baseline; gap: .5rem; color: var(--ink) !important; font-size: 1rem !important; }
