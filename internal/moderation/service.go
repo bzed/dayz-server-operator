@@ -49,6 +49,9 @@ type Service struct {
 	// days; negative keeps them all). VacuumEvery is how often the database file is rebuilt (default 7 days).
 	AddressRetention time.Duration
 	VacuumEvery      time.Duration
+	// OnEvent, when set, sees every BattlEye event of an instance after the ban logic ran. It runs on
+	// the instance's event goroutine and must not block. Set it before Start.
+	OnEvent func(instance string, ev battleye.Event)
 
 	store *Store
 	audit *admin.Audit
@@ -317,6 +320,9 @@ func (s *Service) enforce(ctx context.Context, r *running) {
 				return
 			}
 			s.handle(ctx, r, slots, ev)
+			if s.OnEvent != nil {
+				s.OnEvent(r.inst.Name, ev)
+			}
 		}
 	}
 }

@@ -249,6 +249,8 @@ type SyncRequest struct {
 	// VehicleTypes is the same for the vehicle classes the map can spawn.
 	VehicleTypes *TypesChunk `json:"vehicle_types"`
 	Results      []Result    `json:"results"`
+	// Feed holds the game events since the last sync, numbered by Seq.
+	Feed []FeedEvent `json:"feed"`
 }
 
 // SyncReply is the answer to a sync: the commands waiting for the mod.
@@ -291,6 +293,9 @@ func (r *SyncRequest) Normalise() {
 	}
 	if !has["events"] {
 		r.Events = nil
+	}
+	if !has["feed"] {
+		r.Feed = nil
 	}
 	if r.Types != nil && r.Types.Total == 0 {
 		r.Types = nil

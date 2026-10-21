@@ -76,7 +76,13 @@ All paths start with ``/api/v1``. Responses are JSON.
      - search the vehicle classes the server reported: public cars, boats and helicopters of the game and the loaded mods. ``spawn-vehicle`` refuses any class that is not in the list. The mod does not know which of a mod's vehicles are broken: try them on a test server
    * - ``GET /instances/<i>/stream``
      - server-sent events ``status``, ``players``, ``vehicles``, ``markers``,
-       ``events`` and ``result``; the current state first, then every change
+       ``events``, ``result`` and ``feed``; the current state first, then every change.
+       ``?only=feed`` sends just the ``feed`` events and no snapshot
+   * - ``GET /instances/<i>/feed[?after=<id>&limit=<n>]``
+     - the game events (see :ref:`event-feed`), oldest first: those with an ``id`` above ``after``
+       (at most ``limit``), or the newest ``limit`` without ``after``. A reader that remembers the last
+       ``id`` it saw asks for everything after it, so it loses nothing while the events are still
+       in the ring of 1000
    * - ``GET /audit[?instance=<i>&limit=<n>]``
      - audit entries, newest first (``admin`` role)
 
@@ -162,6 +168,64 @@ Actions are carried out by the game server, so the call waits for its answer:
 Every action, including refused and rate-limited ones, is written to the audit
 log (``${paths.db}/audit.jsonl``) with the actor, the source, the target and the
 result.
+
+.. _event-feed:
+
+Event feed
+----------
+
+``dzo serve`` keeps the newest 1000 game events of every instance and serves them on
+``GET /instances/<i>/feed`` and the ``feed`` events of the stream. They are also written to
+``${paths.db}/feed/<instance>.jsonl`` (mode ``0600``, one JSON object per line), so the feed is not empty
+after ``dzo serve`` restarts. The file holds chat and positions, which is personal data: it keeps at most the
+newest 1000 events per instance and is safe to delete, the feed then starts empty.
+
+Every event has an ``id`` (dzo's, increasing per instance), a ``time`` and a ``kind``. The other fields are
+present when they apply:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 25 75
+
+   * - Field
+     - Meaning
+   * - ``steam_id``, ``name``, ``ai``
+     - the actor: the killer, the player who built, joined, chatted. ``ai`` is true for an Expansion AI (no Steam ID)
+   * - ``target_steam_id``, ``target_name``, ``target_ai``
+     - the victim of a ``kill`` or ``death``, or the player an admin action was for
+   * - ``has_pos``, ``x``, ``y``, ``z``
+     - where it happened (the victim's position for a kill)
+   * - ``weapon``, ``distance``
+     - a ``kill``: the weapon (``fists`` without one, a vehicle for a road kill) and the distance in metres, 0 for melee
+   * - ``cause``
+     - a ``death``: ``self``, ``infected``, ``animal``, ``explosion``, ``vehicle`` or ``other``
+   * - ``object``, ``channel``, ``text``
+     - the part, item or killer class; the chat channel; the chat text, kick reason or the details of the event
+
+The kinds:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 25 75
+
+   * - Kind
+     - Happened
+   * - ``kill``, ``death``
+     - a player or an AI was killed by someone, or died without a killer
+   * - ``connect``, ``disconnect``
+     - a player joined or left
+   * - ``chat``, ``kick``
+     - in-game chat and BattlEye kicks, from BattlEye RCon (needs RCon, as bans do)
+   * - ``build``, ``dismantle``, ``destroy``, ``lock_cut``
+     - base building and raiding: a part built, taken apart or destroyed, a combination lock cut
+   * - ``flag_raised``, ``flag_lowered``
+     - a territory flag moved
+   * - ``stash_buried``, ``stash_dug_up``
+     - a stash buried or dug up
+   * - ``admin``
+     - an action of an operator (kick, ban, teleport, broadcast, ...), from the audit log
+   * - ``dropped``
+     - the mod's buffer overflowed; ``text`` is the number of events lost
 
 Bans and evidence
 -----------------

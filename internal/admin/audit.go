@@ -31,8 +31,10 @@ type AuditEntry struct {
 // whatever the DB layer later becomes.
 type Audit struct {
 	Path string
-	now  func() time.Time
-	mu   sync.Mutex
+	// OnLog, when set, is called with every entry after it was written. It must not block.
+	OnLog func(AuditEntry)
+	now   func() time.Time
+	mu    sync.Mutex
 }
 
 // NewAudit returns an Audit writing to path (created 0600 on first use).
@@ -43,6 +45,16 @@ func (a *Audit) Log(e AuditEntry) error {
 	if e.Time.IsZero() {
 		e.Time = a.now().UTC()
 	}
+	if err := a.write(e); err != nil {
+		return err
+	}
+	if a.OnLog != nil {
+		a.OnLog(e)
+	}
+	return nil
+}
+
+func (a *Audit) write(e AuditEntry) error {
 	b, err := json.Marshal(e)
 	if err != nil {
 		return err

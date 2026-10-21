@@ -668,6 +668,29 @@ Keys:
    ``restart_announce``
       The countdown of an update restart, the keys of ``restarts.announce``.
 
+``killfeed``
+   Posts the kills of the instance to Discord, one line per kill with killer, victim, weapon and
+   distance (``💀 **Alice** killed **Bob** with M4-A1 (123 m)``; kills by Expansion AI get ``🤖``).
+   It needs the :doc:`dzo-admin mod <admin-map>` (version 0.5.0 or newer), which reports the kills.
+   Positions are never posted. Player names are shown literally: Discord markup is escaped and
+   nobody is pinged.
+
+   .. code-block:: yaml
+
+      killfeed:
+        discord: [pvp]        # webhook names of config.yaml notify.discord; empty or unset = off
+        delay: 10m            # hold kills back (0 = at once, at most 24h)
+        ai_killers: true      # kills by Expansion AI (default true)
+        ai_victims: false     # players killing AI (default false)
+        deaths: false         # also deaths without a killer: infected, animals, falls (default false)
+
+   ``delay`` is for PvP servers: a kill is posted that long after it happened, so the feed does not
+   tell anyone where a fight is going on. It is separate from ``notify.discord``, which is for the
+   operator's notifications. The killfeed is best effort: a post that fails, is answered with
+   Discord's rate limit (429) or takes longer than 5 seconds is dropped and logged, never retried, and
+   at most 500 kills wait per instance (the oldest are dropped). Kills that wait for their delay are kept
+   when the site is reloaded (``SIGHUP``) but lost when ``dzo serve`` restarts.
+
 ``welcome``
    The message every player gets when joining. The default is ``Welcome to #name!``. Set your own
    text (``#name``, the ``hostname`` of the instance's ``serverDZ.cfg`` (the instance name when it sets none), and ``#port``, the game port, work in it; up to 160

@@ -215,6 +215,13 @@ installation (default: the local ``serve.listen``). They need the
 
    * - ``dzo player list <instance>``
      - online players
+   * - ``dzo events <instance> [-f] [-n <lines>] [--kind <kind,...>] [--json] [--no-color]``
+     - what happens in the game, journalctl style: kills, deaths, joins, building and raids, chat, admin actions.
+       Prints the newest ``-n`` events (default 20; the feed is kept over restarts of ``dzo serve``) and exits;
+       ``-f`` follows until Ctrl-C and reconnects by itself, marking events that were lost with ``-- events missed --``.
+       ``--kind`` takes kinds (``kill``, ``chat``, ...) or groups (``kills``, ``chat``, ``players``, ``building``,
+       ``raids``, ``flags``, ``stashes``, ``admin``). ``--json`` prints one JSON object per event. Colours only on a
+       terminal. Names and chat are printed with control characters replaced by ``?``. Needs the ``view`` role.
    * - ``dzo player msg <instance> <steamid|all> <text> [--style chat|important|friendly|blue|notification|expansion|rcon] [--type toast|baguette|activity|killfeed|market|garage] [--title <text>] [--seconds <n>]``
      - message one player or everyone. ``chat``, ``important``, ``friendly`` and ``blue`` are coloured chat lines; ``notification`` is
        the on-screen notification of the game (``--title``, default "Server", and ``--seconds``, default 10, at most 60);

@@ -97,6 +97,8 @@ type Hub struct {
 	Styles map[string]Layer
 	// NextRestart returns the next scheduled restart after a time, or the zero time; nil without a schedule.
 	NextRestart func(time.Time) time.Time
+	// Logf receives problems that must not stop the hub (a feed log that cannot be written). Nil logs nothing.
+	Logf func(format string, args ...any)
 
 	now func() time.Time
 
@@ -121,6 +123,12 @@ type Hub struct {
 	byID      map[string]*pending
 	subs      map[chan StreamEvent]struct{}
 	files     fileMarkers
+	// feed is the ring of the newest FeedKeep events, feedID the last ID given, lastSeq the last mod
+	// sequence number stored (a resend is not stored twice).
+	feed    []FeedEvent
+	feedID  int64
+	lastSeq int
+	feedLog *FeedLog
 }
 
 // NewHub returns an empty hub for an instance.
@@ -198,6 +206,7 @@ func (h *Hub) Sync(req SyncRequest) SyncReply {
 			h.wantTypes = true
 		}
 	}
+	h.syncFeedLocked(req)
 	for i := range req.Results {
 		h.finishLocked(req.Results[i])
 	}

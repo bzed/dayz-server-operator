@@ -390,3 +390,21 @@ func TestMessagesDefaultsAndInstanceWins(t *testing.T) {
 	require.Len(t, beta.Messages, 1, "its own list replaces the defaults")
 	assert.Equal(t, "Beta info", beta.Messages[0].Text)
 }
+
+func TestKillfeedUnknownWebhook(t *testing.T) {
+	cfg, tree, _ := fixture(t, false)
+	cfg.Notify.Discord = []config.DiscordWebhook{{Name: "pvp", URL: "https://example.invalid/hook"}}
+	alpha := tree.Instances["alpha"]
+	alpha.Killfeed = site.KillfeedConfig{Discord: []string{"pvp"}}
+	tree.Instances["alpha"] = alpha
+	inst, err := Resolve(cfg, tree, "alpha")
+	require.NoError(t, err)
+	require.Equal(t, []string{"pvp"}, inst.Killfeed.Discord)
+
+	alpha.Killfeed = site.KillfeedConfig{Discord: []string{"pvp", "nowhere"}}
+	tree.Instances["alpha"] = alpha
+	_, err = Resolve(cfg, tree, "alpha")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), `"nowhere"`)
+	require.Contains(t, err.Error(), "killfeed.discord")
+}

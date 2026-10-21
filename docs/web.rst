@@ -112,6 +112,22 @@ Instance
    panel's ``Profile`` button is disabled until the player profile page exists. The player table has no Steam ID column; the
    panel shows it. On a phone the table shows only the name, the health and the actions.
 
+Events
+   A live log of what happens in the game, in the style of ``tail -f`` (``Events`` on the instance page and
+   the map): kills (also by Expansion AI) with weapon and distance, deaths, joins and leaves, kicks, base building and raids,
+   combination locks cut, flags raised and lowered, stashes buried and dug up, in-game chat and the actions of the operators.
+   The newest 200 events are there when the page opens (the feed is kept over restarts of ``dzo serve``, see :ref:`event-feed`)
+   and new ones are added at the bottom as they happen; the page keeps at most 1000 rows. It follows the end of the
+   log while you are there; if you scroll up to read, a "new events" button brings you back. A reconnect
+   fetches what was missed. The checkboxes at the top hide groups of events (remembered in the browser).
+   A player's name links to the player's row in the player list (``#player-<steamid>``: the row is scrolled into view and
+   highlighted for a few seconds; for a player who is not online the page says so); a position links to the map, opened with the place marked
+   (see :doc:`admin-map`).
+   Needs the ``view`` role. Users who may broadcast (``operator`` and up) also get an input line: its text is
+   sent to all players as chat. Kills and deaths come from the dzo-admin mod (0.5.0 or newer); chat comes from BattlEye's
+   RCon, so RCon must be reachable, as it must for bans. The same feed is on the console with ``dzo events``
+   (:doc:`cli`) and in Discord with the ``killfeed`` (:doc:`configuration`).
+
 Live map
    Players, vehicles, active events and marker layers on a map that updates as
    the server reports. A player's icon goes from red to green with the player's health

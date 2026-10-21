@@ -17,7 +17,7 @@ func TestE2EPagesLoadWithoutErrors(t *testing.T) {
 	e := newEnv(t, api.RoleAdmin)
 	useRealAssets(t, e.assets)
 	b := newBrowser(t)
-	for _, p := range []string{"/", "/b/main/i/alpha", "/b/main/i/alpha/map", "/b/main/audit", "/b/main/bans", "/b/main/bans/new"} {
+	for _, p := range []string{"/", "/b/main/i/alpha", "/b/main/i/alpha/map", "/b/main/i/alpha/events", "/b/main/audit", "/b/main/bans", "/b/main/bans/new"} {
 		b.run(t, chromedp.Navigate(e.url(p)), chromedp.WaitReady("body"))
 	}
 	// the collector's cleanup fails the test on any console error, exception or CSP report

@@ -331,3 +331,15 @@ func TestRefusalsAreLoggedOncePerAddress(t *testing.T) {
 	assert.Contains(t, out, "instance alpha speaks protocol 99")
 	assert.NotContains(t, out, "wrong-secret")
 }
+
+func TestAuditOnLog(t *testing.T) {
+	a := NewAudit(filepath.Join(t.TempDir(), "audit.jsonl"))
+	var got []AuditEntry
+	a.OnLog = func(e AuditEntry) { got = append(got, e) }
+	require.NoError(t, a.Log(AuditEntry{Actor: "x", Instance: "a", Action: "message", OK: true}))
+	require.Len(t, got, 1)
+	require.False(t, got[0].Time.IsZero(), "the callback sees the stamped entry")
+	blocked := NewAudit(filepath.Join(a.Path, "x"))
+	blocked.OnLog = func(AuditEntry) { require.Fail(t, "called for a failed write") }
+	require.Error(t, blocked.Log(AuditEntry{}))
+}

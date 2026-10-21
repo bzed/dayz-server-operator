@@ -26,6 +26,11 @@ modded class MissionServer
 			DeleteFile("$profile:dzo_probe/event");
 			DZOProbeEvent();
 		}
+		if (FileExist("$profile:dzo_probe/feed"))
+		{
+			DeleteFile("$profile:dzo_probe/feed");
+			DZOProbeFeed.Run();
+		}
 		if (FileExist("$profile:dzo_probe/gas"))
 		{
 			DeleteFile("$profile:dzo_probe/gas");

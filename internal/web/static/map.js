@@ -823,6 +823,33 @@
   }
   setInterval(drawStats, 30000);
 
+  // ---- a place from a link ----
+  //
+  // /map?x=<east>&z=<north>&label=<text> (the events page links here) marks that place and zooms to it. A
+  // value that is not a plain number inside the world is ignored, and so is the whole link.
+  (function focusFromLink() {
+    var q = new URLSearchParams(location.search);
+    var num = /^-?\d+(\.\d+)?$/;
+    var xs = q.get('x'), zs = q.get('z');
+    if (xs === null || zs === null || !num.test(xs) || !num.test(zs)) { return; }
+    var x = parseFloat(xs), z = parseFloat(zs);
+    if (x < 0 || z < 0 || x > size || z > size) { return; }
+    var label = (q.get('label') || '').slice(0, 80) || 'Marked place';
+    var root = mk('div', 'focus');
+    root.appendChild(mk('i', 'fa fa-crosshairs'));
+    var at = { x: x, z: z };
+    var m = L.marker(ll(at), { icon: elIcon('focus-wrap', root) }).addTo(map);
+    named(m, function () { return label; });
+    bindTip(m, label, [posText(at)]);
+    onMenu(m, function () {
+      var spec = plainSpec(label, [posText(at)], at, 0);
+      spec.items.unshift({ label: 'Remove marker', run: function () { map.removeLayer(m); } });
+      return spec;
+    });
+    map.setView(ll(at), Math.max(map.getZoom(), Math.log2(2 / a)), { animate: false });
+    m.openTooltip();
+  })();
+
   var handlers = { players: onPlayers, vehicles: onVehicles, events: onEvents, markers: onMarkers, status: onStatus };
   var es = new EventSource(el.dataset.stream);
   es.addEventListener('error', function () { document.querySelector('main').classList.add('stale'); });

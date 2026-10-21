@@ -90,6 +90,29 @@
     if (inp) inp.value = b.getAttribute('data-set');
   });
 
+  // A link to #player-<steamid> (from the events page) lands on that player's row: once the player table
+  // has loaded, the row is scrolled into view and highlighted for a few seconds (or until a click); for a
+  // player who is not online a note says so. The tables are replaced on every poll, so this runs once per
+  // hash, not per poll.
+  var jumped = null;
+  function jumpToPlayer() {
+    var h = location.hash, note = document.getElementById('player-note');
+    if (!note || h.indexOf('#player-') !== 0 || h === jumped || !document.querySelector('[data-poll][hx-get$="/players"] > *')) { return; }
+    jumped = h;
+    var row = document.getElementById(h.slice(1));
+    note.hidden = !!row;
+    note.textContent = row ? '' : 'This player is not online.';
+    if (!row || row.tagName !== 'TR') { return; }
+    row.scrollIntoView({block: 'center'});
+    row.classList.add('hl');
+    setTimeout(function () { row.classList.remove('hl'); }, 5000);
+  }
+  document.addEventListener('click', function () {
+    document.querySelectorAll('tr.hl').forEach(function (r) { r.classList.remove('hl'); });
+  });
+  document.addEventListener('htmx:afterSettle', jumpToPlayer);
+  window.addEventListener('hashchange', jumpToPlayer);
+
   // Clicking a header sorts the table by that column. The tables are replaced on every poll, so the
   // chosen column and direction are kept per table (keyed by the polling element) and applied again
   // after each swap.

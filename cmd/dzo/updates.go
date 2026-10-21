@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -62,7 +63,7 @@ func newNotifier(cfg *config.Config) func(context.Context, notify.Event) error {
 	if err != nil {
 		return nil
 	}
-	n := &notify.DiscordNotifier{Templates: ts, Default: cfg.Notify.Discord[0].Name}
+	n := &notify.DiscordNotifier{Templates: ts, Default: cfg.Notify.Discord[0].Name, HTTPClient: &http.Client{Timeout: 10 * time.Second}}
 	for _, w := range cfg.Notify.Discord {
 		n.Webhooks = append(n.Webhooks, notify.Webhook{Name: w.Name, URL: w.URL})
 		if w.Name == "default" {

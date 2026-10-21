@@ -120,6 +120,15 @@ mismatch, an unreadable body. Tokens are never logged. An instance that stays si
 has a mod that does not reach the endpoint at all: check ``endpoint`` in the mod's
 ``$profile:dzo/admin/config.json`` and that the instance really runs with the mod.
 
+Links to a place
+----------------
+
+The map page opens on a place when the link has the world coordinates in metres: ``/b/<backend>/i/<instance>/map?x=7500&z=7600&label=Kill``
+(``x`` east, ``z`` north, ``label`` optional, up to 80 characters). The place gets a marker with the label as its tooltip
+and the map zooms to it. Click the marker for "Remove marker", zoom and copy. The events page
+(:doc:`web`) links the position of every event this way, and the link can be shared. A link whose ``x`` and ``z`` are not plain numbers
+inside the world is ignored and the map opens as usual.
+
 Map background
 --------------
 

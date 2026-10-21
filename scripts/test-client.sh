@@ -240,6 +240,24 @@ if [ "$expansion" = 1 ]; then
 	mk | grep -q '"k":"territory","v":"Probe Camp"' || s=1
 	verdict "territory: its flag names the territory" $s
 fi
+# The game events of the event feed, made by the probe without a player (characters without an identity).
+touch "$tree/profiles/dzo_probe/feed"
+waitfor 40 "grep -q 'DZO-PROBE feed: done' '$script'" || true
+sleep 8 # the events reach dzo with the next syncs
+ev() { grep -E "$1" "$work/events.jsonl" | wc -l; }
+s=0; [ "$(ev '"kind":"kill".*"weapon":"M4-A1","distance":(99|100|101)')" -ge 1 ] || s=1
+verdict "event feed: a rifle kill with weapon and distance" $s
+s=0; [ "$(ev '"kind":"death".*"has_pos":true,"x":705.*"cause":"self"')" -ge 1 ] || s=1
+verdict "event feed: a death without a killer is self" $s
+s=0; [ "$(ev '"kind":"build".*"object":"wall_base_down".*"text":"Fence"')" = 1 ] || s=1
+verdict "event feed: building a fence part" $s
+s=0; [ "$(ev '"kind":"dismantle".*"object":"wall_wood_down"')" = 1 ] || s=1
+verdict "event feed: dismantling a fence part" $s
+s=0; [ "$(ev '"kind":"destroy".*"object":"wall_base_down"')" = 1 ] && [ "$(ev '"kind":"destroy".*"object":"wall_wood_down"')" = 0 ] || s=1
+verdict "event feed: a raid is one destroy, the parts that fall with it are not reported" $s
+s=0; [ "$(ev '"kind":"flag_raised"')" = 1 ] && [ "$(ev '"kind":"flag_lowered"')" = 1 ] || s=1
+verdict "event feed: a flag raised and lowered" $s
+# Stashes are not driven here: a dig action run by hand does not move the item, only a player's does.
 web_tests
 }
 
@@ -314,7 +332,13 @@ dzo() { "$work/dzo" "$@" --config "$work/config.yaml" --token-file "$work/api.to
 start_serve() {
 	"$work/dzo" serve --config "$work/config.yaml" >"$work/serve.log" 2>&1 &
 	pids+=($!)
+	# The event feed of the whole run, as `dzo events -f --json` prints it, started once the API answers.
+	waitfor 30 "curl -sf http://127.0.0.1:$api/healthz >/dev/null"
+	"$work/dzo" events t1 -f --json -n 1000 --config "$work/config.yaml" --token-file "$work/api.token" >"$work/events.jsonl" 2>"$work/events.err" &
+	pids+=($!)
 }
+# feed_has <kind> <field> <value> [<field> <value>]: the event feed has such an event.
+feed_has() { grep -Eq "\"kind\":\"$1\".*\"$2\":\"$3\"${4:+.*\"$4\":\"$5\"}" "$work/events.jsonl"; }
 [ "$bans" = 1 ] || start_serve
 ln -sfn "$work/built/dzo-admin" "$tree/@dzo-admin"
 ln -sfn "$work/tbuilt/dzo-client-probe" "$tree/@dzo-client-probe"
@@ -385,6 +409,9 @@ ok "players: state lists the player"
 sleep 4
 "$dev/dayz-client-headless.sh" "${exp[@]}" shot "$work/client" "$work/welcome.png" >/dev/null 2>&1 || true
 id=$(dzo player list t1 | awk '/dzotester/{print $1}')
+s=0
+waitfor 30 "grep -Eq '\"kind\":\"connect\".*\"steam_id\":\"$id\"' '$work/events.jsonl'" || s=1
+verdict "event feed: the client's join (connect with its Steam ID)" $s
 if [ "$bans" = 1 ]; then
 	mkdir -p "$work/capture/v2"
 	"$work/dzo" rcon exec --addr "127.0.0.1:$rcon" --password "$rconpw" players >"$work/capture/v2/players.out"
@@ -606,10 +633,26 @@ s=0
 dzo player kill t1 "$id" --yes | grep -q ok || s=1
 waitpf alive -eq 0 || s=1
 verdict "player kill kills the player" $s
+s=0
+waitfor 30 "grep -Eq '\"kind\":\"death\".*\"target_steam_id\":\"$id\".*\"cause\":\"self\"' '$work/events.jsonl'" || s=1
+verdict "event feed: the kill is a death with cause self" $s
 s=1
 out=$(dzo player heal t1 "$id" 2>&1 || true)
 case $out in *dead*) s=0 ;; esac
 verdict "player heal is refused for a dead player" $s
+
+# The client leaves: the feed reports it with the Steam ID, although the identity may be gone by then.
+"$dev/dayz-client-headless.sh" "${exp[@]}" stop "$work/client" >/dev/null 2>&1 || true
+s=0
+waitfor 90 "grep -Eq '\"kind\":\"disconnect\".*\"steam_id\":\"$id\"' '$work/events.jsonl'" || s=1
+verdict "event feed: the client's leave (disconnect with its Steam ID)" $s
+s=0
+grep -q '"kind":"dropped"' "$work/events.jsonl" && s=1
+verdict "event feed: no event was dropped" $s
+s=0
+[ -z "$(grep -o '"seq":[0-9]*' "$work/events.jsonl" | sort | uniq -d | head -1)" ] || s=1
+verdict "event feed: the mod's sequence numbers never repeat (a resent batch counts once)" $s
+echo "SKIP event feed: chat (the headless client cannot type; BattlEye is off here, chat is covered by the unit tests)"
 
 echo "== $pass passed, $fail failed"
 [ "$fail" = 0 ]

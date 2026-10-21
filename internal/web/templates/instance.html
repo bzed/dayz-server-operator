@@ -8,6 +8,7 @@
   {{if .Status.Connected}}<span class="dot on"></span>dzo-admin connected{{with .Status.Hello}} (mod {{.ModVersion}}, world {{.World}}){{end}}
   {{else}}<span class="dot"></span>dzo-admin not connected{{end}}
   <a class="btn" href="/b/{{.Backend}}/i/{{.Instance}}/map"><i class="fa fa-map" aria-hidden="true"></i>Open live map</a>
+  <a class="btn" href="/b/{{.Backend}}/i/{{.Instance}}/events"><i class="fa fa-list" aria-hidden="true"></i>Events</a>
 </p>
 <div id="flash"></div>
 
@@ -22,6 +23,7 @@
 
 <section>
   <h2><i class="fa fa-users" aria-hidden="true"></i>Players</h2>
+  <p id="player-note" class="flash err" hidden></p>
   <div hx-get="/b/{{.Backend}}/i/{{.Instance}}/players" hx-trigger="load, every 5s" data-poll></div>
 </section>
 

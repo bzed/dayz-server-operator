@@ -65,6 +65,8 @@ type svcEnv struct {
 	now   time.Time
 	mu    sync.Mutex
 	audit string
+	// seen are the events the service handed to OnEvent, as "instance:kind".
+	seen []string
 }
 
 func newSvc(t testing.TB, names ...string) *svcEnv {
@@ -73,6 +75,11 @@ func newSvc(t testing.TB, names ...string) *svcEnv {
 	e := &svcEnv{st: st, rcon: map[string]*fakeRCon{}, dirs: map[string]string{}, tick: make(chan time.Time), now: t0, audit: filepath.Join(t.TempDir(), "audit.jsonl")}
 	e.svc = NewService(st, admin.NewAudit(e.audit), t.Logf)
 	e.svc.Tick = e.tick
+	e.svc.OnEvent = func(instance string, ev battleye.Event) {
+		e.mu.Lock()
+		defer e.mu.Unlock()
+		e.seen = append(e.seen, instance+":"+ev.Message)
+	}
 	e.svc.Now = func() time.Time { e.mu.Lock(); defer e.mu.Unlock(); return e.now }
 	var insts []Instance
 	for _, n := range names {
@@ -281,4 +288,19 @@ func TestNegativeVacuumEveryNeverVacuums(t *testing.T) {
 	e.tick <- t0 // the second tick is taken only after the first sweep finished
 	due, _ := e.st.VacuumDue(t.Context(), t0, 7*24*time.Hour)
 	require.True(t, due, "the database was vacuumed although that is turned off")
+}
+
+func TestServiceOnEventChat(t *testing.T) {
+	e := newSvc(t, "alpha")
+	r := e.rcon["alpha"]
+	r.events <- battleye.Event{Kind: battleye.EventConnect, PlayerID: 1, PlayerName: "bob", Address: "nonsense"} // dropped by the ban logic, still reported
+	r.events <- battleye.Event{Kind: battleye.EventChat, Channel: "Global", PlayerName: "bob", Message: "hello"}
+	eventually(t, "the chat callback", func() bool {
+		e.mu.Lock()
+		defer e.mu.Unlock()
+		return len(e.seen) == 2
+	})
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	require.Equal(t, "alpha:hello", e.seen[1])
 }

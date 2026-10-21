@@ -42,7 +42,8 @@ func newServeCmd() *cobra.Command {
 				Ready: func(apiAddr, modAddr string) {
 					_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "api on %s, mod endpoint on %s\n", apiAddr, modAddr)
 				},
-				Logf: func(f string, a ...any) { _, _ = fmt.Fprintf(cmd.ErrOrStderr(), f+"\n", a...) },
+				Logf:   func(f string, a ...any) { _, _ = fmt.Fprintf(cmd.ErrOrStderr(), f+"\n", a...) },
+				Notify: newNotifier(cfg),
 			})
 		},
 	}

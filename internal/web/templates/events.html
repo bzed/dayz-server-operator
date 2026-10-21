@@ -1,0 +1,57 @@
+{{/* SPDX-FileCopyrightText: 2026 Bernd Zeimetz <bernd@bzed.de> */}}
+{{/* SPDX-License-Identifier: AGPL-3.0-or-later */}}
+{{define "events"}}{{template "head" .}}
+{{with .Data}}
+<h1><i class="fa fa-list" aria-hidden="true"></i>{{.Instance}} events <small>{{$.Backend}}</small></h1>
+<p>
+  <a class="btn" href="/b/{{.Backend}}/i/{{.Instance}}"><i class="fa fa-users" aria-hidden="true"></i>Players and vehicles</a>
+  <a class="btn" href="/b/{{.Backend}}/i/{{.Instance}}/map"><i class="fa fa-map" aria-hidden="true"></i>Live map</a>
+</p>
+{{if .Err}}<p class="flash err">{{.Err}}</p>{{end}}
+<div class="evfilters" data-filters>
+  {{range .Groups}}<label><input type="checkbox" data-group="{{.ID}}" checked>{{.Label}}</label>{{end}}
+</div>
+<div class="evwrap">
+  <ol id="evlog" class="evlog" data-feed="/b/{{.Backend}}/i/{{.Instance}}/feed" data-stream="/b/{{.Backend}}/i/{{.Instance}}/stream?only=feed" data-last="{{.Last}}">{{template "feedrows" .}}</ol>
+  <button id="evnew" class="evnew" type="button" hidden><i class="fa fa-arrow-down" aria-hidden="true"></i>new events</button>
+  <span id="evconn" class="conn">connection lost, retrying</span>
+</div>
+<div id="flash"></div>
+{{if .CanBroadcast}}
+<form class="evinput" hx-post="/b/{{.Backend}}/i/{{.Instance}}/message" hx-target="#flash" data-reset>
+  <input type="hidden" name="style" value="chat">
+  <input name="text" placeholder="Say something to all players" maxlength="400" required autocomplete="off" autofocus>
+  <button><i class="fa fa-paper-plane" aria-hidden="true"></i>Send</button>
+</form>
+{{end}}
+<script src="/static/events.js" defer></script>
+{{end}}
+{{template "foot" .}}{{end}}
+
+{{define "feedrows"}}{{range .Rows}}{{template "feedrow" .}}{{end}}{{end}}
+
+{{define "feederr"}}<li class="ev ev-err" data-id="0" data-kind="error">{{.}}</li>{{end}}
+
+{{define "who"}}{{if .Href}}<a class="who" href="{{.Href}}">{{.Name}}</a>{{else}}<span class="who{{if .AI}} ai{{end}}">{{.Name}}</span>{{end}}{{end}}
+
+{{define "feedrow"}}{{$e := .E}}<li class="ev ev-{{$e.Kind}}" data-id="{{$e.ID}}" data-kind="{{$e.Kind}}" data-group="{{.Group}}"><time datetime="{{.Stamp}}">{{.Clock}}</time> <i class="fa fa-{{.Icon}}" aria-hidden="true"></i>
+{{- if eq $e.Kind "kill"}} {{template "who" .Actor}} killed {{template "who" .Target}}{{if $e.Weapon}} with {{$e.Weapon}}{{if .HasDistance}} ({{.Distance}} m){{end}}{{end}}
+{{- else if eq $e.Kind "death"}} {{template "who" .Target}} {{.DeathText}}
+{{- else if eq $e.Kind "connect"}} {{template "who" .Actor}} joined
+{{- else if eq $e.Kind "disconnect"}} {{template "who" .Actor}} left
+{{- else if eq $e.Kind "chat"}}{{if $e.Channel}} <span class="chan">[{{$e.Channel}}]</span>{{end}} {{template "who" .Actor}}: <span class="say">{{$e.Text}}</span>
+{{- else if eq $e.Kind "kick"}} {{template "who" .Actor}} was kicked{{if $e.Text}}: {{$e.Text}}{{end}}
+{{- else if eq $e.Kind "build"}} {{template "who" .Actor}} built {{$e.Object}}{{if $e.Text}} on {{$e.Text}}{{end}}
+{{- else if eq $e.Kind "dismantle"}} {{template "who" .Actor}} dismantled {{$e.Object}}{{if $e.Text}} of {{$e.Text}}{{end}}
+{{- else if eq $e.Kind "destroy"}} {{if or $e.SteamID $e.Name}}{{template "who" .Actor}} destroyed{{else}}Destroyed{{end}} {{$e.Object}}{{if $e.Text}} of {{$e.Text}}{{end}}
+{{- else if eq $e.Kind "lock_cut"}} {{template "who" .Actor}} cut the combination lock of {{$e.Text}}{{if $e.Weapon}} with {{$e.Weapon}}{{end}}
+{{- else if eq $e.Kind "flag_raised"}} {{template "who" .Actor}} raised {{$e.Text}}
+{{- else if eq $e.Kind "flag_lowered"}} {{template "who" .Actor}} lowered {{$e.Text}}
+{{- else if eq $e.Kind "stash_buried"}} {{template "who" .Actor}} buried a stash{{if $e.Object}} ({{$e.Object}}){{end}}
+{{- else if eq $e.Kind "stash_dug_up"}} {{template "who" .Actor}} dug up a stash{{if $e.Object}} ({{$e.Object}}){{end}}
+{{- else if eq $e.Kind "admin"}} <span class="adm">{{$e.Name}}</span> {{$e.Text}}{{if $e.Object}} <em>(refused: {{$e.Object}})</em>{{end}}
+{{- else if eq $e.Kind "dropped"}} {{$e.Text}} events were lost
+{{- else}} {{$e.Kind}} {{$e.Text}}
+{{- end}}
+{{- if $e.HasPos}} <a class="pos" href="{{.MapHref}}"><i class="fa fa-map-marker" aria-hidden="true"></i>{{printf "%.0f / %.0f" $e.X $e.Z}}</a>{{end}}</li>
+{{end}}

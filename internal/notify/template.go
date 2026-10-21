@@ -30,6 +30,7 @@ var defaultTemplates = map[Kind]string{
 	KindDriftDetected:          "⚠️ {{.Instance}}: drift on {{.Data.Path}} (backed up, overwritten)",
 	KindSteamLoginRequired:     "🔑 Steam login required ({{.Data.Reason}})",
 	KindJobFailed:              "❌ job {{.Data.Job}} failed: {{.Data.Error}}",
+	KindKill:                   "{{.Data.Lines}}",
 }
 
 // coalescedTemplates render a batch of same-kind events as one message
