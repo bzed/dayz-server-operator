@@ -66,6 +66,9 @@ func (r *Registry) Add(h *Hub) *Hub {
 		old.mu.Unlock()
 		return old
 	}
+	if h.Logf == nil {
+		h.Logf = r.logf
+	}
 	r.hubs[h.Name] = h
 	return h
 }

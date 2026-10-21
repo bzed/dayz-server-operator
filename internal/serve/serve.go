@@ -39,6 +39,11 @@ func APITokens(cfg *config.Config) string { return filepath.Join(cfg.Paths.Secre
 // AuditLog is the audit log file.
 func AuditLog(cfg *config.Config) string { return filepath.Join(cfg.Paths.DB, "audit.jsonl") }
 
+// FeedLogPath is the on-disk copy of an instance's event feed.
+func FeedLogPath(cfg *config.Config, instance string) string {
+	return filepath.Join(cfg.Paths.DB, "feed", instance+".jsonl")
+}
+
 // BanDB is the moderation database (bans, evidence, sightings).
 func BanDB(cfg *config.Config) string { return filepath.Join(cfg.Paths.DB, "dzo.sqlite") }
 
@@ -119,7 +124,10 @@ func AddHubs(reg *admin.Registry, cfg *config.Config, tree *site.Tree) error {
 		for _, w := range watchRules(inst) {
 			h.Styles[w.Layer] = admin.Layer{Name: w.Layer, Icon: w.Icon, Color: w.Color, Visibility: w.Visibility}
 		}
-		reg.Add(h)
+		h = reg.Add(h)
+		if err := h.UseFeedLog(&admin.FeedLog{Path: FeedLogPath(cfg, inst.Name)}); err != nil {
+			return fmt.Errorf("instance %s: %w", inst.Name, err)
+		}
 	}
 	return nil
 }

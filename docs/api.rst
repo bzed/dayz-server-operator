@@ -163,6 +163,15 @@ Every action, including refused and rate-limited ones, is written to the audit
 log (``${paths.db}/audit.jsonl``) with the actor, the source, the target and the
 result.
 
+Event feed
+----------
+
+``dzo serve`` keeps the newest 1000 game events of every instance (kills, deaths, joins and leaves, base
+building, chat, admin actions, see below). They are also written to ``${paths.db}/feed/<instance>.jsonl``
+(mode ``0600``, one JSON object per line), so the feed is not empty after ``dzo serve`` restarts. The file
+holds chat and positions, which is personal data: it keeps at most the newest 1000 events per instance and is
+safe to delete, the feed then starts empty.
+
 Bans and evidence
 -----------------
 

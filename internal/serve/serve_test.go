@@ -213,3 +213,24 @@ func TestBanInstancesNeedTheRConPassword(t *testing.T) {
 	assert.Equal(t, "secret", insts[0].RConPass)
 	assert.Equal(t, filepath.Join(cfg.Paths.Instances, "alpha", "profiles", "battleye"), insts[0].BEDir)
 }
+
+func TestAddHubsFeedLog(t *testing.T) {
+	cfg, tree := fixture(t)
+	reg := admin.NewRegistry(TokenDir(cfg))
+	require.NoError(t, AddHubs(reg, cfg, tree))
+	h, _ := reg.Hub("alpha")
+	h.AddFeed(admin.FeedEvent{Kind: admin.FeedChat, Text: "hi"})
+	path := FeedLogPath(cfg, "alpha")
+	require.Equal(t, filepath.Join(cfg.Paths.DB, "feed", "alpha.jsonl"), path)
+	require.FileExists(t, path)
+
+	// A reload keeps the hub, a fresh registry (restart) loads the log.
+	require.NoError(t, AddHubs(reg, cfg, tree))
+	require.Len(t, h.Feed(0, 0), 1)
+	fresh := admin.NewRegistry(TokenDir(cfg))
+	require.NoError(t, AddHubs(fresh, cfg, tree))
+	h2, _ := fresh.Hub("alpha")
+	got := h2.Feed(0, 0)
+	require.Len(t, got, 1)
+	require.Equal(t, "hi", got[0].Text)
+}
