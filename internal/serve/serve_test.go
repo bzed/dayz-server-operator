@@ -271,7 +271,7 @@ func TestRunKillfeedPosts(t *testing.T) {
 		require.Equal(t, "💀 **Alice** killed **Bob** with M4-A1 (123 m)", ev.Data["Lines"])
 		require.Equal(t, []string{"pvp"}, *ev.Targets)
 	case <-time.After(5 * time.Second):
-		t.Fatal("the kill was not posted")
+		require.Fail(t, "the kill was not posted")
 	}
 	cancel()
 	require.NoError(t, <-done)

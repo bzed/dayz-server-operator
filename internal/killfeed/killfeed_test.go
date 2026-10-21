@@ -55,9 +55,9 @@ func TestLineEscapes(t *testing.T) {
 		require.NotContains(t, body, "\n")
 		require.NotContains(t, body, "\r")
 		require.NotRegexp(t, `(^|[^\\])[*`+"`"+`|_~\[\]]`, strings.ReplaceAll(body, "**", ""), name)
-		require.NotRegexp(t, "@[^​]", body+"x", name)
+		require.NotRegexp(t, "@[^\u200b]", body+"x", name)
 	}
-	require.Contains(t, Line(admin.FeedEvent{Kind: admin.FeedKill, Name: "@everyone", TargetName: "B"}), "@​everyone")
+	require.Contains(t, Line(admin.FeedEvent{Kind: admin.FeedKill, Name: "@everyone", TargetName: "B"}), "@\u200beveryone")
 }
 
 func TestLineCapsLongNames(t *testing.T) {
@@ -365,7 +365,7 @@ func TestCancelEndsAHungPost(t *testing.T) {
 	select {
 	case <-done:
 	case <-time.After(5 * time.Second):
-		t.Fatal("Wait did not return after cancel")
+		require.Fail(t, "Wait did not return after cancel")
 	}
 }
 

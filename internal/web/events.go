@@ -89,7 +89,7 @@ func (r feedRow) DeathText() string {
 
 // MapHref opens the map with the place marked.
 func (r feedRow) MapHref() string {
-	label := r.E.Name
+	var label string
 	switch r.E.Kind {
 	case admin.FeedKill:
 		label = r.E.Name + " killed " + r.E.TargetName

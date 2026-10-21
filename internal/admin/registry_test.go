@@ -340,6 +340,6 @@ func TestAuditOnLog(t *testing.T) {
 	require.Len(t, got, 1)
 	require.False(t, got[0].Time.IsZero(), "the callback sees the stamped entry")
 	blocked := NewAudit(filepath.Join(a.Path, "x"))
-	blocked.OnLog = func(AuditEntry) { t.Fatal("called for a failed write") }
+	blocked.OnLog = func(AuditEntry) { require.Fail(t, "called for a failed write") }
 	require.Error(t, blocked.Log(AuditEntry{}))
 }

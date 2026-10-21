@@ -108,9 +108,15 @@ func TestStreamOnlyPassed(t *testing.T) {
 	done := make(chan struct{})
 	go func() { // the relay connects to the API in the background: add events until one arrives
 		defer close(done)
-		for ctx.Err() == nil {
+		tick := time.NewTicker(10 * time.Millisecond)
+		defer tick.Stop()
+		for {
 			e.hub.AddFeed(admin.FeedEvent{Kind: admin.FeedChat, Text: "ping"})
-			time.Sleep(10 * time.Millisecond)
+			select {
+			case <-ctx.Done():
+				return
+			case <-tick.C:
+			}
 		}
 	}()
 	var kinds []string

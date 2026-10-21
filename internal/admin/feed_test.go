@@ -74,7 +74,7 @@ func TestFeedAfterAndLimit(t *testing.T) {
 
 func TestAddFeedEmits(t *testing.T) {
 	h, _ := testHub()
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	ch := h.Subscribe(ctx)
 	stored := h.AddFeed(FeedEvent{Kind: FeedChat, Text: "hi"})
@@ -83,7 +83,7 @@ func TestAddFeedEmits(t *testing.T) {
 		require.Equal(t, "feed", ev.Kind)
 		require.Equal(t, stored, ev.Data)
 	case <-time.After(time.Second):
-		t.Fatal("no feed event")
+		require.Fail(t, "no feed event")
 	}
 }
 

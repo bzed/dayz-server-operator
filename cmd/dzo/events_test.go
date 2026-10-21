@@ -161,7 +161,6 @@ type fakeFeed struct {
 	streams [][]int64         // per connection: ids to send, then close
 	conns   int
 	after   []int64 // the after= of every feed request
-	cancel  context.CancelFunc
 }
 
 func (f *fakeFeed) handler() http.Handler {

@@ -206,9 +206,15 @@ func TestFeedAndStreamOnly(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		for ctx.Err() == nil {
+		tick := time.NewTicker(10 * time.Millisecond)
+		defer tick.Stop()
+		for {
 			hub.AddFeed(admin.FeedEvent{Kind: admin.FeedChat, Text: "three"})
-			time.Sleep(10 * time.Millisecond)
+			select {
+			case <-ctx.Done():
+				return
+			case <-tick.C:
+			}
 		}
 	}()
 	var kinds []string
