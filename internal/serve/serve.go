@@ -203,6 +203,8 @@ func Run(ctx context.Context, cfg *config.Config, o Options) error {
 	mctx, mcancel := context.WithCancel(ctx)
 	svc := moderation.NewService(store, audit, logf)
 	svc.AddressRetention, svc.VacuumEvery = cfg.Serve.IPRetention(), cfg.Serve.VacuumEvery()
+	svc.OnEvent = feedFromRCon(reg)
+	audit.OnLog = feedFromAudit(reg)
 	svc.Start(mctx)
 	defer func() { mcancel(); svc.Wait() }()
 	if insts, err := BanInstances(cfg, tree, logf); err != nil {
