@@ -156,7 +156,11 @@ hour at that minute, and ``hourly`` is short for ``*:00``:
 
    restarts:
      schedule: ["02:00", "06:00", "10:00", "14:00", "18:00", "22:00"]
-     announce: {minutes: 30, lock: 7, kick: 3}
+     announce:
+       minutes: 30
+       lock: 7
+       kick: 3
+       text: "Restart"      # the message; ways: is described above
 
 ``dzo instance apply <name>`` turns them into ``dzo-restart-<name>.timer``. The times are the
 restart itself: the timer fires ``announce.minutes`` earlier, when the countdown starts (04:00 with
@@ -237,15 +241,18 @@ the site defaults) is a list of regular expressions, matched against the path be
 .. code-block:: yaml
 
    logs:
-     rotate:                 # added to the site's list; the default is the server's own files
+     rotate:                 # added to the site's list; any rule here replaces the default list (the server's own files)
        - {match: '^DayZServer(_x64)?_.*\.RPT$'}
        - {match: '^script_.*\.log$'}
        - {match: '\.mdmp$', max_age: 14d}
        - {match: '^VPPAdminTools/Logs/.*\.txt$'}
        - {match: '^battleye/.*\.log$', keep_newest: 2}
-     keep_newest: 1          # per rule, the newest matches stay in place
-     min_age: 10m            # a file changed more recently is never touched
-     archive: {compress: gzip, max_age: 90d, max_size: 50GiB}
+     keep_newest: 1          # default 1; per rule, the newest matches stay in place
+     min_age: 10m            # default; a file changed more recently is never touched
+     archive:
+       compress: gzip        # default; or none
+       max_age: 90d          # default
+       max_size: 50GiB       # default: no limit
 
 A rule that needs no options can be a plain string: ``- '^RFMosquito_.*\.log$'`` is the same as ``- {match: '^RFMosquito_.*\.log$'}``.
 

@@ -23,11 +23,11 @@ player IP addresses.
    exporter:
      listen: ":9464"
      tls:
-       cert_file: /etc/dzo/tls/cert.pem
-       key_file: /etc/dzo/tls/key.pem
-       client_ca_file: null        # set for mutual TLS
-     allow: ["192.0.2.0/24"]       # optional IP allow-list
-     bearer_token_file: null       # optional
+       cert_file: /etc/dzo/tls/cert.pem      # default: empty (plain HTTP); with key_file
+       key_file: /etc/dzo/tls/key.pem        # default: empty
+       client_ca_file: /etc/dzo/tls/ca.pem   # default: empty; set for mutual TLS (needs cert_file)
+     allow: ["192.0.2.0/24"]       # default: none = every address; otherwise a CIDR allow-list
+     bearer_token_file: /var/lib/dzo/secrets/exporter.token   # default: empty = no token
 
 **Certificates are reloaded without restarts.** Replace the files (for example
 from a certbot or lego deploy hook) and run

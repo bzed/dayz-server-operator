@@ -17,8 +17,9 @@ Create an empty git repository for your configuration and add it to
 .. code-block:: yaml
 
    site:
-     remote: git@<git host>:<you>/dayz-site.git   # or a local path
+     remote: ssh://git@<git host>/<you>/dayz-site.git   # or https://, or a local path
      branch: main
+     # a minimal file: every other key has a default, see Configuration for all of them
 
 .. code-block:: sh
 
@@ -46,10 +47,12 @@ Create ``instances/chernarus/instance.yaml`` in the site repository:
    product: dayz-stable
    map: dayzOffline.chernarusplus   # mission source: Bohemia's Central Economy repository
    ports: {game: 2302, rcon: 2303, query: 27016}
-   network: host
+   network: host                   # required: host or publish
    mods: []
    restarts:
      schedule: ["00:00", "04:00", "08:00", "12:00", "16:00", "20:00"]    # every 4 hours
+
+This is a minimal file; every key and its default is in :ref:`instance-yaml`.
 
 Without ``mission_source`` the mission comes from the ``dayzOffline.chernarusplus``
 folder of the Central Economy repository (see :doc:`missions`). Add a

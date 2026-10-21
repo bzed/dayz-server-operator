@@ -66,8 +66,17 @@ own. Point ``site.yaml`` at it and enable it per instance:
    # instances/deerisle/instance.yaml
    mods:
      - {local: dzo-admin, server: true}
-   admin:
-     deny_classes: ["Land_*"]
+   admin:                         # every key is optional
+     disabled: false              # default; true switches the integration off
+     sync_ms: 1000                # defaults: 1000 ms, then seconds below
+     players_s: 5
+     vehicles_s: 60
+     markers_s: 10
+     events_s: 30
+     allow_spawn: true            # default
+     allow_classes: []            # default: none
+     deny_classes: ["Land_*"]     # trailing * = prefix
+     vehicle_kinds: {bicycle: ["Bike_*"], helicopter: ["MyHeli_*"]}   # default: none
 
 Run ``dzo mod add dzo-admin --instance deerisle --server`` to install it, then
 start the instance. dzo recognises the mod by the name ``dzo-admin``.
@@ -287,7 +296,9 @@ Configure per instance which object classes appear on the map:
 
    admin_map:
      watch:
-       - {layer: campfire,  classes: ["FireplaceBase"], icon: fire, color: "#e67e22", max: 200}
+       # all keys: layer and classes are required
+       - {layer: campfire,  classes: ["FireplaceBase"], icon: fire, color: "#e67e22", max: 200,
+          label: "Campfire", visibility: viewer, cluster: 0}
        - {layer: ufo_crash, classes: ["UFO_Crash_Site*"], icon: rocket, color: "#8e44ad", label: "UFO"}
        - {layer: ai_convoy, classes: ["eAIBase"], icon: android, color: red, cluster: 50}
 

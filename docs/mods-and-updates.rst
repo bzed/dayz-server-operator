@@ -102,13 +102,20 @@ To avoid a restart for every single mod push, updates can be batched:
 .. code-block:: yaml
 
    updates:
-     policy: auto
+     policy: auto                            # default; auto | notify | manual
+     check_interval: 1h                      # default; how often the check runs for this instance
      window: ["06:00-10:00", "14:00-16:00"]   # only restart in these windows
      quiet_hours: ["18:00-24:00"]            # never restart for updates here
      min_restart_interval: 4h
      batch_delay: 20m                        # wait for more updates after the first
      apply_with_scheduled_restart: true      # use a maintenance restart if one is near
-     max_delay: 12h
+     max_delay: 12h                          # apply after this long, whatever window and quiet_hours say
+     restart_minute: 0                       # restart at this minute of the hour, see below
+     restart_announce: {minutes: 12, lock: 5, kick: 2, text: "MOD UPDATE! Restart"}   # the countdown, plus ways:
+
+Every key is optional and unset by default except ``policy`` and ``check_interval``. The block can be
+set in ``instance.yaml`` or under ``defaults:`` in ``site.yaml``; a key the instance sets replaces the
+site's. All keys are explained in :doc:`configuration`.
 
 All pending mod updates of an instance are applied in one restart.
 

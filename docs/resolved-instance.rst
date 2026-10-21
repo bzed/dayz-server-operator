@@ -19,8 +19,9 @@ Defaults
 
 ``site.yaml`` can set ``image`` (the runtime image, default
 ``localhost/dzo-runtime:latest``) and a ``defaults`` block. It may contain
-``params``, ``updates``, ``restarts``, ``health``, ``restart_limit``, ``notify``
-and ``container``. Whatever an instance leaves unset is taken from there, field
+``rcon_bind``, ``params``, ``updates``, ``restarts``, ``health``, ``restart_limit``, ``stop``,
+``notify``, ``container``, ``backup``, ``logs``, ``admin_map``, ``welcome`` and ``messages``,
+with the keys of ``instance.yaml``; the complete file is in :ref:`site-yaml`. Whatever an instance leaves unset is taken from there, field
 by field; a value set in ``instance.yaml`` always wins.
 
 .. code-block:: yaml

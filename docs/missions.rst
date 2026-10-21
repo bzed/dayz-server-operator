@@ -117,20 +117,40 @@ contributes and where they come from:
 
 .. code-block:: yaml
 
-   mod: 2291785308
-   name: DayZExpansionCore
-   files:
+   mod: 2291785308                  # required: the workshop id
+   name: DayZExpansionCore          # required: a label for reports
+   aliases: [2291785437]            # default: none; further workshop ids that use this integration
+   normalize: [xml-decl]            # default: none; eventposdef-root | wrap-root | xml-decl
+   files:                           # default: none; the key is the file name
      types.xml:             {source: local, path: files/types.xml}
      cfgspawnabletypes.xml: {source: url, url: https://…, sha256: …}
      cfgeventspawns.xml:    {source: local, path: files/cfgeventspawns.xml,
                              maps: [dayzOffline.chernarusplus]}
      events.xml:            {source: mod, path: ./info/events.xml}
    hooks:
-     post_merge: [hooks/remove-static-trains.sh]
+     post_merge: [hooks/remove-static-trains.sh]   # default: none
 
-``source`` is ``local`` (in the site repository), ``url`` (downloaded, cached,
-optionally pinned by hash) or ``mod`` (a file shipped inside the mod). dzo never
-changes the downloaded mod itself.
+``mod`` and ``name`` are required; ``mod`` is the workshop id the integration is for, and
+``aliases`` lists further workshop ids that use the same integration. Each entry of ``files`` has a ``source``, which is ``local`` (in the site repository,
+needs ``path``, relative to the integration's folder), ``url`` (downloaded, cached, needs
+``url``; ``sha256`` pins it by hash and is verified) or ``mod`` (a file shipped inside the mod,
+needs ``path``). ``maps`` restricts an entry to the listed maps (the ``map`` of the instance); the
+same file name may then appear for several maps. ``normalize`` is explained at the end of
+:ref:`the merge <merge-details>`. ``hooks.post_merge`` is a list of scripts, see Hooks below.
+dzo never changes the downloaded mod itself.
+
+An instance can replace an integration for itself with ``instances/<name>/integrations/<modid>/``
+(same file, same keys); it takes the place of the shared one as a whole, key by key not merged.
+
+A map preset, ``integrations/maps/<name>.yaml``, is a mission source an instance refers to
+with ``mission_source: {preset: <name>}``. All three keys are required; ``ref`` and ``path``
+of the instance's ``mission_source`` replace them:
+
+.. code-block:: yaml
+
+   git: https://<git host>/<owner>/DeerIsle-mission.git   # the repository
+   ref: main                                              # a branch, tag or commit
+   path: empty.deerisle                                   # the mission folder in the repository
 
 Each file type has a fixed merge strategy:
 
@@ -181,8 +201,13 @@ dzo then adds the references with the right path:
 
 .. code-block:: yaml
 
-   object_spawners: ["*.json"]
-   spawn_gear_presets: ["loadout-*.json"]
+   object_spawners: ["*.json"]            # default: none; file name patterns, in the overlay
+   spawn_gear_presets: ["loadout-*.json"] # default: none
+   restricted_areas: ["areas-*.json"]     # default: none
+
+Each key lists patterns of file names of the overlay that go into the list of that name in
+``cfggameplay.json``: ``object_spawners`` (``objectSpawnersArr``), ``spawn_gear_presets``
+(``spawnGearPresetFiles``) and ``restricted_areas`` (``playerRestrictedAreaFiles``).
 
 Hooks
 -----
@@ -229,6 +254,8 @@ and these variables: ``DZO_INSTANCE``, ``DZO_HOOK_POINT``, ``DZO_MAP``,
      - is printed
 
 ``dzo instance hook <name> <point>`` runs the scripts of one point by hand.
+
+.. _merge-details:
 
 The merge itself
 ~~~~~~~~~~~~~~~~

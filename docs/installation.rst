@@ -124,9 +124,11 @@ everything under ``/var/lib/dzo``. To use another location, for example
      data: /srv/dayz
      instances: ${data}/instances    # must be btrfs
      snapshots: ${data}/snapshots    # same btrfs filesystem as instances
+     logs: ${data}/logs              # archive of rotated profile logs
      cache: ${data}/cache
      secrets: ${data}/secrets
      db: ${data}/db
+     site: ${data}/site              # checkout of the site repository
 
 Run the setup
 -------------

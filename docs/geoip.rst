@@ -96,7 +96,7 @@ The directories can be changed in the :doc:`configuration <configuration>`:
 
 .. code-block:: yaml
 
-   serve:
+   serve:                                # excerpt of config.yaml, all keys: see Configuration
      geoip_dir: /var/lib/GeoIP           # GeoLite2-City, -Country and -ASN (.mmdb)
      geoip_legacy_dir: /usr/share/GeoIP  # GeoIP.dat and GeoIPv6.dat
    web:

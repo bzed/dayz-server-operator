@@ -76,13 +76,13 @@ and run ``dzo site pull`` on the host; ``dzo site validate`` checks the file.
 
    # instances/<name>/instance.yaml
    backup:
-     before: [update, mod_update, mission_update, config_change]
-     schedule: []              # times of day, like restarts.schedule
-     keep: 20
-     keep_by_reason: {mod_update: 8, update: 10, scheduled: 12}
-     max_age: 30d
-     min_keep: 3               # never fewer, regardless of age
-     min_free_bytes: 50GiB     # prune the oldest first to keep this free
+     before: [update, mod_update, mission_update, config_change]   # default; also: render; [] = none
+     schedule: []              # default: none; times of day, like restarts.schedule
+     keep: 20                  # default
+     keep_by_reason: {mod_update: 8, update: 10, scheduled: 12}    # default: no per-reason limit
+     max_age: 30d              # default: no age limit
+     min_keep: 3               # default; never fewer, regardless of age
+     min_free_bytes: 50GiB     # default: none; prune the oldest first to keep this free
 
 ``schedule`` takes the same entries as ``restarts.schedule``: ``HH:MM``, or
 ``Mon,Thu HH:MM`` for some weekdays only, and ``*:MM`` for every hour at that

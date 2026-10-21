@@ -35,8 +35,8 @@ token created *on that installation*:
 
 .. code-block:: yaml
 
-   web:
-     backends:
+   web:                             # excerpt; every key of ``web:`` is explained in :doc:`configuration`
+     backends:                      # name, url and token_file are all required
        - {name: eu, url: "https://dzo-eu.example.invalid", token_file: /var/lib/dzo/secrets/eu.token}
        - {name: us, url: "https://dzo-us.example.invalid", token_file: /var/lib/dzo/secrets/us.token}
 
