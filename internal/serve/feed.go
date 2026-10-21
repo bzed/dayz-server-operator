@@ -42,13 +42,11 @@ func feedFromAudit(reg *admin.Registry) func(admin.AuditEntry) {
 		if !ok {
 			return
 		}
-		var parts []string
-		for _, p := range []string{e.Action, e.Target, e.Detail} {
-			if p != "" {
-				parts = append(parts, p)
-			}
+		text := strings.TrimSpace(e.Action + " " + e.Target)
+		if e.Detail != "" {
+			text += " (" + e.Detail + ")"
 		}
-		fe := admin.FeedEvent{Kind: admin.FeedAdmin, Name: e.Actor, Text: strings.Join(parts, " ")}
+		fe := admin.FeedEvent{Kind: admin.FeedAdmin, Name: e.Actor, Text: text}
 		if !e.OK {
 			fe.Object = e.Result
 		}

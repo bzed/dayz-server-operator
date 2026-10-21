@@ -64,7 +64,7 @@ func TestFeedFromAudit(t *testing.T) {
 	require.Len(t, got, 2)
 	require.Equal(t, admin.FeedAdmin, got[0].Kind)
 	require.Equal(t, "web:bernd", got[0].Name)
-	require.Equal(t, "player.kick 76561198000000001 spam", got[0].Text)
+	require.Equal(t, "player.kick 76561198000000001 (spam)", got[0].Text)
 	require.Equal(t, "76561198000000001", got[0].TargetSteamID)
 	require.Empty(t, got[0].Object)
 	require.Empty(t, got[1].TargetSteamID)

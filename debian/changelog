@@ -41,5 +41,14 @@ dayz-server-operator (0.1.0-1) UNRELEASED; urgency=medium
     operators; dzo-admin 0.4.0 (the packaged PBO changes). Operators can
     raise a flag from the map (new permission flag.raise, dzo flag raise,
     POST /instances/<i>/flags/<id>/raise).
+  * Event feed: dzo-admin 0.5.0 reports kills (Expansion AI too), deaths,
+    joins and leaves, base building and raids, flags and stashes; dzo adds
+    in-game chat (BattlEye RCon) and admin actions. The newest 1000 events
+    per instance are kept in <paths.db>/feed/<instance>.jsonl. GET
+    /instances/<i>/feed, stream?only=feed, a live events page with a chat
+    input in the web interface, dzo events [-f] on the console, and a Discord
+    killfeed (instance.yaml killfeed, with an optional delay for PvP servers;
+    Discord posts no longer ping anyone). The notifier gets a 10 second HTTP
+    timeout.
 
  -- Bernd Zeimetz <bernd@bzed.de>  Sat, 26 Sep 2026 15:00:00 +0000

@@ -18,34 +18,6 @@ import (
 // backlogRows is how many events the events page opens with.
 const backlogRows = 200
 
-// feedGroup is a checkbox of the events page's filter.
-type feedGroup struct {
-	ID, Label string
-	Kinds     []string
-}
-
-var feedGroups = []feedGroup{
-	{"kills", "Kills & deaths", []string{admin.FeedKill, admin.FeedDeath}},
-	{"chat", "Chat", []string{admin.FeedChat}},
-	{"players", "Players", []string{admin.FeedConnect, admin.FeedDisconnect, admin.FeedKick}},
-	{"building", "Base building", []string{admin.FeedBuild, admin.FeedDismantle}},
-	{"raids", "Raids", []string{admin.FeedDestroy, admin.FeedLockCut}},
-	{"flags", "Flags", []string{admin.FeedFlagRaised, admin.FeedFlagLowered}},
-	{"stashes", "Stashes", []string{admin.FeedStashBuried, admin.FeedStashDugUp}},
-	{"admin", "Admin", []string{admin.FeedAdmin, admin.FeedDropped}},
-}
-
-func groupOf(kind string) string {
-	for _, g := range feedGroups {
-		for _, k := range g.Kinds {
-			if k == kind {
-				return g.ID
-			}
-		}
-	}
-	return "other"
-}
-
 var feedIcons = map[string]string{
 	admin.FeedKill: "crosshairs", admin.FeedDeath: "heartbeat", admin.FeedConnect: "sign-in", admin.FeedDisconnect: "sign-out",
 	admin.FeedChat: "comment", admin.FeedKick: "ban", admin.FeedBuild: "cube", admin.FeedDismantle: "wrench",
@@ -73,7 +45,7 @@ func feedRows(backend, instance string, evs []admin.FeedEvent) []feedRow {
 	return out
 }
 
-func (r feedRow) Group() string { return groupOf(r.E.Kind) }
+func (r feedRow) Group() string { return admin.FeedGroupOf(r.E.Kind) }
 func (r feedRow) Icon() string {
 	if i, ok := feedIcons[r.E.Kind]; ok {
 		return i
@@ -142,7 +114,7 @@ func isSteamID(s string) bool {
 type eventsView struct {
 	Backend, Instance string
 	Rows              []feedRow
-	Groups            []feedGroup
+	Groups            []admin.FeedGroup
 	Last              int64
 	CanBroadcast      bool
 	Expansion         bool
@@ -155,7 +127,7 @@ func (s *Server) eventsPage(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	v := eventsView{Backend: b.Name, Instance: inst, Groups: feedGroups}
+	v := eventsView{Backend: b.Name, Instance: inst, Groups: admin.FeedGroups}
 	evs, err := c.Feed(r.Context(), inst, 0, backlogRows)
 	if err != nil {
 		v.Err = err.Error()
