@@ -22,6 +22,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -144,6 +145,7 @@ type Instance struct {
 	RestartLimit site.RestartLimit    `yaml:"restart_limit"`
 	Stop         site.StopConfig      `yaml:"stop"`
 	Notify       site.NotifyConfig    `yaml:"notify"`
+	Killfeed     site.KillfeedConfig  `yaml:"killfeed,omitempty"`
 	Container    site.ContainerConfig `yaml:"container"`
 	Hooks        site.HooksConfig     `yaml:"hooks"`
 	// Binary is the dzo executable the unit runs and mounts (config.yaml binary).
@@ -237,6 +239,11 @@ func Resolve(cfg *config.Config, t *site.Tree, name string) (*Instance, error) {
 	if !ok {
 		return nil, fmt.Errorf("instance %q: unknown product %q (not in config.yaml products)", name, raw.Product)
 	}
+	for _, w := range raw.Killfeed.Discord {
+		if !slices.ContainsFunc(cfg.Notify.Discord, func(d config.DiscordWebhook) bool { return d.Name == w }) {
+			return nil, fmt.Errorf("instance %q: killfeed.discord: webhook %q is not in config.yaml notify.discord", name, w)
+		}
+	}
 	src, err := missionSource(t, raw)
 	if err != nil {
 		return nil, fmt.Errorf("instance %q: %w", name, err)
@@ -247,7 +254,7 @@ func Resolve(cfg *config.Config, t *site.Tree, name string) (*Instance, error) {
 		Binary: cfg.Binary,
 		Name:   name, Map: raw.Map, Ports: raw.Ports, RConBind: raw.RConBind, Network: raw.Network, Image: t.Site.Image,
 		Params: raw.Params, Overlays: raw.Overlays, Updates: raw.Updates, Restarts: raw.Restarts,
-		Health: raw.Health, RestartLimit: raw.RestartLimit, Stop: raw.Stop, Notify: raw.Notify, Container: raw.Container, Hooks: raw.Hooks, Backup: raw.Backup, Logs: raw.Logs, Admin: raw.Admin, AdminMap: raw.AdminMap, Welcome: raw.Welcome, Messages: raw.Messages, Priority: raw.Priority,
+		Health: raw.Health, RestartLimit: raw.RestartLimit, Stop: raw.Stop, Notify: raw.Notify, Killfeed: raw.Killfeed, Container: raw.Container, Hooks: raw.Hooks, Backup: raw.Backup, Logs: raw.Logs, Admin: raw.Admin, AdminMap: raw.AdminMap, Welcome: raw.Welcome, Messages: raw.Messages, Priority: raw.Priority,
 		Mission: Mission{Source: src, Fallback: raw.FallbackMission, Unmanaged: raw.Mission.Unmanaged, Drift: raw.Mission.Drift},
 		Product: Product{Name: raw.Product, Product: prod},
 		Paths: Paths{

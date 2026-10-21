@@ -122,6 +122,10 @@ crash loops, failed renders, mission drift, Steam login required, and failed
 jobs. Bursts are combined into one message ("12 mods updated, 3 servers
 restarting").
 
+The killfeed, which posts the kills of a game server, is a separate setting of the instance
+(``killfeed``, see :doc:`configuration`) and uses the same webhooks. Give it its own webhook for
+the public channel; ``notify.discord`` stays for the operator.
+
 .. code-block:: sh
 
    dzo notify test [--target admins]

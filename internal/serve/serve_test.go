@@ -17,6 +17,7 @@ import (
 	"github.com/bzed/dayz-server-operator/internal/api"
 	"github.com/bzed/dayz-server-operator/internal/apiclient"
 	"github.com/bzed/dayz-server-operator/internal/config"
+	"github.com/bzed/dayz-server-operator/internal/notify"
 	"github.com/bzed/dayz-server-operator/internal/resolve"
 	"github.com/bzed/dayz-server-operator/internal/site"
 	"github.com/stretchr/testify/assert"
@@ -233,4 +234,45 @@ func TestAddHubsFeedLog(t *testing.T) {
 	got := h2.Feed(0, 0)
 	require.Len(t, got, 1)
 	require.Equal(t, "hi", got[0].Text)
+}
+
+func TestRunKillfeedPosts(t *testing.T) {
+	cfg, tree := fixture(t)
+	cfg.Notify.Discord = []config.DiscordWebhook{{Name: "pvp", URL: "https://example.invalid/hook"}}
+	alpha := tree.Instances["alpha"]
+	alpha.Killfeed = site.KillfeedConfig{Discord: []string{"pvp"}}
+	tree.Instances["alpha"] = alpha
+	insts, _ := resolve.ResolveAll(cfg, tree)
+	require.NoError(t, WriteModConfig(cfg, insts[0]))
+	tokenB, _ := os.ReadFile(filepath.Join(TokenDir(cfg), "alpha.token"))
+
+	posted := make(chan notify.Event, 4)
+	ready := make(chan [2]string, 1)
+	ctx, cancel := context.WithCancel(t.Context())
+	done := make(chan error, 1)
+	go func() {
+		done <- Run(ctx, cfg, Options{
+			Version: "test", Load: func() (*site.Tree, error) { return tree, nil },
+			Ready:  func(a, m string) { ready <- [2]string{a, m} },
+			Logf:   t.Logf,
+			Notify: func(_ context.Context, ev notify.Event) error { posted <- ev; return nil },
+		})
+	}()
+	addrs := <-ready
+	body := `{"token":"` + strings.TrimSpace(string(tokenB)) + `","protocol":1,"hello":true,"has":["feed"],` +
+		`"feed":[{"seq":1,"kind":"kill","name":"Alice","target_name":"Bob","weapon":"M4-A1","distance":123.4}]}`
+	resp, err := http.Post("http://"+addrs[1]+"/mod/v1/sync", "application/json", strings.NewReader(body))
+	require.NoError(t, err)
+	_ = resp.Body.Close()
+	select {
+	case ev := <-posted:
+		require.Equal(t, notify.KindKill, ev.Kind)
+		require.Equal(t, "alpha", ev.Instance)
+		require.Equal(t, "💀 **Alice** killed **Bob** with M4-A1 (123 m)", ev.Data["Lines"])
+		require.Equal(t, []string{"pvp"}, *ev.Targets)
+	case <-time.After(5 * time.Second):
+		t.Fatal("the kill was not posted")
+	}
+	cancel()
+	require.NoError(t, <-done)
 }

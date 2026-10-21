@@ -31,6 +31,8 @@ const (
 	KindDriftDetected          Kind = "drift_detected"
 	KindSteamLoginRequired     Kind = "steam_login_required"
 	KindJobFailed              Kind = "job_failed"
+	// KindKill carries the lines of the killfeed in Data["Lines"], already escaped for Discord.
+	KindKill Kind = "kill"
 )
 
 // Event is one notification. Data feeds the Kind's message template; the

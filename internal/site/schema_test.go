@@ -390,3 +390,28 @@ func TestAdminConfigVehicleKinds(t *testing.T) {
 	err = (AdminConfig{VehicleKinds: map[string][]string{"rocket": {"X"}}}).Validate()
 	require.Error(t, err, "an unknown kind must fail: its icon would not exist")
 }
+
+func TestKillfeedValidateDelay(t *testing.T) {
+	i := validInstance()
+	i.Killfeed = KillfeedConfig{Discord: []string{"default"}, Delay: Duration(10 * time.Minute)}
+	require.NoError(t, i.Validate())
+	i.Killfeed.Delay = Duration(24 * time.Hour)
+	require.NoError(t, i.Validate(), "24h is the longest delay")
+	for _, d := range []time.Duration{-time.Second, 24*time.Hour + time.Second} {
+		i.Killfeed.Delay = Duration(d)
+		err := i.Validate()
+		require.Error(t, err, d.String())
+		require.Contains(t, err.Error(), "killfeed.delay")
+	}
+}
+
+func TestKillfeedYAML(t *testing.T) {
+	var i Instance
+	require.NoError(t, yaml.Unmarshal([]byte("killfeed:\n  discord: [pvp]\n  delay: 10m\n  ai_killers: false\n  deaths: true\n"), &i))
+	require.Equal(t, []string{"pvp"}, i.Killfeed.Discord)
+	require.Equal(t, 10*time.Minute, i.Killfeed.Delay.Std())
+	require.NotNil(t, i.Killfeed.AIKillers)
+	require.False(t, *i.Killfeed.AIKillers)
+	require.True(t, i.Killfeed.Deaths)
+	require.False(t, i.Killfeed.AIVictims)
+}

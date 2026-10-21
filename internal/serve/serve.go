@@ -21,7 +21,9 @@ import (
 	"github.com/bzed/dayz-server-operator/internal/api"
 	"github.com/bzed/dayz-server-operator/internal/config"
 	"github.com/bzed/dayz-server-operator/internal/geoip"
+	"github.com/bzed/dayz-server-operator/internal/killfeed"
 	"github.com/bzed/dayz-server-operator/internal/moderation"
+	"github.com/bzed/dayz-server-operator/internal/notify"
 	"github.com/bzed/dayz-server-operator/internal/resolve"
 	"github.com/bzed/dayz-server-operator/internal/site"
 )
@@ -142,6 +144,8 @@ type Options struct {
 	// Ready is called once both listeners are bound.
 	Ready func(apiAddr, modAddr string)
 	Logf  func(format string, args ...any)
+	// Notify posts the killfeed to Discord (cmd/dzo passes the notifier of config.yaml); nil posts nothing.
+	Notify func(context.Context, notify.Event) error
 }
 
 func newServer(h http.Handler) *http.Server {
@@ -172,6 +176,24 @@ func BanInstances(cfg *config.Config, tree *site.Tree, logf func(string, ...any)
 	return out, nil
 }
 
+// KillfeedConfigs are the killfeeds of the instances that have one.
+func KillfeedConfigs(cfg *config.Config, tree *site.Tree) ([]killfeed.Config, error) {
+	all, err := resolve.ResolveAll(cfg, tree)
+	if err != nil {
+		return nil, err
+	}
+	var out []killfeed.Config
+	for _, inst := range all {
+		k := inst.Killfeed
+		if len(k.Discord) == 0 {
+			continue
+		}
+		out = append(out, killfeed.Config{Instance: inst.Name, Targets: k.Discord, Delay: k.Delay.Std(),
+			AIKillers: k.AIKillers == nil || *k.AIKillers, AIVictims: k.AIVictims, Deaths: k.Deaths})
+	}
+	return out, nil
+}
+
 // Run serves until ctx is done.
 func Run(ctx context.Context, cfg *config.Config, o Options) error {
 	logf := o.Logf
@@ -189,6 +211,14 @@ func Run(ctx context.Context, cfg *config.Config, o Options) error {
 	}
 	reg.LogTokens()
 	go reg.Watch(ctx)
+	kctx, kcancel := context.WithCancel(ctx)
+	kf := &killfeed.Manager{Notify: o.Notify, Logf: logf}
+	defer func() { kcancel(); kf.Wait() }()
+	if cfgs, err := KillfeedConfigs(cfg, tree); err != nil {
+		logf("killfeed: %v", err)
+	} else {
+		kf.Set(kctx, reg, cfgs)
+	}
 	msgs, err := startMessengers(ctx, cfg, tree, reg, logf)
 	if err != nil {
 		return err
@@ -260,6 +290,11 @@ func Run(ctx context.Context, cfg *config.Config, o Options) error {
 				logf("bans: %v", err)
 			} else {
 				svc.SetInstances(insts)
+			}
+			if cfgs, err := KillfeedConfigs(cfg, t); err != nil {
+				logf("killfeed: %v", err)
+			} else {
+				kf.Set(kctx, reg, cfgs)
 			}
 			reg.LogTokens()
 			logf("site reloaded")

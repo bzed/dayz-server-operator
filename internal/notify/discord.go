@@ -112,9 +112,11 @@ func (d *DiscordNotifier) NotifyBatch(ctx context.Context, kind Kind, events []E
 }
 
 func (d *DiscordNotifier) post(ctx context.Context, targets []Webhook, message string) error {
+	// No message pings anyone: player names and chat can contain @everyone or <@id>.
 	body, err := json.Marshal(struct {
-		Content string `json:"content"`
-	}{Content: message})
+		Content         string              `json:"content"`
+		AllowedMentions map[string][]string `json:"allowed_mentions"`
+	}{Content: message, AllowedMentions: map[string][]string{"parse": {}}})
 	if err != nil {
 		return fmt.Errorf("notify: marshal payload: %w", err)
 	}

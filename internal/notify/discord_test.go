@@ -161,3 +161,28 @@ func TestNotifyBatchEmpty(t *testing.T) {
 	err := n.NotifyBatch(t.Context(), KindModUpdateDetected, nil)
 	require.NoError(t, err, "NotifyBatch(nil) =")
 }
+
+func TestPostBlocksMentions(t *testing.T) {
+	var body []byte
+	n := newTestNotifier(t, []Webhook{{Name: "default", URL: "http://x.invalid"}}, "default")
+	n.PostFunc = func(_ context.Context, _ string, b []byte) error { body = b; return nil }
+	require.NoError(t, n.Notify(t.Context(), Event{Kind: KindKill, Instance: "alpha", Data: map[string]any{"Lines": "@everyone"}}))
+	require.Contains(t, string(body), `"allowed_mentions":{"parse":[]}`)
+	require.Contains(t, string(body), "@everyone", "the text itself is not rewritten here")
+}
+
+func TestKillTemplateIsTheLines(t *testing.T) {
+	ts, err := NewTemplateSet()
+	require.NoError(t, err)
+	got, err := ts.Render(Event{Kind: KindKill, Instance: "alpha", Data: map[string]any{"Lines": "a\nb"}})
+	require.NoError(t, err)
+	require.Equal(t, "a\nb", got)
+}
+
+func TestRateLimitIsAnError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusTooManyRequests) }))
+	defer srv.Close()
+	n := newTestNotifier(t, []Webhook{{Name: "default", URL: srv.URL}}, "default")
+	err := n.Notify(t.Context(), Event{Kind: KindKill, Data: map[string]any{"Lines": "x"}})
+	require.ErrorContains(t, err, "429")
+}

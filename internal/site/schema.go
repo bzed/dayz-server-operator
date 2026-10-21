@@ -495,6 +495,7 @@ type Instance struct {
 	RestartLimit    RestartLimit    `yaml:"restart_limit,omitempty"`
 	Stop            StopConfig      `yaml:"stop,omitempty"`
 	Notify          NotifyConfig    `yaml:"notify,omitempty"`
+	Killfeed        KillfeedConfig  `yaml:"killfeed,omitempty"`
 	Container       ContainerConfig `yaml:"container,omitempty"`
 	Hooks           HooksConfig     `yaml:"hooks,omitempty"`
 	Backup          BackupConfig    `yaml:"backup,omitempty"`
@@ -505,6 +506,32 @@ type Instance struct {
 	Messages        []Message       `yaml:"messages,omitempty"`
 	// Priority lists the Steam64 IDs that skip the login queue (rendered to the server root's priority.txt).
 	Priority []string `yaml:"priority,omitempty"`
+}
+
+// MaxKillfeedDelay is the longest delay a killfeed accepts.
+const MaxKillfeedDelay = 24 * time.Hour
+
+// KillfeedConfig posts the kills of an instance to Discord, see docs/configuration.rst. Without Discord
+// targets the killfeed is off.
+type KillfeedConfig struct {
+	// Discord names the webhooks of config.yaml notify.discord that get the kills.
+	Discord []string `yaml:"discord,omitempty"`
+	// Delay holds a kill back, so a PvP server does not give away where a fight is happening. 0 posts at once.
+	Delay Duration `yaml:"delay,omitempty"`
+	// AIKillers includes kills by Expansion AI (default true).
+	AIKillers *bool `yaml:"ai_killers,omitempty"`
+	// AIVictims includes players killing AI (default false).
+	AIVictims bool `yaml:"ai_victims,omitempty"`
+	// Deaths includes deaths without a killer: infected, animals, falls, bleeding (default false).
+	Deaths bool `yaml:"deaths,omitempty"`
+}
+
+// Validate checks the delay.
+func (k KillfeedConfig) Validate() error {
+	if d := k.Delay.Std(); d < 0 || d > MaxKillfeedDelay {
+		return fmt.Errorf("killfeed.delay: %s is not between 0 and %s", d, MaxKillfeedDelay)
+	}
+	return nil
 }
 
 // Validate checks the invariants the rest of dzo relies on. It does not
@@ -571,6 +598,9 @@ func (i Instance) Validate() error {
 		seen[m.Key()] = true
 	}
 	if err := i.Admin.Validate(); err != nil {
+		errs = append(errs, err.Error())
+	}
+	if err := i.Killfeed.Validate(); err != nil {
 		errs = append(errs, err.Error())
 	}
 	for _, w := range i.AdminMap.Watch {
