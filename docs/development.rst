@@ -116,7 +116,11 @@ no password, free ports), a real ``dzo serve`` and the DayZ client headless (swa
 ``dayz-dev`` skill's scripts, ``DAYZ_DEV_SCRIPTS``), and drives them with ``dzo player`` and
 ``dzo vehicle``: the players state, messages in the three styles, teleport (and its refusal in a
 vehicle), ``spawn_item`` into the inventory, the hands and the ground, an unknown class, a class
-watch rule on an item, and the crew of a car. The probe mod logs what the player has and, on a
+watch rule on an item, and the crew of a car. It also follows the event feed (``dzo events -f --json``)
+for the whole run: the client's join and leave, the kill of the player as a death, and, from a marker file
+of the probe that makes the game events happen without a player (a rifle shot, a death without a killer,
+building, dismantling and destroying a fence, a flag raised and lowered; stashes need a real dig),
+those events, once each. The probe mod logs what the player has and, on a
 marker file, seats the player in a new car; it is a test aid and never part of a release. It needs
 the Steam DayZ Server tool and the client of the same build, a logged-in Steam and one game at a
 time; on a machine that runs dzo instances, run it elsewhere.
