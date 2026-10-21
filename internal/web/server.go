@@ -125,6 +125,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET "+inst+"/vehicle-types", s.vehicleTypesFragment)
 	mux.HandleFunc("GET /b/{backend}/tiles/{map}/{rest...}", s.tiles)
 	mux.HandleFunc("GET "+inst+"/map", s.mapPage)
+	mux.HandleFunc("GET "+inst+"/events", s.eventsPage)
+	mux.HandleFunc("GET "+inst+"/feed", s.feedFragment)
 	mux.HandleFunc("GET "+inst+"/stream", s.stream)
 	mux.HandleFunc("POST "+inst+"/message", s.act(actMessage))
 	mux.HandleFunc("POST "+inst+"/players/{steamid}/message", s.act(actMessage))

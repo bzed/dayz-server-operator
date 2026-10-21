@@ -354,11 +354,22 @@ func (s *Server) stream(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "streaming unsupported", http.StatusInternalServerError)
 		return
 	}
+	only := r.URL.Query().Get("only")
+	if only != "" && only != "feed" {
+		http.Error(w, "only must be feed", http.StatusBadRequest)
+		return
+	}
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("X-Accel-Buffering", "no")
 	started := false
-	err := c.Stream(r.Context(), inst, func(kind string, data json.RawMessage) {
+	if only != "" {
+		// A feed stream has no snapshot to start with: open it now, so the browser knows it is connected.
+		started = true
+		w.WriteHeader(http.StatusOK)
+		fl.Flush()
+	}
+	err := c.StreamOnly(r.Context(), inst, only, func(kind string, data json.RawMessage) {
 		started = true
 		_, _ = fmt.Fprintf(w, "event: %s\ndata: %s\n\n", kind, data)
 		fl.Flush()

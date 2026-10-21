@@ -70,6 +70,8 @@ func useRealAssets(t *testing.T, dst string) {
 type browser struct {
 	ctx     context.Context
 	dialogs chan<- bool // the answer for the next window.confirm: true accepts
+	// expect makes a problem that contains text an expected one, for a test that breaks a connection on purpose.
+	expect func(text string)
 }
 
 func newBrowser(t *testing.T) *browser {
@@ -112,11 +114,17 @@ func newBrowserWithin(t *testing.T, budget time.Duration) *browser {
 	})
 
 	var mu sync.Mutex
-	var problems []string
+	var problems, expected []string
 	report := func(format string, args ...any) {
 		mu.Lock()
 		defer mu.Unlock()
-		problems = append(problems, fmt.Sprintf(format, args...))
+		msg := fmt.Sprintf(format, args...)
+		for _, e := range expected {
+			if strings.Contains(msg, e) {
+				return
+			}
+		}
+		problems = append(problems, msg)
 	}
 	answers := make(chan bool, 8)
 	chromedp.ListenTarget(ctx, func(ev any) {
@@ -161,7 +169,11 @@ func newBrowserWithin(t *testing.T, budget time.Duration) *browser {
 	if c := chromedp.FromContext(ctx); c != nil && c.Browser != nil && c.Browser.Process() != nil {
 		pgid = c.Browser.Process().Pid
 	}
-	return &browser{ctx: ctx, dialogs: answers}
+	return &browser{ctx: ctx, dialogs: answers, expect: func(text string) {
+		mu.Lock()
+		defer mu.Unlock()
+		expected = append(expected, text)
+	}}
 }
 
 func (b *browser) run(t *testing.T, actions ...chromedp.Action) {
