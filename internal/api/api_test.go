@@ -452,3 +452,65 @@ func TestRaiseFlagNeedsOperator(t *testing.T) {
 	c, b := e.do("POST", "/api/v1/instances/alpha/flags/f1/raise", e.token(RoleOperator, nil, false), "")
 	require.Equal(t, 200, c, "%s", b)
 }
+
+func TestFeedEndpoint(t *testing.T) {
+	e := newEnv(t)
+	for _, txt := range []string{"a", "b", "c"} {
+		e.alpha.AddFeed(admin.FeedEvent{Kind: admin.FeedChat, Text: txt})
+	}
+	viewer := e.token(RoleViewer, nil, false)
+	feed := func(q string) []admin.FeedEvent {
+		code, body := e.do("GET", "/api/v1/instances/alpha/feed"+q, viewer, "")
+		require.Equal(t, 200, code, string(body))
+		var out []admin.FeedEvent
+		require.NoError(t, json.Unmarshal(body, &out))
+		return out
+	}
+	require.Len(t, feed(""), 3)
+	got := feed("?after=1&limit=1")
+	require.Len(t, got, 1)
+	require.Equal(t, "b", got[0].Text)
+	got = feed("?limit=2")
+	require.Equal(t, "b", got[0].Text, "no after: the newest ones")
+	require.Empty(t, feed("?after=3"))
+	for _, bad := range []string{"?after=x", "?after=-1", "?limit=x", "?limit=-2"} {
+		code, _ := e.do("GET", "/api/v1/instances/alpha/feed"+bad, viewer, "")
+		require.Equal(t, 400, code, bad)
+	}
+	onlyBeta := e.token(RoleViewer, []string{"beta"}, false)
+	code, _ := e.do("GET", "/api/v1/instances/alpha/feed", onlyBeta, "")
+	require.Equal(t, 404, code)
+	code, _ = e.do("GET", "/api/v1/instances/alpha/feed", "", "")
+	require.Equal(t, 401, code)
+}
+
+func TestStreamOnlyFeed(t *testing.T) {
+	e := newEnv(t)
+	e.modAnswers("")
+	tok := e.token(RoleViewer, nil, false)
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	req, _ := http.NewRequestWithContext(ctx, "GET", e.ts.URL+"/api/v1/instances/alpha/stream?only=feed", nil)
+	req.Header.Set("Authorization", "Bearer "+tok)
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	defer func() { _ = resp.Body.Close() }()
+	e.alpha.AddFeed(admin.FeedEvent{Kind: admin.FeedChat, Text: "later"})
+	e.alpha.Sync(admin.SyncRequest{Proto: 1, Players: []admin.Player{{SteamID: "x"}}}) // not a feed event
+	e.alpha.AddFeed(admin.FeedEvent{Kind: admin.FeedChat, Text: "last"})
+	var kinds, data []string
+	sc := bufio.NewScanner(resp.Body)
+	for sc.Scan() {
+		if v, ok := strings.CutPrefix(sc.Text(), "event: "); ok {
+			kinds = append(kinds, v)
+		}
+		if v, ok := strings.CutPrefix(sc.Text(), "data: "); ok {
+			data = append(data, v)
+			if strings.Contains(v, "last") {
+				break
+			}
+		}
+	}
+	require.Equal(t, []string{"feed", "feed"}, kinds)
+	require.Contains(t, data[0], "later")
+}

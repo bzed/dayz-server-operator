@@ -164,6 +164,12 @@ func (c *Client) Events(ctx context.Context, name string) (out []admin.Event, er
 	return out, c.get(ctx, inst(name)+"/events", &out)
 }
 
+// Feed returns the game events with an id above after, oldest first: at most limit, the newest ones when
+// after is 0. A limit of 0 asks for everything the hub keeps.
+func (c *Client) Feed(ctx context.Context, name string, after int64, limit int) (out []admin.FeedEvent, err error) {
+	return out, c.get(ctx, fmt.Sprintf("%s/feed?after=%d&limit=%d", inst(name), after, limit), &out)
+}
+
 // Layers returns the marker layers visible to the token.
 func (c *Client) Layers(ctx context.Context, name string) (out []admin.Layer, err error) {
 	return out, c.get(ctx, inst(name)+"/layers", &out)
@@ -251,7 +257,17 @@ func (c *Client) DeleteVehicle(ctx context.Context, name, vehicle string, force 
 // Stream calls fn for every server-sent event of an instance until ctx ends
 // or the connection drops; it returns the reason.
 func (c *Client) Stream(ctx context.Context, name string, fn func(kind string, data json.RawMessage)) error {
-	r, err := c.req(ctx, http.MethodGet, inst(name)+"/stream", nil)
+	return c.StreamOnly(ctx, name, "", fn)
+}
+
+// StreamOnly is Stream limited to one kind of event ("feed"): no snapshot of the rest. An empty only is
+// the whole stream.
+func (c *Client) StreamOnly(ctx context.Context, name, only string, fn func(kind string, data json.RawMessage)) error {
+	path := inst(name) + "/stream"
+	if only != "" {
+		path += "?only=" + url.QueryEscape(only)
+	}
+	r, err := c.req(ctx, http.MethodGet, path, nil)
 	if err != nil {
 		return err
 	}

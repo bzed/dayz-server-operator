@@ -135,6 +135,7 @@ func (s *Server) Handler() http.Handler {
 	route("GET "+base+"/instances/{instance}/types", PermView, true, s.types)
 	route("GET "+base+"/instances/{instance}/vehicle-types", PermView, true, s.vehicleTypes)
 	route("GET "+base+"/instances/{instance}/stream", PermView, true, s.stream)
+	route("GET "+base+"/instances/{instance}/feed", PermView, true, s.feed)
 	route("GET "+base+"/instances/{instance}/commands/{id}", PermView, true, s.command)
 
 	route("POST "+base+"/instances/{instance}/message", PermBroadcast, true, s.message)
@@ -285,8 +286,34 @@ func filterLayers(in []admin.Layer, role Role) []admin.Layer {
 	return out
 }
 
-// stream is the SSE endpoint: the current state first, then every change.
+// feed is GET .../feed?after=<id>&limit=<n>: the events with an id above after, oldest first.
+func (s *Server) feed(w http.ResponseWriter, r *http.Request, c *call) {
+	q := r.URL.Query()
+	var after int64
+	var limit int
+	if v := q.Get("after"); v != "" {
+		if _, err := fmt.Sscanf(v, "%d", &after); err != nil || after < 0 {
+			fail(w, http.StatusBadRequest, "after must be an event id")
+			return
+		}
+	}
+	if v := q.Get("limit"); v != "" {
+		if _, err := fmt.Sscanf(v, "%d", &limit); err != nil || limit < 0 {
+			fail(w, http.StatusBadRequest, "limit must be a number")
+			return
+		}
+	}
+	writeJSON(w, 200, c.hub.Feed(after, limit))
+}
+
+// stream is the SSE endpoint: the current state first, then every change. With only=feed it carries
+// just the feed events and no snapshot.
 func (s *Server) stream(w http.ResponseWriter, r *http.Request, c *call) {
+	only := r.URL.Query().Get("only")
+	if only != "" && only != "feed" {
+		fail(w, http.StatusBadRequest, "only must be feed")
+		return
+	}
 	fl, ok := w.(http.Flusher)
 	if !ok {
 		fail(w, http.StatusInternalServerError, "streaming is not supported")
@@ -305,11 +332,17 @@ func (s *Server) stream(w http.ResponseWriter, r *http.Request, c *call) {
 		fl.Flush()
 		return err == nil
 	}
-	send("status", c.hub.Status())
-	send("players", c.hub.Players())
-	send("vehicles", c.hub.Vehicles())
-	send("markers", filterMarkers(c.hub.Markers(""), c.who.Token.Role))
-	send("events", c.hub.Events())
+	if only == "" {
+		send("status", c.hub.Status())
+		send("players", c.hub.Players())
+		send("vehicles", c.hub.Vehicles())
+		send("markers", filterMarkers(c.hub.Markers(""), c.who.Token.Role))
+		send("events", c.hub.Events())
+	} else {
+		// Headers go out now, so the client knows it is subscribed.
+		_, _ = fmt.Fprint(w, ": feed\n\n")
+		fl.Flush()
+	}
 	beat := time.NewTicker(15 * time.Second)
 	defer beat.Stop()
 	for {
@@ -324,6 +357,9 @@ func (s *Server) stream(w http.ResponseWriter, r *http.Request, c *call) {
 		case ev, open := <-ch:
 			if !open {
 				return
+			}
+			if only != "" && ev.Kind != only {
+				continue
 			}
 			data := ev.Data
 			if ev.Kind == "markers" {

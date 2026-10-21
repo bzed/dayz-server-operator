@@ -188,3 +188,36 @@ func TestMessageSendsTheWholeBody(t *testing.T) {
 	_, err = c.Message(t.Context(), "alpha", "1", api.MessageBody{Text: "x", Style: "expansion", NotifyType: "popup"})
 	assert.Error(t, err, "an unknown type was accepted")
 }
+
+func TestFeedAndStreamOnly(t *testing.T) {
+	c, hub, _ := setup(t)
+	hub.AddFeed(admin.FeedEvent{Kind: admin.FeedChat, Text: "one"})
+	hub.AddFeed(admin.FeedEvent{Kind: admin.FeedChat, Text: "two"})
+	got, err := c.Feed(t.Context(), "alpha", 1, 0)
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	require.Equal(t, "two", got[0].Text)
+	_, err = c.Feed(t.Context(), "nope", 0, 0)
+	require.Error(t, err)
+
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	// The stream has no snapshot to wait for, so add events until one arrives.
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for ctx.Err() == nil {
+			hub.AddFeed(admin.FeedEvent{Kind: admin.FeedChat, Text: "three"})
+			time.Sleep(10 * time.Millisecond)
+		}
+	}()
+	var kinds []string
+	err = c.StreamOnly(ctx, "alpha", "feed", func(kind string, _ json.RawMessage) {
+		kinds = append(kinds, kind)
+		cancel()
+	})
+	<-done
+	require.ErrorIs(t, err, context.Canceled)
+	require.Equal(t, "feed", kinds[0])
+	require.NotContains(t, kinds, "players")
+}
