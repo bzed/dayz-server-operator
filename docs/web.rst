@@ -120,7 +120,9 @@ Events
    and new ones are added at the bottom as they happen; the page keeps at most 1000 rows. It follows the end of the
    log while you are there; if you scroll up to read, a "new events" button brings you back. A reconnect
    fetches what was missed. The checkboxes at the top hide groups of events (remembered in the browser).
-   A player's name links to the player's row in the player list; a position links to the map, opened with the place marked.
+   A player's name links to the player's row in the player list (``#player-<steamid>``: the row is scrolled into view and
+   highlighted for a few seconds; for a player who is not online the page says so); a position links to the map, opened with the place marked
+   (see :doc:`admin-map`).
    Needs the ``view`` role. Users who may broadcast (``operator`` and up) also get an input line: its text is
    sent to all players as chat. Kills and deaths come from the dzo-admin mod (0.5.0 or newer); chat comes from BattlEye's
    RCon, so RCon must be reachable, as it must for bans. The same feed is on the console with ``dzo events``

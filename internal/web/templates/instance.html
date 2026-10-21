@@ -23,6 +23,7 @@
 
 <section>
   <h2><i class="fa fa-users" aria-hidden="true"></i>Players</h2>
+  <p id="player-note" class="flash err" hidden></p>
   <div hx-get="/b/{{.Backend}}/i/{{.Instance}}/players" hx-trigger="load, every 5s" data-poll></div>
 </section>
 

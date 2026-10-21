@@ -82,3 +82,30 @@ func TestE2EEventsInputSendsChat(t *testing.T) {
 	entries, _ := e.api.Audit.Tail("alpha", 1)
 	require.Contains(t, entries[0].Detail, "hello world")
 }
+
+// inView reports whether the first element that matches sel is inside the window.
+func (b *browser) inView(sel string) bool {
+	var ok bool
+	_ = chromedp.Run(b.ctx, chromedp.Evaluate(`(function(){var e=document.querySelector('`+sel+`');if(!e){return false;}var r=e.getBoundingClientRect();return r.top>=0&&r.bottom<=window.innerHeight;})()`, &ok))
+	return ok
+}
+
+func TestE2EPlayerLinkHighlightsTheRow(t *testing.T) {
+	e := newEnv(t, api.RoleAdmin)
+	useRealAssets(t, e.assets)
+	b := newBrowser(t)
+	b.run(t, chromedp.Navigate(e.url("/b/main/i/alpha#player-7656")))
+	require.Eventually(t, func() bool { return b.count("tr#player-7656.hl") == 1 }, 10*time.Second, 100*time.Millisecond, "the row is highlighted after the first poll")
+	require.True(t, b.inView("tr#player-7656"), "and scrolled into view")
+	require.Empty(t, b.textOf("#player-note"))
+	require.Eventually(t, func() bool { return b.count("tr#player-7656.hl") == 0 }, 15*time.Second, 200*time.Millisecond, "the highlight fades")
+}
+
+func TestE2EPlayerLinkOfAnOfflinePlayer(t *testing.T) {
+	e := newEnv(t, api.RoleAdmin)
+	useRealAssets(t, e.assets)
+	b := newBrowser(t)
+	b.run(t, chromedp.Navigate(e.url("/b/main/i/alpha#player-9999")))
+	require.Eventually(t, func() bool { return b.textOf("#player-note") == "This player is not online." }, 10*time.Second, 100*time.Millisecond)
+	require.Zero(t, b.count("tr.hl"))
+}

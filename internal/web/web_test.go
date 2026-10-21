@@ -628,3 +628,11 @@ func TestForcedExpansionWithoutFeatureShowsAFlash(t *testing.T) {
 	require.Contains(t, body, "not available", "post")
 	require.NotContains(t, body, "flash ok", "post")
 }
+
+func TestPlayersRowsHaveAnchors(t *testing.T) {
+	e := newEnv(t, api.RoleAdmin)
+	_, body, _ := e.get("/b/main/i/alpha/players")
+	require.Contains(t, body, `<tr id="player-7656"`, "an event links to this row")
+	_, body, _ = e.get("/b/main/i/alpha")
+	require.Contains(t, body, `id="player-note"`, "the page has a place for the not-online note")
+}

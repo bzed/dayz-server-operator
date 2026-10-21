@@ -6,7 +6,7 @@
   <thead><tr><th data-sort="text">Name</th><th data-sort="num">Position</th><th data-sort="num">Health</th><th data-sort="num">Ping</th><th></th></tr></thead>
   <tbody>
   {{range .Items}}
-    <tr>
+    <tr id="player-{{.SteamID}}">
       <td class="who" hx-get="/b/{{$.Backend}}/i/{{$.Instance}}/players/{{.SteamID}}/info" hx-trigger="mouseenter once, focusin once" hx-target="find .pop" hx-swap="innerHTML">
         <span class="flag">{{if .Country}}<img src="/flags/{{.Country}}.svg" alt="{{.Country}}" title="{{.Country}}" loading="lazy">{{end}}</span>{{.Name}}{{if not .Alive}} <em>(dead)</em>{{else if .Unconscious}} <em>(unconscious)</em>{{end}}{{if .Vehicle}} <em>(in vehicle)</em>{{end}}
         <button type="button" class="info quiet" aria-label="Connection info for {{.Name}}" aria-expanded="false" data-info><i class="fa fa-info-circle" aria-hidden="true"></i></button>
