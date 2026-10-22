@@ -62,6 +62,10 @@ const (
 	PermPlayerIP  = "player.ip"
 	PermIPHistory = "ip.history"
 
+	// PermPlayerHistory reads the player database: who ever connected, under which names, and what BattlEye
+	// and Steam say about them.
+	PermPlayerHistory = "player.history"
+
 	secretPrefix   = "dzo_"
 	secretBytes    = 24
 	defaultMaxDays = 365
@@ -71,10 +75,10 @@ var rolePerms = map[Role][]string{
 	RoleDetector:  {PermEvidenceAdd},
 	RoleViewer:    {PermView},
 	RoleAnnouncer: {PermView, PermBroadcast},
-	RoleModerator: {PermView, PermMessage, PermKick, PermBanView, PermBanInstance, PermEvidenceAdd},
-	RoleOperator:  {PermView, PermMessage, PermKick, PermKill, PermHeal, PermFixGear, PermBroadcast, PermTeleport, PermSpawn, PermRepair, PermDelete, PermRaise, PermBanView, PermBanInstance, PermBanLong, PermBanIP, PermEvidenceAdd, PermPlayerIP},
+	RoleModerator: {PermView, PermMessage, PermKick, PermBanView, PermBanInstance, PermEvidenceAdd, PermPlayerHistory},
+	RoleOperator:  {PermView, PermMessage, PermKick, PermKill, PermHeal, PermFixGear, PermBroadcast, PermTeleport, PermSpawn, PermRepair, PermDelete, PermRaise, PermBanView, PermBanInstance, PermBanLong, PermBanIP, PermEvidenceAdd, PermPlayerIP, PermPlayerHistory},
 	RoleAdmin: {PermView, PermMessage, PermKick, PermKill, PermHeal, PermFixGear, PermBroadcast, PermTeleport, PermSpawn, PermRepair, PermDelete, PermRaise, PermAuditView,
-		PermBanView, PermBanInstance, PermBanLong, PermBanIP, PermBanGlobal, PermBanRevokeAny, PermEvidenceAdd, PermPlayerIP, PermIPHistory},
+		PermBanView, PermBanInstance, PermBanLong, PermBanIP, PermBanGlobal, PermBanRevokeAny, PermEvidenceAdd, PermPlayerIP, PermIPHistory, PermPlayerHistory},
 }
 
 // Rank orders roles; a marker is visible to roles of at least its rank.

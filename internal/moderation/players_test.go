@@ -274,3 +274,20 @@ func TestNamesAreTruncated(t *testing.T) {
 	p, _ := s.Player(t.Context(), steamA)
 	assert.Len(t, p.Name, 128)
 }
+
+func TestPlayersOnlySeenOnTheGivenInstances(t *testing.T) {
+	s, _ := newStore(t)
+	ctx := t.Context()
+	require.NoError(t, s.PlayerJoined(ctx, "alpha", steamA, "A", t0))
+	require.NoError(t, s.PlayerJoined(ctx, "beta", steamB, "B", t0))
+	got, total, err := s.Players(ctx, PlayerFilter{Only: []string{"alpha"}})
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	assert.Equal(t, 1, total)
+	assert.Equal(t, steamA, got[0].SteamID)
+	assert.Equal(t, []string{"alpha"}, got[0].Instances)
+	got, _, _ = s.Players(ctx, PlayerFilter{Only: []string{"alpha", "beta"}})
+	assert.Len(t, got, 2)
+	got, _, _ = s.Players(ctx, PlayerFilter{Only: []string{}})
+	assert.Len(t, got, 2, "no restriction")
+}

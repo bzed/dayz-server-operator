@@ -43,7 +43,7 @@ func newServeCmd() *cobra.Command {
 					_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "api on %s, mod endpoint on %s\n", apiAddr, modAddr)
 				},
 				Logf:   func(f string, a ...any) { _, _ = fmt.Fprintf(cmd.ErrOrStderr(), f+"\n", a...) },
-				Notify: newNotifier(cfg),
+				Notify: newNotifier(cfg), Lookups: true,
 			})
 		},
 	}

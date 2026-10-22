@@ -15,6 +15,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/bzed/dayz-server-operator/internal/admin"
@@ -145,6 +146,9 @@ type Options struct {
 	// Ready is called once both listeners are bound.
 	Ready func(apiAddr, modAddr string)
 	Logf  func(format string, args ...any)
+	// Lookups asks BattlEye's master and Steam about the players of the player history (cmd/dzo sets it;
+	// tests leave it off so that nothing talks to the internet).
+	Lookups bool
 	// Notify posts the killfeed to Discord (cmd/dzo passes the notifier of config.yaml); nil posts nothing.
 	Notify func(context.Context, notify.Event) error
 }
@@ -247,9 +251,23 @@ func Run(ctx context.Context, cfg *config.Config, o Options) error {
 	pctx, pcancel := context.WithCancel(ctx)
 	rec := &presence.Recorder{Store: store, Logf: logf}
 	defer func() { pcancel(); rec.Wait() }()
+	var lookupAPI api.Lookups
+	if o.Lookups {
+		ref, err := newLookups(cfg, o.Version, store, logf)
+		if err != nil {
+			return err
+		}
+		rec.OnJoin = ref.Nudge
+		lookupAPI = ref
+		var lwg sync.WaitGroup
+		lwg.Add(1)
+		go func() { defer lwg.Done(); ref.Run(pctx) }()
+		defer func() { pcancel(); lwg.Wait() }()
+	}
 	rec.Set(pctx, presence.FromRegistry(reg), reg.Names())
 	apiSrv := api.New(cfg.Serve.Installation, o.Version, reg, api.NewTokenStore(APITokens(cfg)), audit)
 	apiSrv.Moderation = svc
+	apiSrv.Lookups = lookupAPI
 	apiSrv.TilesDir = TilesDir(cfg)
 	apiSrv.Say = newRConSay(rconDialer(cfg, tree))
 	apiSrv.GeoIP = geoip.Open(cfg.Serve.GeoIPDir, cfg.Serve.GeoIPLegacyDir)

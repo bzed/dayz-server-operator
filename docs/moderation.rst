@@ -64,6 +64,9 @@ only to those who need it:
    * - Banning an address
      - ``ban.ip``
      - operator, admin
+   * - The player database: names, sessions, what BattlEye and Steam say (:ref:`player-history`)
+     - ``player.history``
+     - moderator, operator, admin
 
 Players are still matched by address without showing it: the ban form lists the addresses a player was
 seen with as "Address (name on instance, last seen), shared with N other players", and ticking one bans it.
@@ -93,6 +96,24 @@ for 10 seconds, the sessions end at the last time it was heard from or at the st
 (``serve.session_retention_days``); the players, their names and first-seen times are kept for good.
 
 BattlEye kicks are not recorded: they are dzo's own.
+
+**BattlEye's global bans.** ``dzo serve`` asks BattlEye's master server whether a player's GUID is globally banned, for
+DayZ and, because it is the same Steam account, for Arma 3 and Arma 2: Operation Arrowhead. This is information for the
+player page only: the DayZ server enforces BattlEye's global bans itself when a player joins, and dzo neither enforces
+nor duplicates that, so there is no option for it and it is always on. BattlEye publishes no API for this; dzo uses the
+UDP query that game servers use (one datagram with the GUID to 57.129.90.115, the address of ``dayz1.battleye.com``, on
+port 2354 for DayZ, 2344 for Arma 3 and 2324 for Arma 2: OA; Arma Reforger has none). The game server already sends every
+joining player's GUID there, so nothing new is disclosed. dzo asks gently: a new player is asked once for each of the
+three games, an answer is kept for 7 days, only players seen in the last 30 days are asked again, never more than one
+packet a second, and after three rounds without any answer it leaves BattlEye alone for an hour. A silent master is
+"no answer" on the page, never "not banned".
+
+**Steam.** With ``steam.profile_lookup`` (default on) the player page also shows what Steam says: the link to the
+profile, the name, whether the profile is private and whether the account has a VAC or community ban. With a Web API key
+(``steam.web_api_key_file``, :doc:`configuration`) it adds the number of VAC and game bans, the days since the last ban,
+the account's age and country, the Steam level, the DayZ playtime and the player's public friends who also played on your
+servers. Answers are kept for 24 hours. A moderator can press **Check now** on a player's page to ask both sources at
+once; that works at most once per 10 minutes per player.
 
 How bans are enforced
 ---------------------

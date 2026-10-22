@@ -42,6 +42,8 @@ type Server struct {
 	TilesDir string
 	// Moderation serves the ban and evidence routes; nil answers them 503.
 	Moderation Moderation
+	// Lookups asks BattlEye and Steam about one player on request (the Check now button); nil answers 503.
+	Lookups Lookups
 	// GeoIP locates the players' addresses (flags and the connection info); nil shows none.
 	GeoIP *geoip.DB
 	// Say sends text over the instance's RCon (style rcon of a message): to everyone when steamID
@@ -165,6 +167,9 @@ func (s *Server) Handler() http.Handler {
 	route("GET "+base+"/evidence/{id}", PermBanView, false, s.getEvidence)
 	route("GET "+base+"/evidence/{id}/file", PermBanView, false, s.evidenceFile)
 	route("GET "+base+"/players/{steamid}/identities", PermBanView, false, s.identities)
+	route("GET "+base+"/players", PermPlayerHistory, false, s.listPlayers)
+	route("GET "+base+"/players/{steamid}", PermPlayerHistory, false, s.getPlayer)
+	route("POST "+base+"/players/{steamid}/lookup", PermPlayerHistory, false, s.lookupPlayer)
 	return mux
 }
 

@@ -136,10 +136,13 @@ type PlayerRecord struct {
 type PlayerFilter struct {
 	Query    string // a Steam ID, a GUID or a part of a name the player ever used
 	Instance string
-	Flagged  bool // only players with a BattlEye ban, a Steam ban or an active ban of ours
-	Limit    int
-	Offset   int
-	Now      time.Time // when "active" is judged; zero is now
+	// Only restricts the players to those seen on one of these instances (a token for some instances); empty
+	// does not restrict.
+	Only    []string
+	Flagged bool // only players with a BattlEye ban, a Steam ban or an active ban of ours
+	Limit   int
+	Offset  int
+	Now     time.Time // when "active" is judged; zero is now
 }
 
 const (
@@ -249,6 +252,12 @@ func (s *Store) Players(ctx context.Context, f PlayerFilter) ([]PlayerSummary, i
 	if f.Instance != "" {
 		where += ` AND EXISTS (SELECT 1 FROM player_sessions x WHERE x.steam_id = p.steam_id AND x.instance = ?)`
 		args = append(args, f.Instance)
+	}
+	if len(f.Only) > 0 {
+		where += ` AND EXISTS (SELECT 1 FROM player_sessions o WHERE o.steam_id = p.steam_id AND o.instance IN (` + strings.TrimSuffix(strings.Repeat("?,", len(f.Only)), ",") + `))`
+		for _, i := range f.Only {
+			args = append(args, i)
+		}
 	}
 	if f.Flagged {
 		where += ` AND (EXISTS (SELECT 1 FROM be_status b WHERE b.guid = p.guid AND b.banned = 1)
