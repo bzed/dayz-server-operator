@@ -446,6 +446,12 @@ below as "site default".
      ignore_asserts: true          # default
    notify:
      discord: [default, admins]    # default: [default]; [] sends nothing
+   killfeed:                       # Discord killfeed of the game's kills, see below; needs dzo-admin 0.5.0
+     discord: [pvp]                # default: none (the killfeed is off); webhooks of config.yaml notify.discord
+     delay: 10m                    # default: 0 (at once); at most 24h
+     ai_killers: true              # default; kills by Expansion AI
+     ai_victims: false             # default; players killing AI
+     deaths: false                 # default; also deaths without a killer (infected, animals, falls)
    container:
      env: {}                       # default: none
      mounts: ["/var/lib/GeoIP:/var/lib/GeoIP:ro"]   # default: none

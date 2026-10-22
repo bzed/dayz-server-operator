@@ -264,6 +264,19 @@ Contaminated areas are events of the mod itself: a static or dynamic gas zone (a
 M18 smoke grenade) is reported as soon as it is created, with the radius of the zone
 (120 m for a dynamic one), and the map draws that circle around the icon.
 
+Event feed
+----------
+
+From version 0.5.0 the mod also reports what happens in the game: kills (Expansion AI too, with the
+weapon and the distance), deaths and their cause, joins and leaves, base building and raids, combination
+locks cut, flags raised and lowered, and stashes buried and dug up. Which fields each kind has is in the
+mod's README; what dzo does with them is in :ref:`event-feed` (the API and the file kept on disk),
+the events page (:doc:`web`), ``dzo events`` (:doc:`cli`) and the ``killfeed`` of an instance
+(:doc:`configuration`). The mod buffers at most 256 events while dzo cannot be reached and sends them with
+the next sync; dzo counts each event once. Chat and BattlEye kicks come from RCon, not from the mod. Cutting
+a combination lock is deprecated in 1.30 and no item offers it, so ``lock_cut`` appears only with a mod that brings
+the action back.
+
 Flags and territories
 ---------------------
 
