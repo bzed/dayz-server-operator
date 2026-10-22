@@ -674,29 +674,6 @@ Keys:
    ``restart_announce``
       The countdown of an update restart, the keys of ``restarts.announce``.
 
-``killfeed``
-   Posts the kills of the instance to Discord, one line per kill with killer, victim, weapon and
-   distance (``💀 **Alice** killed **Bob** with M4-A1 (123 m)``; kills by Expansion AI get ``🤖``).
-   It needs the :doc:`dzo-admin mod <admin-map>` (version 0.5.0 or newer), which reports the kills.
-   Positions are never posted. Player names are shown literally: Discord markup is escaped and
-   nobody is pinged.
-
-   .. code-block:: yaml
-
-      killfeed:
-        discord: [pvp]        # webhook names of config.yaml notify.discord; empty or unset = off
-        delay: 10m            # hold kills back (0 = at once, at most 24h)
-        ai_killers: true      # kills by Expansion AI (default true)
-        ai_victims: false     # players killing AI (default false)
-        deaths: false         # also deaths without a killer: infected, animals, falls (default false)
-
-   ``delay`` is for PvP servers: a kill is posted that long after it happened, so the feed does not
-   tell anyone where a fight is going on. It is separate from ``notify.discord``, which is for the
-   operator's notifications. The killfeed is best effort: a post that fails, is answered with
-   Discord's rate limit (429) or takes longer than 5 seconds is dropped and logged, never retried, and
-   at most 500 kills wait per instance (the oldest are dropped). Kills that wait for their delay are kept
-   when the site is reloaded (``SIGHUP``) but lost when ``dzo serve`` restarts.
-
 ``welcome``
    The message every player gets when joining. The default is ``Welcome to #name!``. Set your own
    text (``#name``, the ``hostname`` of the instance's ``serverDZ.cfg`` (the instance name when it sets none), and ``#port``, the game port, work in it; up to 160
@@ -773,6 +750,52 @@ Keys:
 ``notify``
    ``discord`` lists the names of the webhooks of ``notify.discord`` in ``config.yaml``
    this instance reports to. Unset: the webhook named ``default``. ``[]``: none. Site default.
+
+``killfeed``
+   Posts the kills of the instance to Discord, so a community can follow its server. Off unless
+   ``discord`` names at least one webhook. It needs the :doc:`dzo-admin mod <admin-map>` (0.5.0 or
+   newer) on the instance, because the mod reports the kills (see :ref:`event-feed`); without the
+   mod nothing is posted. Not a site default: set it per instance. The ``notify`` key is a different
+   thing: it routes the operator's notifications (updates, restarts, crashes), the killfeed has its own
+   targets, so a public channel can get the kills and a private one the operator messages.
+
+   ``discord``
+      The names of webhooks of ``notify.discord`` in ``config.yaml`` that get the kills; any number.
+      A name that is not there is an error when the instance is resolved (``dzo instance render``,
+      ``dzo serve``), not a silent no-op. Unset or ``[]``: the killfeed is off.
+   ``delay``
+      Holds every kill back for this long before it is posted (``10m``, ``1h``; default ``0``, at once;
+      at most ``24h``). It is meant for PvP servers: a kill posted at once tells everybody where a fight
+      is going on. The delay counts from the moment ``dzo serve`` receives the kill. A changed ``delay``
+      applies to the kills that come after the change; the ones already waiting keep their time.
+   ``ai_killers``
+      Include kills by DayZ Expansion AI (default ``true``). The killer is shown as ``AI (faction)``.
+   ``ai_victims``
+      Include players killing AI (default ``false``).
+   ``deaths``
+      Also post deaths without a killer: infected, animals, explosions, vehicles without a driver,
+      falls, starvation and bleeding (default ``false``).
+
+   .. code-block:: yaml
+
+      killfeed:
+        discord: [pvp]        # posts to the webhook named pvp
+        delay: 10m            # a PvP server: kills appear ten minutes later
+        deaths: true          # and what the infected did
+
+   A kill is one line, for example ``💀 **Alice** killed **Bob** with M4-A1 (123 m)``, ``🤖 **AI (East)**
+   killed **Bob** with AKM (54 m)`` (melee has no distance) or, with ``deaths``, ``☠️ **Bob** was killed by
+   infected``. Positions are never posted. Names and weapons come from players and mods, so Discord markup
+   and mentions in them are escaped: they show as text and ping nobody. Kills that are due together (a
+   grenade, a raid) are posted in as few messages as fit under Discord's limit of 2000 characters, in
+   order.
+
+   The killfeed is best effort and never slows the game: a post that fails, is refused with Discord's rate
+   limit (429) or takes longer than 5 seconds is dropped and logged, not retried, and the later kills go
+   out on time. At most 500 kills wait per instance; beyond that the oldest are dropped. Kills that wait
+   for their delay survive a reload of the site (``SIGHUP``) but not a restart of ``dzo serve``. Kills
+   that happened before ``dzo serve`` started are not posted. The same events, with chat and base
+   building, are on the events page (:doc:`web`) and in ``dzo events`` (:doc:`cli`).
 
 ``hooks``
    Scripts for the hook points ``pre_start``, ``post_stop``, ``pre_update``, ``post_update``,
