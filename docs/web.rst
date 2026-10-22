@@ -89,6 +89,17 @@ action fails with a clear message.
    * - ``admin``
      - everything, including the audit log, global bans, the history of IP addresses and markers that are admin-only
 
+Finding your way
+----------------
+
+Every page reaches every other page in one click. The header has the **instance switcher** (a menu of every
+installation's instances, with a dot for the connection state of the mod; Escape or a click outside closes it) and
+the links **Bans**, **Audit log** and **docs**. The first two go to the installation of the page you are on, on the
+dashboard to the first installation (the others are in the switcher). Pages of an instance (**Overview**, **Map**,
+**Events**) share an *instance bar* under the header: the instance's name, its live facts and the three tabs,
+the current one underlined. An installation that cannot be reached is marked ``unreachable`` in the switcher; the page still works.
+The lists in the switcher are kept for 15 seconds.
+
 Pages
 -----
 
@@ -113,8 +124,7 @@ Instance
    panel shows it. On a phone the table shows only the name, the health and the actions.
 
 Events
-   A live log of what happens in the game, in the style of ``tail -f`` (``Events`` on the instance page and
-   the map): kills (also by Expansion AI) with weapon and distance, deaths, joins and leaves, kicks, base building and raids,
+   A live log of what happens in the game, in the style of ``tail -f`` (the ``Events`` tab): kills (also by Expansion AI) with weapon and distance, deaths, joins and leaves, kicks, base building and raids,
    combination locks cut, flags raised and lowered, stashes buried and dug up, in-game chat and the actions of the operators.
    The newest 200 events are there when the page opens (the feed is kept over restarts of ``dzo serve``, see :ref:`event-feed`)
    and new ones are added at the bottom as they happen; the page keeps at most 1000 rows. It follows the end of the
@@ -131,7 +141,7 @@ Events
 Live map
    Players, vehicles, active events and marker layers on a map that updates as
    the server reports. A player's icon goes from red to green with the player's health
-   (a thick red ring: unconscious, dashed: dead). The title shows the in-game time (with a sun or moon),
+   (a thick red ring: unconscious, dashed: dead). The instance bar shows the in-game time (with a sun or moon),
    the players online, the
    uptime (since ``dzo serve`` last saw the mod start) and, if the instance has a
    ``restarts.schedule``, the time to the next scheduled restart, on the map's satellite imagery if you built it (see
@@ -145,7 +155,7 @@ Live map
    you lack the role for are not shown. See :doc:`admin-map`.
 
 Bans
-   One page per installation (``<name> bans`` in the navigation): the list of bans with a state filter and
+   One page per installation (``Bans`` in the header): the list of bans with a state filter and
    a search by Steam ID, GUID, IP, text or player name; a ban page with its targets, scope, evidence,
    history, an edit form and revoke. A player's panel has a **Ban…** button that opens the form with the
    Steam ID, the instance, the addresses the player was seen with (shown only with ``ip.history``, otherwise as

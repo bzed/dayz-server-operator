@@ -23,6 +23,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/bzed/dayz-server-operator/internal/apiclient"
 	"github.com/bzed/dayz-server-operator/internal/moderation"
@@ -60,6 +61,8 @@ type Server struct {
 	opts     Options
 	csrf     string
 	tmpl     *template.Template
+	navc     navCache
+	now      func() time.Time // the clock, replaced by tests
 }
 
 // New returns a Server over the given backends.
@@ -75,7 +78,7 @@ func New(backends []*Backend, opts Options) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Server{backends: backends, opts: opts, csrf: hex.EncodeToString(raw[:]), tmpl: t}, nil
+	return &Server{backends: backends, opts: opts, csrf: hex.EncodeToString(raw[:]), tmpl: t, now: time.Now}, nil
 }
 
 func pct(f float64) string { return fmt.Sprintf("%.0f%%", f*100) }
@@ -205,8 +208,19 @@ type page struct {
 	Version  string
 	Class    string // body class; "map" makes the page fill the window
 	Data     any
+
+	Nav        []navBackend // the instances of every backend, for the switcher
+	Instance   string       // the instance the page is about, "" outside instance pages
+	Section    string       // overview, map, events, players, bans, audit or dashboard
+	Home       string       // the backend the Bans and Audit log links go to
+	HasPlayers bool         // the player database is served: the header links it
 }
 
-func (s *Server) page(title, backend string, data any) page {
-	return page{Title: title, CSRF: s.csrf, Backends: s.backends, Backend: backend, Version: s.opts.Version, Data: data}
+func (s *Server) page(r *http.Request, title, backend, instance, section string, data any) page {
+	home := backend
+	if home == "" {
+		home = s.backends[0].Name
+	}
+	return page{Home: home, Title: title, CSRF: s.csrf, Backends: s.backends, Backend: backend, Version: s.opts.Version, Data: data,
+		Nav: s.nav(r.Context()), Instance: instance, Section: section}
 }

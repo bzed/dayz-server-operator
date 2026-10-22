@@ -2,11 +2,6 @@
 {{/* SPDX-License-Identifier: AGPL-3.0-or-later */}}
 {{define "events"}}{{template "head" .}}
 {{with .Data}}
-<h1><i class="fa fa-list" aria-hidden="true"></i>{{.Instance}} events <small>{{$.Backend}}</small></h1>
-<p>
-  <a class="btn" href="/b/{{.Backend}}/i/{{.Instance}}"><i class="fa fa-users" aria-hidden="true"></i>Players and vehicles</a>
-  <a class="btn" href="/b/{{.Backend}}/i/{{.Instance}}/map"><i class="fa fa-map" aria-hidden="true"></i>Live map</a>
-</p>
 {{if .Err}}<p class="flash err">{{.Err}}</p>{{end}}
 <div class="evfilters" data-filters>
   {{range .Groups}}<label><input type="checkbox" data-group="{{.ID}}" checked>{{.Label}}</label>{{end}}

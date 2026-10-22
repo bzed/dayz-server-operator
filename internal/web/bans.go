@@ -45,7 +45,7 @@ func (s *Server) bansPage(w http.ResponseWriter, r *http.Request) {
 	if v.Bans, err = c.Bans(r.Context(), apiclient.BanFilter{State: v.State, Query: v.Query, Limit: 200}); err != nil {
 		v.Err = err.Error()
 	}
-	s.render(w, "bans", s.page("Bans", b.Name, v))
+	s.render(w, "bans", s.page(r, "Bans", b.Name, "", "bans", v))
 }
 
 type banFormView struct {
@@ -81,7 +81,7 @@ func (s *Server) banForm(w http.ResponseWriter, r *http.Request) {
 		v.Identities, _ = c.Identities(r.Context(), v.SteamID) // optional extras; the form works without them
 		v.Evidence, _ = c.Evidence(r.Context(), moderation.Who{SteamID: v.SteamID})
 	}
-	s.render(w, "banform", s.page("Ban a player", b.Name, v))
+	s.render(w, "banform", s.page(r, "Ban a player", b.Name, "", "bans", v))
 }
 
 // formInput reads the ban fields of a form. duration "keep" leaves keep's expiry.
@@ -228,7 +228,7 @@ func (s *Server) banPage(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	s.render(w, "ban", s.page(fmt.Sprintf("Ban #%d", id), b.Name, v))
+	s.render(w, "ban", s.page(r, fmt.Sprintf("Ban #%d", id), b.Name, "", "bans", v))
 }
 
 // evidenceWho names the player a ban is about, for filing and finding evidence: the Steam ID, else a GUID.

@@ -9,7 +9,7 @@
   <tbody>
   {{range .Entries}}
     <tr class="{{if .OK}}ok{{else}}err{{end}}">
-      <td>{{.Time.Format "2006-01-02 15:04:05"}}</td><td>{{.Actor}}</td><td>{{.Source}}</td><td>{{.Instance}}</td>
+      <td>{{.Time.Format "2006-01-02 15:04:05"}}</td><td>{{.Actor}}</td><td>{{.Source}}</td><td>{{if .Instance}}<a href="/b/{{$.Backend}}/i/{{.Instance}}">{{.Instance}}</a>{{end}}</td>
       <td>{{.Action}}</td><td>{{.Target}}</td><td>{{.Detail}}</td><td>{{.Result}}</td>
     </tr>
   {{end}}

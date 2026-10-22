@@ -21,6 +21,14 @@
     if (form.hasAttribute('data-reset')) { form.reset(); }
     if (form.hasAttribute('data-close-dialog')) { form.closest('dialog').close(); }
   });
+  // The instance switcher in the header closes on a click outside of it and on Escape.
+  document.addEventListener('click', function (e) {
+    document.querySelectorAll('details.switch[open]').forEach(function (d) { if (!d.contains(e.target)) { d.open = false; } });
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape') { return; }
+    document.querySelectorAll('details.switch[open]').forEach(function (d) { d.open = false; d.querySelector('summary').focus(); });
+  });
   // The Expansion notification type is asked for only with the Expansion way.
   document.addEventListener('change', function (e) {
     if (!e.target.hasAttribute('data-msgstyle')) { return; }

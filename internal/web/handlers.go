@@ -40,7 +40,7 @@ func (s *Server) dashboard(w http.ResponseWriter, r *http.Request) {
 		}
 		views = append(views, v)
 	}
-	s.render(w, "dashboard", s.page("Dashboard", "", views))
+	s.render(w, "dashboard", s.page(r, "Dashboard", "", "", "dashboard", views))
 }
 
 // target resolves the backend and instance of a request, or answers 404.
@@ -76,7 +76,7 @@ func (s *Server) instance(w http.ResponseWriter, r *http.Request) {
 		v.Role = info.Role
 	}
 	v.Expansion, v.Rcon = v.Status.Hello.Has("expansion"), true
-	s.render(w, "instance", s.page(inst, b.Name, v))
+	s.render(w, "instance", s.page(r, inst, b.Name, inst, "overview", v))
 }
 
 type listView[T any] struct {
@@ -319,7 +319,7 @@ func (s *Server) mapPage(w http.ResponseWriter, r *http.Request) {
 	if info, err := c.Info(r.Context()); err == nil {
 		v.Role = info.Role
 	}
-	pg := s.page(inst+" map", b.Name, v)
+	pg := s.page(r, inst+" map", b.Name, inst, "map", v)
 	pg.Class = "map"
 	s.render(w, "map", pg)
 }
@@ -339,7 +339,7 @@ func (s *Server) audit(w http.ResponseWriter, r *http.Request) {
 	if v.Entries, err = s.client(b, r).Audit(r.Context(), r.URL.Query().Get("instance"), 200); err != nil {
 		v.Err = err.Error()
 	}
-	s.render(w, "audit", s.page("Audit log", b.Name, v))
+	s.render(w, "audit", s.page(r, "Audit log", b.Name, "", "audit", v))
 }
 
 // stream relays an instance's event stream to the browser, so the browser
