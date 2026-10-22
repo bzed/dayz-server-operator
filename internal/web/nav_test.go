@@ -4,7 +4,6 @@
 package web
 
 import (
-	"github.com/bzed/dayz-server-operator/internal/admin"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -15,6 +14,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/bzed/dayz-server-operator/internal/admin"
 	"github.com/bzed/dayz-server-operator/internal/apiclient"
 )
 
