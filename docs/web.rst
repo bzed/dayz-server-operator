@@ -104,8 +104,11 @@ Pages
 -----
 
 Dashboard
-   All installations and their instances, with the dzo-admin connection state
-   and player and vehicle counts.
+   All installations and their instances, with the dzo-admin connection state, the world, the in-game time (sun or moon),
+   the players online, the vehicles, how long the game server has been up, the time to the next scheduled restart (``now`` when it
+   is overdue) and the version of the dzo-admin mod. An instance whose mod is not connected shows
+   the schedule only. On a phone the table keeps the instance, the state, the players and the next restart. The
+   map icon after an instance's name opens its map.
 
 Instance
    Broadcast message (to everyone, by chat colour, on screen, RCon ``say`` or, when ``dzo-admin`` reports DayZ Expansion,
@@ -141,7 +144,7 @@ Events
 Live map
    Players, vehicles, active events and marker layers on a map that updates as
    the server reports. A player's icon goes from red to green with the player's health
-   (a thick red ring: unconscious, dashed: dead). The instance bar shows the in-game time (with a sun or moon),
+   (a thick red ring: unconscious, dashed: dead). The instance bar (also on the overview and the events page, as a snapshot there) shows the in-game time (with a sun or moon),
    the players online, the
    uptime (since ``dzo serve`` last saw the mod start) and, if the instance has a
    ``restarts.schedule``, the time to the next scheduled restart, on the map's satellite imagery if you built it (see

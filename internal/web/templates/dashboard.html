@@ -8,15 +8,19 @@
   {{if .Err}}<p class="flash err">{{.Err}}</p>{{end}}
   {{if .Instances}}
   <div class="scroll"><table class="rows">
-    <thead><tr><th>Instance</th><th>Game server</th><th><i class="fa fa-users" aria-hidden="true"></i>Players</th><th><i class="fa fa-car" aria-hidden="true"></i>Vehicles</th><th></th></tr></thead>
+    <thead><tr><th>Instance</th><th>Game server</th><th class="opt">World</th><th class="opt">Time</th><th><i class="fa fa-users" aria-hidden="true"></i>Players</th><th class="opt"><i class="fa fa-car" aria-hidden="true"></i>Vehicles</th><th class="opt">Up</th><th>Next restart</th><th class="opt">Mod</th></tr></thead>
     <tbody>
-    {{range .Instances}}
+    {{range .Instances}}{{$f := facts . $.Now}}
       <tr{{if not .Connected}} class="off"{{end}}>
-        <td class="name"><a href="/b/{{$b}}/i/{{.Instance}}">{{.Instance}}</a></td>
+        <td class="name"><a href="/b/{{$b}}/i/{{.Instance}}">{{.Instance}}</a> <a class="mapl" href="/b/{{$b}}/i/{{.Instance}}/map" title="Map of {{.Instance}}" aria-label="Map of {{.Instance}}"><i class="fa fa-map" aria-hidden="true"></i></a></td>
         <td class="state">{{if .Connected}}<span class="dot on"></span>connected{{else}}<span class="dot"></span>not connected{{end}}</td>
+        <td class="opt">{{$f.World}}</td>
+        <td class="opt">{{if $f.Clock}}<i class="fa fa-{{if $f.Day}}sun-o{{else}}moon-o{{end}}" aria-hidden="true"></i>{{$f.Clock}}{{end}}</td>
         <td>{{.Players}}</td>
-        <td>{{.Vehicles}}</td>
-        <td><a class="btn" href="/b/{{$b}}/i/{{.Instance}}/map"><i class="fa fa-map" aria-hidden="true"></i>Open map</a></td>
+        <td class="opt">{{.Vehicles}}</td>
+        <td class="opt">{{$f.Up}}</td>
+        <td>{{$f.Restart}}</td>
+        <td class="opt">{{$f.Mod}}</td>
       </tr>
     {{end}}
     </tbody>

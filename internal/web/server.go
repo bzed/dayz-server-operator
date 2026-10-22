@@ -74,7 +74,7 @@ func New(backends []*Backend, opts Options) (*Server, error) {
 	if _, err := rand.Read(raw[:]); err != nil {
 		return nil, err
 	}
-	t, err := template.New("").Funcs(template.FuncMap{"pct": pct, "deref": func(f *float64) float64 { return *f }, "join": strings.Join, "expiry": moderation.FormatExpiry}).ParseFS(templateFS, "templates/*.html")
+	t, err := template.New("").Funcs(template.FuncMap{"pct": pct, "deref": func(f *float64) float64 { return *f }, "join": strings.Join, "expiry": moderation.FormatExpiry, "facts": factsOf}).ParseFS(templateFS, "templates/*.html")
 	if err != nil {
 		return nil, err
 	}
@@ -213,6 +213,8 @@ type page struct {
 	Instance   string       // the instance the page is about, "" outside instance pages
 	Section    string       // overview, map, events, players, bans, audit or dashboard
 	Home       string       // the backend the Bans and Audit log links go to
+	Now        time.Time    // when the page was made, for the facts
+	Facts      *factsView   // the facts of Instance, in the instance bar
 	HasPlayers bool         // the player database is served: the header links it
 }
 
@@ -222,5 +224,5 @@ func (s *Server) page(r *http.Request, title, backend, instance, section string,
 		home = s.backends[0].Name
 	}
 	return page{Home: home, Title: title, CSRF: s.csrf, Backends: s.backends, Backend: backend, Version: s.opts.Version, Data: data,
-		Nav: s.nav(r.Context()), Instance: instance, Section: section}
+		Now: s.now(), Nav: s.nav(r.Context()), Instance: instance, Section: section}
 }

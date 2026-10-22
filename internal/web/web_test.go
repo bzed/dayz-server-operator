@@ -173,7 +173,7 @@ func TestDashboard(t *testing.T) {
 	}
 	require.Contains(t, body, "/vendor/fork-awesome/css/fork-awesome.css", "dashboard icons")
 	require.Contains(t, body, `fa-map`, "dashboard icons")
-	require.Contains(t, body, "Open map", "dashboard icons")
+	require.Contains(t, body, `aria-label="Map of alpha"`, "dashboard icons")
 	require.True(t, strings.Contains(body, "api: ") || strings.Contains(body, "down"), "an unreachable backend must be shown with its error")
 	require.Contains(t, hdr.Get("Content-Security-Policy"), "default-src 'self'")
 	require.Equal(t, "DENY", hdr.Get("X-Frame-Options"))

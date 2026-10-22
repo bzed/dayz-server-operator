@@ -76,7 +76,9 @@ func (s *Server) instance(w http.ResponseWriter, r *http.Request) {
 		v.Role = info.Role
 	}
 	v.Expansion, v.Rcon = v.Status.Hello.Has("expansion"), true
-	s.render(w, "instance", s.page(r, inst, b.Name, inst, "overview", v))
+	pg := s.page(r, inst, b.Name, inst, "overview", v)
+	pg.setFacts(v.Status, err)
+	s.render(w, "instance", pg)
 }
 
 type listView[T any] struct {
@@ -320,6 +322,7 @@ func (s *Server) mapPage(w http.ResponseWriter, r *http.Request) {
 		v.Role = info.Role
 	}
 	pg := s.page(r, inst+" map", b.Name, inst, "map", v)
+	pg.setFacts(st, err)
 	pg.Class = "map"
 	s.render(w, "map", pg)
 }
@@ -503,4 +506,14 @@ func (s *Server) flag(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Cache-Control", "public, max-age=86400")
 	http.ServeFileFS(w, r, os.DirFS(s.opts.FlagsDir), code+".svg") //nolint:gosec // G703: code is two ASCII letters (checked above) and the file system is rooted at the flags directory
+}
+
+// setFacts fills the instance bar from an instance's status; without one (the request failed) the bar has the
+// name and the tabs only.
+func (p *page) setFacts(st admin.Status, err error) {
+	if err != nil {
+		return
+	}
+	f := factsOf(st, p.Now)
+	p.Facts = &f
 }

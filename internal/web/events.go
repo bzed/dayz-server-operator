@@ -139,7 +139,10 @@ func (s *Server) eventsPage(w http.ResponseWriter, r *http.Request) {
 	if info, err := c.Info(r.Context()); err == nil {
 		v.CanBroadcast = info.Role.Can(api.PermBroadcast)
 	}
-	s.render(w, "events", s.page(r, inst+" events", b.Name, inst, "events", v))
+	pg := s.page(r, inst+" events", b.Name, inst, "events", v)
+	st, err := c.Status(r.Context(), inst)
+	pg.setFacts(st, err)
+	s.render(w, "events", pg)
 }
 
 // feedFragment answers with the rows after an event id, for the page to append; without after, with the
