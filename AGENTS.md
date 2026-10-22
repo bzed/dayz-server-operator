@@ -39,6 +39,26 @@ Also, when the change touches them:
   message that it passed. CI cannot run DayZ, so this is the only check against
   the real game.
 
+## Documenting configuration (required)
+
+Every new or changed configuration option, in `config.yaml`, `site.yaml`, `instance.yaml`, the mod's
+`config.json`, an environment variable or a command-line flag, **must be documented in the same commit, in
+both ways**. A change that adds an option without them is not done and is not merged:
+
+- **In the YAML example** of the reference it belongs to (`docs/configuration.rst`: the `config.yaml`,
+  `site.yaml` and `instance.yaml` examples list *every* key), with its default marked (`# default`) or its
+  absence said (`# default: none`), and a short comment. The resolved-instance page and the quickstart
+  follow when they list the key.
+- **As text** in the notes below that example: what the option does and why, every value it takes, the
+  default, the limits and the error for a bad value, what it needs (a mod, a version, another option), how
+  it interacts with related options (and whether it is a site default), when a change takes effect (render,
+  reload, restart), and what is lost or kept on a reload. An example alone is not documentation. Say how
+  the option behaves, not only that it exists.
+- CLI flags also go into the command's help and `docs/cli.rst`; user-visible behaviour into the page of the
+  feature (`docs/web.rst`, `docs/api.rst`, ...). `make docs` must pass.
+
+Review a change by searching the docs for the new key name: it has to turn up in an example and in prose.
+
 ## Coverage
 
 - Keep total coverage at or above 85% (`COVERAGE_MIN` in the `Makefile`). Never
