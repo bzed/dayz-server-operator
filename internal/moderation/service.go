@@ -49,6 +49,9 @@ type Service struct {
 	// days; negative keeps them all). VacuumEvery is how often the database file is rebuilt (default 7 days).
 	AddressRetention time.Duration
 	VacuumEvery      time.Duration
+	// SessionRetention is how long the sessions of the player history are kept (default 365 days;
+	// negative keeps them all). The players, their names and first-seen times stay.
+	SessionRetention time.Duration
 	// OnEvent, when set, sees every BattlEye event of an instance after the ban logic ran. It runs on
 	// the instance's event goroutine and must not block. Set it before Start.
 	OnEvent func(instance string, ev battleye.Event)
@@ -213,6 +216,7 @@ func (s *Service) Changed(ctx context.Context, b Ban, prev *Ban) map[string]stri
 const (
 	DefaultAddressRetention = 90 * 24 * time.Hour
 	DefaultVacuumEvery      = 7 * 24 * time.Hour
+	DefaultSessionRetention = 365 * 24 * time.Hour
 )
 
 // maintain drops the addresses past their retention and vacuums the database when it is due.
@@ -223,6 +227,13 @@ func (s *Service) maintain(ctx context.Context) {
 			s.logf("bans: dropping old addresses: %v", err)
 		} else if n > 0 {
 			s.logf("bans: dropped %d addresses older than %s", n, keep)
+		}
+	}
+	if keep := cmp.Or(s.SessionRetention, DefaultSessionRetention); keep > 0 {
+		if n, err := s.store.PurgeSessions(ctx, now.Add(-keep)); err != nil {
+			s.logf("players: dropping old sessions: %v", err)
+		} else if n > 0 {
+			s.logf("players: dropped %d sessions older than %s", n, keep)
 		}
 	}
 	every := cmp.Or(s.VacuumEvery, DefaultVacuumEvery)

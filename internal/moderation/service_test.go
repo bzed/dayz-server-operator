@@ -304,3 +304,26 @@ func TestServiceOnEventChat(t *testing.T) {
 	defer e.mu.Unlock()
 	require.Equal(t, "alpha:hello", e.seen[1])
 }
+
+func TestSweepPurgesOldSessions(t *testing.T) {
+	e := newSvc(t)
+	require.NoError(t, e.st.PlayerJoined(t.Context(), "alpha", steamA, "alice", t0.Add(-400*24*time.Hour)))
+	require.NoError(t, e.st.PlayerLeft(t.Context(), "alpha", steamA, t0.Add(-400*24*time.Hour+time.Hour)))
+	require.NoError(t, e.st.PlayerJoined(t.Context(), "alpha", steamA, "alice", t0.Add(-time.Hour)))
+	e.tick <- t0
+	eventually(t, "the old session purged", func() bool {
+		p, err := e.st.Player(t.Context(), steamA)
+		return err == nil && len(p.Sessions) == 1
+	})
+}
+
+func TestNegativeSessionRetentionKeepsSessions(t *testing.T) {
+	e := newSvc(t)
+	e.svc.SessionRetention = -1
+	require.NoError(t, e.st.PlayerJoined(t.Context(), "alpha", steamA, "alice", t0.Add(-4000*24*time.Hour)))
+	require.NoError(t, e.st.PlayerLeft(t.Context(), "alpha", steamA, t0.Add(-4000*24*time.Hour+time.Hour)))
+	e.tick <- t0
+	e.tick <- t0
+	p, _ := e.st.Player(t.Context(), steamA)
+	require.Len(t, p.Sessions, 1)
+}
