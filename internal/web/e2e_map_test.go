@@ -107,3 +107,27 @@ func TestE2ERebuiltHouseShowsItsDecay(t *testing.T) {
 	require.NotContains(t, tip, "goes down", "flags go down, a rebuilt house is worn down")
 	require.Contains(t, b.textOf(".leaflet-control-layers"), "Rebuilt houses")
 }
+
+func TestE2ESandstormDrawsAQuietArea(t *testing.T) {
+	e := newEnv(t, api.RoleAdmin)
+	useRealAssets(t, e.assets)
+	b := newBrowser(t)
+	b.run(t, chromedp.EmulateViewport(1280, 800), chromedp.Navigate(e.url("/b/main/i/alpha/map")), chromedp.WaitVisible(`.leaflet-container`))
+	box := func(id, band string, from, to float64) admin.Marker {
+		return admin.Marker{Layer: "Sandstorm", ID: id, Shape: "polygon", Source: "sandstorm", Visibility: "viewer", Color: "#c8a464",
+			Points: []admin.Point{{X: from, Z: from}, {X: to, Z: from}, {X: to, Z: to}, {X: from, Z: to}}, Props: []admin.KV{{K: "band", V: band}}}
+	}
+	e.hub.Sync(admin.SyncRequest{Proto: 1,
+		Layers: []admin.Layer{{Name: "Sandstorm", Icon: "asterisk", Color: "#c8a464", Visibility: "viewer"}},
+		Markers: []admin.Marker{box("s0", "light", 4000, 9000), box("s1", "heavy", 5500, 7500),
+			{Layer: "Sandstorm", ID: "storm", Shape: "point", X: 6400, Z: 6400, Icon: "asterisk", Label: "Sandstorm", Source: "sandstorm", Visibility: "viewer", TTL: 1500, Color: "#c8a464",
+				Props: []admin.KV{{K: "heading", V: "NE (47°)"}, {K: "speed", V: "12 km/h"}, {K: "strength", V: "80%"}}}}})
+	require.Eventually(t, func() bool { return b.count(".leaflet-sand-pane path") == 2 }, 10*time.Second, 100*time.Millisecond, "the two bands are drawn in the sand pane")
+	require.Zero(t, b.count(".leaflet-sand-pane path.leaflet-interactive"), "the sand does not take clicks or hovers")
+	b.hover(t, ".mi-wrap")
+	require.Eventually(t, func() bool { return strings.Contains(b.textOf(".leaflet-tooltip"), "reaches its end in 25m") }, 5*time.Second, 50*time.Millisecond, "tooltip: %q", b.textOf(".leaflet-tooltip"))
+	require.Contains(t, b.textOf(".leaflet-tooltip"), "heading: NE (47°)")
+	var tr string
+	b.run(t, chromedp.Evaluate(`document.querySelector('.mi-wrap .storm-dir').style.transform`, &tr))
+	require.Equal(t, "rotate(47deg)", tr, "the arrow points the way the storm moves")
+}

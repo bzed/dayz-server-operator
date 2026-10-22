@@ -793,11 +793,24 @@
   function markerColor(c) {
     return c && window.CSS && CSS.supports('color', c) ? c : '#7a3db8';
   }
-  function markerIcon(cls, color) {
+  function markerIcon(cls, color, heading) {
     var root = mk('div', 'mi');
     root.style.setProperty('--mc', color);
     root.appendChild(mk('i', cls));
+    if (heading !== undefined && heading !== null) {
+      var arrow = mk('i', 'fa fa-long-arrow-up storm-dir');
+      arrow.style.transform = 'rotate(' + heading + 'deg)';
+      root.appendChild(arrow);
+    }
     return elIcon('mi-wrap', root);
+  }
+  // The sand of a storm: a quiet wash below every other marker, no outline, and no clicks.
+  map.createPane('sandPane').style.zIndex = 350;
+  // The compass degrees in the parentheses of the storm's heading prop ("NE (47°)"), or null.
+  function stormHeading(m) {
+    var kv = (m.props || []).filter(function (p) { return p.k === 'heading'; })[0];
+    var d = kv ? /\((\d{1,3})°\)/.exec(kv.v) : null;
+    return d ? +d[1] : null;
   }
 
   // A marker with a ttl expires in that many seconds; a territory flag says so when its refresher is used up.
@@ -805,6 +818,10 @@
   function ttlText(m) {
     if ((m.props || []).some(function (kv) { return kv.k === 'refresher' && kv.v === 'expired'; })) { return 'goes down now'; }
     if (m.source === 'rebuilt') { return m.ttl > 0 ? 'worn down in ' + span(m.ttl) : ''; }
+    if (m.source === 'sandstorm') {
+      if ((m.props || []).some(function (kv) { return kv.k === 'moving' && kv.v === 'arrived'; })) { return 'arrived'; }
+      return m.ttl > 0 ? 'reaches its end in ' + span(m.ttl) : '';
+    }
     return m.ttl > 0 ? 'goes down in ' + span(m.ttl) : '';
   }
 
@@ -827,20 +844,25 @@
           : L.circle(ll(m), { radius: m.radius || 50, color: color, weight: 2, fillOpacity: 0.15 });
       } else if ((m.shape === 'polygon' || m.shape === 'polyline') && m.points && m.points.length) {
         var pts = m.points.map(function (p) { return [p.z, p.x]; });
-        shape = m.shape === 'polygon' ? L.polygon(pts, { color: color }) : L.polyline(pts, { color: color });
+        if (m.source === 'sandstorm' && m.shape === 'polygon') {
+          var heavy = (m.props || []).some(function (kv) { return kv.k === 'band' && kv.v === 'heavy'; });
+          shape = L.polygon(pts, { stroke: false, fillColor: color, fillOpacity: heavy ? 0.28 : 0.14, interactive: false, pane: 'sandPane' });
+        } else {
+          shape = m.shape === 'polygon' ? L.polygon(pts, { color: color }) : L.polyline(pts, { color: color });
+        }
       } else if (glyph) {
-        shape = L.marker(ll(m), { icon: markerIcon(glyph, color) });
+        shape = L.marker(ll(m), { icon: markerIcon(glyph, color, m.source === 'sandstorm' ? stormHeading(m) : null) });
         named(shape, function () { return (m.label || m.id) + ' (' + m.layer + ')'; });
       } else {
         shape = L.circleMarker(ll(m), { radius: 5, color: color, fillOpacity: 0.9 });
       }
-      var lines = (m.props || []).filter(function (kv) { return kv.k !== 'refresher' && !(kv.k === 'territory' && m.source === 'flags'); }).map(function (kv) { return kv.k + ': ' + kv.v; });
+      var lines = (m.props || []).filter(function (kv) { return kv.k !== 'refresher' && kv.k !== 'band' && !(kv.k === 'moving' && m.source === 'sandstorm') && !(kv.k === 'territory' && m.source === 'flags'); }).map(function (kv) { return kv.k + ': ' + kv.v; });
       var left = ttlText(m);
       if (left) { lines.unshift(left); }
       var title = m.label || m.id;
       // A territory is only an outline: no name on the map, no hover, and clicks go to the map. Its name is
       // shown in the menu of its flag.
-      if (m.source !== 'territory') {
+      if (m.source !== 'territory' && !(m.source === 'sandstorm' && m.shape === 'polygon')) {
         bindTip(shape, title, lines);
         var tname = ((m.props || []).filter(function (kv) { return kv.k === 'territory'; })[0] || {}).v;
         onMenu(shape, function () {

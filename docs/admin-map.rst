@@ -335,6 +335,18 @@ over one shows:
 
 A building with no part built is not shown. This needs dzo-admin 0.6.0; an older mod shows nothing on these layers.
 
+Sandstorms
+----------
+
+While a sandstorm is active (DayZ 1.30, on maps that have them), the **Sandstorm** layer shows where it is as a thin
+sand-coloured wash under everything else, and one marker at its centre. The wash has two strengths: a light one where
+the storm is felt at all and a darker one where it is strong. It is sampled from the game on a grid of about 320 m, so its
+edge is approximate and blocky; it takes no clicks or hovers, so it never gets in the way of players and vehicles. The
+centre marker has an arrow that points the way the storm moves; hovering over it shows ``heading`` (a compass direction
+with the degrees), ``speed`` (km/h), ``strength`` (percent) and ``reaches its end in 25m``, the time until the storm arrives
+at the end of its path at its current speed (``arrived`` once it has). The layer is visible to every role and is empty
+when there is no storm. It needs dzo-admin 0.6.0; maps without sandstorms never show it.
+
 Markers from other mods
 -----------------------
 

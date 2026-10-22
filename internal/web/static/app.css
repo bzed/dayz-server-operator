@@ -411,3 +411,6 @@ table.pdb td.vcol .bad { color: var(--flare); font-weight: 600; white-space: now
   .verdict:last-child { border-bottom: 0; }
   table.pdb th:nth-child(3), table.pdb td:nth-child(3), table.pdb th:nth-child(4), table.pdb td:nth-child(4) { display: none; }
 }
+
+/* The centre of a sandstorm: the marker's arrow points the way the storm moves. */
+.mi .storm-dir { position: absolute; left: 50%; top: 50%; width: 1em; margin: -.5em 0 0 -.5em; font-size: 2.2rem; line-height: 1; text-align: center; color: var(--mc); transform-origin: 50% 50%; pointer-events: none; opacity: .85; }

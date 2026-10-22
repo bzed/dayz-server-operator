@@ -142,7 +142,7 @@ Events
    (:doc:`cli`) and in Discord with the ``killfeed`` (:doc:`configuration`).
 
 Live map
-   Players, vehicles, active events and marker layers (including the rebuilt houses and wells with the time until decay wears them down) on a map that updates as
+   Players, vehicles, active events and marker layers (including the rebuilt houses and wells with the time until decay wears them down, and an active sandstorm as a thin sand-coloured wash) on a map that updates as
    the server reports. A player's icon goes from red to green with the player's health
    (a thick red ring: unconscious, dashed: dead). The instance bar (also on the overview and the events page, as a snapshot there) shows the in-game time (with a sun or moon),
    the players online, the
