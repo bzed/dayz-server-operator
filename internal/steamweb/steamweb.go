@@ -78,6 +78,8 @@ type Client struct {
 	APIBase       string // default https://api.steampowered.com
 	HTTP          *http.Client
 	UserAgent     string // sent with every request, "dzo/<version>"
+	// Wait, when set, is called before every request; it paces them (and returns an error when ctx ends).
+	Wait func(ctx context.Context) error
 }
 
 func (c *Client) client() *http.Client {
@@ -90,6 +92,11 @@ func (c *Client) client() *http.Client {
 // get fetches one endpoint and returns its body, at most maxBody bytes. endpoint names it in errors; the URL
 // never appears there because it holds the key.
 func (c *Client) get(ctx context.Context, endpoint, rawURL string) ([]byte, int, error) {
+	if c.Wait != nil {
+		if err := c.Wait(ctx); err != nil {
+			return nil, 0, fmt.Errorf("steam: %s: %w", endpoint, err)
+		}
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
 		return nil, 0, fmt.Errorf("steam: %s: request", endpoint)

@@ -4,6 +4,8 @@
 package steamweb
 
 import (
+	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -278,4 +280,17 @@ func TestProfileURL(t *testing.T) {
 	assert.Equal(t, "https://steamcommunity.com/profiles/"+idPublic, ProfileURL(idPublic))
 	assert.Empty(t, ProfileURL("../x"))
 	assert.Empty(t, ProfileURL(""))
+}
+
+func TestWaitIsCalledBeforeEveryRequest(t *testing.T) {
+	s := newSteam(t, map[string]string{"/IPlayerService/GetOwnedGames/v1/": "owned.json", "/IPlayerService/GetSteamLevel/v1/": "level.json", "/ISteamUser/GetFriendList/v0001/": "friends.json"})
+	c := s.client(testKey)
+	waits := 0
+	c.Wait = func(context.Context) error { waits++; return nil }
+	var in moderationInfo
+	require.NoError(t, c.Details(t.Context(), idPublic, &in))
+	assert.Equal(t, 3, waits, "GetOwnedGames, GetSteamLevel and GetFriendList each wait")
+	c.Wait = func(context.Context) error { return errors.New("stop") }
+	require.Error(t, c.Details(t.Context(), idPublic, &in))
+	assert.Len(t, s.seen, 3, "no request after a failed wait")
 }

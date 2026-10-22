@@ -14,6 +14,9 @@ import (
 	"time"
 )
 
+// ErrLookupTooSoon is returned when a player was looked up on request a moment ago.
+var ErrLookupTooSoon = errors.New("moderation: this player was looked up a moment ago")
+
 // PlayerName is a name a player used.
 type PlayerName struct {
 	Name      string    `json:"name"`
