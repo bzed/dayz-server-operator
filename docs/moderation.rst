@@ -80,6 +80,20 @@ one instance that lose their address merge into one that keeps the newest name a
 to give back the space of deleted rows. The references (``ref``) are ids from a sequence, so they never
 change and are never reused, vacuum or not.
 
+.. _player-history:
+
+Player history
+--------------
+
+``dzo serve`` keeps a database of every player who connected to one of its instances, in the same SQLite file as the
+bans. It is built from the live player list that ``dzo-admin`` reports, so it needs the mod. For each player (by
+Steam ID, with the BattlEye GUID derived from it) it records every name used and when, and each stay as a session:
+the instance, when the player joined and when the player left. If ``dzo serve`` stops, or the mod is not heard from
+for 10 seconds, the sessions end at the last time it was heard from or at the stop. Sessions are kept for a year
+(``serve.session_retention_days``); the players, their names and first-seen times are kept for good.
+
+BattlEye kicks are not recorded: they are dzo's own.
+
 How bans are enforced
 ---------------------
 

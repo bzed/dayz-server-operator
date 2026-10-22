@@ -94,6 +94,9 @@ type Serve struct {
 	// 90; 0: for ever). VacuumDays is how often the ban database file is rebuilt (unset: 7; 0: never).
 	IPRetentionDays *int `yaml:"ip_retention_days"`
 	VacuumDays      *int `yaml:"vacuum_days"`
+	// SessionRetentionDays is how long the sessions of the player history (who was on which instance
+	// when) are kept (unset: 365; 0: for ever). The players, their names and first-seen times stay.
+	SessionRetentionDays *int `yaml:"session_retention_days"`
 	// GeoIPDir holds the GeoLite2 databases geoipupdate keeps (GeoLite2-City, -Country and -ASN, .mmdb); with
 	// them the player list shows flags and the player info the city, location and provider. GeoIPLegacyDir
 	// holds GeoIP.dat and GeoIPv6.dat of Debian's geoip-database, which know the country only and are the
@@ -117,6 +120,9 @@ func days(v *int, def int) time.Duration {
 
 // IPRetention is how long a sighting keeps its address; negative means for ever.
 func (s Serve) IPRetention() time.Duration { return days(s.IPRetentionDays, 90) }
+
+// SessionRetention is how long the sessions of the player history are kept; negative means for ever.
+func (s Serve) SessionRetention() time.Duration { return days(s.SessionRetentionDays, 365) }
 
 // VacuumEvery is how often the ban database is vacuumed; negative means never.
 func (s Serve) VacuumEvery() time.Duration { return days(s.VacuumDays, 7) }
@@ -350,7 +356,7 @@ func (c *Config) Validate() error {
 		}
 	}
 
-	for name, v := range map[string]*int{"serve.ip_retention_days": c.Serve.IPRetentionDays, "serve.vacuum_days": c.Serve.VacuumDays} {
+	for name, v := range map[string]*int{"serve.ip_retention_days": c.Serve.IPRetentionDays, "serve.vacuum_days": c.Serve.VacuumDays, "serve.session_retention_days": c.Serve.SessionRetentionDays} {
 		if v != nil && *v < 0 {
 			errs = append(errs, fmt.Sprintf("%s: must be 0 (off) or a number of days", name))
 		}

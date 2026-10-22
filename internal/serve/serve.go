@@ -24,6 +24,7 @@ import (
 	"github.com/bzed/dayz-server-operator/internal/killfeed"
 	"github.com/bzed/dayz-server-operator/internal/moderation"
 	"github.com/bzed/dayz-server-operator/internal/notify"
+	"github.com/bzed/dayz-server-operator/internal/presence"
 	"github.com/bzed/dayz-server-operator/internal/resolve"
 	"github.com/bzed/dayz-server-operator/internal/site"
 )
@@ -232,7 +233,7 @@ func Run(ctx context.Context, cfg *config.Config, o Options) error {
 	defer func() { _ = store.Close() }() // after the Service has stopped (deferred below, runs first)
 	mctx, mcancel := context.WithCancel(ctx)
 	svc := moderation.NewService(store, audit, logf)
-	svc.AddressRetention, svc.VacuumEvery = cfg.Serve.IPRetention(), cfg.Serve.VacuumEvery()
+	svc.AddressRetention, svc.VacuumEvery, svc.SessionRetention = cfg.Serve.IPRetention(), cfg.Serve.VacuumEvery(), cfg.Serve.SessionRetention()
 	svc.OnEvent = feedFromRCon(reg)
 	audit.OnLog = feedFromAudit(reg)
 	svc.Start(mctx)
@@ -242,6 +243,11 @@ func Run(ctx context.Context, cfg *config.Config, o Options) error {
 	} else {
 		svc.SetInstances(insts)
 	}
+	// The player history: who is on which instance, from the live player lists. Stopped before the store closes.
+	pctx, pcancel := context.WithCancel(ctx)
+	rec := &presence.Recorder{Store: store, Logf: logf}
+	defer func() { pcancel(); rec.Wait() }()
+	rec.Set(pctx, presence.FromRegistry(reg), reg.Names())
 	apiSrv := api.New(cfg.Serve.Installation, o.Version, reg, api.NewTokenStore(APITokens(cfg)), audit)
 	apiSrv.Moderation = svc
 	apiSrv.TilesDir = TilesDir(cfg)
@@ -296,6 +302,7 @@ func Run(ctx context.Context, cfg *config.Config, o Options) error {
 			} else {
 				kf.Set(kctx, reg, cfgs)
 			}
+			rec.Set(pctx, presence.FromRegistry(reg), reg.Names())
 			reg.LogTokens()
 			logf("site reloaded")
 		case err := <-errc:

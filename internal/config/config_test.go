@@ -246,3 +246,17 @@ func TestServeBanUpkeep(t *testing.T) {
 		assert.Error(t, err, "%s must be refused", yml)
 	}
 }
+
+func TestSessionRetentionDefaultAndZero(t *testing.T) {
+	c, err := Parse([]byte("{}\n"))
+	require.NoError(t, err)
+	require.Equal(t, 365*24*time.Hour, c.Serve.SessionRetention(), "default")
+	c, err = Parse([]byte("serve: {session_retention_days: 30}\n"))
+	require.NoError(t, err)
+	require.Equal(t, 30*24*time.Hour, c.Serve.SessionRetention())
+	c, err = Parse([]byte("serve: {session_retention_days: 0}\n"))
+	require.NoError(t, err)
+	require.Negative(t, c.Serve.SessionRetention(), "0 keeps the sessions for ever (a negative duration)")
+	_, err = Parse([]byte("serve: {session_retention_days: -1}\n"))
+	require.Error(t, err)
+}
