@@ -18,6 +18,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/chromedp/cdproto/input"
 	"github.com/chromedp/cdproto/log"
 	cdppage "github.com/chromedp/cdproto/page"
 	"github.com/chromedp/cdproto/runtime"
@@ -195,4 +196,54 @@ func (b *browser) clickUntil(t *testing.T, sel string, done func() bool) {
 		_ = chromedp.Run(b.ctx, chromedp.Click(sel, chromedp.ByQuery))
 		return false
 	}, 15*time.Second, 300*time.Millisecond, "clicking %s had no effect", sel)
+}
+
+// drag presses the left button on the centre of the first element that matches sel, moves through path (pixel
+// offsets from the start, in order) in steps interpolated moves per segment and releases. The 16 ms between the
+// moves paces the input like a hand; nothing waits for a result with it.
+func (b *browser) drag(t *testing.T, sel string, path [][2]float64, steps int) {
+	t.Helper()
+	b.press(t, sel)
+	b.moveBy(t, path, steps)
+	b.run(t, chromedp.Sleep(100*time.Millisecond)) // the hand rests a moment: the icon catches up with the pointer
+	b.release(t)
+}
+
+// dragPos is where the pointer is, in viewport coordinates, between press and release.
+var dragPos [2]float64
+
+func (b *browser) press(t *testing.T, sel string) {
+	t.Helper()
+	var r []float64
+	b.run(t, chromedp.Evaluate(`(function(){var r=document.querySelector(`+jsString(sel)+`).getBoundingClientRect();return [r.left+r.width/2,r.top+r.height/2];})()`, &r))
+	require.Len(t, r, 2)
+	dragPos = [2]float64{r[0], r[1]}
+	b.run(t,
+		input.DispatchMouseEvent(input.MouseMoved, r[0], r[1]),
+		input.DispatchMouseEvent(input.MousePressed, r[0], r[1]).WithButton(input.Left).WithClickCount(1),
+	)
+}
+
+func (b *browser) moveBy(t *testing.T, path [][2]float64, steps int) {
+	t.Helper()
+	for _, d := range path {
+		from := dragPos
+		for i := 1; i <= steps; i++ {
+			f := float64(i) / float64(steps)
+			x, y := from[0]+d[0]*f, from[1]+d[1]*f
+			b.run(t, input.DispatchMouseEvent(input.MouseMoved, x, y).WithButton(input.Left).WithButtons(1), chromedp.Sleep(16*time.Millisecond))
+		}
+		dragPos = [2]float64{from[0] + d[0], from[1] + d[1]}
+	}
+}
+
+func (b *browser) release(t *testing.T) {
+	t.Helper()
+	b.run(t, input.DispatchMouseEvent(input.MouseReleased, dragPos[0], dragPos[1]).WithButton(input.Left).WithClickCount(1))
+}
+
+// mapZoom sets the zoom of the map without animation.
+func (b *browser) mapZoom(t *testing.T, z float64) {
+	t.Helper()
+	b.run(t, chromedp.Evaluate(fmt.Sprintf(`document.getElementById('map')._dzoMap.setZoom(%v,{animate:false});void 0`, z), nil))
 }

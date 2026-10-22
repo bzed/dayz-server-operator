@@ -8,6 +8,20 @@ The web interface has a live map of each server: players, vehicles, active
 events and markers from other mods. Dragging a player's icon teleports the player, and
 the context menu of every icon offers its actions.
 
+Teleporting by drag
+-------------------
+
+Press a player's icon (operators and admins only) and drag it. From the moment you press until you confirm or
+cancel, the icon does not follow the live updates, so it neither jumps away nor is replaced under the pointer; the
+latest report of the player is kept and applied afterwards. The icon sits exactly under the pointer, also when
+you move fast, and the drop point is where you let go (clamped to the world). Other icons ignore the pointer
+while you drag, so crossing them neither opens their tooltips nor interrupts the drag. A confirmation asks
+``Teleport <name>?`` with the coordinates. You can pan and zoom to check the drop point before you answer; the
+confirmation stays with the icon. Teleport sends the command and the icon goes to the player's reported position once it is
+done; if the game server refuses, or you cancel, the icon goes back to where the player is now, not to
+where the drag began. If the player disconnects while you decide, the confirmation closes and nothing is sent.
+A plain click on an icon opens its menu as before.
+
 The dzo-admin server mod
 ------------------------
 

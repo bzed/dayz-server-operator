@@ -375,3 +375,6 @@ input, select, textarea { max-width: 100%; }
 .mapl { margin-left: .3rem; }
 .instbar .stats .mute { opacity: .8; }
 @media (max-width: 700px) { .rows .opt { display: none; } }
+/* While a player icon is dragged the other icons ignore the pointer: no tooltip, no rising, no menu. */
+#map.dragging-player .leaflet-marker-icon:not(.pm-src), #map.dragging-player .leaflet-interactive:not(.pm-src) { pointer-events: none; }
+#map.dragging-player .leaflet-tooltip { display: none; }

@@ -56,6 +56,7 @@
     maxBoundsViscosity: 0.8, zoomControl: false, attributionControl: false,
     bounceAtZoomLimits: false
   });
+  el._dzoMap = map; // for the browser tests
   var minorZ = Math.log2(0.2 / a); // the 100 m grid shows from 5 m per pixel
   if (meta) {
     L.tileLayer(el.dataset.tiles + '/' + meta.hash + '/{z}/{x}/{y}.' + meta.ext, {
@@ -249,7 +250,7 @@
   function openMenu(pt, spec) {
     closeMenu();
     opener = document.activeElement;
-    cur = { pt: pt, done: false, dismiss: spec.dismiss };
+    cur = { pt: pt, done: false, dismiss: spec.dismiss, owner: spec.owner };
     show(spec);
   }
   function closeMenu() {
@@ -416,7 +417,12 @@
     items[(i + (e.key === 'ArrowDown' ? 1 : items.length - 1)) % items.length].focus();
   });
   document.addEventListener('pointerdown', function (e) { if (cur && !ctx.contains(e.target)) { closeMenu(); } }, true);
-  map.on('movestart zoomstart', closeMenu);
+  // A pending teleport confirmation survives panning and zooming (to look at the drop point), and follows the icon.
+  map.on('movestart zoomstart', function () { if (!pendingDrop()) { closeMenu(); } });
+  map.on('moveend zoomend', function () {
+    var e = pendingDrop();
+    if (e && cur && cur.owner === e) { cur.pt = map.latLngToContainerPoint(e.m.getLatLng()).add([20, -10]); place(); }
+  });
   el.addEventListener('contextmenu', function (e) { e.preventDefault(); });
 
   // where to anchor a menu for an event: the pointer, or the layer if the
@@ -560,17 +566,19 @@
     };
   }
   map.on('contextmenu', function (e) { openMenu(e.containerPoint, mapSpec(e.latlng)); });
-  map.on('click', closeMenu);
+  // The click that ends a drag lands on the map when the icon is a few pixels behind the pointer; it must not
+  // cancel the drop it belongs to.
+  var droppedAt = 0;
+  map.on('click', function () { if (Date.now() - droppedAt > 400) { closeMenu(); } });
 
   // ---- layers ----
 
-  // teleport moves the player and reports it; an icon that was dragged goes
-  // back where it was if the game server says no.
-  function teleport(p, to, revert) {
+  // teleport moves the player and reports it; the promise says whether the game server did it.
+  function teleport(p, to) {
     return act('/players/' + encodeURIComponent(p.steam_id) + '/teleport', to).then(function (ok) {
       var e = pm[p.steam_id];
-      if (ok && e) { e.data.x = +to.x; e.data.z = +to.z; e.m.setLatLng([+to.z, +to.x]); }
-      if (!ok && revert) { revert(); }
+      if (ok && e) { e.data.x = +to.x; e.data.z = +to.z; }
+      return ok;
     });
   }
 
@@ -591,31 +599,64 @@
   }
   function playerLines(p) { return [p.steam_id, 'health ' + Math.round(p.health) + (p.alive ? '' : ' (dead)'), 'ping ' + p.ping]; }
 
+  // A player's icon has a drag lifecycle: idle (follows the stream), held (the button is down on it), dragging,
+  // pending (dropped, waiting for the confirmation and the answer). The stream only moves an idle icon; every
+  // other state keeps the icon where the hand put it, and the latest report waits in e.data.
+  function pendingDrop() {
+    var found = null;
+    Object.keys(pm).forEach(function (id) { if (pm[id].state === 'pending') { found = pm[id]; } });
+    return found;
+  }
+  function apply(e) {
+    var p = e.data;
+    e.m.setLatLng(ll(p));
+    var key = p.name + playerState(p);
+    if (key !== e.key) { e.key = key; e.m.setIcon(playerIcon(p)); }
+    bindTip(e.m, p.name, playerLines(p));
+  }
+  function settle(e) {
+    e.state = 'idle';
+    e.from = e.to = null;
+    el.classList.remove('dragging-player');
+    if (pm[e.data.steam_id] === e) { apply(e); }
+  }
+
   function makePlayer(p) {
     var m = L.marker(ll(p), { icon: playerIcon(p), draggable: can('operator'), autoPan: true, riseOnHover: true, zIndexOffset: 1000 });
-    var e = { m: m, data: p, key: p.name + playerState(p), drag: null };
+    var e = { m: m, data: p, key: p.name + playerState(p), state: 'idle', from: null, to: null };
     var root = function () { return m.getElement() && m.getElement().firstChild; };
     m.on('dragstart', function () {
       closeMenu();
-      e.drag = m.getLatLng();
+      e.state = 'dragging';
+      e.from = m.getLatLng();
+      el.classList.add('dragging-player');
+      m.getElement().classList.add('pm-src');
       m.closeTooltip();
       m.unbindTooltip();
       if (root()) { root().classList.add('dragging'); }
     });
-    m.on('drag', function () { showPos(e.data.name, m.getLatLng()); });
+    // Leaflet leaves the icon behind the pointer by the distance of its first move; the icon sits at the pointer.
+    m.on('drag', function () {
+      if (lastPointer) { m.setLatLng(map.mouseEventToLatLng(lastPointer)); }
+      showPos(e.data.name, m.getLatLng());
+    });
     m.on('dragend', function () {
-      var from = e.drag;
-      var at = m.getLatLng();
-      var to = { x: r1(at.lng), z: r1(at.lat) };
+      var at = lastPointer ? map.mouseEventToLatLng(lastPointer) : m.getLatLng();
+      var to = { x: Math.max(0, Math.min(size, r1(at.lng))), z: Math.max(0, Math.min(size, r1(at.lat))) };
+      e.state = 'pending';
+      e.to = to;
+      droppedAt = Date.now();
       m.setLatLng([to.z, to.x]);
+      el.classList.remove('dragging-player');
+      if (m.getElement()) { m.getElement().classList.remove('pm-src'); }
       if (root()) { root().classList.remove('dragging'); }
-      e.drag = null;
       bindTip(m, e.data.name, playerLines(e.data));
-      var settled = false;
+      var confirmed = false;
       openMenu(map.latLngToContainerPoint(m.getLatLng()).add([20, -10]), {
+        owner: e,
         title: 'Teleport ' + e.data.name + '?', text: 'To ' + to.x + ' / ' + to.z, submit: 'Teleport',
-        run: function () { settled = true; teleport(e.data, to, function () { m.setLatLng(from); }); },
-        dismiss: function () { if (!settled) { m.setLatLng(from); } }
+        run: function () { confirmed = true; teleport(e.data, to).then(function () { settle(e); }); },
+        dismiss: function () { if (!confirmed) { settle(e); } }
       });
     });
     onMenu(m, function () { return playerSpec(e.data); });
@@ -624,6 +665,34 @@
     m.addTo(players);
     return e;
   }
+
+  // Pressing on an icon holds it still: the stream must not move or replace it under the pointer before Leaflet
+  // starts the drag. A press that turns out to be a click (no drag) lets it go again.
+  function holdFor(target) {
+    if (!can('operator') || !target.closest) { return; }
+    var wrap = target.closest('.pm-wrap');
+    if (!wrap) { return; }
+    Object.keys(pm).forEach(function (id) {
+      var e = pm[id];
+      if (e.m.getElement() === wrap && e.state === 'idle') { e.state = 'held'; }
+    });
+  }
+  // The pointer's last position, from the moves of a held or dragged icon.
+  var lastPointer = null;
+  function trackPointer(ev) {
+    var t = ev.touches && ev.touches[0] ? ev.touches[0] : ev;
+    lastPointer = { clientX: t.clientX, clientY: t.clientY };
+  }
+  ['pointermove', 'mousemove', 'touchmove'].forEach(function (n) { document.addEventListener(n, trackPointer, true); });
+  function letGo() {
+    Object.keys(pm).forEach(function (id) { if (pm[id].state === 'held') { settle(pm[id]); } });
+  }
+  el.addEventListener('pointerdown', function (ev) { holdFor(ev.target); }, true);
+  el.addEventListener('mousedown', function (ev) { holdFor(ev.target); }, true);
+  el.addEventListener('touchstart', function (ev) { holdFor(ev.target); }, true);
+  ['pointerup', 'pointercancel', 'mouseup', 'touchend', 'touchcancel'].forEach(function (n) {
+    document.addEventListener(n, function () { setTimeout(letGo, 0); });
+  });
 
   function onPlayers(list) {
     playerList = list;
@@ -635,14 +704,14 @@
       var e = pm[p.steam_id];
       if (!e) { pm[p.steam_id] = makePlayer(p); return; }
       e.data = p;
-      if (e.drag) { return; }
-      e.m.setLatLng(ll(p));
-      var key = p.name + playerState(p);
-      if (key !== e.key) { e.key = key; e.m.setIcon(playerIcon(p)); }
-      bindTip(e.m, p.name, playerLines(p));
+      if (e.state === 'idle') { apply(e); }
     });
     Object.keys(pm).forEach(function (id) {
-      if (!seen[id]) { players.removeLayer(pm[id].m); delete pm[id]; }
+      if (seen[id]) { return; }
+      var e = pm[id];
+      players.removeLayer(e.m);
+      delete pm[id];
+      if (cur && cur.owner === e) { closeMenu(); }
     });
   }
 

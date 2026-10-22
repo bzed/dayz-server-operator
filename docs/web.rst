@@ -151,7 +151,7 @@ Live map
    :doc:`admin-map`). The map always fits the window and zooms in to a few
    pixels per metre; ``Fit`` shows the whole world again. Icons sit exactly on
    their position. **Drag a player's icon** and drop it to teleport the player
-   there; the crosshair and the coordinate readout show where it will land, and
+   there (the icon stays under the pointer and at the drop point until you answer, see :doc:`admin-map`); the crosshair and the coordinate readout show where it will land, and
    you confirm before anything happens. **Right-click** (or click, or press the
    menu key on a focused icon) for the actions on a player, vehicle, event or
    marker; right-click empty ground to teleport a player there, spawn an item there (as many stacks as the quantity needs) or spawn a vehicle there. Menu entries
