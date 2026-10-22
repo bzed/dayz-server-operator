@@ -111,7 +111,7 @@ type Marker struct {
 	Props      []KV    `json:"props,omitempty"`
 	TTL        int     `json:"ttl,omitempty"`
 	Visibility string  `json:"visibility,omitempty"` // lowest role that sees it, default admin
-	Source     string  `json:"source,omitempty"`     // api, tracked, watch, file
+	Source     string  `json:"source,omitempty"`     // api, tracked, watch, file, flags, territory, rebuilt, sandstorm
 }
 
 // Layer is the default style of a marker layer.

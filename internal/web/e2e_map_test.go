@@ -6,11 +6,13 @@
 package web
 
 import (
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/bzed/dayz-server-operator/internal/admin"
 	"github.com/bzed/dayz-server-operator/internal/api"
+	"github.com/chromedp/cdproto/input"
 	"github.com/chromedp/chromedp"
 	"github.com/stretchr/testify/require"
 )
@@ -76,4 +78,32 @@ func TestE2EMapIgnoresABadLink(t *testing.T) {
 		require.Eventually(t, func() bool { return b.count(".far") == 1 }, 10*time.Second, 100*time.Millisecond, q)
 		require.Zero(t, b.count(".focus"), q)
 	}
+}
+
+// hover moves the pointer over the first element that matches sel.
+func (b *browser) hover(t *testing.T, sel string) {
+	t.Helper()
+	var r []float64
+	b.run(t, chromedp.Evaluate(`(function(){var r=document.querySelector('`+sel+`').getBoundingClientRect();return [r.left+r.width/2,r.top+r.height/2];})()`, &r))
+	require.Len(t, r, 2)
+	b.run(t, input.DispatchMouseEvent(input.MouseMoved, r[0]-5, r[1]-5), input.DispatchMouseEvent(input.MouseMoved, r[0], r[1]))
+}
+
+func TestE2ERebuiltHouseShowsItsDecay(t *testing.T) {
+	e := newEnv(t, api.RoleAdmin)
+	useRealAssets(t, e.assets)
+	b := newBrowser(t)
+	b.run(t, chromedp.EmulateViewport(1280, 800), chromedp.Navigate(e.url("/b/main/i/alpha/map")), chromedp.WaitVisible(`.leaflet-container`))
+	e.hub.Sync(admin.SyncRequest{Proto: 1,
+		Layers: []admin.Layer{{Name: "Rebuilt houses", Icon: "home", Color: "#8f6f00", Visibility: "operator"}},
+		Markers: []admin.Marker{{Layer: "Rebuilt houses", ID: "r1", Shape: "point", X: 6400, Z: 6400, Icon: "home", Label: "House", Source: "rebuilt", TTL: 7380, Visibility: "operator",
+			Props: []admin.KV{{K: "parts", V: "3/12"}, {K: "weakest", V: "wall_1 64%"}}}}})
+	require.Eventually(t, func() bool { return b.count(".mi-wrap") == 1 }, 10*time.Second, 100*time.Millisecond)
+	b.hover(t, ".mi-wrap")
+	require.Eventually(t, func() bool { return strings.Contains(b.textOf(".leaflet-tooltip"), "worn down in 2h 3m") }, 5*time.Second, 50*time.Millisecond, "tooltip: %q", b.textOf(".leaflet-tooltip"))
+	tip := b.textOf(".leaflet-tooltip")
+	require.Contains(t, tip, "parts: 3/12")
+	require.Contains(t, tip, "weakest: wall_1 64%")
+	require.NotContains(t, tip, "goes down", "flags go down, a rebuilt house is worn down")
+	require.Contains(t, b.textOf(".leaflet-control-layers"), "Rebuilt houses")
 }

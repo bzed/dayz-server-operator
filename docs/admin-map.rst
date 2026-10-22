@@ -315,6 +315,26 @@ Both layers are visible to the roles ``operator`` and ``admin`` only, since they
 bases are; they appear in ``/map/markers`` and ``/layers`` of the API for those roles and carry
 the remaining time as ``ttl`` (seconds). This needs dzo-admin 0.4.0; an older mod shows no flags.
 
+Rebuilt houses and wells
+------------------------
+
+DayZ 1.30 lets players rebuild some map buildings (houses, and wells where the game has them) part by part with the
+rebuilding mechanic. Every such building with at least one part built is a marker on the **Rebuilt houses** layer
+(``home`` icon) or the **Rebuilt wells** layer (``tint`` icon), visible to ``operator`` and ``admin`` like the flags. Hovering
+over one shows:
+
+* ``worn down in 2h 3m``: the time until decay has worn the first of its parts down to its floor (the marker's ``ttl``, in
+  seconds). **Decay does not remove the building or its parts.** A decaying part loses health until it reaches a fraction of
+  its full health (its floor) and then stays there, weakened. The time is for the weakest decaying part to get there. It is
+  shorter while a sandstorm is active (decay runs 1.5 times as fast, and the marker says ``sandstorm: decaying faster``). It is
+  missing when nothing is left to decay: ``decay: worn down`` when every built part is at its floor, and ``decay: off`` when
+  the server has ``disableBaseDecay`` set in ``cfggameplay.json``.
+* ``parts: 3/12``: built parts of all parts, ``weakest: wall_1 64%``: the built part with the lowest health, and ``floor: 40%``:
+  the health at which its decay stops.
+* ``lock: code lock`` or ``lock: combination lock`` when the building carries one.
+
+A building with no part built is not shown. This needs dzo-admin 0.6.0; an older mod shows nothing on these layers.
+
 Markers from other mods
 -----------------------
 

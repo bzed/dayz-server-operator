@@ -801,8 +801,10 @@
   }
 
   // A marker with a ttl expires in that many seconds; a territory flag says so when its refresher is used up.
+  // A rebuilt house or well is not removed by decay: its weakest part is worn down to its floor.
   function ttlText(m) {
     if ((m.props || []).some(function (kv) { return kv.k === 'refresher' && kv.v === 'expired'; })) { return 'goes down now'; }
+    if (m.source === 'rebuilt') { return m.ttl > 0 ? 'worn down in ' + span(m.ttl) : ''; }
     return m.ttl > 0 ? 'goes down in ' + span(m.ttl) : '';
   }
 
