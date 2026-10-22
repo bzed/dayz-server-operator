@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?><profile>
+	<steamID64>76561198066209976</steamID64>
+	<steamID><![CDATA[Smith]]></steamID>
+	<onlineState>online</onlineState>
+	<privacyState>public</privacyState>
+	<visibilityState>3</visibilityState>
+	<vacBanned>1</vacBanned>
+	<tradeBanState>None</tradeBanState>
+	<isLimitedAccount>0</isLimitedAccount>
+	<memberSince>June 29, 2012</memberSince>
+	<location><![CDATA[Ukraine]]></location>
+	<mostPlayedGames>
+		<mostPlayedGame>
+			<gameName><![CDATA[Arma 3]]></gameName>
+			<gameLink><![CDATA[https://steamcommunity.com/app/107410]]></gameLink>
+			<hoursPlayed>41.3</hoursPlayed>
+			<hoursOnRecord>119</hoursOnRecord>
+		</mostPlayedGame>
+		<mostPlayedGame>
+			<gameName><![CDATA[DayZ]]></gameName>
+			<gameLink><![CDATA[https://steamcommunity.com/app/221100]]></gameLink>
+			<hoursPlayed>3.5</hoursPlayed>
+			<hoursOnRecord>1,532.4</hoursOnRecord>
+		</mostPlayedGame>
+	</mostPlayedGames>
+</profile>

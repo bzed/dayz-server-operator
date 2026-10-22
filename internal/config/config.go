@@ -63,7 +63,15 @@ type Product struct {
 // the session itself lives in the steamcmd home (see `dzo steam login`).
 type Steam struct {
 	Account string `yaml:"account"`
+	// ProfileLookup lets dzo ask Steam about players (profile page, bans) for the player pages. Unset: on.
+	ProfileLookup *bool `yaml:"profile_lookup"`
+	// WebAPIKeyFile holds a Steam Web API key (mode 0600, absolute path). With it the Web API replaces the
+	// community page and adds ban counts, account age, level, playtime and friends. Unset: no key.
+	WebAPIKeyFile string `yaml:"web_api_key_file"`
 }
+
+// Lookup reports whether Steam is asked about players.
+func (s Steam) Lookup() bool { return s.ProfileLookup == nil || *s.ProfileLookup }
 
 // DiscordWebhook is one named Discord notification target (§C9).
 type DiscordWebhook struct {
@@ -356,6 +364,9 @@ func (c *Config) Validate() error {
 		}
 	}
 
+	if k := c.Steam.WebAPIKeyFile; k != "" && !filepath.IsAbs(k) {
+		errs = append(errs, "steam.web_api_key_file: must be an absolute path")
+	}
 	for name, v := range map[string]*int{"serve.ip_retention_days": c.Serve.IPRetentionDays, "serve.vacuum_days": c.Serve.VacuumDays, "serve.session_retention_days": c.Serve.SessionRetentionDays} {
 		if v != nil && *v < 0 {
 			errs = append(errs, fmt.Sprintf("%s: must be 0 (off) or a number of days", name))

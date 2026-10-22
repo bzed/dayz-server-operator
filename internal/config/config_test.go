@@ -260,3 +260,16 @@ func TestSessionRetentionDefaultAndZero(t *testing.T) {
 	_, err = Parse([]byte("serve: {session_retention_days: -1}\n"))
 	require.Error(t, err)
 }
+
+func TestSteamProfileLookupDefaultsOn(t *testing.T) {
+	c, err := Parse([]byte("{}\n"))
+	require.NoError(t, err)
+	require.True(t, c.Steam.Lookup(), "on by default")
+	require.Empty(t, c.Steam.WebAPIKeyFile, "no key by default")
+	c, err = Parse([]byte("steam: {profile_lookup: false, web_api_key_file: /var/lib/dzo/secrets/steam-web-api.key}\n"))
+	require.NoError(t, err)
+	require.False(t, c.Steam.Lookup())
+	require.Equal(t, "/var/lib/dzo/secrets/steam-web-api.key", c.Steam.WebAPIKeyFile)
+	_, err = Parse([]byte("steam: {web_api_key_file: relative/key}\n"))
+	require.Error(t, err, "a relative key path is refused")
+}

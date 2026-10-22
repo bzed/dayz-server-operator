@@ -21,3 +21,6 @@ test-report.xml
 /debian/files
 .private/*
 /debian/man/
+# Secrets never belong in the repository (the Steam Web API key lives outside it, see docs/configuration.rst).
+*.key
+secrets/

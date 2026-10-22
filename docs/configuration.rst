@@ -45,6 +45,8 @@ built-in ones, and an entry of the same name replaces the built-in entry as a wh
 
    steam:
      account: <steam account name>   # default: empty
+     profile_lookup: true            # default
+     web_api_key_file: /var/lib/dzo/secrets/steam-web-api.key   # default: none (no Web API key)
 
    products:                         # the two entries below are built in
      dayz-stable:
@@ -133,6 +135,25 @@ and print what is wrong. A key dzo does not know is ignored.
 ``steam.account``
    The Steam account steamcmd logs in with for downloads. The session itself is created with
    ``dzo steam login`` and kept in the steamcmd home; the password is never in this file.
+
+``steam.profile_lookup``
+   Whether ``dzo serve`` asks Steam about the players in the player history (:ref:`player-history`): their Steam
+   name, whether the profile is private, VAC and community bans and account facts, shown on the player page. ``true``
+   (the default) or ``false``. Without a key (see below) dzo reads the public community profile page
+   (``https://steamcommunity.com/profiles/<id>?xml=1``), at most one request every 2 seconds and about one per
+   player per day, for players seen in the last 30 days. That page is not an official API and may change; when it
+   cannot be read the player page shows the profile link only. ``false`` sends nothing to Steam; the profile
+   link is still shown, it is only a link. Takes effect when ``dzo serve`` starts.
+
+``steam.web_api_key_file``
+   The path of a file with a Steam Web API key (32 hex digits; get one at https://steamcommunity.com/dev/apikey),
+   absolute, readable by ``dzo serve`` only (mode 0600; a group- or world-readable file stops ``dzo serve`` with an
+   error that names the file). Unset: no key. With a key the Web API replaces the community page and adds the number
+   of VAC and game bans, the days since the last ban, community and economy bans (also for private profiles), the
+   account's age and country, the Steam level, the DayZ playtime and the player's public friends who also played on
+   your servers. The key is sent to ``api.steampowered.com`` only, never written to a log or shown in an error, and
+   the file must stay out of version control (the repository's ``.gitignore`` lists ``*.key`` and ``secrets/``).
+   Needs ``profile_lookup: true``. Takes effect when ``dzo serve`` starts.
    Required for every download (server builds and mods); empty makes those commands fail.
 
 ``products``
