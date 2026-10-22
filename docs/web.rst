@@ -123,7 +123,7 @@ Instance
    shown there; it needs ``ip.history`` (:doc:`moderation`). The country flag before a name and the
    country in that info come from the GeoIP databases (:doc:`geoip`); with ``player.ip`` the info also shows the city,
    the approximate location and the provider. The
-   panel's ``Profile`` button is disabled until the player profile page exists. The player table has no Steam ID column; the
+   panel's ``Profile`` button opens the player's page (see Players below), and the panel shows the verdicts of BattlEye, Steam and our bans in one line before you act. A player who is flagged (a BattlEye global ban, a Steam ban or a ban of ours) has a red marker after the name in the player table. The player table has no Steam ID column; the
    panel shows it. On a phone the table shows only the name, the health and the actions.
 
 Events
@@ -157,6 +157,32 @@ Live map
    marker; right-click empty ground to teleport a player there, spawn an item there (as many stacks as the quantity needs) or spawn a vehicle there. Menu entries
    you lack the role for are not shown. See :doc:`admin-map`.
 
+Players
+   The player database of an installation (``Players`` in the header; it needs the ``player.history`` permission,
+   that is the moderator role or higher, :doc:`moderation`). The list has a search over every name a player ever used,
+   the Steam ID and the BattlEye GUID, an instance filter and "Only flagged players", most recently seen first, with a
+   red mark in the BattlEye, Steam and Here columns for a player something flags. A player's page shows, under the name
+   with the other names used, a **verdict row** of three cells that each answer one question and say how old the answer is:
+
+   * **BattlEye**: whether BattlEye's master server lists the GUID as globally banned, one line per game (DayZ first, then
+     Arma 3 and Arma 2). A ban in an Arma game alone is shown in red with the game's name, because it is the same Steam
+     account. "No answer" means the master did not answer and is never "not banned"; "Not asked yet" is a new player.
+   * **Steam**: VAC, game and community bans. Without a Web API key that is "VAC banned" or "No bans" from the public
+     profile; with one, the counts and the days since the last ban, also for private profiles. "Private profile, no ban
+     data" appears when a private profile gives nothing more. A line below lists what Steam said about the account: the
+     name, public or private, since when, the country, the Steam level and the DayZ hours, whatever the source gave, and
+     the player's public Steam friends who also played on your servers.
+   * **Here**: our own bans of the player: "Banned permanently" or "Banned until", with the ban number and scope, linked
+     to the ban; a past ban is shown muted as "Ban expired" or "Ban revoked".
+
+   Only a cell that reports a ban is red; "not banned" is plain text, not green, because the sources cannot promise more.
+   **Check now** asks BattlEye and Steam again and swaps the row (once per 10 minutes per player); the answers are otherwise
+   refreshed in the background (:ref:`player-history`). Below the row are the instances played with first and last day,
+   sessions and time, the names, the newest 50 sessions and, from the ban form's data, where the player was seen
+   (addresses only with ``ip.history``). **Ban…** opens the ban form with the player filled in, **Steam profile** opens
+   the profile on steamcommunity.com in a new tab. On a phone the three cells stack in the same order. The Steam ID of a ban's
+   target links to the player's page.
+
 Bans
    One page per installation (``Bans`` in the header): the list of bans with a state filter and
    a search by Steam ID, GUID, IP, text or player name; a ban page with its targets, scope, evidence,
@@ -181,6 +207,5 @@ Not available yet
 -----------------
 
 These are planned and are not part of the web interface today: users with
-passwords and TOTP, single sign-on, the player database (history, sessions,
-Steam profiles), kicks and bans, restart timers and scheduled
+passwords and TOTP, single sign-on, restart timers and scheduled
 broadcasts, and editors for server configuration.

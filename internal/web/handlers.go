@@ -11,6 +11,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/bzed/dayz-server-operator/internal/admin"
 	"github.com/bzed/dayz-server-operator/internal/api"
@@ -85,6 +86,7 @@ type listView[T any] struct {
 	Backend, Instance string
 	Items             []T
 	Err               string
+	Flagged           map[string]string // Steam ID -> why the player is flagged, for the player list
 }
 
 func (s *Server) playersFragment(w http.ResponseWriter, r *http.Request) {
@@ -97,6 +99,7 @@ func (s *Server) playersFragment(w http.ResponseWriter, r *http.Request) {
 	if v.Items, err = c.Players(r.Context(), inst); err != nil {
 		v.Err = err.Error()
 	}
+	v.Flagged = s.flagged(r, c, inst)
 	s.render(w, "players", v)
 }
 
@@ -118,8 +121,9 @@ type panelView struct {
 	Player            admin.Player
 	Others            []admin.Player // the other online players, as teleport targets
 	Err               string
-	Expansion         bool // the mod reports Expansion
-	Rcon              bool // always false: RCon says to everyone only
+	Expansion         bool          // the mod reports Expansion
+	Rcon              bool          // always false: RCon says to everyone only
+	Cells             []verdictCell // the verdicts of the player, for those who may read the player database
 }
 
 // playerPanel is the action form block for one player; it is loaded on
@@ -149,6 +153,11 @@ func (s *Server) playerPanel(w http.ResponseWriter, r *http.Request) {
 	}
 	if v.Player.SteamID == "" && v.Err == "" {
 		v.Err = "player is not online"
+	}
+	if v.Player.SteamID != "" {
+		if d, err := c.PlayerDetail(r.Context(), v.Player.SteamID); err == nil { // without player.history or a history there is nothing to show
+			v.Cells = verdicts(d, b.Name, time.Now())
+		}
 	}
 	s.render(w, "panel", v)
 }

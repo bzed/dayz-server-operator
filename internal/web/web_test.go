@@ -454,12 +454,6 @@ func TestPlayerInfoWithoutThePlayerIPPermissionHasNoAddress(t *testing.T) {
 	require.Contains(t, body, webSteam, "info")
 }
 
-func TestPlayerPanelHasAProfileButtonThatDoesNothingYet(t *testing.T) {
-	e := newEnv(t, api.RoleAdmin)
-	_, body, _ := e.get("/b/main/i/alpha/players/7656/panel")
-	require.Contains(t, body, `class="profile" disabled`, "no disabled profile button")
-}
-
 func TestPlayerTableHasNoSteamIDColumn(t *testing.T) {
 	e := newEnv(t, api.RoleAdmin)
 	_, body, _ := e.get("/b/main/i/alpha/players")

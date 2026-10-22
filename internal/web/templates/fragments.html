@@ -8,7 +8,7 @@
   {{range .Items}}
     <tr id="player-{{.SteamID}}">
       <td class="who" hx-get="/b/{{$.Backend}}/i/{{$.Instance}}/players/{{.SteamID}}/info" hx-trigger="mouseenter once, focusin once" hx-target="find .pop" hx-swap="innerHTML">
-        <span class="flag">{{if .Country}}<img src="/flags/{{.Country}}.svg" alt="{{.Country}}" title="{{.Country}}" loading="lazy">{{end}}</span>{{.Name}}{{if not .Alive}} <em>(dead)</em>{{else if .Unconscious}} <em>(unconscious)</em>{{end}}{{if .Vehicle}} <em>(in vehicle)</em>{{end}}
+        <span class="flag">{{if .Country}}<img src="/flags/{{.Country}}.svg" alt="{{.Country}}" title="{{.Country}}" loading="lazy">{{end}}</span>{{.Name}}{{with index $.Flagged .SteamID}} <span class="flagged" title="{{.}}"><i class="fa fa-exclamation-circle" aria-hidden="true"></i><span class="sr">flagged: {{.}}</span></span>{{end}}{{if not .Alive}} <em>(dead)</em>{{else if .Unconscious}} <em>(unconscious)</em>{{end}}{{if .Vehicle}} <em>(in vehicle)</em>{{end}}
         <button type="button" class="info quiet" aria-label="Connection info for {{.Name}}" aria-expanded="false" data-info><i class="fa fa-info-circle" aria-hidden="true"></i></button>
         <div class="pop" role="status"></div>
       </td>
@@ -75,7 +75,8 @@
 {{if .Err}}<p class="flash err">{{.Err}}</p><button class="quiet" data-close><i class="fa fa-times" aria-hidden="true"></i>Close</button>{{else}}
 {{$base := printf "/b/%s/i/%s/players/%s" .Backend .Instance .Player.SteamID}}
 <div class="panel playerpanel">
-  <h3><i class="fa fa-user" aria-hidden="true"></i>{{.Player.Name}} <small>{{.Player.SteamID}}</small> <button class="profile" disabled title="The player profile is not available yet"><i class="fa fa-id-card" aria-hidden="true"></i>Profile</button> <button class="quiet" data-close><i class="fa fa-times" aria-hidden="true"></i>Close</button></h3>
+  <h3><i class="fa fa-user" aria-hidden="true"></i>{{.Player.Name}} <small>{{.Player.SteamID}}</small> {{if .Cells}}<a class="btn" href="/b/{{.Backend}}/players/{{.Player.SteamID}}"><i class="fa fa-id-card" aria-hidden="true"></i>Profile</a>{{end}} <button class="quiet" data-close><i class="fa fa-times" aria-hidden="true"></i>Close</button></h3>
+  {{if .Cells}}{{template "verdictmini" .Cells}}{{end}}
   <div id="panel-flash"></div>
   <div class="grp"><span class="gname">Tell</span>
     <form hx-post="{{$base}}/message" hx-target="#panel-flash" data-reset>

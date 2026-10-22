@@ -25,7 +25,7 @@
       <td><span class="chip {{.State $now}}">{{.State $now}}</span></td>
       <td>{{expiry .ExpiresAt}}</td>
       <td>{{if eq .Scope "global"}}global{{else}}{{join .Instances ", "}}{{end}}</td>
-      <td>{{range .Targets}}{{if not .Derived}}{{if and (eq .Kind "ip") (not .Value)}}<em>address hidden</em>{{else}}<code>{{.Value}}</code>{{end}} {{end}}{{end}}</td>
+      <td>{{range .Targets}}{{if not .Derived}}{{if and (eq .Kind "ip") (not .Value)}}<em>address hidden</em>{{else}}{{if eq .Kind "steam"}}<a href="/b/{{$be}}/players/{{.Value}}"><code>{{.Value}}</code></a>{{else}}<code>{{.Value}}</code>{{end}}{{end}} {{end}}{{end}}</td>
       <td>{{.Reason}}</td>
       <td>{{.CreatedBy}}</td>
     </tr>

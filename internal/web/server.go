@@ -74,7 +74,7 @@ func New(backends []*Backend, opts Options) (*Server, error) {
 	if _, err := rand.Read(raw[:]); err != nil {
 		return nil, err
 	}
-	t, err := template.New("").Funcs(template.FuncMap{"pct": pct, "deref": func(f *float64) float64 { return *f }, "join": strings.Join, "expiry": moderation.FormatExpiry, "facts": factsOf}).ParseFS(templateFS, "templates/*.html")
+	t, err := template.New("").Funcs(template.FuncMap{"pct": pct, "deref": func(f *float64) float64 { return *f }, "join": strings.Join, "expiry": moderation.FormatExpiry, "facts": factsOf, "day": func(t time.Time) string { return t.UTC().Format("2006-01-02") }, "ago": ago, "hours": hours}).ParseFS(templateFS, "templates/*.html")
 	if err != nil {
 		return nil, err
 	}
@@ -108,6 +108,9 @@ func (s *Server) Handler() http.Handler {
 
 	const inst = "/b/{backend}/i/{instance}"
 	mux.HandleFunc("GET /b/{backend}/audit", s.audit)
+	mux.HandleFunc("GET /b/{backend}/players", s.playersPage)
+	mux.HandleFunc("GET /b/{backend}/players/{steamid}", s.playerPage)
+	mux.HandleFunc("POST /b/{backend}/players/{steamid}/lookup", s.lookupPlayer)
 	mux.HandleFunc("GET /b/{backend}/bans", s.bansPage)
 	mux.HandleFunc("GET /b/{backend}/bans/new", s.banForm)
 	mux.HandleFunc("POST /b/{backend}/bans", s.createBan)
@@ -192,8 +195,16 @@ func (s *Server) client(b *Backend, r *http.Request) *apiclient.Client {
 }
 
 func (s *Server) render(w http.ResponseWriter, name string, data any) {
+	s.renderCode(w, http.StatusOK, name, data)
+}
+
+// renderCode renders a template with a status code.
+func (s *Server) renderCode(w http.ResponseWriter, code int, name string, data any) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
+	if code != http.StatusOK {
+		w.WriteHeader(code)
+	}
 	if err := s.tmpl.ExecuteTemplate(w, name, data); err != nil {
 		http.Error(w, "template error", http.StatusInternalServerError)
 	}
@@ -224,5 +235,5 @@ func (s *Server) page(r *http.Request, title, backend, instance, section string,
 		home = s.backends[0].Name
 	}
 	return page{Home: home, Title: title, CSRF: s.csrf, Backends: s.backends, Backend: backend, Version: s.opts.Version, Data: data,
-		Now: s.now(), Nav: s.nav(r.Context()), Instance: instance, Section: section}
+		Now: s.now(), Nav: s.nav(r.Context()), Instance: instance, Section: section, HasPlayers: true}
 }

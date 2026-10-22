@@ -378,3 +378,36 @@ input, select, textarea { max-width: 100%; }
 /* While a player icon is dragged the other icons ignore the pointer: no tooltip, no rising, no menu. */
 #map.dragging-player .leaflet-marker-icon:not(.pm-src), #map.dragging-player .leaflet-interactive:not(.pm-src) { pointer-events: none; }
 #map.dragging-player .leaflet-tooltip { display: none; }
+
+/* ---- player database ---- */
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.flagged { color: var(--flare); margin-left: .25rem; }
+.phead { display: flex; flex-wrap: wrap; align-items: baseline; gap: .2rem 1rem; height: auto; padding: 0; background: none; color: inherit; margin-bottom: .1rem; }
+.phead h1 { margin: 0; overflow-wrap: anywhere; }
+.sid { color: var(--muted); }
+.pstatus { margin: .1rem 0 .6rem; }
+.pactions { display: flex; flex-wrap: wrap; gap: .5rem; margin: .2rem 0 1rem; }
+.verdictrow { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border: 1px solid var(--ink); border-radius: var(--r); background: var(--surface); }
+.verdict { padding: .6rem .9rem .55rem; border-left: 3px solid transparent; border-right: 1px solid var(--line); min-width: 0; }
+.verdict:last-child { border-right: 0; }
+.verdict h3 { margin: 0 0 .25rem; font: 600 1.05rem/1.2 var(--display); color: var(--muted); }
+.verdict ul { list-style: none; margin: 0; padding: 0; }
+.verdict li { overflow-wrap: anywhere; }
+.verdict .foot { margin: .4rem 0 0; font-size: .85rem; color: var(--muted); }
+.verdict.bad { border-left-color: var(--flare); }
+.verdict.bad h3 { color: var(--flare); }
+.verdict li.bad { color: var(--flare); font-weight: 600; }
+.steamfacts, .friends { margin: .6rem 0 0; overflow-wrap: anywhere; }
+.steamfacts .fa { margin-right: .4em; color: var(--muted); }
+.vmini { margin: 0 0 .6rem; display: flex; flex-wrap: wrap; gap: .1rem 1.1rem; font-size: .95rem; }
+.vmini .v { overflow-wrap: anywhere; }
+.vmini .bad { color: var(--flare); font-weight: 600; }
+table.pdb td.vcol .bad { color: var(--flare); font-weight: 600; white-space: nowrap; }
+.pager { display: flex; gap: .5rem; }
+.names { list-style: none; margin: 0; padding: 0; }
+@media (max-width: 700px) {
+  .verdictrow { grid-template-columns: minmax(0, 1fr); }
+  .verdict { border-right: 0; border-bottom: 1px solid var(--line); }
+  .verdict:last-child { border-bottom: 0; }
+  table.pdb th:nth-child(3), table.pdb td:nth-child(3), table.pdb th:nth-child(4), table.pdb td:nth-child(4) { display: none; }
+}
