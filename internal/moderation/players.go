@@ -261,6 +261,7 @@ func (s *Store) Players(ctx context.Context, f PlayerFilter) ([]PlayerSummary, i
 		limit = defaultPlayerLimit
 	}
 	limit = min(limit, maxPlayerLimit)
+	//nolint:gosec // the clauses are constants of this file; every value is bound
 	rows, err := s.db.QueryContext(ctx, `SELECT p.steam_id, p.guid, p.name, p.first_seen, p.last_seen, `+activeBan+` FROM players p`+where+
 		` ORDER BY p.last_seen DESC, p.steam_id LIMIT ? OFFSET ?`, append(append([]any{now.Unix()}, args...), limit, max(f.Offset, 0))...)
 	if err != nil {
@@ -555,6 +556,7 @@ func (s *Store) FriendsSeen(ctx context.Context, friendIDs []string) ([]PlayerSu
 		for i, id := range chunk {
 			args[i] = id
 		}
+		//nolint:gosec // only the number of ? placeholders is concatenated; every value is bound
 		rows, err := s.db.QueryContext(ctx, `SELECT steam_id, guid, name, first_seen, last_seen FROM players WHERE steam_id IN (`+
 			strings.TrimSuffix(strings.Repeat("?,", len(chunk)), ",")+`)`, args...)
 		if err != nil {
