@@ -341,7 +341,7 @@ Tunnel entrances
 ~~~~~~~~~~~~~~~~
 
 The tunnel entrances of the irrigation tunnels (Nasdara) are holes a rope ladder can be built on. The **Tunnel entrances**
-layer marks every one of them for every role, in a plain brown, and in green with ``ladder: usable`` once a ladder is built on
+layer marks every one of them for every role with a small dot, in a plain brown, and in green with ``ladder: usable`` once a ladder is built on
 it (``ladder: none`` otherwise). Needs dzo-admin 0.6.0.
 
 Sandstorms

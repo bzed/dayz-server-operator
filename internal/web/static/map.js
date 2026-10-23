@@ -850,6 +850,10 @@
         } else {
           shape = m.shape === 'polygon' ? L.polygon(pts, { color: color }) : L.polyline(pts, { color: color });
         }
+      } else if (m.source === 'tunnel') {
+        // A tunnel entrance is one of many: a small dot is enough, the icon would cover the map.
+        shape = L.circleMarker(ll(m), { radius: 3, weight: 1, color: color, fillColor: color, fillOpacity: 0.9 });
+        named(shape, function () { return (m.label || m.id) + ' (' + m.layer + ')'; });
       } else if (glyph) {
         shape = L.marker(ll(m), { icon: markerIcon(glyph, color, m.source === 'sandstorm' ? stormHeading(m) : null) });
         named(shape, function () { return (m.label || m.id) + ' (' + m.layer + ')'; });
