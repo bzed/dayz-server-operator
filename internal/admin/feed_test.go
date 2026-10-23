@@ -171,3 +171,14 @@ func TestFeedGroups(t *testing.T) {
 	require.Equal(t, "raids", FeedGroupOf(FeedLockCut))
 	require.Equal(t, "other", FeedGroupOf("weird"))
 }
+
+func TestAddFeedTranslatesAIFactionKeys(t *testing.T) {
+	h, _ := testHub()
+	ev := h.AddFeed(FeedEvent{
+		Kind: FeedKill, Name: "fam.tonini", TargetName: "AI (#STR_EXPANSION_AI_FACTION_WEST)", TargetAI: true,
+	})
+	require.Equal(t, "AI (West)", ev.TargetName)
+	require.Equal(t, "fam.tonini", ev.Name)
+	ev = h.AddFeed(FeedEvent{Kind: FeedKill, Name: "AI (#STR_EXPANSION_AI_FACTION_MERCENARY_GUARDS)"})
+	require.Equal(t, "AI (Mercenary Guards)", ev.Name)
+}

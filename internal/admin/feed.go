@@ -67,6 +67,8 @@ func (h *Hub) AddFeed(ev FeedEvent) FeedEvent {
 func (h *Hub) addFeedLocked(ev FeedEvent) FeedEvent {
 	h.feedID++
 	ev.ID, ev.Time = h.feedID, h.now()
+	ev.Name, ev.TargetName = delocalize(ev.Name), delocalize(ev.TargetName)
+	ev.Weapon, ev.Object = delocalize(ev.Weapon), delocalize(ev.Object)
 	h.feed = append(h.feed, ev)
 	if len(h.feed) > FeedKeep {
 		h.feed = append([]FeedEvent(nil), h.feed[len(h.feed)-FeedKeep:]...)
