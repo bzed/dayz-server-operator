@@ -39,6 +39,17 @@ Also, when the change touches them:
   message that it passed. CI cannot run DayZ, so this is the only check against
   the real game.
 
+## The dzo-admin mod
+
+Coding agents load the `dayz-dev` skill before reading, planning, or changing
+anything in `servermods/dzo-admin` (Enforce Script, `config.cpp`, building or
+signing the PBO, a local test server). Look up every class, method, enum and
+constant with its API index before using it
+(`python3 <skill dir>/scripts/dayz-api.py class|find|sub|enum|chain|src ...`;
+the vanilla 1.30 scripts plus CF, COT, Dabs and Expansion with `-m all`).
+Together with its 1.30 porting notes it is the reference for signatures and
+for what changed in the game; do not guess them from memory.
+
 ## Documenting configuration (required)
 
 Every new or changed configuration option, in `config.yaml`, `site.yaml`, `instance.yaml`, the mod's

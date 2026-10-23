@@ -226,6 +226,84 @@ s=0
 out=$("$work/dzo" flag raise t1 f0.0.0.0 --config "$work/config.yaml" --token-file "$work/api.token" 2>&1) && s=1
 echo "$out" | grep -qi 'flag not found' || { s=1; echo "$out" >&2; }
 verdict "flag: raise of an unknown flag is refused" $s
+# mkl <layer>: the markers of a layer, one compact JSON object per line (props and points hold braces, which grep -o cannot span).
+mkl() { mk | python3 -I -c 'import json,sys;[print(json.dumps(m,separators=(",",":"),ensure_ascii=False)) for m in json.load(sys.stdin) if m.get("layer")==sys.argv[1]]' "$1" || true; }
+# The experimental build does not always have the rebuilding of 1.30 yet (no rebuildable types, the tunnel is a plain house): then
+# these checks are skipped, and dzo-admin must only stay quiet (the script log check above).
+touch "$tree/profiles/dzo_probe/rebuild"
+sleep 8
+rebuilt_tests() {
+# A rebuilt house (two parts built by the probe) is a marker of the "Rebuilt houses" layer for operators, with the parts, the
+# weakest part and the time until decay wears it down (the part stays, at its floor: ttl = (health - floor) / rate).
+rb() { mkl "Rebuilt houses"; }
+s=0
+waitfor 60 "curl -s -H 'Authorization: Bearer $(cat "$work/api.token")' http://127.0.0.1:$api/api/v1/instances/t1/map/markers | grep -q '\"layer\":\"Rebuilt houses\"'" || s=1
+verdict "rebuilt: a rebuilt house is a marker of the Rebuilt houses layer" $s
+s=0
+rb | grep -q '"icon":"home"' && rb | grep -q '"source":"rebuilt"' && rb | grep -q '"visibility":"operator"' && rb | grep -Eq '"x":79[0-9][0-9]' || s=1
+[ "$s" = 0 ] || { rb >&2; mk >&2; }
+verdict "rebuilt: with the house icon, at its place, for operators" $s
+s=0
+rb | grep -Eq '"k":"parts","v":"2/[0-9]+"' && rb | grep -Eq '"k":"weakest","v":"[a-z0-9_]+ 100%"' && rb | grep -q '"k":"floor","v":"30%"' || s=1
+[ "$s" = 0 ] || rb >&2
+verdict "rebuilt: parts built, the weakest part and its decay floor" $s
+s=0
+rb | grep -Eq '"ttl":17[34][0-9][0-9]' || s=1
+[ "$s" = 0 ] || rb >&2
+verdict "rebuilt: the ttl is the time until decay reaches the floor (70% of 25000 HP at 1 HP/s, a few ticks of decay in)" $s
+s=0
+curl -s -H "Authorization: Bearer $(cat "$work/api.token")" "http://127.0.0.1:$api/api/v1/instances/t1/layers" | grep -o '{[^{}]*"name":"Rebuilt houses"[^{}]*}' | grep -q '"visibility":"operator"' || s=1
+verdict "rebuilt: the Rebuilt houses layer is defined for operators" $s
+# A well, when the game has one that can be rebuilt (Land_WaterWell_Brick does in 1.30).
+touch "$tree/profiles/dzo_probe/rebuildwell"
+s=0
+waitfor 60 "curl -s -H 'Authorization: Bearer $(cat "$work/api.token")' http://127.0.0.1:$api/api/v1/instances/t1/map/markers | grep -q '\"layer\":\"Rebuilt wells\"'" || s=1
+verdict "rebuilt: a rebuilt well is a marker of the Rebuilt wells layer" $s
+s=0
+mkl "Rebuilt wells" | grep -q '"icon":"tint"' || s=1
+verdict "rebuilt: a well has the tint icon" $s
+# The holes of the tunnel entrances a rope ladder can be built on: marked for everybody, in another colour with a usable ladder.
+tn() { mkl "Tunnel entrances" | grep -E '"x":80[0-9][0-9]' || true; }
+touch "$tree/profiles/dzo_probe/tunnel"
+s=0
+waitfor 60 "curl -s -H 'Authorization: Bearer $(cat "$work/api.token")' http://127.0.0.1:$api/api/v1/instances/t1/map/markers | grep -Eq '\"layer\":\"Tunnel entrances\".*\"x\":80[0-9][0-9]'" || s=1
+verdict "tunnel: an entrance without a ladder is marked" $s
+s=0
+tn | grep -q '"color":"#6b5b45"' && tn | grep -q '"k":"ladder","v":"none"' && tn | grep -q '"visibility":"viewer"' || s=1
+[ "$s" = 0 ] || tn >&2
+verdict "tunnel: in the plain colour, for everybody" $s
+touch "$tree/profiles/dzo_probe/tunnelladder"
+s=0
+waitfor 60 "curl -s -H 'Authorization: Bearer $(cat "$work/api.token")' http://127.0.0.1:$api/api/v1/instances/t1/map/markers  | python3 -I -c 'import json,sys;sys.exit(0 if any(m.get(\"layer\")==\"Tunnel entrances\" and 7990<m[\"x\"]<8010 and {\"k\":\"ladder\",\"v\":\"usable\"} in m[\"props\"] for m in json.load(sys.stdin)) else 1)'" || s=1
+verdict "tunnel: with a built ladder it says usable" $s
+s=0
+tn | grep -q '"color":"#2a8553"' || s=1
+verdict "tunnel: and has the other colour" $s
+}
+if grep -q 'DZO-PROBE rebuild: type [A-Za-z]' "$script"; then
+	rebuilt_tests
+else
+	echo "SKIP rebuilt houses and wells, tunnel entrances: this build has no rebuildable buildings"
+fi
+# A sandstorm is a thin area of two strengths and a centre marker with heading, speed and time left; everybody sees it.
+sn() { mkl Sandstorm; }
+touch "$tree/profiles/dzo_probe/storm"
+s=0
+waitfor 60 "curl -s -H 'Authorization: Bearer $(cat "$work/api.token")' http://127.0.0.1:$api/api/v1/instances/t1/map/markers | grep -q '\"id\":\"storm\"'" || s=1
+verdict "sandstorm: an active storm has a centre marker" $s
+s=0
+sn | grep -q '"id":"storm"' && sn | grep -Eq '"k":"heading","v":"[NSEW]+ \([0-9]+°\)"' && sn | grep -Eq '"k":"speed","v":"[0-9]+ km/h"' && sn | grep -Eq '"k":"strength","v":"[0-9]+%"' && sn | grep -q '"source":"sandstorm"' && sn | grep -q '"visibility":"viewer"' || s=1
+[ "$s" = 0 ] || sn | grep '"id":"storm"' >&2
+verdict "sandstorm: the centre has heading, speed and strength, for everybody" $s
+s=0
+waitfor 90 "curl -s -H 'Authorization: Bearer $(cat "$work/api.token")' http://127.0.0.1:$api/api/v1/instances/t1/map/markers | grep -q '\"shape\":\"polygon\".*\"source\":\"sandstorm\"'" || s=1 # the storm fades in over 30 s: its intensity grows from nothing
+[ "$(sn | grep -c '"shape":"polygon".*"k":"band","v":"light"')" -ge 1 ] || s=1 # grep -c, not -q: pipefail turns the early exit into a failure
+echo "sandstorm polygons: $(sn | grep -c '"shape":"polygon"')" >&2
+verdict "sandstorm: the storm is an area of light (and heavy) rectangles" $s
+touch "$tree/profiles/dzo_probe/stormstop"
+s=0
+waitfor 90 "! curl -s -H 'Authorization: Bearer $(cat "$work/api.token")' http://127.0.0.1:$api/api/v1/instances/t1/map/markers | grep -q '\"layer\":\"Sandstorm\"'" || s=1
+verdict "sandstorm: nothing is reported once the storm is over" $s
 if [ "$expansion" = 1 ]; then
 	touch "$tree/profiles/dzo_probe/territory"
 	tr() { mk | grep -o '{[^{}]*"layer":"Territories"[^{}]*}'; }

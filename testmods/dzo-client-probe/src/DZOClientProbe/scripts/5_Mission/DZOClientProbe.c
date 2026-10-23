@@ -10,6 +10,7 @@
 modded class MissionServer
 {
 	protected ref array<Object> m_BareCars;
+	protected EntityAI m_Tunnel;
 
 	override void OnInit()
 	{
@@ -60,6 +61,43 @@ modded class MissionServer
 			Print("DZO-PROBE territory: " + tflag + " " + tmod);
 		}
 #endif
+		if (FileExist("$profile:dzo_probe/rebuild"))
+		{
+			DeleteFile("$profile:dzo_probe/rebuild");
+			DZOProbeRebuild(false);
+		}
+		if (FileExist("$profile:dzo_probe/rebuildwell"))
+		{
+			DeleteFile("$profile:dzo_probe/rebuildwell");
+			DZOProbeRebuild(true);
+		}
+		if (FileExist("$profile:dzo_probe/tunnel"))
+		{
+			DeleteFile("$profile:dzo_probe/tunnel");
+			// A tunnel entrance without its rope ladder.
+			m_Tunnel = EntityAI.Cast(GetGame().CreateObjectEx("Land_IrrigationTunnel_Entrance_01", Vector(8000, GetGame().SurfaceY(8000, 8000), 8000), ECE_PLACE_ON_SURFACE));
+			Print("DZO-PROBE tunnel: " + m_Tunnel);
+		}
+		if (FileExist("$profile:dzo_probe/tunnelladder"))
+		{
+			DeleteFile("$profile:dzo_probe/tunnelladder");
+			ConstructionBase tcon;
+			if (m_Tunnel && Class.CastTo(tcon, m_Tunnel.GetConstructionBasic()))
+				tcon.BuildPartServerEx(null, "ladder_rebuild", -1);
+			Print("DZO-PROBE tunnel ladder built");
+		}
+		if (FileExist("$profile:dzo_probe/storm"))
+		{
+			DeleteFile("$profile:dzo_probe/storm");
+			// A sandstorm for 30 s of fade-in, as the console's weather tab starts one.
+			Print("DZO-PROBE storm: start " + GetGame().GetWeather().GetSandstorm().Start(30, false) + " active " + GetGame().GetWeather().GetSandstorm().IsActive());
+		}
+		if (FileExist("$profile:dzo_probe/stormstop"))
+		{
+			DeleteFile("$profile:dzo_probe/stormstop");
+			GetGame().GetWeather().GetSandstorm().Stop(5, false);
+			Print("DZO-PROBE storm: stop");
+		}
 		if (FileExist("$profile:dzo_probe/bike"))
 		{
 			DeleteFile("$profile:dzo_probe/bike");
@@ -161,6 +199,65 @@ modded class MissionServer
 	{
 		Object o = GetGame().CreateObjectEx("Land_Wreck_sed01_aban1_police", Vector(7500, GetGame().SurfaceY(7500, 7500), 7500), ECE_PLACE_ON_SURFACE);
 		Print("DZO-PROBE event: " + o + " at " + o.GetPosition());
+	}
+
+	// The first rebuildable type of the game (a cfgVehicles type with a Construction class that is not base
+	// building), a well or not.
+	string DZOProbeRebuildableType(bool well)
+	{
+		string basePath = "cfgVehicles";
+		string typeName;
+		string found = "";
+		int count = GetGame().ConfigGetChildrenCount(basePath);
+		for (int q = 0; q < count; q++)
+		{
+			GetGame().ConfigGetChildName(basePath, q, typeName);
+			if (!GetGame().ConfigIsExisting("cfgVehicles " + typeName + " Construction") || GetGame().IsKindOf(typeName, "BaseBuildingBase"))
+				continue;
+			typename tn = typeName.ToType();
+			bool isWell = tn && tn.IsInherited(Well);
+			Print("DZO-PROBE rebuildable type " + typeName + " well=" + isWell.ToString());
+			// a house is preferred to the other buildings (a ladder, a tunnel), they have more parts
+			if (isWell == well && (found == "" || (typeName.IndexOf("Land_House") == 0 && found.IndexOf("Land_House") != 0)))
+				found = typeName;
+		}
+		return found;
+	}
+
+	// A rebuildable building with two of its parts built, for dzo-admin's rebuilt layers.
+	void DZOProbeRebuild(bool well)
+	{
+		string type = DZOProbeRebuildableType(well);
+		Print("DZO-PROBE rebuild: type " + type);
+		if (type == "")
+			return;
+		vector pos = Vector(7900, 0, 7900);
+		pos[1] = GetGame().SurfaceY(pos[0], pos[2]);
+		EntityAI b = EntityAI.Cast(GetGame().CreateObjectEx(type, pos, ECE_PLACE_ON_SURFACE));
+		ConstructionBase con;
+		if (!b || !Class.CastTo(con, b.GetConstructionBasic()))
+		{
+			Print("DZO-PROBE rebuild: no construction on " + b);
+			return;
+		}
+		int built = 0;
+		map<string, ref ConstructionPart> parts = con.GetConstructionParts();
+		foreach (string name, ConstructionPart part : parts)
+		{
+			if (part.IsUtilityPart() || con.HasConflictPart(name))
+				continue;
+			con.BuildPartServerEx(null, name, -1);
+			built++;
+			if (built >= 2)
+				break;
+		}
+		Print("DZO-PROBE rebuild: " + b + " built " + built);
+		foreach (string pname, ConstructionPart p : parts)
+		{
+			string zone;
+			DamageSystem.GetDamageZoneFromComponentName(b, p.GetPartName(), zone);
+			Print("DZO-PROBE rebuild part " + pname + "/" + p.GetPartName() + " built=" + p.IsBuilt().ToString() + " decay=" + p.CanPartDecay().ToString() + " rate=" + p.GetPartDecayRate().ToString() + " floor=" + p.GetPartDecayThreshold().ToString() + " zone=" + zone + " hp=" + b.GetHealth(zone, "Health").ToString() + "/" + b.GetMaxHealth(zone, "Health").ToString());
+		}
 	}
 
 	// 1.30: a parked motorbike, for dzo-admin's vehicle list.

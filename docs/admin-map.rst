@@ -331,9 +331,18 @@ over one shows:
   the server has ``disableBaseDecay`` set in ``cfggameplay.json``.
 * ``parts: 3/12``: built parts of all parts, ``weakest: wall_1 64%``: the built part with the lowest health, and ``floor: 40%``:
   the health at which its decay stops.
-* ``lock: code lock`` or ``lock: combination lock`` when the building carries one.
+* ``locks: 2 code locks, 1 combination lock`` when the building carries any.
+* for a well, ``water: drinkable`` or ``water: none yet``: the brick well only gives water once its roof is built.
 
-A building with no part built is not shown. This needs dzo-admin 0.6.0; an older mod shows nothing on these layers.
+A building with no part built is not shown. The first rebuildable well of the game is ``Land_WaterWell_Brick``, the houses
+are the ``Land_House_*`` types. This needs dzo-admin 0.6.0; an older mod shows nothing on these layers.
+
+Tunnel entrances
+~~~~~~~~~~~~~~~~
+
+The tunnel entrances of the irrigation tunnels (Nasdara) are holes a rope ladder can be built on. The **Tunnel entrances**
+layer marks every one of them for every role, in a plain brown, and in green with ``ladder: usable`` once a ladder is built on
+it (``ladder: none`` otherwise). Needs dzo-admin 0.6.0.
 
 Sandstorms
 ----------

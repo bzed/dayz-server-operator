@@ -50,5 +50,15 @@ dayz-server-operator (0.1.0-1) UNRELEASED; urgency=medium
     killfeed (instance.yaml killfeed, with an optional delay for PvP servers;
     Discord posts no longer ping anyone). The notifier gets a 10 second HTTP
     timeout.
+  * Web interface: an instance switcher and an instance bar on every page,
+    world, time, uptime, restart and mod version on the dashboard, a fixed
+    teleport drag on the map, and a player database (Players page, API
+    /players, permission player.history) with BattlEye global bans (asked
+    from BattlEye's master server, per game) and Steam bans (optional Web API
+    key, steam.web_api_key_file). New options steam.profile_lookup,
+    steam.web_api_key_file and serve.session_retention_days.
+  * Map: rebuilt houses and wells with the time until decay wears them down,
+    the tunnel entrances (with and without a usable rope ladder) and an active
+    sandstorm; dzo-admin 0.6.0 (the packaged PBO changes).
 
  -- Bernd Zeimetz <bernd@bzed.de>  Sat, 26 Sep 2026 15:00:00 +0000
