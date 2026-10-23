@@ -39,6 +39,17 @@ func (f *fakeRCon) Command(_ context.Context, cmd string) (string, error) {
 	if cmd == "players" {
 		return f.players, nil
 	}
+	// A kicked player is gone from the list, as on a real server: otherwise every sweep that runs
+	// after the ban (the one at the instance's start, and Changed) kicks the same player again.
+	if slot, _, ok := strings.Cut(strings.TrimPrefix(cmd, "kick "), " "); ok && strings.HasPrefix(cmd, "kick ") {
+		var keep []string
+		for _, line := range strings.Split(f.players, "\n") {
+			if f := strings.Fields(line); len(f) == 0 || f[0] != slot {
+				keep = append(keep, line)
+			}
+		}
+		f.players = strings.Join(keep, "\n")
+	}
 	return "", nil
 }
 func (f *fakeRCon) Events() <-chan battleye.Event { return f.events }
