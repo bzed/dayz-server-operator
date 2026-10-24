@@ -851,8 +851,8 @@
           shape = m.shape === 'polygon' ? L.polygon(pts, { color: color }) : L.polyline(pts, { color: color });
         }
       } else if (m.source === 'tunnel') {
-        // A tunnel entrance is one of many: a small dot is enough, the icon would cover the map.
-        shape = L.circleMarker(ll(m), { radius: 3, weight: 1, color: color, fillColor: color, fillOpacity: 0.9 });
+        // A tunnel entrance is one of many: a small dot is enough; the white ring keeps the dark brown one visible on the map.
+        shape = L.circleMarker(ll(m), { radius: 4, weight: 1.5, color: '#fff', opacity: 0.9, fillColor: color, fillOpacity: 1 });
         named(shape, function () { return (m.label || m.id) + ' (' + m.layer + ')'; });
       } else if (glyph) {
         shape = L.marker(ll(m), { icon: markerIcon(glyph, color, m.source === 'sandstorm' ? stormHeading(m) : null) });
