@@ -335,6 +335,11 @@ s=0; [ "$(ev '"kind":"destroy".*"object":"wall_base_down"')" = 1 ] && [ "$(ev '"
 verdict "event feed: a raid is one destroy, the parts that fall with it are not reported" $s
 s=0; [ "$(ev '"kind":"flag_raised"')" = 1 ] && [ "$(ev '"kind":"flag_lowered"')" = 1 ] || s=1
 verdict "event feed: a flag raised and lowered" $s
+if [ "$expansion" = 1 ]; then
+	s=0; [ "$(ev '"kind":"kill".*"target_name":"AI \\"[^"\\]+\\"( \([A-Za-z ]+\))?".*"target_ai":true')" -ge 1 ] || s=1
+	[ "$s" = 0 ] || grep '"target_ai"' "$work/events.jsonl" >&2
+	verdict "event feed: an Expansion AI victim is named, AI \"Name\" (Faction), without a raw string key" $s
+fi
 # Stashes are not driven here: a dig action run by hand does not move the item, only a player's does.
 web_tests
 }

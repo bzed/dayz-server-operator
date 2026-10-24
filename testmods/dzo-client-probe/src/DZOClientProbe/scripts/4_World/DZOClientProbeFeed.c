@@ -29,6 +29,16 @@ class DZOProbeFeed
 		victim.ProcessDirectDamage(DamageType.FIRE_ARM, rifle, "Torso", "Bullet_556x45", "0 0 0", 1);
 		// Death without a killer.
 		loner.SetHealth("", "", 0);
+#ifdef EXPANSIONMODAI
+		// The same shot at an Expansion AI, 150 m away: the victim is named, its faction is not a raw key.
+		eAIBase bot = eAIBase.Cast(GetGame().CreateObject(eAISurvivor.GetQuasiRandom(), Vector(7150, GetGame().SurfaceY(7150, 7000), 7000)));
+		if (bot)
+		{
+			Print("DZO-PROBE feed: ai '" + bot.GetCachedName() + "'");
+			bot.SetHealth("GlobalHealth", "Health", 1);
+			bot.ProcessDirectDamage(DamageType.FIRE_ARM, rifle, "Torso", "Bullet_556x45", "0 0 0", 1);
+		}
+#endif
 		Print("DZO-PROBE feed: shot " + victim.IsAlive() + " alone " + loner.IsAlive());
 
 		// A fence: its base, a wall on it, then a raid on the base takes the wall with it.
