@@ -796,7 +796,8 @@ Keys:
       is going on. The delay counts from the moment ``dzo serve`` receives the kill. A changed ``delay``
       applies to the kills that come after the change; the ones already waiting keep their time.
    ``ai_killers``
-      Include kills by DayZ Expansion AI (default ``true``). The killer is shown as ``AI (faction)``.
+      Include kills by DayZ Expansion AI (default ``true``). The killer is shown as ``AI "Name" (faction)``,
+      the AI's own name and its faction, each only when it has one (dzo-admin 0.6.1; older mods send only the faction).
    ``ai_victims``
       Include players killing AI (default ``false``).
    ``deaths``
@@ -810,7 +811,7 @@ Keys:
         delay: 10m            # a PvP server: kills appear ten minutes later
         deaths: true          # and what the infected did
 
-   A kill is one line, for example ``💀 **Alice** killed **Bob** with M4-A1 (123 m)``, ``🤖 **AI (East)**
+   A kill is one line, for example ``💀 **Alice** killed **Bob** with M4-A1 (123 m)``, ``🤖 **AI "Frida" (East)**
    killed **Bob** with AKM (54 m)`` (melee has no distance) or, with ``deaths``, ``☠️ **Bob** was killed by
    infected``. Positions are never posted. Names and weapons come from players and mods, so Discord markup
    and mentions in them are escaped: they show as text and ping nobody. Kills that are due together (a

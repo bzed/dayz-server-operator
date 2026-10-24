@@ -30,6 +30,8 @@ func TestLine(t *testing.T) {
 			"💀 **Alice** killed **Bob** with M4-A1 (123 m)"},
 		{"ai kill", admin.FeedEvent{Kind: admin.FeedKill, Name: "AI (East)", AI: true, TargetName: "Bob", Weapon: "AKM", Distance: 54},
 			"🤖 **AI (East)** killed **Bob** with AKM (54 m)"},
+		{"named ai kill", admin.FeedEvent{Kind: admin.FeedKill, Name: `AI "Frida" (East)`, AI: true, TargetName: "Bob", Weapon: "AKM", Distance: 54},
+			`🤖 **AI "Frida" (East)** killed **Bob** with AKM (54 m)`},
 		{"melee has no distance", admin.FeedEvent{Kind: admin.FeedKill, Name: "Alice", TargetName: "Bob", Weapon: "fists"},
 			"💀 **Alice** killed **Bob** with fists"},
 		{"vehicle", admin.FeedEvent{Kind: admin.FeedKill, Name: "Alice", TargetName: "Bob", Weapon: "Ada 4x4"},

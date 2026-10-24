@@ -59,6 +59,8 @@ dayz-server-operator (0.1.0-1) UNRELEASED; urgency=medium
     steam.web_api_key_file and serve.session_retention_days.
   * Map: rebuilt houses and wells with the time until decay wears them down,
     the tunnel entrances (with and without a usable rope ladder) and an active
-    sandstorm; dzo-admin 0.6.0 (the packaged PBO changes).
+    sandstorm; dzo-admin 0.6.1 (the packaged PBO changes).
+  * Killfeed: an Expansion AI is shown with its own name and its faction,
+    AI "Frida" (West); the faction is no longer a raw stringtable key.
 
  -- Bernd Zeimetz <bernd@bzed.de>  Sat, 26 Sep 2026 15:00:00 +0000
