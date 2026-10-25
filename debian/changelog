@@ -62,5 +62,13 @@ dayz-server-operator (0.1.0-1) UNRELEASED; urgency=medium
     sandstorm; dzo-admin 0.6.1 (the packaged PBO changes).
   * Killfeed: an Expansion AI is shown with its own name and its faction,
     AI "Frida" (West); the faction is no longer a raw stringtable key.
+  * Move vehicles (drag on the map, "Move to coordinates", dzo vehicle move,
+    POST /vehicles/<id>/move) to pull stuck ones out. A vehicle with players
+    inside moves at most admin.move_occupied_max metres (new option, default
+    200) and everyone takes no damage for 3 s; dzo-admin 0.7.0 (the packaged
+    PBO changes).
+  * Boats (vanilla and DayZ Expansion) are listed on the map and in the vehicle
+    list as kind boat and can be spawned on the water, repaired, flipped, moved
+    and deleted like cars; dzo-admin 0.7.0.
 
  -- Bernd Zeimetz <bernd@bzed.de>  Sat, 26 Sep 2026 15:00:00 +0000

@@ -165,6 +165,7 @@ func TestPlayerAndVehicleCommands(t *testing.T) {
 		{"player", "give", "alpha", "7656", "AKM", "--qty", "1", "--target", "hands"},
 		{"vehicle", "repair", "alpha", "v1", "--scope", "wheels"},
 		{"vehicle", "flip", "alpha", "v1"},
+		{"vehicle", "move", "alpha", "v1", "--x", "100", "--z", "200"},
 		{"flag", "raise", "alpha", "f1"},
 		{"vehicle", "delete", "alpha", "v1", "--force"},
 	} {

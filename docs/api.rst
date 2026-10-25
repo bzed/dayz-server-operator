@@ -63,7 +63,7 @@ All paths start with ``/api/v1``. Responses are JSON.
    * - ``GET /instances/<i>/players``
      - online players: Steam ID, name, position, health, ping, vehicle
    * - ``GET /instances/<i>/vehicles``
-     - persistent vehicles: id, kind (``car``, ``motorbike`` or ``bicycle``), class, position, health, fuel, crew, and with DayZ Expansion ``owner`` and ``covered``
+     - persistent vehicles: id, kind (``car``, ``motorbike``, ``boat``, ``bicycle`` or ``helicopter``), class, position, health, fuel, crew, and with DayZ Expansion ``owner`` and ``covered``
    * - ``GET /instances/<i>/events``
      - active events (effect areas, markers from mods)
    * - ``GET /instances/<i>/layers``
@@ -144,6 +144,12 @@ Acting
    * - ``POST /instances/<i>/vehicles/<id>/flip``
      - ``operator``
      - stand the vehicle upright on its wheels
+   * - ``POST /instances/<i>/vehicles/<id>/move`` ``{"x", "z"}``
+     - ``operator`` (``player.teleport``)
+     - put the vehicle on the ground at ``x``/``z``, upright, at rest and with its heading, to pull a stuck one out. Players inside
+       stay seated and move with it, but only up to ``admin.move_occupied_max`` metres (default 200; 0 refuses those moves), with
+       their damage and the vehicle's switched off for about 3 seconds. Refused: a position outside the world, a covered
+       Expansion vehicle, a vehicle that is not there. Needs dzo-admin 0.7.0.
    * - ``POST /instances/<i>/flags/<id>/raise``
      - ``operator``
      - raise a territory flag to the top of its pole and fill its timer (the 40 days a freshly raised flag has); ``<id>`` is the id of its marker on the ``Flags`` layer

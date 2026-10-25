@@ -87,7 +87,7 @@ func newEnv(t *testing.T, role api.Role) *env {
 	t.Cleanup(ws.Close)
 	hub.Sync(admin.SyncRequest{Proto: 1, Hello: true, ModVersion: "0.1.0", World: "enoch",
 		Players:  []admin.Player{{SteamID: "7656", Name: "<b>alice</b>", Alive: true, X: 1, Z: 2}},
-		Vehicles: []admin.Vehicle{{ID: "1.2.3.4", Kind: "car", Type: "OffroadHatchback", Health: 0.5, Fuel: 0.25}, {ID: "5.6.7.8", Kind: "motorbike", Type: "Motorbike_01"}, {ID: "9.9.9.9", Kind: "bicycle", Type: "Old_Bike_Red"}, {ID: "c.c.c.c", Kind: "car", Type: "Sedan_02", Owner: "Rita", Covered: true}},
+		Vehicles: []admin.Vehicle{{ID: "1.2.3.4", Kind: "car", Type: "OffroadHatchback", Health: 0.5, Fuel: 0.25}, {ID: "5.6.7.8", Kind: "motorbike", Type: "Motorbike_01"}, {ID: "9.9.9.9", Kind: "bicycle", Type: "Old_Bike_Red"}, {ID: "b.b.b.b", Kind: "boat", Type: "Boat_01_Orange"}, {ID: "c.c.c.c", Kind: "car", Type: "Sedan_02", Owner: "Rita", Covered: true}},
 		Types:    &admin.TypesChunk{Hash: "h", Total: 2, Names: []string{"AKM", "AK74"}},
 	})
 	return &env{t: t, web: ws, srv: srv, hub: hub, api: apiSrv, assets: assets}
@@ -193,7 +193,7 @@ func TestInstanceAndFragments(t *testing.T) {
 	require.Contains(t, body, "&lt;b&gt;alice&lt;/b&gt;", "player names must be escaped")
 	require.NotContains(t, body, "<b>alice", "player names must be escaped")
 	_, body, _ = e.get("/b/main/i/alpha/vehicles")
-	for _, want := range []string{"OffroadHatchback", "50%", "/vehicles/1.2.3.4/panel", "Motorbike_01", "fa-motorcycle", "Old_Bike_Red", "fa-bicycle", "Sedan_02 <em>(covered)</em>", "Rita"} {
+	for _, want := range []string{"OffroadHatchback", "50%", "/vehicles/1.2.3.4/panel", "Motorbike_01", "fa-motorcycle", "Old_Bike_Red", "fa-bicycle", "Boat_01_Orange", "fa-ship", "Sedan_02 <em>(covered)</em>", "Rita"} {
 		require.Contains(t, body, want, "vehicles")
 	}
 	require.NotContains(t, body, "/vehicles/c.c.c.c/panel", "vehicles")
@@ -282,6 +282,7 @@ func TestActions(t *testing.T) {
 		"/b/main/i/alpha/spawn-vehicle":           {"type": {"AKM"}, "x": {"10"}, "z": {"20"}},
 		"/b/main/i/alpha/vehicles/1.2.3.4/repair": {"scope": {"missing"}},
 		"/b/main/i/alpha/vehicles/1.2.3.4/flip":   {},
+		"/b/main/i/alpha/vehicles/1.2.3.4/move":   {"x": {"10"}, "z": {"20"}},
 		"/b/main/i/alpha/flags/f1.2/raise":        {},
 		"/b/main/i/alpha/vehicles/1.2.3.4/delete": {"force": {"1"}},
 	} {

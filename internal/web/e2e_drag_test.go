@@ -182,3 +182,21 @@ func TestE2EViewerCannotDragAndTheIconStaysLive(t *testing.T) {
 	require.Eventually(t, func() bool { return b.markerStyle(".pm-wrap") != before }, 10*time.Second, 50*time.Millisecond, "a viewer's pressed icon still follows the stream")
 	b.release(t)
 }
+
+// Dragging a car's icon asks to move it; confirming sends vehicle_move, and the icon stays at the drop
+// until the answer.
+func TestE2EDragAVehicleMovesIt(t *testing.T) {
+	e, b := dragEnv(t)
+	defer e.answerCommands(true, "moved")()
+	x, z := b.atPx(t, 100, 150)
+	b.drag(t, ".vm-wrap", [][2]float64{{0, 150}}, 20)
+	require.Eventually(t, func() bool { return strings.Contains(b.menuText(), "Move OffroadHatchback?") }, 5*time.Second, 50*time.Millisecond, "the confirmation opens")
+	var xs, zs float64
+	_, _ = fmt.Sscanf(strings.SplitN(b.menuText(), "To ", 2)[1], "%f / %f", &xs, &zs)
+	x1, _ := b.atPx(t, 1.5, 0)
+	x0, _ := b.atPx(t, 0, 0)
+	require.InDelta(t, x, xs, x1-x0, "menu: %q", b.menuText())
+	require.InDelta(t, z, zs, x1-x0, "menu: %q", b.menuText())
+	b.run(t, chromedp.Click(`.ctx form button:not([type=button])`, chromedp.ByQuery))
+	require.Eventually(t, func() bool { return e.commandsOf("vehicle_move") == 1 }, 10*time.Second, 50*time.Millisecond)
+}

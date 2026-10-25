@@ -521,6 +521,7 @@ below as "site default".
      markers_s: 10                 # default
      events_s: 30                  # default
      allow_spawn: true             # default
+     move_occupied_max: 200        # default; metres, 0 = no moves of vehicles with players inside
      allow_classes: []             # default: none
      deny_classes: ["Land_*"]      # default: none; items admins may not spawn (trailing * = prefix)
      vehicle_kinds: {bicycle: ["Bike_*"], helicopter: ["MyHeli_*"]}   # default: none
@@ -657,10 +658,17 @@ Keys:
       negative values are refused.
    ``admin.allow_spawn``
       Whether admins may spawn items (default true).
+   ``admin.move_occupied_max``
+      The farthest, in metres (ground distance), an operator may move a vehicle that has players inside, on the map
+      or with ``dzo vehicle move``. Default 200; 0 refuses every move of an occupied vehicle; a negative value is an
+      error. Empty vehicles can be moved anywhere in the world. A short move keeps the terrain the players' game
+      already has loaded; a long one can leave them looking at no world while it streams in. Needs dzo-admin 0.7.0
+      (an older mod cannot move vehicles at all). Written to the mod's ``config.json`` by ``dzo instance render``, read when
+      the server starts.
    ``admin.allow_classes``, ``admin.deny_classes``
       Class names admins may or may not spawn; a trailing ``*`` is a prefix.
    ``admin.vehicle_kinds``
-      Class name patterns by kind, ``bicycle`` or ``helicopter``, of other mods, on top of the
+      Class name patterns by kind, ``bicycle``, ``boat`` or ``helicopter``, of other mods, on top of the
       classes dzo knows: the map and the vehicle list show them with the icon of the kind.
    ``admin_map.vanilla_events``
       Whether the map shows the events of the Central Economy as marker layers (default true). A

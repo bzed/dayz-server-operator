@@ -498,6 +498,10 @@ func actFlip(r *http.Request, c *apiclient.Client, inst string) (api.ActionResul
 	return c.Flip(r.Context(), inst, r.PathValue("id"))
 }
 
+func actMoveVehicle(r *http.Request, c *apiclient.Client, inst string) (api.ActionResult, error) {
+	return c.MoveVehicle(r.Context(), inst, r.PathValue("id"), num(r, "x"), num(r, "z"))
+}
+
 func actRaise(r *http.Request, c *apiclient.Client, inst string) (api.ActionResult, error) {
 	return c.RaiseFlag(r.Context(), inst, r.PathValue("id"))
 }

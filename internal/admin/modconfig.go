@@ -75,18 +75,20 @@ func ColorOK(s string) bool { return colorRe.MatchString(s) }
 
 // ModConfig is $profile:dzo/admin/config.json (DZOAdminConfig in the mod).
 type ModConfig struct {
-	Version      int         `json:"version"`
-	Endpoint     string      `json:"endpoint"`
-	Token        string      `json:"token"`
-	SyncMS       int         `json:"sync_ms"`
-	PlayersS     int         `json:"players_s"`
-	VehiclesS    int         `json:"vehicles_s"`
-	MarkersS     int         `json:"markers_s"`
-	EventsS      int         `json:"events_s"`
-	AllowSpawn   bool        `json:"allow_spawn"`
-	AllowClasses []string    `json:"allow_classes"`
-	DenyClasses  []string    `json:"deny_classes"`
-	Watch        []WatchRule `json:"watch"`
+	Version    int    `json:"version"`
+	Endpoint   string `json:"endpoint"`
+	Token      string `json:"token"`
+	SyncMS     int    `json:"sync_ms"`
+	PlayersS   int    `json:"players_s"`
+	VehiclesS  int    `json:"vehicles_s"`
+	MarkersS   int    `json:"markers_s"`
+	EventsS    int    `json:"events_s"`
+	AllowSpawn bool   `json:"allow_spawn"`
+	// MoveOccupiedMax is the farthest a vehicle with players inside may be moved, in metres; 0 refuses.
+	MoveOccupiedMax int         `json:"move_occupied_max"`
+	AllowClasses    []string    `json:"allow_classes"`
+	DenyClasses     []string    `json:"deny_classes"`
+	Watch           []WatchRule `json:"watch"`
 }
 
 // WithDefaults fills the intervals the instance config left at zero.

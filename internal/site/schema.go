@@ -406,16 +406,19 @@ func (m ModRef) Validate() error {
 // mean the mod's defaults (sync every second, players every 5 s, vehicles
 // every 60 s, markers every 10 s, events every 30 s).
 type AdminConfig struct {
-	Disabled     bool     `yaml:"disabled,omitempty"`
-	SyncMS       int      `yaml:"sync_ms,omitempty"`
-	PlayersS     int      `yaml:"players_s,omitempty"`
-	VehiclesS    int      `yaml:"vehicles_s,omitempty"`
-	MarkersS     int      `yaml:"markers_s,omitempty"`
-	EventsS      int      `yaml:"events_s,omitempty"`
-	AllowSpawn   *bool    `yaml:"allow_spawn,omitempty"`
-	AllowClasses []string `yaml:"allow_classes,omitempty"`
-	DenyClasses  []string `yaml:"deny_classes,omitempty"`
-	// VehicleKinds are class-name globs by kind (bicycle, helicopter) of other mods, on top of the
+	Disabled   bool  `yaml:"disabled,omitempty"`
+	SyncMS     int   `yaml:"sync_ms,omitempty"`
+	PlayersS   int   `yaml:"players_s,omitempty"`
+	VehiclesS  int   `yaml:"vehicles_s,omitempty"`
+	MarkersS   int   `yaml:"markers_s,omitempty"`
+	EventsS    int   `yaml:"events_s,omitempty"`
+	AllowSpawn *bool `yaml:"allow_spawn,omitempty"`
+	// MoveOccupiedMax is the farthest, in metres, a vehicle with players inside may be moved; 0 refuses
+	// those moves. Unset means 200.
+	MoveOccupiedMax *int     `yaml:"move_occupied_max,omitempty"`
+	AllowClasses    []string `yaml:"allow_classes,omitempty"`
+	DenyClasses     []string `yaml:"deny_classes,omitempty"`
+	// VehicleKinds are class-name globs by kind (bicycle, boat, helicopter) of other mods, on top of the
 	// classes dzo knows (admin.DefaultVehicleKinds): the map and the vehicle list show them with the
 	// icon of the kind.
 	VehicleKinds map[string][]string `yaml:"vehicle_kinds,omitempty"`
@@ -467,9 +470,12 @@ func (a AdminConfig) Validate() error {
 			return fmt.Errorf("admin.%s must not be negative", name)
 		}
 	}
+	if a.MoveOccupiedMax != nil && *a.MoveOccupiedMax < 0 {
+		return fmt.Errorf("admin.move_occupied_max must not be negative")
+	}
 	for k := range a.VehicleKinds {
 		if !admin.VehicleKindOK(k) {
-			return fmt.Errorf("admin.vehicle_kinds: unknown kind %q (bicycle or helicopter)", k)
+			return fmt.Errorf("admin.vehicle_kinds: unknown kind %q (bicycle, boat or helicopter)", k)
 		}
 	}
 	return nil

@@ -177,6 +177,8 @@ func TestValidate(t *testing.T) {
 		{"repair scope", Command{Kind: KindVehicleRepair, Vehicle: "v", Scope: "x"}, "scope"},
 		{"repair no vehicle", Command{Kind: KindVehicleRepair}, "vehicle"},
 		{"flip no vehicle", Command{Kind: KindVehicleFlip}, "vehicle"},
+		{"move no vehicle", Command{Kind: KindVehicleMove, X: 1, Z: 2}, "vehicle"},
+		{"move nowhere", Command{Kind: KindVehicleMove, Vehicle: "v"}, "position"},
 		{"delete no vehicle", Command{Kind: KindVehicleDelete}, "vehicle"},
 		{"raise no flag", Command{Kind: KindFlagRaise}, "flag"},
 		{"kind", Command{Kind: "explode"}, "unknown command"},
@@ -198,6 +200,7 @@ func TestValidate(t *testing.T) {
 		{Kind: KindVehicleRepair, Vehicle: "v", Scope: "wheels"},
 		{Kind: KindVehicleRepair, Vehicle: "v", Scope: "missing"},
 		{Kind: KindVehicleFlip, Vehicle: "v"},
+		{Kind: KindVehicleMove, Vehicle: "v", X: 100, Z: 200},
 		{Kind: KindFlagRaise, Flag: "f1"},
 		{Kind: KindTeleport, SteamID: "1", ToSteamID: "2"},
 		{Kind: KindPlayerKill, SteamID: "1"},
@@ -207,6 +210,16 @@ func TestValidate(t *testing.T) {
 		_, err := h.Enqueue(ok)
 		assert.NoError(t, err, "%+v", ok)
 	}
+}
+
+func TestMoveRefusesACoveredVehicle(t *testing.T) {
+	h, _ := testHub()
+	hello(h)
+	h.Sync(SyncRequest{Proto: 1, Vehicles: []Vehicle{{ID: "v1", Kind: "car", Type: "Hatchback_02", Covered: true}, {ID: "v2", Kind: "car", Type: "Hatchback_02"}}})
+	_, err := h.Enqueue(Command{Kind: KindVehicleMove, Vehicle: "v1", X: 1, Z: 2})
+	require.ErrorContains(t, err, "covered")
+	_, err = h.Enqueue(Command{Kind: KindVehicleMove, Vehicle: "v2", X: 1, Z: 2})
+	require.NoError(t, err)
 }
 
 func TestSpawnAtPositionDefaultsToGround(t *testing.T) {

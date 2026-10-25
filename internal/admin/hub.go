@@ -598,6 +598,20 @@ func (h *Hub) validate(c *Command) error {
 		}
 	case KindVehicleFlip, KindVehicleDelete:
 		return need("vehicle", c.Vehicle)
+	case KindVehicleMove:
+		if err := need("vehicle", c.Vehicle); err != nil {
+			return err
+		}
+		if c.X == 0 && c.Z == 0 {
+			return errors.New("admin: vehicle_move needs a position")
+		}
+		h.mu.Lock()
+		defer h.mu.Unlock()
+		for _, v := range h.vehicles {
+			if v.ID == c.Vehicle && v.Covered {
+				return errors.New("admin: the vehicle is covered (stored by Expansion) and cannot be moved")
+			}
+		}
 	case KindFlagRaise:
 		return need("flag", c.Flag)
 	default:

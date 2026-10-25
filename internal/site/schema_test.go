@@ -321,7 +321,7 @@ func TestAdminConfigYAMLAndValidate(t *testing.T) {
 	var inst Instance
 	src := `
 name: a
-admin: {players_s: 2, allow_spawn: false, deny_classes: ["Land_*"]}
+admin: {players_s: 2, allow_spawn: false, move_occupied_max: 50, deny_classes: ["Land_*"]}
 admin_map:
   watch:
     - {layer: fire, classes: [FireplaceBase], icon: fire, cluster: 50, max: 100}
@@ -331,6 +331,8 @@ admin_map:
 	require.Equal(t, 2, inst.Admin.PlayersS)
 	require.NotNil(t, inst.Admin.AllowSpawn)
 	require.False(t, *inst.Admin.AllowSpawn, "parsed = %+v", inst)
+	require.NotNil(t, inst.Admin.MoveOccupiedMax)
+	require.Equal(t, 50, *inst.Admin.MoveOccupiedMax)
 	require.Len(t, inst.AdminMap.Watch, 1)
 	require.Equal(t, 50, inst.AdminMap.Watch[0].Cluster)
 	v := validInstance()
@@ -342,6 +344,11 @@ admin_map:
 	err = v.Validate()
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "vehicles_s")
+	v.Admin.VehiclesS = 0
+	neg := -1
+	v.Admin.MoveOccupiedMax = &neg
+	err = v.Validate()
+	require.ErrorContains(t, err, "move_occupied_max")
 	v = validInstance()
 	v.AdminMap.Watch = append(v.AdminMap.Watch, inst.AdminMap.Watch[0])
 	v.AdminMap.Watch[0].OnlyIf = "burning"
@@ -385,7 +392,7 @@ func TestLogRuleTakesAPlainString(t *testing.T) {
 }
 
 func TestAdminConfigVehicleKinds(t *testing.T) {
-	err := (AdminConfig{VehicleKinds: map[string][]string{"bicycle": {"Tandem*"}, "helicopter": {"Heli_*"}}}).Validate()
+	err := (AdminConfig{VehicleKinds: map[string][]string{"bicycle": {"Tandem*"}, "boat": {"Ship_*"}, "helicopter": {"Heli_*"}}}).Validate()
 	require.NoError(t, err)
 	err = (AdminConfig{VehicleKinds: map[string][]string{"rocket": {"X"}}}).Validate()
 	require.Error(t, err, "an unknown kind must fail: its icon would not exist")

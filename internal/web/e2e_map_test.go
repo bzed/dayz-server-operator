@@ -30,10 +30,12 @@ func TestE2EMapShowsPlayersAndVehicles(t *testing.T) {
 	useRealAssets(t, e.assets)
 	b := newBrowser(t)
 	b.run(t, chromedp.Navigate(e.url("/b/main/i/alpha/map")), chromedp.WaitVisible(`.leaflet-container`))
-	require.Eventually(t, func() bool { return b.count(".pm-wrap") == 1 && b.count(".vm-wrap") == 4 }, 10*time.Second, 100*time.Millisecond,
-		"one player and four vehicles are on the map (players %d, vehicles %d)", b.count(".pm-wrap"), b.count(".vm-wrap"))
+	require.Eventually(t, func() bool { return b.count(".pm-wrap") == 1 && b.count(".vm-wrap") == 5 }, 10*time.Second, 100*time.Millisecond,
+		"one player and five vehicles are on the map (players %d, vehicles %d)", b.count(".pm-wrap"), b.count(".vm-wrap"))
 	require.Contains(t, b.textOf(".pm-wrap .pm-l"), "<b>alice</b>")
 	require.Zero(t, b.count(".pm-wrap b"), "the player name is text, not markup")
+	require.Equal(t, 1, b.count(".vm.boat i.fa-ship"), "a boat has a ship marker")
+	require.Zero(t, b.count(".vm.boat.dot"), "and not the plain diamond of an unknown icon")
 }
 
 func TestE2EMapFollowsTheStream(t *testing.T) {

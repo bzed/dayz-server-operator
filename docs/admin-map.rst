@@ -35,15 +35,15 @@ admin actions:
 * heal a player (every damage zone, blood, shock, broken bones, bleeding, diseases, stamina and
   unconsciousness; food and water stay as they are), repair everything a player carries and wears, or kill them,
 * spawn items into a player's inventory, hands or on the ground, and items and vehicles at a point of the map,
-* repair vehicles (including refuelling and fitting missing parts), flip them upright, or delete them,
+* repair vehicles (including refuelling and fitting missing parts), flip them upright, move them (to get a stuck one out), or delete them,
 * raise a territory flag (fills its timer).
 
 The mod connects *out* to dzo: about once a second it posts what changed and the
 results of finished actions to ``dzo serve``, and gets the next actions in the
 reply. Nothing connects into the game server. The mod knows persistent
 vehicles of the car type (``CarScript``, which includes most modded cars) and, on DayZ 1.30,
-motorbikes (``MotorbikeScript``); both can be repaired and deleted. Each vehicle has a kind,
-``car``, ``motorbike``, ``bicycle`` or ``helicopter``, shown in the vehicle list, with an icon of its own on the map.
+motorbikes (``MotorbikeScript``) and boats (``BoatScript``); all of them can be spawned, repaired, flipped, moved and deleted.
+Each vehicle has a kind, ``car``, ``motorbike``, ``boat``, ``bicycle`` or ``helicopter``, shown in the vehicle list, with an icon of its own on the map.
 With DayZ Expansion loaded the mod also reports the vehicle's owner (the name on its key chain), and the
 vehicles under an Expansion cover (``*_Cover``, stored by Expansion, not in the world as cars) as
 ``covered`` vehicles (drawn in amber instead of white): they are on the map and in the list with their class, place and owner, but have no
@@ -52,7 +52,13 @@ Bicycles and the helicopters of mods are cars to the game; dzo gives a car the k
 ``bicycle`` for the DayZBicycle mod (``Old_Bike*``, ``Lady_Bicycle*``, ``MMTArma``, the classes of its event) and
 ``helicopter`` for the helicopters of DayZ Expansion (``ExpansionMh6*``, ``ExpansionMerlin*``, ``ExpansionUh1h*``,
 ``ExpansionGyrocopter*``) and the Mosquito of Deer Isle (``RFMosquito``). ``admin.vehicle_kinds`` adds the classes of
-other mods. Boats are not reported yet.
+other mods.
+
+Boats (vanilla ``Boat_01_*`` and the Expansion boats, whose Zodiac is a car to the game and Boat_01 a ``BoatScript``)
+are reported as kind ``boat`` by the mod itself, with a ship icon. A boat has fuel and parts but no wheels: ``wheels`` repairs
+nothing on it and ``fluids`` fills its tank. A spawned or moved boat is put on the surface of the water, not on the
+seabed (the height of the water above the ground is added where there is water). Boats need dzo-admin 0.7.0 and DayZ 1.30;
+1.29 does not report them. ``vehicle_kinds: {boat: [...]}`` adds the boat classes of other mods that are cars to the game.
 
 Markers have no frame, so that the icon gets all the room, and are told apart by shape and edge: players are round dots
 in the colour of their health, with a white ring; vehicles are white icons with a dark edge; events and other markers are
@@ -88,6 +94,7 @@ own. Point ``site.yaml`` at it and enable it per instance:
      markers_s: 10
      events_s: 30
      allow_spawn: true            # default
+     move_occupied_max: 200       # default; metres, 0 = never move a vehicle with players inside
      allow_classes: []            # default: none
      deny_classes: ["Land_*"]     # trailing * = prefix
      vehicle_kinds: {bicycle: ["Bike_*"], helicopter: ["MyHeli_*"]}   # default: none
@@ -115,7 +122,10 @@ Settings in ``instance.yaml`` under ``admin`` (see :doc:`configuration`):
   admins may spawn. A class must be a valid class name, must not match a deny
   entry, and, if an allow list exists, must match it. dzo also rejects classes
   the server did not report;
-* ``vehicle_kinds``: class names (one ``*`` allowed) by kind, ``bicycle`` or ``helicopter``, of other
+* ``move_occupied_max``: the farthest, in metres, a vehicle with players inside may be moved (see
+  *Moving vehicles*); default 200, 0 refuses those moves, negative values are refused. The mod reads it at the
+  start of the server, so a change takes effect with the next ``dzo instance render`` and restart;
+* ``vehicle_kinds``: class names (one ``*`` allowed) by kind, ``bicycle``, ``boat`` or ``helicopter``, of other
   mods, on top of the classes dzo knows:
   ``vehicle_kinds: {helicopter: ["MyHeli_*"], bicycle: ["Tandem*"]}``.
 
@@ -133,6 +143,27 @@ token that matches no instance (the line names the instances without a token fil
 mismatch, an unreadable body. Tokens are never logged. An instance that stays silent in this log
 has a mod that does not reach the endpoint at all: check ``endpoint`` in the mod's
 ``$profile:dzo/admin/config.json`` and that the instance really runs with the mod.
+
+Moving vehicles
+---------------
+
+To get a stuck car out, press its icon (operators and admins only; not a covered Expansion vehicle) and drag it. A
+confirmation asks ``Move <class>?`` with the coordinates; as with players you can pan and zoom to check the drop point, and
+the icon stays where you dropped it until the answer. The vehicle menu also has **Move to coordinates…**, and
+``dzo vehicle move`` and ``POST /vehicles/<id>/move`` do the same (:doc:`api`).
+
+The mod puts the vehicle on the ground at the point (the terrain height plus one metre, so it settles on its
+wheels), upright, with its heading, and sets its speed and spin to zero. Nothing else about it changes. A vehicle with
+**players inside** keeps them seated and moves them with it, under these rules:
+
+* the move may be at most ``admin.move_occupied_max`` metres (default 200, ground distance); a longer one is refused with
+  ``too far with players inside`` and 0 refuses every such move. An empty vehicle can go anywhere in the world;
+* the damage of the players and of the vehicle is switched off just before the move and back on three seconds
+  later, so the landing and the physics settling cannot hurt anyone. It is switched on again whatever happens to the
+  players or the vehicle in between;
+* a position outside the world is refused.
+
+This needs dzo-admin 0.7.0. The actions of the map show up in the audit log as ``vehicle_move``.
 
 Links to a place
 ----------------

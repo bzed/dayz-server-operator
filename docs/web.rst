@@ -115,7 +115,7 @@ Instance
    as an Expansion notification of a type you pick, with an optional title and duration), the player list (refreshed every 5 seconds) with a panel of
    actions per player (message, teleport to coordinates or to another player, heal, fix gear, kick with a reason, kill after a confirmation,
    give item with a search over the server's item classes), and the vehicle list
-   with repair (everything, or only body, parts, wheels, fuel or missing parts), flip and delete. The
+   with repair (everything, or only body, parts, wheels, fuel or missing parts), flip and delete (moving a vehicle is on the map). The
    actions open directly under the player or vehicle they apply to. Banning is a link
    in the panel to the ban form with the player filled in. Hovering over a player's name (or tapping its
    ``i`` button on a phone) shows the Steam ID, the ping and, with the ``player.ip`` permission

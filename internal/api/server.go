@@ -154,6 +154,7 @@ func (s *Server) Handler() http.Handler {
 	route("POST "+base+"/instances/{instance}/spawn-vehicle", PermSpawn, true, s.spawnVehicle)
 	route("POST "+base+"/instances/{instance}/vehicles/{id}/repair", PermRepair, true, s.repair)
 	route("POST "+base+"/instances/{instance}/vehicles/{id}/flip", PermRepair, true, s.flip)
+	route("POST "+base+"/instances/{instance}/vehicles/{id}/move", PermTeleport, true, s.moveVehicle)
 	route("POST "+base+"/instances/{instance}/flags/{id}/raise", PermRaise, true, s.raiseFlag)
 	route("DELETE "+base+"/instances/{instance}/vehicles/{id}", PermDelete, true, s.deleteVehicle)
 	route("GET "+base+"/bans", PermBanView, false, s.listBans)
@@ -456,6 +457,8 @@ func detail(c admin.Command) string {
 			return "to player " + c.ToSteamID
 		}
 		return fmt.Sprintf("to %.0f/%.0f", c.X, c.Z)
+	case admin.KindVehicleMove:
+		return fmt.Sprintf("to %.0f/%.0f", c.X, c.Z)
 	case admin.KindSpawnVehicle:
 		return fmt.Sprintf("%s at %.0f/%.0f", c.Type, c.X, c.Z)
 	case admin.KindSpawnItem:
@@ -644,6 +647,21 @@ func (s *Server) repair(w http.ResponseWriter, r *http.Request, c *call) {
 func (s *Server) flip(w http.ResponseWriter, r *http.Request, c *call) {
 	cmd := admin.Command{Kind: admin.KindVehicleFlip, Vehicle: r.PathValue("id")}
 	s.run(w, r, c, cmd, "vehicle_flip", cmd.Vehicle)
+}
+
+type moveVehicleBody struct {
+	X float64 `json:"x"`
+	Z float64 `json:"z"`
+}
+
+// moveVehicle puts a vehicle, with its crew, at a position on the ground.
+func (s *Server) moveVehicle(w http.ResponseWriter, r *http.Request, c *call) {
+	var b moveVehicleBody
+	if !decode(w, r, &b) {
+		return
+	}
+	cmd := admin.Command{Kind: admin.KindVehicleMove, Vehicle: r.PathValue("id"), X: b.X, Z: b.Z}
+	s.run(w, r, c, cmd, "vehicle_move", cmd.Vehicle)
 }
 
 // raiseFlag raises a territory flag to the top of its pole and fills its refresher time.

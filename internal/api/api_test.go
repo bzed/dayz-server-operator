@@ -192,6 +192,7 @@ func TestActions(t *testing.T) {
 		{"POST", "/api/v1/instances/alpha/vehicles/v1/repair", `{"scope":"wheels"}`},
 		{"POST", "/api/v1/instances/alpha/vehicles/v1/repair", ``},
 		{"POST", "/api/v1/instances/alpha/vehicles/v1/flip", ``},
+		{"POST", "/api/v1/instances/alpha/vehicles/v1/move", `{"x":100,"z":200}`},
 		{"POST", "/api/v1/instances/alpha/flags/f1/raise", ``},
 		{"POST", "/api/v1/instances/alpha/players/7656/heal", ``},
 		{"POST", "/api/v1/instances/alpha/players/7656/fixgear", ``},

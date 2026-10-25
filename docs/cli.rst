@@ -247,6 +247,9 @@ installation (default: the local ``serve.listen``). They need the
      - repair a vehicle; ``all`` also refuels it and fits missing parts
    * - ``dzo vehicle flip <instance> <id>``
      - stand a vehicle upright on its wheels
+   * - ``dzo vehicle move <instance> <id> --x <x> --z <z>``
+     - put a vehicle on the ground at a position, upright and at rest; players inside move with it, at most
+       ``admin.move_occupied_max`` metres (:doc:`configuration`)
    * - ``dzo vehicle delete <instance> <id> [--force]``
      - delete a vehicle (``--force``: even with players inside)
    * - ``dzo flag raise <instance> <id>``

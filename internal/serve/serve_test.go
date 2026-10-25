@@ -71,6 +71,15 @@ func TestModConfigAndEndpoint(t *testing.T) {
 	mc, err := ModConfig(cfg, insts[0])
 	require.NoError(t, err)
 	require.True(t, mc.AllowSpawn, "mod config %+v", mc)
+	require.Equal(t, 200, mc.MoveOccupiedMax, "unset = 200 m")
+	zero := 0
+	insts[0].Admin.MoveOccupiedMax = &zero
+	mc, err = ModConfig(cfg, insts[0])
+	require.NoError(t, err)
+	require.Equal(t, 0, mc.MoveOccupiedMax, "0 refuses moves with players inside")
+	insts[0].Admin.MoveOccupiedMax = nil
+	mc, err = ModConfig(cfg, insts[0])
+	require.NoError(t, err)
 	require.Equal(t, 30, mc.VehiclesS)
 	require.Equal(t, "Land_*", mc.DenyClasses[0])
 	require.Len(t, mc.Watch, len(admin.VanillaEventWatch())+1)

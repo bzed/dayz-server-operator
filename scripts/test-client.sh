@@ -100,6 +100,51 @@ s=0
 waitfor 30 "! '$work/dzo' vehicle list t1 --config '$work/config.yaml' --token-file '$work/api.token' | grep -q '^$bike '" || s=1
 verdict "motorbike: delete" $s
 
+# Boats (1.30): BoatScript is not a Car either. Spawned in the sea south of Chernarus, they must be listed as kind
+# boat, floating at the water (not on the seabed), and be repaired, flipped, moved and deleted like a car.
+# yof reads the height a boat is reported at.
+vjson() { curl -s -H "Authorization: Bearer $(cat "$work/api.token")" "http://127.0.0.1:$api/api/v1/instances/t1/vehicles"; }
+boat_checks() {
+	local class=$1 label=$2 x=$3 z=$4 id= y
+	s=0
+	"$work/dzo" vehicle spawn t1 "$class" --x "$x" --z "$z" --config "$work/config.yaml" --token-file "$work/api.token" | grep -q ok || s=1
+	for _ in $(seq 20); do
+		id=$(vjson | jq -r --arg c "$class" --argjson x "$x" '[.[] | select(.type == $c and .kind == "boat" and (.x - $x | fabs) < 5)][0].id // empty')
+		[ -n "$id" ] && break
+		sleep 3
+	done
+	[ -n "$id" ] || s=1
+	verdict "$label: spawned and listed with kind boat" $s
+	[ -n "$id" ] || return 0
+	y=$(vjson | jq -r --arg id "$id" '.[] | select(.id == $id) | .y')
+	s=1
+	awk -v y="$y" 'BEGIN{exit !(y > -3 && y < 3)}' && s=0
+	verdict "$label: floats on the water (y $y)" $s
+	s=0
+	"$work/dzo" vehicle repair t1 "$id" --config "$work/config.yaml" --token-file "$work/api.token" >/dev/null || s=1
+	"$work/dzo" vehicle repair t1 "$id" --scope missing --config "$work/config.yaml" --token-file "$work/api.token" >/dev/null || s=1
+	verdict "$label: repair" $s
+	s=0
+	"$work/dzo" vehicle flip t1 "$id" --config "$work/config.yaml" --token-file "$work/api.token" >/dev/null || s=1
+	verdict "$label: flip" $s
+	s=0
+	"$work/dzo" vehicle move t1 "$id" --x "$((x + 150))" --z "$z" --config "$work/config.yaml" --token-file "$work/api.token" | grep -q ok || s=1
+	waitfor 30 "curl -s -H 'Authorization: Bearer $(cat "$work/api.token")' http://127.0.0.1:$api/api/v1/instances/t1/vehicles | jq -e --arg id '$id' '.[] | select(.id == \$id and .x > $x + 140)' >/dev/null" || s=1
+	verdict "$label: move" $s
+	y=$(vjson | jq -r --arg id "$id" '.[] | select(.id == $id) | .y')
+	s=1
+	awk -v y="$y" 'BEGIN{exit !(y > -3 && y < 3)}' && s=0
+	verdict "$label: after the move it floats on the water (y $y)" $s
+	s=0
+	"$work/dzo" vehicle delete t1 "$id" --config "$work/config.yaml" --token-file "$work/api.token" >/dev/null || s=1
+	waitfor 30 "! '$work/dzo' vehicle list t1 --config '$work/config.yaml' --token-file '$work/api.token' | grep -q '^$id '" || s=1
+	verdict "$label: delete" $s
+}
+boat_checks Boat_01_Orange "boat (vanilla Boat_01)" 7000 300
+if [ "$expansion" = 1 ]; then
+	boat_checks ExpansionZodiacBoat_Orange "boat (Expansion Zodiac)" 7000 500
+fi
+
 # Missing parts: bare cars (as the economy leaves them) get their parts, the headlights in both slots and the battery.
 touch "$tree/profiles/dzo_probe/bare"
 s=0
@@ -685,6 +730,28 @@ verdict "teleport is refused in a vehicle" $s
 s=0
 waitfor 30 "'$work/dzo' vehicle list t1 --config '$work/config.yaml' --token-file '$work/api.token' | grep -q 'Offroad_02.*crew 1'" || s=1
 verdict "vehicle state: the car has crew 1" $s
+
+# Moving a car with the player inside: refused beyond the cap, otherwise the player stays in the seat
+# and loses no health.
+carline=$(dzo vehicle list t1 | awk '$3 == "Offroad_02" && /crew 1/ {print $1, $4, $5; exit}')
+read -r car carx carz <<<"$carline"
+pfield() { probe | sed -n "s/.* $1=\([0-9]*\).*/\1/p"; }
+hp0=$(pfield hp)
+s=1
+out=$(dzo vehicle move t1 "$car" --x "$(awk "BEGIN{print $carx + 400}")" --z "$carz" 2>&1 || true)
+case $out in *'too far'*) s=0 ;; esac
+verdict "vehicle move: refused beyond the cap with a player inside" $s
+s=0
+dzo vehicle move t1 "$car" --x "$(awk "BEGIN{print $carx + 60}")" --z "$carz" | grep -q ok || s=1
+waitfor 30 "'$work/dzo' vehicle list t1 --config '$work/config.yaml' --token-file '$work/api.token' | awk '\$1 == \"$car\" && \$4 > $carx + 50' | grep -q crew" || s=1
+verdict "vehicle move: the car with a player inside is moved 60 m" $s
+sleep 5
+s=1
+probe | grep 'DZO-PROBE player' | tail -1 | grep -q 'transport=true' && s=0
+verdict "vehicle move: the player still sits in the car" $s
+s=1
+[ -n "$hp0" ] && [ "$(pfield hp)" -ge "$hp0" ] && s=0
+verdict "vehicle move: the player is not hurt (hp $hp0 -> $(pfield hp))" $s
 
 server_tests
 # Heal, fix gear and kill, last: a dead player cannot be used for anything after.

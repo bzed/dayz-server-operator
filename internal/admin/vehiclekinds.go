@@ -16,12 +16,14 @@ import "slices"
 func DefaultVehicleKinds() map[string][]string {
 	return map[string][]string{
 		"bicycle":    {"Old_Bike*", "Lady_Bicycle*", "MMTArma"},
+		"boat":       {},
 		"helicopter": {"ExpansionMh6*", "ExpansionMerlin*", "ExpansionUh1h*", "ExpansionGyrocopter*", "RFMosquito"},
 	}
 }
 
 // VehicleKindOK reports whether kind is one the map has an icon for (the car, motorbike and the kinds
-// of DefaultVehicleKinds; only the latter can be set by class).
+// of DefaultVehicleKinds; only the latter can be set by class). The boats of the game and of DayZ Expansion
+// are reported as "boat" by the mod itself; the kind lists only the boats of other mods.
 func VehicleKindOK(kind string) bool {
 	_, ok := DefaultVehicleKinds()[kind]
 	return ok

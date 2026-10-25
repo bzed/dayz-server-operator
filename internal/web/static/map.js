@@ -518,6 +518,12 @@
           }) };
         } },
         { label: 'Flip upright', min: 'operator', run: function () { act('/vehicles/' + id + '/flip', {}); } },
+        { label: 'Move to coordinates…', min: 'operator', view: function () {
+          return { title: 'Move ' + v.type, text: crew ? crew + ' inside move with it, at most the distance the server allows.' : '', submit: 'Move', fields: [
+            { name: 'x', label: 'x (east)', type: 'number', step: 'any', required: true, value: r1(v.x), pair: true },
+            { name: 'z', label: 'z (north)', type: 'number', step: 'any', required: true, value: r1(v.z), pair: true }
+          ], run: function (f) { act('/vehicles/' + id + '/move', { x: f.x, z: f.z }); } };
+        } },
         { label: 'Delete…', min: 'operator', danger: true, view: function () {
           return { title: 'Delete ' + v.type + '?', text: crew ? crew + ' inside will be removed with it.' : 'It is removed from the world.', submit: 'Delete', danger: true,
             run: function () { act('/vehicles/' + id + '/delete', crew ? { force: '1' } : {}); } };
@@ -604,7 +610,9 @@
   // other state keeps the icon where the hand put it, and the latest report waits in e.data.
   function pendingDrop() {
     var found = null;
-    Object.keys(pm).forEach(function (id) { if (pm[id].state === 'pending') { found = pm[id]; } });
+    [pm, vm].forEach(function (set) {
+      Object.keys(set).forEach(function (id) { if (set[id].state === 'pending') { found = set[id]; } });
+    });
     return found;
   }
   function apply(e) {
@@ -716,8 +724,8 @@
   }
 
   var vm = {};
-  var vehicleGlyphs = { car: 'car', motorbike: 'motorcycle', bicycle: 'bicycle', helicopter: 'helicopter' };
-  var vehicleNames = { motorbike: 'Motorbike ', bicycle: 'Bicycle ', helicopter: 'Helicopter ' };
+  var vehicleGlyphs = { car: 'car', motorbike: 'motorcycle', bicycle: 'bicycle', boat: 'ship', helicopter: 'helicopter' };
+  var vehicleNames = { motorbike: 'Motorbike ', bicycle: 'Bicycle ', boat: 'Boat ', helicopter: 'Helicopter ' };
   function vehicleIcon(v) {
     var glyph = iconClass(vehicleGlyphs[v.kind] || 'car');
     var root = mk('div', 'vm ' + v.kind + (glyph ? '' : ' dot') + (v.ruined ? ' ruined' : '') + (v.covered ? ' covered' : ''));
@@ -725,25 +733,58 @@
     return elIcon('vm-wrap', root);
   }
   function vehicleLines(v) { if (v.covered) { return ['covered'].concat(v.owner ? ['owner ' + v.owner] : []); } return (v.owner ? ['owner ' + v.owner] : []).concat(['health ' + Math.round(v.health * 100) + '%', 'fuel ' + Math.round(v.fuel * 100) + '%', 'crew ' + (v.occupants || []).length]); }
+  // Dropping a vehicle's icon asks to move it there; the icon stays where it was dropped until the answer, then
+  // goes to the reported position (the vehicles are reported every minute, so a move shows at once).
+  function dragVehicle(e) {
+    var m = e.m;
+    function settleVehicle() { e.state = 'idle'; if (vm[e.data.id] === e) { m.setLatLng(ll(e.data)); } }
+    m.on('dragstart', function () { closeMenu(); e.state = 'dragging'; m.closeTooltip(); });
+    m.on('drag', function () {
+      if (lastPointer) { m.setLatLng(map.mouseEventToLatLng(lastPointer)); }
+      showPos(e.data.type, m.getLatLng());
+    });
+    m.on('dragend', function () {
+      var at = lastPointer ? map.mouseEventToLatLng(lastPointer) : m.getLatLng();
+      var to = { x: Math.max(0, Math.min(size, r1(at.lng))), z: Math.max(0, Math.min(size, r1(at.lat))) };
+      var crew = (e.data.occupants || []).length;
+      e.state = 'pending';
+      droppedAt = Date.now();
+      m.setLatLng([to.z, to.x]);
+      var confirmed = false;
+      openMenu(map.latLngToContainerPoint(m.getLatLng()).add([20, -10]), {
+        owner: e,
+        title: 'Move ' + e.data.type + '?', text: 'To ' + to.x + ' / ' + to.z + (crew ? '. ' + crew + ' inside move with it.' : ''), submit: 'Move',
+        run: function () {
+          confirmed = true;
+          act('/vehicles/' + encodeURIComponent(e.data.id) + '/move', to).then(function (ok) {
+            if (ok) { e.data.x = to.x; e.data.z = to.z; }
+            settleVehicle();
+          });
+        },
+        dismiss: function () { if (!confirmed) { settleVehicle(); } }
+      });
+    });
+  }
   function onVehicles(list) {
     var seen = {};
     list.forEach(function (v) {
       seen[v.id] = true;
       var e = vm[v.id];
       if (!e) {
-        var m = L.marker(ll(v), { icon: vehicleIcon(v) });
-        e = vm[v.id] = { m: m, data: v, ruined: v.ruined };
+        var m = L.marker(ll(v), { icon: vehicleIcon(v), draggable: can('operator') && !v.covered, autoPan: true });
+        e = vm[v.id] = { m: m, data: v, ruined: v.ruined, state: 'idle' };
+        dragVehicle(e);
         onMenu(m, function () { return vehicleSpec(e.data); });
         named(m, function () { return (vehicleNames[e.data.kind] || 'Vehicle ') + e.data.type; });
         m.addTo(vehicles);
       }
       e.data = v;
-      e.m.setLatLng(ll(v));
+      if (e.state === 'idle') { e.m.setLatLng(ll(v)); }
       if (e.ruined !== v.ruined) { e.ruined = v.ruined; e.m.setIcon(vehicleIcon(v)); }
       bindTip(e.m, v.type, vehicleLines(v));
     });
     Object.keys(vm).forEach(function (id) {
-      if (!seen[id]) { vehicles.removeLayer(vm[id].m); delete vm[id]; }
+      if (!seen[id]) { if (cur && cur.owner === vm[id]) { closeMenu(); } vehicles.removeLayer(vm[id].m); delete vm[id]; }
     });
   }
 
@@ -828,6 +869,9 @@
   function onMarkers(list) {
     Object.keys(markerLayers).forEach(function (k) { markerLayers[k].clearLayers(); });
     list.forEach(function (m) {
+      // A rebuilt house is drawn only while its decay timer runs: one already worn down (or with decay off)
+      // would clutter the map. The marker stays in the data, the API still lists it.
+      if (m.source === 'rebuilt' && m.layer === 'Rebuilt houses' && !(m.ttl > 0)) { return; }
       var group = markerLayers[m.layer];
       if (!group) {
         group = L.layerGroup().addTo(map);
@@ -835,6 +879,8 @@
         control.addOverlay(group, m.layer);
       }
       var color = markerColor(m.color);
+      // A tunnel entrance is blue until a rope ladder is usable on it, then the mod's green.
+      if (m.source === 'tunnel' && (m.props || []).some(function (kv) { return kv.k === 'ladder' && kv.v === 'none'; })) { color = '#3a7bd5'; }
       var glyph = m.shape && m.shape !== 'point' ? '' : iconClass(m.icon);
       var shape;
       if (m.shape === 'circle') {
@@ -869,9 +915,6 @@
       if (m.source !== 'territory' && !(m.source === 'sandstorm' && m.shape === 'polygon')) {
         bindTip(shape, title, lines);
         var tname = ((m.props || []).filter(function (kv) { return kv.k === 'territory'; })[0] || {}).v;
-      // A rebuilt house is drawn only while its decay timer runs: one already worn down (or with decay off)
-      // would clutter the map. The marker stays in the data, the API still lists it.
-      if (m.source === 'rebuilt' && m.layer === 'Rebuilt houses' && !(m.ttl > 0)) { return; }
         onMenu(shape, function () {
           var spec = plainSpec(tname || title, (tname ? [title] : []).concat(lines, posText(m)), m, m.shape === 'circle' ? m.radius : 0);
           if (m.source === 'flags') {
@@ -879,8 +922,6 @@
           }
           return spec;
         });
-      // A tunnel entrance is blue until a rope ladder is usable on it, then the mod's green.
-      if (m.source === 'tunnel' && (m.props || []).some(function (kv) { return kv.k === 'ladder' && kv.v === 'none'; })) { color = '#3a7bd5'; }
       }
       shape.addTo(group);
     });

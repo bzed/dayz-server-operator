@@ -240,6 +240,11 @@ func (c *Client) Flip(ctx context.Context, name, vehicle string) (api.ActionResu
 	return c.action(ctx, http.MethodPost, inst(name)+"/vehicles/"+url.PathEscape(vehicle)+"/flip", nil)
 }
 
+// MoveVehicle puts a vehicle, with its crew, at a position on the ground.
+func (c *Client) MoveVehicle(ctx context.Context, name, vehicle string, x, z float64) (api.ActionResult, error) {
+	return c.action(ctx, http.MethodPost, inst(name)+"/vehicles/"+url.PathEscape(vehicle)+"/move", map[string]float64{"x": x, "z": z})
+}
+
 // RaiseFlag raises a territory flag and fills its refresher time.
 func (c *Client) RaiseFlag(ctx context.Context, name, flag string) (api.ActionResult, error) {
 	return c.action(ctx, http.MethodPost, inst(name)+"/flags/"+url.PathEscape(flag)+"/raise", nil)
