@@ -272,11 +272,14 @@ These routes need the ban database of ``dzo serve`` (``503`` without it) and are
    * - ``GET /players/<steamid>/identities``
      - ``moderator``
      - the GUIDs and IPs the player was seen with, per instance, and how many other Steam IDs share each IP
-   * - ``GET /players?q=&instance=&flagged=&limit=&offset=``
+   * - ``GET /players?q=&instance=&flagged=&online=&sort=&dir=&limit=&offset=``
      - ``moderator`` (``player.history``)
      - the player database: ``{"players": [...], "total": n}``, most recently seen first. ``q`` is a Steam ID, a GUID or a
-       part of any name the player used; ``flagged=1`` keeps players with a BattlEye ban, a Steam ban or a ban of ours;
-       ``limit`` defaults to 50 and is at most 200. A token for some instances only sees players seen on them
+       part of any name the player used; ``flagged=1`` keeps players with a BattlEye ban, a Steam ban or a ban of ours; ``online=1`` keeps the players who are on an
+       instance now (with ``instance`` set, on that one);
+       ``sort`` orders by ``name``, ``last`` (last seen), ``first`` (first seen), ``be`` (BattlEye ban), ``steam`` (Steam
+       ban) or ``here`` (banned on our servers), ascending, or descending with ``dir=desc``; another value is a 400. Without ``sort``
+       the newest come first. ``limit`` defaults to 50 and is at most 200. A token for some instances only sees players seen on them
    * - ``GET /players/<steamid>``
      - ``moderator`` (``player.history``)
      - one player: names, per-instance totals, the newest 50 sessions, BattlEye's answer per game (``be``), what Steam

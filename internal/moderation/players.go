@@ -140,9 +140,25 @@ type PlayerFilter struct {
 	// does not restrict.
 	Only    []string
 	Flagged bool // only players with a BattlEye ban, a Steam ban or an active ban of ours
+	Online  bool // only players who are on one of the instances now (a session that has not ended)
 	Limit   int
 	Offset  int
-	Now     time.Time // when "active" is judged; zero is now
+	// Sort is the column the list is ordered by (a key of PlayerSorts); empty is the last time seen, newest
+	// first. Desc reverses the order of a column named in Sort.
+	Sort string
+	Desc bool
+	Now  time.Time // when "active" is judged; zero is now
+}
+
+// PlayerSorts are the columns the player list can be ordered by, with the SQL that orders by them. A sort
+// key outside this list is refused, so no request text reaches the query.
+var PlayerSorts = map[string]string{
+	"name":  `p.name COLLATE NOCASE`,
+	"last":  `p.last_seen`,
+	"first": `p.first_seen`,
+	"be":    `EXISTS (SELECT 1 FROM be_status b WHERE b.guid = p.guid AND b.banned = 1)`,
+	"steam": `COALESCE((SELECT i.banned FROM steam_info i WHERE i.steam_id = p.steam_id), 0)`,
+	"here":  `has_ban`,
 }
 
 const (
@@ -237,7 +253,7 @@ const activeBan = `EXISTS (SELECT 1 FROM ban_targets t JOIN bans b ON b.id = t.b
 	WHERE ((t.kind = 'steam' AND t.value = p.steam_id) OR (t.kind = 'guid' AND t.value = p.guid))
 	AND b.revoked_at IS NULL AND (b.expires_at IS NULL OR b.expires_at > ?))`
 
-// Players returns the players matching f, most recently seen first, and how many match in all.
+// Players returns the players matching f, ordered by f.Sort (default: most recently seen first), and how many match in all.
 func (s *Store) Players(ctx context.Context, f PlayerFilter) ([]PlayerSummary, int, error) {
 	now := f.Now
 	if now.IsZero() {
@@ -259,6 +275,20 @@ func (s *Store) Players(ctx context.Context, f PlayerFilter) ([]PlayerSummary, i
 			args = append(args, i)
 		}
 	}
+	if f.Online {
+		where += ` AND EXISTS (SELECT 1 FROM player_sessions n WHERE n.steam_id = p.steam_id AND n.ended_at IS NULL`
+		if len(f.Only) > 0 {
+			where += ` AND n.instance IN (` + strings.TrimSuffix(strings.Repeat("?,", len(f.Only)), ",") + `)`
+			for _, i := range f.Only {
+				args = append(args, i)
+			}
+		}
+		where += `)`
+		if f.Instance != "" {
+			where += ` AND EXISTS (SELECT 1 FROM player_sessions m WHERE m.steam_id = p.steam_id AND m.ended_at IS NULL AND m.instance = ?)`
+			args = append(args, f.Instance)
+		}
+	}
 	if f.Flagged {
 		where += ` AND (EXISTS (SELECT 1 FROM be_status b WHERE b.guid = p.guid AND b.banned = 1)
 			OR EXISTS (SELECT 1 FROM steam_info i WHERE i.steam_id = p.steam_id AND i.banned = 1) OR ` + activeBan + `)`
@@ -273,9 +303,17 @@ func (s *Store) Players(ctx context.Context, f PlayerFilter) ([]PlayerSummary, i
 		limit = defaultPlayerLimit
 	}
 	limit = min(limit, maxPlayerLimit)
+	order := `p.last_seen DESC`
+	if f.Sort != "" {
+		col, ok := PlayerSorts[f.Sort]
+		if !ok {
+			return nil, 0, fmt.Errorf("moderation: players: unknown sort %q", f.Sort)
+		}
+		order = col + map[bool]string{false: ` ASC`, true: ` DESC`}[f.Desc]
+	}
 	//nolint:gosec // the clauses are constants of this file; every value is bound
-	rows, err := s.db.QueryContext(ctx, `SELECT p.steam_id, p.guid, p.name, p.first_seen, p.last_seen, `+activeBan+` FROM players p`+where+
-		` ORDER BY p.last_seen DESC, p.steam_id LIMIT ? OFFSET ?`, append(append([]any{now.Unix()}, args...), limit, max(f.Offset, 0))...)
+	rows, err := s.db.QueryContext(ctx, `SELECT p.steam_id, p.guid, p.name, p.first_seen, p.last_seen, `+activeBan+` AS has_ban FROM players p`+where+
+		` ORDER BY `+order+`, p.steam_id LIMIT ? OFFSET ?`, append(append([]any{now.Unix()}, args...), limit, max(f.Offset, 0))...)
 	if err != nil {
 		return nil, 0, fmt.Errorf("moderation: players: %w", err)
 	}

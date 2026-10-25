@@ -57,7 +57,12 @@ func (s *Server) listPlayers(w http.ResponseWriter, r *http.Request, c *call) {
 		fail(w, http.StatusNotFound, "unknown instance %q", inst)
 		return
 	}
-	f := moderation.PlayerFilter{Query: q.Get("q"), Instance: q.Get("instance"), Flagged: q.Get("flagged") == "1" || q.Get("flagged") == "true",
+	sort := q.Get("sort")
+	if _, ok := moderation.PlayerSorts[sort]; sort != "" && !ok {
+		fail(w, http.StatusBadRequest, "unknown sort %q (name, last, first, be, steam or here)", sort)
+		return
+	}
+	f := moderation.PlayerFilter{Sort: sort, Desc: q.Get("dir") == "desc", Query: q.Get("q"), Instance: q.Get("instance"), Flagged: q.Get("flagged") == "1" || q.Get("flagged") == "true", Online: q.Get("online") == "1" || q.Get("online") == "true",
 		Limit: queryInt(r, "limit", 50, 200), Offset: max(queryInt(r, "offset", 0, 1<<30), 0), Only: c.who.Token.Instances, Now: s.now()}
 	list, total, err := st.Players(r.Context(), f)
 	if err != nil {

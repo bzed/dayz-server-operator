@@ -356,14 +356,21 @@ const playersPerPage = 50
 
 type playerListView struct {
 	Backend, Query, Instance string
-	Flagged                  bool
+	Flagged, Online          bool
 	Instances                []string
 	Players                  []moderation.PlayerSummary
 	Total, Offset            int
 	PrevHref, NextHref       string
+	Sort                     string // the column the list is ordered by (name, last, first, be, steam, here)
+	Desc                     bool
+	Heads                    map[string]playerHead // the header of each sortable column
 	Now                      time.Time
 	Err                      string
 }
+
+// playerHead is a sortable column header of the player list: the link that sorts by it (or reverses its order
+// when the list is sorted by it already) and its aria-sort value.
+type playerHead struct{ Href, Aria string }
 
 func (s *Server) playersPage(w http.ResponseWriter, r *http.Request) {
 	b, c, ok := s.backendOf(w, r)
@@ -371,9 +378,14 @@ func (s *Server) playersPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	q := r.URL.Query()
-	v := playerListView{Backend: b.Name, Query: strings.TrimSpace(q.Get("q")), Instance: q.Get("instance"), Flagged: q.Get("flagged") == "1", Now: time.Now()}
+	v := playerListView{Backend: b.Name, Query: strings.TrimSpace(q.Get("q")), Instance: q.Get("instance"), Flagged: q.Get("flagged") == "1", Online: q.Get("online") == "1", Now: time.Now()}
 	v.Offset, _ = strconv.Atoi(q.Get("offset"))
 	v.Offset = max(v.Offset, 0)
+	// Without a sort the list is the newest first, which is the last-seen column descending.
+	v.Sort, v.Desc = "last", true
+	if _, ok := moderation.PlayerSorts[q.Get("sort")]; ok {
+		v.Sort, v.Desc = q.Get("sort"), q.Get("dir") == "desc"
+	}
 	for _, nb := range s.nav(r.Context()) {
 		if nb.Name == b.Name {
 			for _, i := range nb.Instances {
@@ -381,7 +393,7 @@ func (s *Server) playersPage(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	list, total, err := c.PlayerHistory(r.Context(), apiclient.PlayerHistoryFilter{Query: v.Query, Instance: v.Instance, Flagged: v.Flagged, Limit: playersPerPage, Offset: v.Offset})
+	list, total, err := c.PlayerHistory(r.Context(), apiclient.PlayerHistoryFilter{Query: v.Query, Instance: v.Instance, Flagged: v.Flagged, Online: v.Online, Limit: playersPerPage, Offset: v.Offset, Sort: v.Sort, Desc: v.Desc})
 	if err != nil {
 		var ae *apiclient.Error
 		if errors.As(err, &ae) && ae.Status == http.StatusForbidden {
@@ -391,8 +403,14 @@ func (s *Server) playersPage(w http.ResponseWriter, r *http.Request) {
 		v.Err = err.Error()
 	}
 	v.Players, v.Total = list, total
-	link := func(off int) string {
+	link := func(off int, sort string, desc bool) string {
 		p := url.Values{}
+		if sort != "last" || !desc {
+			p.Set("sort", sort)
+			if desc {
+				p.Set("dir", "desc")
+			}
+		}
 		if v.Query != "" {
 			p.Set("q", v.Query)
 		}
@@ -402,16 +420,30 @@ func (s *Server) playersPage(w http.ResponseWriter, r *http.Request) {
 		if v.Flagged {
 			p.Set("flagged", "1")
 		}
+		if v.Online {
+			p.Set("online", "1")
+		}
 		if off > 0 {
 			p.Set("offset", strconv.Itoa(off))
 		}
 		return "/b/" + url.PathEscape(b.Name) + "/players?" + p.Encode()
 	}
 	if v.Offset > 0 {
-		v.PrevHref = link(max(v.Offset-playersPerPage, 0))
+		v.PrevHref = link(max(v.Offset-playersPerPage, 0), v.Sort, v.Desc)
 	}
 	if v.Offset+len(list) < total {
-		v.NextHref = link(v.Offset + playersPerPage)
+		v.NextHref = link(v.Offset+playersPerPage, v.Sort, v.Desc)
+	}
+	// A click on the column the list is sorted by reverses it; on another one sorts by it, the name from A to Z
+	// and the rest the largest (newest, flagged) first.
+	v.Heads = map[string]playerHead{}
+	for key := range moderation.PlayerSorts {
+		h := playerHead{Aria: "none", Href: link(0, key, key != "name")}
+		if key == v.Sort {
+			h.Href = link(0, key, !v.Desc)
+			h.Aria = map[bool]string{false: "ascending", true: "descending"}[v.Desc]
+		}
+		v.Heads[key] = h
 	}
 	s.render(w, "playerdb", s.page(r, "Players", b.Name, "", "players", v))
 }

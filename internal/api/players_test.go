@@ -91,6 +91,21 @@ func TestPlayersList(t *testing.T) {
 	_, b = e.do("GET", "/api/v1/players?instance=beta", mod, "")
 	require.NoError(t, json.Unmarshal(b, &out))
 	require.Len(t, out.Players, 1)
+	_, b = e.do("GET", "/api/v1/players?online=1", mod, "")
+	require.NoError(t, json.Unmarshal(b, &out))
+	assert.LessOrEqual(t, len(out.Players), 2)
+	for _, p := range out.Players {
+		assert.True(t, p.Online, "online=1 lists only online players")
+	}
+	_, b = e.do("GET", "/api/v1/players?sort=name", mod, "")
+	require.NoError(t, json.Unmarshal(b, &out))
+	require.Len(t, out.Players, 2)
+	first := out.Players[0].Name
+	_, b = e.do("GET", "/api/v1/players?sort=name&dir=desc", mod, "")
+	require.NoError(t, json.Unmarshal(b, &out))
+	assert.NotEqual(t, first, out.Players[0].Name, "dir=desc reverses the order")
+	code, b = e.do("GET", "/api/v1/players?sort=1%3BDROP", mod, "")
+	assert.Equal(t, 400, code, "%s", b)
 	_, b = e.do("GET", "/api/v1/players?limit=1&offset=1", mod, "")
 	require.NoError(t, json.Unmarshal(b, &out))
 	require.Len(t, out.Players, 1)

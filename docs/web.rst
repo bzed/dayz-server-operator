@@ -160,7 +160,11 @@ Live map
 Players
    The player database of an installation (``Players`` in the header; it needs the ``player.history`` permission,
    that is the moderator role or higher, :doc:`moderation`). The list has a search over every name a player ever used,
-   the Steam ID and the BattlEye GUID, an instance filter and "Only flagged players", most recently seen first, with a
+   the Steam ID and the BattlEye GUID, an instance filter, "Only online players" (who is on an instance now; with an instance chosen, on that one) and "Only flagged players", most recently seen first. Clicking
+   the header of the Name, Last seen, First seen, BattlEye, Steam or Here column sorts the whole list (not only the page) by
+   it; a second click reverses it. Name starts A to Z, the others with the newest or the flagged players first; the arrow in the
+   header shows the order, and the choice is part of the page's address, so it survives paging and can be shared. Instances is
+   not sortable. The list has a red mark in the BattlEye, Steam and Here columns for a player something flags, with a
    red mark in the BattlEye, Steam and Here columns for a player something flags. A player's page shows, under the name
    with the other names used, a **verdict row** of three cells that each answer one question and say how old the answer is:
 

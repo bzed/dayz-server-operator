@@ -242,6 +242,8 @@ main > .flash.err { margin: 1rem; }
 
 th[data-sort] { cursor: pointer; user-select: none; }
 th[data-sort]:hover { color: var(--fg, inherit); }
+th a.sort { color: inherit; text-decoration: none; }
+th a.sort:hover { text-decoration: underline; }
 th[aria-sort="ascending"]::after { content: " \25B2"; font-size: .7em; }
 th[aria-sort="descending"]::after { content: " \25BC"; font-size: .7em; }
 

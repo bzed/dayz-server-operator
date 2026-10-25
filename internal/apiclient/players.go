@@ -16,8 +16,11 @@ import (
 // PlayerHistoryFilter selects players of the player database; empty fields do not filter.
 type PlayerHistoryFilter struct {
 	Query, Instance string
-	Flagged         bool
+	Flagged, Online bool
 	Limit, Offset   int
+	// Sort is name, last, first, be, steam or here; empty is the last time seen, newest first.
+	Sort string
+	Desc bool
 }
 
 // PlayerHistory lists the players who ever connected, most recently seen first, and how many match in all.
@@ -31,6 +34,15 @@ func (c *Client) PlayerHistory(ctx context.Context, f PlayerHistoryFilter) ([]mo
 	}
 	if f.Flagged {
 		q.Set("flagged", "1")
+	}
+	if f.Online {
+		q.Set("online", "1")
+	}
+	if f.Sort != "" {
+		q.Set("sort", f.Sort)
+		if f.Desc {
+			q.Set("dir", "desc")
+		}
 	}
 	if f.Limit > 0 {
 		q.Set("limit", strconv.Itoa(f.Limit))

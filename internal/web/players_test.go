@@ -340,3 +340,43 @@ func TestHeaderLinksPlayers(t *testing.T) {
 	_, body, _ := e.get("/")
 	assert.Contains(t, body, `href="/b/main/players"`)
 }
+
+func TestPlayerListFiltersOnline(t *testing.T) {
+	e, st, _ := playerSetup(t, api.RoleModerator)
+	seedPlayer(t, st, webSteam, "Online Olga", time.Now().Add(-time.Hour))
+	seedPlayer(t, st, "76561198000000002", "Gone Gus", time.Now().Add(-2*time.Hour))
+	require.NoError(t, st.PlayerLeft(t.Context(), "alpha", "76561198000000002", time.Now().Add(-time.Hour)))
+
+	_, body, _ := e.get("/b/main/players")
+	assert.Contains(t, body, "Gone Gus")
+	assert.Contains(t, body, `name="online" value="1"> Only online players`)
+	_, body, _ = e.get("/b/main/players?online=1&sort=name")
+	assert.Contains(t, body, "Online Olga")
+	assert.NotContains(t, body, "Gone Gus")
+	assert.Contains(t, body, `name="online" value="1" checked>`, "the box stays ticked")
+	assert.Contains(t, body, `name="sort" value="name"`, "the sort survives a new search")
+	assert.Contains(t, body, `href="/b/main/players?dir=desc&amp;online=1&amp;sort=name"`, "the headers keep the filter")
+}
+
+func TestPlayerListHeadersSort(t *testing.T) {
+	e, st, _ := playerSetup(t, api.RoleModerator)
+	seedPlayer(t, st, webSteam, "zed", time.Now().Add(-time.Hour))
+	seedPlayer(t, st, "76561198000000002", "Anna", time.Now().Add(-30*time.Minute))
+	idx := func(body, s string) int { return strings.Index(body, s) }
+
+	_, body, _ := e.get("/b/main/players")
+	assert.Contains(t, body, `aria-sort="descending"><a class="sort" href="/b/main/players?sort=last"`, "last seen newest first by default; a click reverses it")
+	assert.Less(t, idx(body, ">Anna<"), idx(body, ">zed<"), "newest first")
+	assert.Contains(t, body, `href="/b/main/players?sort=name"`, "the name column sorts A to Z first")
+	assert.Contains(t, body, `href="/b/main/players?dir=desc&amp;sort=be"`, "a flag column sorts the flagged first")
+
+	_, body, _ = e.get("/b/main/players?sort=name")
+	assert.Less(t, idx(body, ">Anna<"), idx(body, ">zed<"), "A to Z")
+	assert.Contains(t, body, `aria-sort="ascending"><a class="sort" href="/b/main/players?dir=desc&amp;sort=name"`)
+
+	_, body, _ = e.get("/b/main/players?sort=name&dir=desc")
+	assert.Less(t, idx(body, ">zed<"), idx(body, ">Anna<"), "Z to A")
+
+	_, body, _ = e.get("/b/main/players?sort=bogus")
+	assert.Contains(t, body, `aria-sort="descending"><a class="sort" href="/b/main/players?sort=last"`, "an unknown column falls back to the default")
+}

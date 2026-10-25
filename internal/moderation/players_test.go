@@ -117,6 +117,54 @@ func TestPlayersSearch(t *testing.T) {
 	assert.Equal(t, steamA, page[0].SteamID)
 }
 
+func TestPlayersOnlineFilter(t *testing.T) {
+	s, _ := newStore(t)
+	ctx := t.Context()
+	require.NoError(t, s.PlayerJoined(ctx, "alpha", steamA, "Anna", t0))
+	require.NoError(t, s.PlayerJoined(ctx, "beta", steamB, "Bob", t0))
+	require.NoError(t, s.PlayerLeft(ctx, "beta", steamB, t0.Add(time.Hour)))
+	ids := func(f PlayerFilter) []string {
+		got, total, err := s.Players(ctx, f)
+		require.NoError(t, err)
+		require.Equal(t, len(got), total)
+		var out []string
+		for _, p := range got {
+			out = append(out, p.SteamID)
+		}
+		return out
+	}
+	assert.Equal(t, []string{steamA}, ids(PlayerFilter{Online: true}), "Bob left")
+	assert.Equal(t, []string{steamA}, ids(PlayerFilter{Online: true, Instance: "alpha"}))
+	assert.Empty(t, ids(PlayerFilter{Online: true, Instance: "beta"}), "online on beta, not only seen there")
+	assert.Empty(t, ids(PlayerFilter{Online: true, Only: []string{"beta"}}), "a token for beta does not see who is online on alpha")
+	assert.Len(t, ids(PlayerFilter{}), 2)
+}
+
+func TestPlayersSort(t *testing.T) {
+	s, _ := newStore(t)
+	ctx := t.Context()
+	require.NoError(t, s.PlayerJoined(ctx, "alpha", steamA, "zed", t0))
+	require.NoError(t, s.PlayerJoined(ctx, "alpha", steamB, "Anna", t0.Add(time.Hour)))
+	order := func(f PlayerFilter) []string {
+		got, _, err := s.Players(ctx, f)
+		require.NoError(t, err)
+		var ids []string
+		for _, p := range got {
+			ids = append(ids, p.SteamID)
+		}
+		return ids
+	}
+	assert.Equal(t, []string{steamB, steamA}, order(PlayerFilter{Sort: "name"}), "A to Z, regardless of case")
+	assert.Equal(t, []string{steamA, steamB}, order(PlayerFilter{Sort: "name", Desc: true}))
+	assert.Equal(t, []string{steamA, steamB}, order(PlayerFilter{Sort: "last"}), "oldest first")
+	assert.Equal(t, []string{steamB, steamA}, order(PlayerFilter{Sort: "first", Desc: true}))
+	for _, k := range []string{"be", "steam", "here"} {
+		assert.Len(t, order(PlayerFilter{Sort: k, Desc: true}), 2, k)
+	}
+	_, _, err := s.Players(ctx, PlayerFilter{Sort: "name; DROP TABLE players"})
+	require.ErrorContains(t, err, "unknown sort")
+}
+
 func TestFlaggedFilter(t *testing.T) {
 	s, _ := newStore(t)
 	ctx := t.Context()

@@ -7,13 +7,24 @@
 <form method="get" class="filters bar">
   <input name="q" value="{{.Query}}" placeholder="Name, Steam ID or GUID" size="28" aria-label="Search">
   <select name="instance" aria-label="Instance"><option value="">all instances</option>{{$sel := .Instance}}{{range .Instances}}<option value="{{.}}"{{if eq . $sel}} selected{{end}}>{{.}}</option>{{end}}</select>
+  {{if or (ne .Sort "last") (not .Desc)}}<input type="hidden" name="sort" value="{{.Sort}}">{{if .Desc}}<input type="hidden" name="dir" value="desc">{{end}}{{end}}
+  <label><input type="checkbox" name="online" value="1"{{if .Online}} checked{{end}}> Only online players</label>
   <label><input type="checkbox" name="flagged" value="1"{{if .Flagged}} checked{{end}}> Only flagged players</label>
   <button><i class="fa fa-search" aria-hidden="true"></i>Search</button>
 </form>
 {{if not .Players}}<p>No players.</p>{{else}}
-<p class="mute">{{.Total}} player{{if ne .Total 1}}s{{end}}, most recently seen first.</p>
+<p class="mute">{{.Total}} player{{if ne .Total 1}}s{{end}}, {{if and (eq .Sort "last") .Desc}}most recently seen first{{else}}sorted by the column in the header{{end}}. Click a header to sort.</p>
 <div class="scroll"><table class="pdb">
-  <thead><tr><th>Name</th><th>Last seen</th><th>First seen</th><th>Instances</th><th><i class="fa fa-shield" aria-hidden="true"></i>BattlEye</th><th><i class="fa fa-steam" aria-hidden="true"></i>Steam</th><th><i class="fa fa-ban" aria-hidden="true"></i>Here</th></tr></thead>
+  <thead><tr>
+    {{$h := .Heads}}
+    <th aria-sort="{{(index $h "name").Aria}}"><a class="sort" href="{{(index $h "name").Href}}">Name</a></th>
+    <th aria-sort="{{(index $h "last").Aria}}"><a class="sort" href="{{(index $h "last").Href}}">Last seen</a></th>
+    <th aria-sort="{{(index $h "first").Aria}}"><a class="sort" href="{{(index $h "first").Href}}">First seen</a></th>
+    <th>Instances</th>
+    <th aria-sort="{{(index $h "be").Aria}}"><a class="sort" href="{{(index $h "be").Href}}"><i class="fa fa-shield" aria-hidden="true"></i>BattlEye</a></th>
+    <th aria-sort="{{(index $h "steam").Aria}}"><a class="sort" href="{{(index $h "steam").Href}}"><i class="fa fa-steam" aria-hidden="true"></i>Steam</a></th>
+    <th aria-sort="{{(index $h "here").Aria}}"><a class="sort" href="{{(index $h "here").Href}}"><i class="fa fa-ban" aria-hidden="true"></i>Here</a></th>
+  </tr></thead>
   <tbody>
   {{$b := .Backend}}
   {{range .Players}}
