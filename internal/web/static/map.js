@@ -851,8 +851,8 @@
           shape = m.shape === 'polygon' ? L.polygon(pts, { color: color }) : L.polyline(pts, { color: color });
         }
       } else if (m.source === 'tunnel') {
-        // A tunnel entrance is one of many: a small dot is enough; the white ring keeps the dark brown one visible on the map.
-        shape = L.circleMarker(ll(m), { radius: 4, weight: 1.5, color: '#fff', opacity: 0.9, fillColor: color, fillOpacity: 1 });
+        // A tunnel entrance is one of many: a small dot without an outline is enough.
+        shape = L.circleMarker(ll(m), { radius: 3, stroke: false, fillColor: color, fillOpacity: 1 });
         named(shape, function () { return (m.label || m.id) + ' (' + m.layer + ')'; });
       } else if (glyph) {
         shape = L.marker(ll(m), { icon: markerIcon(glyph, color, m.source === 'sandstorm' ? stormHeading(m) : null) });
@@ -869,6 +869,9 @@
       if (m.source !== 'territory' && !(m.source === 'sandstorm' && m.shape === 'polygon')) {
         bindTip(shape, title, lines);
         var tname = ((m.props || []).filter(function (kv) { return kv.k === 'territory'; })[0] || {}).v;
+      // A rebuilt house is drawn only while its decay timer runs: one already worn down (or with decay off)
+      // would clutter the map. The marker stays in the data, the API still lists it.
+      if (m.source === 'rebuilt' && m.layer === 'Rebuilt houses' && !(m.ttl > 0)) { return; }
         onMenu(shape, function () {
           var spec = plainSpec(tname || title, (tname ? [title] : []).concat(lines, posText(m)), m, m.shape === 'circle' ? m.radius : 0);
           if (m.source === 'flags') {
@@ -876,6 +879,8 @@
           }
           return spec;
         });
+      // A tunnel entrance is blue until a rope ladder is usable on it, then the mod's green.
+      if (m.source === 'tunnel' && (m.props || []).some(function (kv) { return kv.k === 'ladder' && kv.v === 'none'; })) { color = '#3a7bd5'; }
       }
       shape.addTo(group);
     });

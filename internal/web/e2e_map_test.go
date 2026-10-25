@@ -97,7 +97,10 @@ func TestE2ERebuiltHouseShowsItsDecay(t *testing.T) {
 	e.hub.Sync(admin.SyncRequest{Proto: 1,
 		Layers: []admin.Layer{{Name: "Rebuilt houses", Icon: "home", Color: "#8f6f00", Visibility: "operator"}},
 		Markers: []admin.Marker{{Layer: "Rebuilt houses", ID: "r1", Shape: "point", X: 6400, Z: 6400, Icon: "home", Label: "House", Source: "rebuilt", TTL: 7380, Visibility: "operator",
-			Props: []admin.KV{{K: "parts", V: "3/12"}, {K: "weakest", V: "wall_1 64%"}}}}})
+			Props: []admin.KV{{K: "parts", V: "3/12"}, {K: "weakest", V: "wall_1 64%"}}},
+			// worn down already: no timer, not drawn
+			{Layer: "Rebuilt houses", ID: "r2", Shape: "point", X: 6800, Z: 6800, Icon: "home", Label: "Old house", Source: "rebuilt", Visibility: "operator",
+				Props: []admin.KV{{K: "decay", V: "worn down"}}}}})
 	require.Eventually(t, func() bool { return b.count(".mi-wrap") == 1 }, 10*time.Second, 100*time.Millisecond)
 	b.hover(t, ".mi-wrap")
 	require.Eventually(t, func() bool { return strings.Contains(b.textOf(".leaflet-tooltip"), "worn down in 2h 3m") }, 5*time.Second, 50*time.Millisecond, "tooltip: %q", b.textOf(".leaflet-tooltip"))

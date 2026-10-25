@@ -319,8 +319,7 @@ Rebuilt houses and wells
 ------------------------
 
 DayZ 1.30 lets players rebuild some map buildings (houses, and wells where the game has them) part by part with the
-rebuilding mechanic. Every such building with at least one part built is a marker on the **Rebuilt houses** layer
-(``home`` icon) or the **Rebuilt wells** layer (``tint`` icon), visible to ``operator`` and ``admin`` like the flags. Hovering
+rebuilding mechanic. Every such building with at least one part built is a marker on the **Rebuilt houses** layer (``home`` icon) or the **Rebuilt wells** layer (``tint`` icon), visible to ``operator`` and ``admin`` like the flags. Hovering
 over one shows:
 
 * ``worn down in 2h 3m``: the time until decay has worn the first of its parts down to its floor (the marker's ``ttl``, in
@@ -334,14 +333,16 @@ over one shows:
 * ``locks: 2 code locks, 1 combination lock`` when the building carries any.
 * for a well, ``water: drinkable`` or ``water: none yet``: the brick well only gives water once its roof is built.
 
-A building with no part built is not shown. The first rebuildable well of the game is ``Land_WaterWell_Brick``, the houses
+A building with no part built is not shown. The map draws a house only while its decay timer runs (it has a ``worn down in``
+time): a house whose parts are all worn down already, one where only the rubble was cleared, and any house on a server
+with ``disableBaseDecay`` are left off the map, so that it stays readable (the API still lists them). A well is shown as long as a part is built. The first rebuildable well of the game is ``Land_WaterWell_Brick``, the houses
 are the ``Land_House_*`` types. This needs dzo-admin 0.6.0; an older mod shows nothing on these layers.
 
 Tunnel entrances
 ~~~~~~~~~~~~~~~~
 
 The tunnel entrances of the irrigation tunnels (Nasdara) are holes a rope ladder can be built on. The **Tunnel entrances**
-layer marks every one of them for every role with a small dot, in a plain brown, and in green with ``ladder: usable`` once a ladder is built on
+layer marks every one of them for every role with a small dot without an outline, in blue, and in green with ``ladder: usable`` once a ladder is built on
 it (``ladder: none`` otherwise). Needs dzo-admin 0.6.0.
 
 Sandstorms
