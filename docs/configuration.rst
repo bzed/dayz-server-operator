@@ -276,6 +276,8 @@ Site repository layout
        messages.xml
        overlays/<name>/…            overlays for this instance only
        integrations/<modid>/…       per-instance override of an integration
+       EditorFiles/…                .dze files for the mission's EditorFiles/ (see missions)
+       MapStreamDZE/…               .dze files mirrored to profiles/dzo/mapstream/DZE (dzo_mapstream)
        hooks/…
 
 ``dzo site pull`` updates the checkout. Uncommitted local edits block the pull
