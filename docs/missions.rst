@@ -196,6 +196,24 @@ servermod) are copied to ``EditorFiles/`` in the live mission on every render.
 They are generated files: dzo owns them, and a file you remove from the site is
 removed from the mission at the next render.
 
+MapStreamDZE
+------------
+
+Files in ``instances/<name>/MapStreamDZE/`` (``*.dze``, subfolders allowed) are
+mirrored to ``profiles/dzo/mapstream/DZE/`` of the instance, where the
+``dzo_mapstream`` servermod reads them. It is not part of the mission: the sync
+runs on every render (so at every start), after the mission is applied. dzo
+owns that target folder: files are written when they differ, and files and
+folders that are not in the site any more are removed. The render prints the
+number of files written and removed when it changed anything.
+
+An instance without a ``MapStreamDZE`` folder is not touched, so files the mod
+wrote itself stay. Git does not keep an empty folder: to remove the last file,
+delete it and keep a placeholder such as ``.gitkeep`` in the folder (it is
+copied too, which is harmless). Symlinks and other non-regular files in the
+folder fail the render. There is no ``config.yaml``, ``site.yaml`` or
+``instance.yaml`` key for it.
+
 An ``overlay.yaml`` can declare files that ``cfggameplay.json`` must reference.
 dzo then adds the references with the right path:
 

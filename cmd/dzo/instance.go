@@ -23,6 +23,7 @@ import (
 	"github.com/bzed/dayz-server-operator/internal/btrfs"
 	"github.com/bzed/dayz-server-operator/internal/config"
 	"github.com/bzed/dayz-server-operator/internal/instance"
+	"github.com/bzed/dayz-server-operator/internal/integrate"
 	"github.com/bzed/dayz-server-operator/internal/mission"
 	"github.com/bzed/dayz-server-operator/internal/moderation"
 	"github.com/bzed/dayz-server-operator/internal/quadlet"
@@ -161,6 +162,13 @@ func renderInstance(cmd *cobra.Command, cfg *config.Config, inst *resolve.Instan
 	printReport(cmd, report)
 	if err := runfiles.Write(rf); err != nil {
 		return err
+	}
+	w, r, err := integrate.SyncMapStream(filepath.Join(tree.Dir, "instances", inst.Name), inst.Paths.Profiles)
+	if err != nil {
+		return fmt.Errorf("syncing %s: %w", integrate.MapStreamSrc, err)
+	}
+	if w+r > 0 {
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "dzo_mapstream %s: %d written, %d removed\n", integrate.MapStreamSrc, w, r)
 	}
 	// Bans hold even when dzo serve is down: bans.txt is rendered from the database at every start.
 	msg, err := moderation.RenderAtStart(cmd.Context(), serve.BanDB(cfg), inst.Name, filepath.Join(inst.Paths.Profiles, "battleye"), time.Now())

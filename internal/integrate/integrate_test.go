@@ -256,3 +256,43 @@ func TestCollectModMessagesAreDropped(t *testing.T) {
 	_, err := Collect(t.Context(), tr, inst, Options{CacheDir: t.TempDir()})
 	require.NoError(t, err, "a mod's messages.xml is accepted (and later replaced by the empty one)")
 }
+
+func TestSyncMapStreamMirrorsTheInstanceFolder(t *testing.T) {
+	site, profiles := t.TempDir(), t.TempDir()
+	inst := filepath.Join(site, "instances", "x")
+	dst := filepath.Join(profiles, "dzo", "mapstream", "DZE")
+
+	w, r, err := SyncMapStream(inst, profiles)
+	require.NoError(t, err)
+	require.Zero(t, w+r, "no MapStreamDZE folder: nothing to do")
+	put(t, filepath.Join(dst, "keep.dze"), "K") // untouched without a source folder
+	_, _, err = SyncMapStream(inst, profiles)
+	require.NoError(t, err)
+	require.FileExists(t, filepath.Join(dst, "keep.dze"))
+
+	put(t, filepath.Join(inst, "MapStreamDZE", "a.dze"), "A")
+	put(t, filepath.Join(inst, "MapStreamDZE", "sub", "b.dze"), "B")
+	put(t, filepath.Join(dst, "old", "gone.dze"), "G")
+	w, r, err = SyncMapStream(inst, profiles)
+	require.NoError(t, err)
+	require.Equal(t, 2, w)
+	require.Equal(t, 2, r, "keep.dze and old/gone.dze are not in the site")
+	require.NoFileExists(t, filepath.Join(dst, "keep.dze"))
+	require.NoDirExists(t, filepath.Join(dst, "old"))
+	got, err := os.ReadFile(filepath.Join(dst, "sub", "b.dze"))
+	require.NoError(t, err)
+	require.Equal(t, "B", string(got))
+
+	w, r, err = SyncMapStream(inst, profiles)
+	require.NoError(t, err)
+	require.Zero(t, w+r, "a second sync changes nothing")
+
+	require.NoError(t, os.Remove(filepath.Join(inst, "MapStreamDZE", "sub", "b.dze")))
+	put(t, filepath.Join(inst, "MapStreamDZE", "a.dze"), "A2")
+	w, r, err = SyncMapStream(inst, profiles)
+	require.NoError(t, err)
+	require.Equal(t, 1, w)
+	require.Equal(t, 1, r)
+	require.NoFileExists(t, filepath.Join(dst, "sub", "b.dze"))
+	require.NoDirExists(t, filepath.Join(dst, "sub"))
+}
