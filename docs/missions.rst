@@ -194,8 +194,10 @@ EditorFiles
 Files in ``instances/<name>/EditorFiles/`` (``*.dze`` for the `DayZ Editor Loader
 <https://steamcommunity.com/sharedfiles/filedetails/?id=2276010135>`_
 servermod) are copied to ``EditorFiles/`` in the live mission on every render.
-They are generated files: dzo owns them, and a file you remove from the site is
-removed from the mission at the next render.
+They are generated files: dzo owns them. A file you remove from the site is
+removed from the mission at the next render (a copy goes to the file history
+first, and a folder that ends up empty is removed). Only files dzo wrote are
+removed; a file you put there yourself stays.
 
 MapStreamDZE
 ------------

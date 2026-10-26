@@ -106,6 +106,30 @@ func TestApplyObsoleteNeverTouchesDisk(t *testing.T) {
 	assert.False(t, ok, "obsolete entry should have been dropped from the manifest")
 }
 
+func TestApplyObsoleteEditorFilesAreRemovedAndBackedUp(t *testing.T) {
+	staging := t.TempDir()
+	live := t.TempDir()
+	filehistory := t.TempDir()
+	writeTree(t, live, map[string]string{"EditorFiles/sub/a.dze": "A", "EditorFiles/b.dze": "B", "EditorFiles/foreign.dze": "F"})
+
+	m := NewManifest()
+	m.Entries["EditorFiles/sub/a.dze"] = Entry{Origin: OriginGenerated, SourceHash: "h", WrittenHash: "h"}
+	m.Entries["EditorFiles/b.dze"] = Entry{Origin: OriginGenerated, SourceHash: "h", WrittenHash: "h"}
+
+	plan, err := Classify(staging, live, m, nil)
+	require.NoError(t, err, "Classify")
+	report, err := Apply(plan, staging, live, filehistory, m, Options{})
+	require.NoError(t, err, "Apply")
+	require.Len(t, report.Obsolete, 2)
+	assert.NoFileExists(t, filepath.Join(live, "EditorFiles/b.dze"))
+	assert.NoFileExists(t, filepath.Join(live, "EditorFiles/sub/a.dze"))
+	assert.NoDirExists(t, filepath.Join(live, "EditorFiles/sub"), "an emptied folder goes too")
+	assert.FileExists(t, filepath.Join(live, "EditorFiles/foreign.dze"), "a file dzo never wrote stays")
+	backups, err := filepath.Glob(filepath.Join(filehistory, "*", "EditorFiles", "b.dze"))
+	require.NoError(t, err)
+	assert.Len(t, backups, 1, "the removed file is kept in the file history")
+}
+
 func TestApplyUnchangedDoesNotRewriteFile(t *testing.T) {
 	staging := t.TempDir()
 	live := t.TempDir()

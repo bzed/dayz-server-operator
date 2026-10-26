@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 )
 
@@ -101,6 +102,26 @@ func Apply(plan Plan, stagingDir, liveDir, filehistoryDir string, manifest *Mani
 	}
 
 	for _, entry := range plan.Obsolete() {
+		// EditorFiles/ is dzo's: a file removed from the site is removed from the mission (after a
+		// backup). Everything else that became obsolete stays on disk.
+		if strings.HasPrefix(entry.Path, "EditorFiles/") && filepath.IsLocal(entry.Path) {
+			livePath := filepath.Join(liveDir, entry.Path)
+			existing, err := os.ReadFile(livePath) //nolint:gosec // entry.Path is from the manifest, checked with IsLocal
+			if err == nil {
+				if err := ensureHistoryDir(); err != nil {
+					return report, err
+				}
+				if err := writeFileAtomic(filepath.Join(historyDir, entry.Path), existing, 0o640); err != nil {
+					return report, fmt.Errorf("mission: back up %s: %w", entry.Path, err)
+				}
+			} else if !os.IsNotExist(err) {
+				return report, fmt.Errorf("mission: read live %s: %w", entry.Path, err)
+			}
+			if err := os.Remove(livePath); err != nil && !os.IsNotExist(err) {
+				return report, fmt.Errorf("mission: remove live %s: %w", entry.Path, err)
+			}
+			removeEmptyParents(liveDir, filepath.Dir(livePath))
+		}
 		delete(manifest.Entries, entry.Path)
 		report.Obsolete = append(report.Obsolete, entry)
 	}
@@ -166,4 +187,14 @@ func pruneFileHistory(filehistoryDir string, keep int) error {
 		}
 	}
 	return nil
+}
+
+// removeEmptyParents removes dir and its parents up to, but not including, root, as far as they are empty.
+func removeEmptyParents(root, dir string) {
+	for dir != root && strings.HasPrefix(dir, root+string(filepath.Separator)) {
+		if os.Remove(dir) != nil { // not empty (or gone): stop
+			return
+		}
+		dir = filepath.Dir(dir)
+	}
 }
