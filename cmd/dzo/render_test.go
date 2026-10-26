@@ -139,3 +139,32 @@ func TestInstanceRenderNeedsServerCfgBeforeTouchingTheMission(t *testing.T) {
 	_, err = runCmd(t, "instance", "render", "x", "--config", cfg)
 	assert.Error(t, err, "a serverDZ.cfg that does not parse must fail")
 }
+
+// A file removed from instances/<name>/EditorFiles or MapStreamDZE must be gone after the next render.
+func TestRenderRemovesDZEFilesThatLeftTheSite(t *testing.T) {
+	cfg, root, _ := renderSetup(t)
+	instDir := filepath.Join(filepath.Dir(cfg), "site", "instances", "x")
+	editor := filepath.Join(root, "mpmissions", "empty.m", "EditorFiles")
+	stream := filepath.Join(root, "profiles", "dzo", "mapstream", "DZE")
+	for _, d := range []string{"EditorFiles", "MapStreamDZE"} {
+		writeFile(t, filepath.Join(instDir, d, "keep.dze"), "K")
+		writeFile(t, filepath.Join(instDir, d, "sub", "drop.dze"), "D")
+	}
+
+	out, err := runCmd(t, "instance", "render", "x", "--config", cfg)
+	require.NoError(t, err, "first render: %s", out)
+	for _, d := range []string{editor, stream} {
+		require.FileExists(t, filepath.Join(d, "keep.dze"))
+		require.FileExists(t, filepath.Join(d, "sub", "drop.dze"))
+	}
+
+	for _, d := range []string{"EditorFiles", "MapStreamDZE"} {
+		require.NoError(t, os.RemoveAll(filepath.Join(instDir, d, "sub")))
+	}
+	out, err = runCmd(t, "instance", "render", "x", "--config", cfg)
+	require.NoError(t, err, "second render: %s", out)
+	for _, d := range []string{editor, stream} {
+		assert.FileExists(t, filepath.Join(d, "keep.dze"), d)
+		assert.NoDirExists(t, filepath.Join(d, "sub"), "the removed file and its folder must be gone from %s", d)
+	}
+}
