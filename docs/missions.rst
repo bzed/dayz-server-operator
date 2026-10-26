@@ -191,7 +191,8 @@ spawners. Shared overlays live in ``site/overlays/``, instance overlays in
 EditorFiles
 -----------
 
-Files in ``instances/<name>/EditorFiles/`` (``*.dze`` for the DayZ Editor Loader
+Files in ``instances/<name>/EditorFiles/`` (``*.dze`` for the `DayZ Editor Loader
+<https://steamcommunity.com/sharedfiles/filedetails/?id=2276010135>`_
 servermod) are copied to ``EditorFiles/`` in the live mission on every render.
 They are generated files: dzo owns them, and a file you remove from the site is
 removed from the mission at the next render.
@@ -201,7 +202,8 @@ MapStreamDZE
 
 Files in ``instances/<name>/MapStreamDZE/`` (``*.dze``, subfolders allowed) are
 mirrored to ``profiles/dzo/mapstream/DZE/`` of the instance, where the
-``dzo_mapstream`` servermod reads them. It is not part of the mission: the sync
+`dzo_mapstream
+<https://steamcommunity.com/sharedfiles/filedetails/?id=3812840035>`_ servermod reads them. It is not part of the mission: the sync
 runs on every render (so at every start), after the mission is applied. dzo
 owns that target folder: files are written when they differ, and files and
 folders that are not in the site any more are removed. The render prints the
