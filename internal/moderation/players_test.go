@@ -165,6 +165,21 @@ func TestPlayersSort(t *testing.T) {
 	require.ErrorContains(t, err, "unknown sort")
 }
 
+func TestPlayersSortLastSeenPutsOnlinePlayersFirst(t *testing.T) {
+	s, _ := newStore(t)
+	ctx := t.Context()
+	require.NoError(t, s.PlayerJoined(ctx, "alpha", steamA, "Anna", t0))
+	require.NoError(t, s.PlayerJoined(ctx, "alpha", steamB, "Bob", t0.Add(time.Hour)))
+	require.NoError(t, s.PlayerLeft(ctx, "alpha", steamB, t0.Add(2*time.Hour)))
+	got, _, err := s.Players(ctx, PlayerFilter{Sort: "last", Desc: true})
+	require.NoError(t, err)
+	require.Len(t, got, 2)
+	assert.Equal(t, steamA, got[0].SteamID, "online now, so newest although the stored date is older")
+	got, _, err = s.Players(ctx, PlayerFilter{Sort: "last"})
+	require.NoError(t, err)
+	assert.Equal(t, steamA, got[1].SteamID, "and last when ascending")
+}
+
 func TestFlaggedFilter(t *testing.T) {
 	s, _ := newStore(t)
 	ctx := t.Context()

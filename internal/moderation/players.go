@@ -150,11 +150,15 @@ type PlayerFilter struct {
 	Now  time.Time // when "active" is judged; zero is now
 }
 
+// lastSeenOrder sorts by when a player was last seen, a player who is online now counting as newer than
+// any date: the list shows "online" for them, and their stored date lags behind.
+const lastSeenOrder = `(p.last_seen + CASE WHEN EXISTS (SELECT 1 FROM player_sessions n WHERE n.steam_id = p.steam_id AND n.ended_at IS NULL) THEN 1099511627776 ELSE 0 END)`
+
 // PlayerSorts are the columns the player list can be ordered by, with the SQL that orders by them. A sort
 // key outside this list is refused, so no request text reaches the query.
 var PlayerSorts = map[string]string{
 	"name":  `p.name COLLATE NOCASE`,
-	"last":  `p.last_seen`,
+	"last":  lastSeenOrder,
 	"first": `p.first_seen`,
 	"be":    `EXISTS (SELECT 1 FROM be_status b WHERE b.guid = p.guid AND b.banned = 1)`,
 	"steam": `COALESCE((SELECT i.banned FROM steam_info i WHERE i.steam_id = p.steam_id), 0)`,
@@ -303,7 +307,7 @@ func (s *Store) Players(ctx context.Context, f PlayerFilter) ([]PlayerSummary, i
 		limit = defaultPlayerLimit
 	}
 	limit = min(limit, maxPlayerLimit)
-	order := `p.last_seen DESC`
+	order := lastSeenOrder + ` DESC`
 	if f.Sort != "" {
 		col, ok := PlayerSorts[f.Sort]
 		if !ok {
