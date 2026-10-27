@@ -74,7 +74,7 @@ func New(backends []*Backend, opts Options) (*Server, error) {
 	if _, err := rand.Read(raw[:]); err != nil {
 		return nil, err
 	}
-	t, err := template.New("").Funcs(template.FuncMap{"pct": pct, "deref": func(f *float64) float64 { return *f }, "join": strings.Join, "expiry": moderation.FormatExpiry, "facts": factsOf, "day": func(t time.Time) string { return t.UTC().Format("2006-01-02") }, "ago": ago, "hours": hours}).ParseFS(templateFS, "templates/*.html")
+	t, err := template.New("").Funcs(template.FuncMap{"pct": pct, "deref": func(f *float64) float64 { return *f }, "join": strings.Join, "expiry": moderation.FormatExpiry, "facts": factsOf, "day": func(t time.Time) string { return t.UTC().Format("2006-01-02") }, "stamp": func(t time.Time) string { return t.UTC().Format("2006-01-02 15:04") }, "ago": ago, "hours": hours}).ParseFS(templateFS, "templates/*.html")
 	if err != nil {
 		return nil, err
 	}

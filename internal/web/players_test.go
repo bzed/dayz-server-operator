@@ -230,6 +230,16 @@ func TestPlayerPageListsSightings(t *testing.T) {
 	assert.NotContains(t, body, "template error")
 }
 
+func TestPlayerListShowsTheTimeOfDay(t *testing.T) {
+	e, st, _ := playerSetup(t, api.RoleModerator)
+	at := time.Date(2026, 10, 3, 14, 25, 0, 0, time.UTC)
+	seedPlayer(t, st, webSteam, "Fritz", at)
+	require.NoError(t, st.PlayerLeft(t.Context(), "alpha", webSteam, at.Add(time.Hour)))
+	_, body, _ := e.get("/b/main/players")
+	assert.Contains(t, body, "<td>2026-10-03 15:25</td>", "last seen")
+	assert.Contains(t, body, "<td>2026-10-03 14:25</td>", "first seen")
+}
+
 func TestPlayerPageOnlyBanCellsAreBad(t *testing.T) {
 	e, st, _ := playerSetup(t, api.RoleModerator)
 	seedPlayer(t, st, webSteam, "Fritz", time.Now())
