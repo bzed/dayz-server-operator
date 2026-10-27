@@ -27,13 +27,15 @@ const (
 	beGap        = time.Second
 	steamKeyGap  = time.Second
 	steamPageGap = 2 * time.Second
-	beRound      = 10 // GUIDs per round: 30 packets, 30 s
-	steamRound   = 20
-	beSilentMax  = 3 // rounds in a row without any answer before BattlEye is left alone
-	steamFailMax = 5
-	pause        = time.Hour
-	lookupGap    = 10 * time.Minute
-	maxNudged    = 1000
+
+	defaultLookupTimeout = 30 * time.Second
+	beRound              = 10 // GUIDs per round: 30 packets, 30 s
+	steamRound           = 20
+	beSilentMax          = 3 // rounds in a row without any answer before BattlEye is left alone
+	steamFailMax         = 5
+	pause                = time.Hour
+	lookupGap            = 10 * time.Minute
+	maxNudged            = 1000
 )
 
 // Store is the part of moderation.Store the refresher uses.
@@ -69,7 +71,7 @@ type Refresher struct {
 	Sleep func(ctx context.Context, d time.Duration) error
 	Tick  <-chan time.Time
 	Logf  func(string, ...any)
-	// LookupTimeout bounds LookupNow (default 5 s).
+	// LookupTimeout bounds LookupNow (default 30 s: with a key it is five paced Steam requests and the BattlEye query).
 	LookupTimeout time.Duration
 
 	mu         sync.Mutex
@@ -418,7 +420,7 @@ func (r *Refresher) LookupNow(ctx context.Context, steamID string) error {
 
 	timeout := r.LookupTimeout
 	if timeout <= 0 {
-		timeout = 5 * time.Second
+		timeout = defaultLookupTimeout
 	}
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
