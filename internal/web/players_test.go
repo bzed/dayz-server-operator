@@ -217,6 +217,19 @@ func TestPlayerPageShowsTheVerdictsAndEscapes(t *testing.T) {
 	assert.Contains(t, body, `hx-post="/b/main/players/`+webSteam+`/lookup"`)
 }
 
+func TestPlayerPageListsSightings(t *testing.T) {
+	e, st, _ := playerSetup(t, api.RoleModerator)
+	seedPlayer(t, st, webSteam, "Fritz", time.Now())
+	g, _ := moderation.DeriveGUID(webSteam)
+	require.NoError(t, st.Seen(t.Context(), "alpha", g, "203.0.113.7", "Fritz", time.Now()))
+	code, body, _ := e.get("/b/main/players/" + webSteam)
+	require.Equal(t, http.StatusOK, code)
+	assert.Contains(t, body, "Seen with")
+	assert.Contains(t, body, "Others behind it")
+	assert.Contains(t, body, "</html>", "the page rendered to its end")
+	assert.NotContains(t, body, "template error")
+}
+
 func TestPlayerPageOnlyBanCellsAreBad(t *testing.T) {
 	e, st, _ := playerSetup(t, api.RoleModerator)
 	seedPlayer(t, st, webSteam, "Fritz", time.Now())

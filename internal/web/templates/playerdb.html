@@ -40,7 +40,7 @@
   {{end}}
   </tbody>
 </table></div>
-<p class="pager">{{if .PrevHref}}<a class="btn" href="{{.PrevHref}}"><i class="fa fa-chevron-left" aria-hidden="true"></i>Newer</a>{{end}}{{if .NextHref}}<a class="btn" href="{{.NextHref}}">Older<i class="fa fa-chevron-right" aria-hidden="true"></i></a>{{end}}</p>
+<p class="pager">{{if .PrevHref}}<a class="btn" href="{{.PrevHref}}"><i class="fa fa-chevron-left" aria-hidden="true"></i>Previous</a>{{end}}{{if .NextHref}}<a class="btn" href="{{.NextHref}}">Next<i class="fa fa-chevron-right" aria-hidden="true"></i></a>{{end}}</p>
 {{end}}
 {{end}}
 {{end}}
@@ -103,8 +103,8 @@
 <section>
   <h2><i class="fa fa-globe" aria-hidden="true"></i>Seen with</h2>
   <div class="scroll"><table>
-    <thead><tr><th>Instance</th><th>Name</th>{{if .ShowAddr}}<th>Address</th>{{end}}<th>Last seen</th><th>Others behind it</th></tr></thead>
-    <tbody>{{range $d.Identities}}<tr><td>{{.Instance}}</td><td>{{.Name}}</td>{{if $.ShowAddr}}<td>{{.IP}}</td>{{end}}<td>{{day .LastSeen}}</td><td>{{.SharedWith}}</td></tr>{{end}}</tbody>
+    {{$showAddr := .ShowAddr}}<thead><tr><th>Instance</th><th>Name</th>{{if .ShowAddr}}<th>Address</th>{{end}}<th>Last seen</th><th>Others behind it</th></tr></thead>
+    <tbody>{{range $d.Identities}}<tr><td>{{.Instance}}</td><td>{{.Name}}</td>{{if $showAddr}}<td>{{.IP}}</td>{{end}}<td>{{day .LastSeen}}</td><td>{{.SharedWith}}</td></tr>{{end}}</tbody>
   </table></div>
 </section>
 {{end}}
