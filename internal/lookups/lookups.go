@@ -402,6 +402,15 @@ func (r *Refresher) steamWithKey(ctx context.Context, ids []string) {
 // refuses a player looked up less than ten minutes ago with moderation.ErrLookupTooSoon, and gives up after
 // LookupTimeout.
 func (r *Refresher) LookupNow(ctx context.Context, steamID string) error {
+	start := r.now()
+	err := r.lookupNow(ctx, steamID)
+	if err != nil && !errors.Is(err, moderation.ErrLookupTooSoon) && r.Logf != nil {
+		r.Logf("lookups: check now for %s failed after %s: %v", steamID, r.now().Sub(start).Round(time.Millisecond), err)
+	}
+	return err
+}
+
+func (r *Refresher) lookupNow(ctx context.Context, steamID string) error {
 	guid, err := moderation.DeriveGUID(steamID)
 	if err != nil {
 		return fmt.Errorf("lookups: %w", err)

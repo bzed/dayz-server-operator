@@ -6,6 +6,7 @@ package lookups
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -283,6 +284,23 @@ func TestLookupNowTimesOut(t *testing.T) {
 	// a failed lookup does not lock the player out for ten minutes
 	g.be.block = false
 	require.NoError(t, g.r.LookupNow(t.Context(), alice))
+}
+
+func TestLookupNowLogsAFailure(t *testing.T) {
+	g := newRig(t, false)
+	var lines []string
+	g.r.Logf = func(f string, a ...any) { lines = append(lines, fmt.Sprintf(f, a...)) }
+	g.be.block = true
+	g.r.LookupTimeout = 50 * time.Millisecond
+	require.Error(t, g.r.LookupNow(t.Context(), alice))
+	require.Len(t, lines, 1)
+	assert.Contains(t, lines[0], alice)
+	assert.Contains(t, lines[0], "failed after")
+	assert.Contains(t, lines[0], "deadline exceeded")
+	g.be.block = false
+	g.advance(11 * time.Minute)
+	require.NoError(t, g.r.LookupNow(t.Context(), alice))
+	assert.Len(t, lines, 1, "a lookup that works logs nothing")
 }
 
 func TestRunLoopsUntilTheContextEnds(t *testing.T) {
