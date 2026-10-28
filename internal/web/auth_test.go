@@ -16,6 +16,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -47,6 +48,8 @@ type loginEnv struct {
 	st    *moderation.Store
 	steam *httptest.Server
 	nonce int
+	// signIn is the Steam ID the fake Steam signs the browser in as when it is sent there (browser tests).
+	signIn atomic.Value
 }
 
 func newLoginEnv(t *testing.T, opts ...func(*Options)) *loginEnv {
@@ -60,7 +63,30 @@ func newLoginEnv(t *testing.T, opts ...func(*Options)) *loginEnv {
 	t.Cleanup(func() { _ = st.Close() })
 	apiSrv.Moderation = webMod{st}
 	apiSrv.Accounts = st
-	steam := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	l := &loginEnv{t: t}
+	l.signIn.Store(loginSteamA)
+	var steam *httptest.Server
+	steam = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Query().Get("openid.mode") == "checkid_setup" { // the sign-in page: send the browser back
+			id := l.signIn.Load().(string)
+			back, err := url.Parse(r.URL.Query().Get("openid.return_to"))
+			if err != nil {
+				http.Error(w, "bad return_to", http.StatusBadRequest)
+				return
+			}
+			q := back.Query()
+			for k, v := range map[string]string{
+				"openid.ns": "http://specs.openid.net/auth/2.0", "openid.mode": "id_res", "openid.op_endpoint": steam.URL,
+				"openid.claimed_id": "https://steamcommunity.com/openid/id/" + id, "openid.identity": "https://steamcommunity.com/openid/id/" + id,
+				"openid.return_to": r.URL.Query().Get("openid.return_to"), "openid.response_nonce": "n" + id + randomToken(),
+				"openid.assoc_handle": "1", "openid.signed": "signed,op_endpoint,claimed_id,identity,return_to,response_nonce,assoc_handle", "openid.sig": "good",
+			} {
+				q.Set(k, v)
+			}
+			back.RawQuery = q.Encode()
+			http.Redirect(w, r, back.String(), http.StatusFound)
+			return
+		}
 		_ = r.ParseForm()
 		_, _ = w.Write([]byte("ns:http://specs.openid.net/auth/2.0\nis_valid:" + strconv.FormatBool(r.PostForm.Get("openid.sig") == "good") + "\n"))
 	}))
@@ -78,7 +104,8 @@ func newLoginEnv(t *testing.T, opts ...func(*Options)) *loginEnv {
 	ws := httptest.NewServer(srv.Handler())
 	t.Cleanup(ws.Close)
 	apiSrv.Login = api.LoginSettings{WebURL: ws.URL, Steam: auth.Steam{Endpoint: steam.URL, HTTP: steam.Client()}}
-	return &loginEnv{t: t, web: ws, srv: srv, api: apiSrv, st: st, steam: steam}
+	l.web, l.srv, l.api, l.st, l.steam = ws, srv, apiSrv, st, steam
+	return l
 }
 
 // ann is a person who logs in with a password and TOTP.

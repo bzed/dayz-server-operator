@@ -5,7 +5,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 # Web users, login and per-instance permissions: design
 
-Status: brainstormed on 2026-10-28, waiting for approval, then to be turned into an implementation plan.
+Status: implemented on 2026-10-29 (branch feature/web-users); see docs/superpowers/plans/2026-10-28-web-users-and-permissions.md.
 
 ## Why
 

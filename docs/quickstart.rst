@@ -97,6 +97,21 @@ edit the list the same way.
 The restart announces itself in game, locks the server, kicks the remaining
 players and restarts with the new mod generations. See :doc:`operations`.
 
+A web interface with logins
+---------------------------
+
+The web interface has real logins (:ref:`web-login`). On the host of ``dzo serve``:
+
+.. code-block:: sh
+
+   # config.yaml: serve.web_url: https://dzo.example.org  (where people open the web interface)
+   sudo -iu dayz dzo token create web --role admin --web > /var/lib/dzo/secrets/web.token
+   sudo -iu dayz dzo user grant <your Steam64 ID> --role admin
+   sudo -iu dayz dzo units sync
+
+Then open the web interface, sign in through Steam and set up your second factor (an authenticator app or a
+passkey). Put it behind HTTPS: certificate files in ``web.tls`` or a reverse proxy (:ref:`web-https`).
+
 What next
 ---------
 
