@@ -7,6 +7,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/pem"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -261,6 +262,38 @@ func TestWebCommand(t *testing.T) {
 	writeFile(t, cfg, "paths:\n  data: "+dir+"\nweb:\n  listen: 127.0.0.1:99999\n")
 	_, err = runCmd(t, "web", "--config", cfg)
 	require.Error(t, err, "bad listen")
+}
+
+func TestWebAPIClientUsesCAFile(t *testing.T) {
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"installation":"far","role":"operator"}`))
+	}))
+	t.Cleanup(ts.Close)
+	cfgPath, dir := adminConfig(t)
+	ca := filepath.Join(dir, "ca.pem")
+	writeFile(t, ca, string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: ts.Certificate().Raw})))
+	writeFile(t, filepath.Join(dir, "far.token"), "tok\n")
+	writeFile(t, cfgPath, "paths:\n  data: "+dir+"\nweb:\n  listen: 127.0.0.1:0\n  api: {url: \""+ts.URL+"\", token_file: "+filepath.Join(dir, "far.token")+", ca_file: "+ca+"}\n")
+	cfg, err := config.Load(cfgPath)
+	require.NoError(t, err)
+
+	b, reload, err := webBackend(cfg, t.Logf)
+	require.NoError(t, err)
+	info, err := b.Client.Info(t.Context())
+	require.NoError(t, err, "the CA file makes the private CA trusted")
+	require.Equal(t, "far", info.Installation)
+	reload() // SIGHUP re-reads the CA file; nothing to assert beyond not failing
+
+	// without the CA file the self-signed certificate is refused
+	cfg.Web.API.CAFile = ""
+	b, _, err = webBackend(cfg, t.Logf)
+	require.NoError(t, err)
+	_, err = b.Client.Info(t.Context())
+	require.Error(t, err, "an unknown CA")
+
+	cfg.Web.API.CAFile = filepath.Join(dir, "missing.pem")
+	_, _, err = webBackend(cfg, t.Logf)
+	require.ErrorContains(t, err, "web.api.ca_file")
 }
 
 func TestServermodsBuildCommand(t *testing.T) {

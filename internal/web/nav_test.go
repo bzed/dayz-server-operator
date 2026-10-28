@@ -41,7 +41,7 @@ func TestNavIsCachedForTheTTL(t *testing.T) {
 	var fail atomic.Bool
 	var calls atomic.Int32
 	ts := fakeInstances(t, `[{"instance":"a b","connected":true,"hello":{"world":"enoch"}}]`, &fail, &calls)
-	s, err := New([]*Backend{{Name: "main", Client: apiclient.New(ts.URL, "x")}}, Options{})
+	s, err := New(&Backend{Name: "main", Client: apiclient.New(ts.URL, "x")}, Options{})
 	require.NoError(t, err)
 	now := time.Unix(1000, 0)
 	s.now = func() time.Time { return now }
@@ -61,7 +61,7 @@ func TestNavKeepsTheLastListWhenABackendFails(t *testing.T) {
 	var fail atomic.Bool
 	var calls atomic.Int32
 	ts := fakeInstances(t, `[{"instance":"alpha"}]`, &fail, &calls)
-	s, err := New([]*Backend{{Name: "main", Client: apiclient.New(ts.URL, "x")}}, Options{})
+	s, err := New(&Backend{Name: "main", Client: apiclient.New(ts.URL, "x")}, Options{})
 	require.NoError(t, err)
 	now := time.Unix(1000, 0)
 	s.now = func() time.Time { return now }
@@ -84,8 +84,6 @@ func TestEveryPageHasTheSwitcher(t *testing.T) {
 		assert.Contains(t, body, `<details class="switch"`, path)
 		assert.Contains(t, body, `href="/b/main/i/alpha"`, path)
 	}
-	_, body, _ := e.get("/b/down/audit")
-	assert.Contains(t, body, "unreachable")
 }
 
 func TestInstanceBarMarksTheActiveTab(t *testing.T) {

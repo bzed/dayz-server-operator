@@ -5,7 +5,16 @@ package serve
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/tls"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/pem"
 	"fmt"
+	"math/big"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -154,6 +163,66 @@ func TestRunEndToEnd(t *testing.T) {
 	cancel()
 	require.NoError(t, <-done)
 	_ = admin.ProtocolVersion
+}
+
+// selfSigned writes a certificate for 127.0.0.1 and its key under dir and returns the paths.
+func selfSigned(t *testing.T, dir string) (cert, key string) {
+	t.Helper()
+	k, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+	tmpl := &x509.Certificate{
+		SerialNumber: big.NewInt(1), Subject: pkix.Name{CommonName: "dzo test"},
+		NotBefore: time.Now().Add(-time.Hour), NotAfter: time.Now().Add(time.Hour),
+		KeyUsage: x509.KeyUsageDigitalSignature, ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		IPAddresses: []net.IP{net.ParseIP("127.0.0.1")}, IsCA: true, BasicConstraintsValid: true,
+	}
+	der, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, &k.PublicKey, k)
+	require.NoError(t, err)
+	kb, err := x509.MarshalECPrivateKey(k)
+	require.NoError(t, err)
+	cert, key = filepath.Join(dir, "cert.pem"), filepath.Join(dir, "key.pem")
+	require.NoError(t, os.WriteFile(cert, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}), 0o600))
+	require.NoError(t, os.WriteFile(key, pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: kb}), 0o600))
+	return cert, key
+}
+
+func TestServeAPIOverTLS(t *testing.T) {
+	cfg, tree := fixture(t)
+	certFile, keyFile := selfSigned(t, t.TempDir())
+	cfg.Serve.TLS = config.TLS{CertFile: certFile, KeyFile: keyFile}
+	secret, _, err := api.NewTokenStore(APITokens(cfg)).Create("op", api.RoleOperator, nil, false, time.Hour)
+	require.NoError(t, err)
+
+	ready := make(chan [2]string, 1)
+	ctx, cancel := context.WithCancel(t.Context())
+	done := make(chan error, 1)
+	go func() {
+		done <- Run(ctx, cfg, Options{Version: "test", Load: func() (*site.Tree, error) { return tree, nil },
+			Ready: func(a, m string) { ready <- [2]string{a, m} }, Logf: t.Logf})
+	}()
+	addrs := <-ready
+
+	pemBytes, err := os.ReadFile(certFile)
+	require.NoError(t, err)
+	pool := x509.NewCertPool()
+	require.True(t, pool.AppendCertsFromPEM(pemBytes))
+	hc := &http.Client{Timeout: 10 * time.Second, Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: pool, MinVersion: tls.VersionTLS12}}}
+	resp, err := hc.Get("https://" + addrs[0] + "/healthz")
+	require.NoError(t, err, "the API listener speaks HTTPS")
+	_ = resp.Body.Close()
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	c := apiclient.NewTLS("https://"+addrs[0], secret, &tls.Config{RootCAs: pool, MinVersion: tls.VersionTLS12})
+	_, err = c.Instances(t.Context())
+	require.NoError(t, err, "an API client with the CA")
+
+	// the mod listener stays plain HTTP
+	resp, err = http.Post("http://"+addrs[1]+"/mod/v1/sync", "application/json", strings.NewReader(`{}`))
+	require.NoError(t, err)
+	_ = resp.Body.Close()
+
+	cancel()
+	require.NoError(t, <-done)
 }
 
 func TestRunErrors(t *testing.T) {

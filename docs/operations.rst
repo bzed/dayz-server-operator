@@ -165,6 +165,8 @@ hour at that minute, and ``hourly`` is short for ``*:00``:
 ``dzo instance apply <name>`` turns them into ``dzo-restart-<name>.timer``. The times are the
 restart itself: the timer fires ``announce.minutes`` earlier, when the countdown starts (04:00 with
 ``minutes: 30`` fires at 03:30). Give every server its own times, so they do not go down together.
+HTTPS for the web interface and the API, certificate renewal and port 443 are in :ref:`web-https`.
+
 One-off restarts ("today at 18:30") can be scheduled in the web interface; they
 also become systemd timers.
 

@@ -85,3 +85,12 @@ Review, then roll out
    once the new one is stable.
 
 The old volumes are not touched and not read.
+
+Several backends in one web interface
+-------------------------------------
+
+One web interface now serves one installation, so ``web.backends`` is gone and a configuration that
+still sets it is refused. Run one ``dzo web`` per installation: on the host of the installation, or
+on another host with ``web.api`` (``url``, ``token_file``, and ``ca_file`` for a private CA). The
+backend picker and sending a ban to several installations at once are gone with it. See
+:ref:`web-https` for putting the API and the web interface on HTTPS.

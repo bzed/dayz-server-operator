@@ -232,7 +232,7 @@ func serveUnit(o Options) File {
 func webUnit(o Options) File {
 	return File{Dir: Systemd, Name: "dzo-web.service", Enable: "dzo-web.service", Content: generated(
 		"[Unit]\nDescription=dzo web interface\nAfter=network.target\n\n" +
-			"[Service]\nEnvironment=" + instance.ServicePathEnv + "\nExecStart=" + o.cmd("web") + "\nRestart=on-failure\nRestartSec=5\n\n" +
+			"[Service]\nEnvironment=" + instance.ServicePathEnv + "\nExecStart=" + o.cmd("web") + "\nExecReload=/bin/kill -HUP $MAINPID\nRestart=on-failure\nRestartSec=5\n\n" +
 			"[Install]\nWantedBy=default.target\n")}
 }
 

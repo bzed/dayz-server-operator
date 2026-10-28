@@ -43,6 +43,51 @@ created *on the installation*:
 
 For several installations run one web interface for each.
 
+.. _web-https:
+
+HTTPS
+-----
+
+``dzo serve`` and ``dzo web`` both take a ``tls`` block (``cert_file`` and ``key_file``, optionally
+``client_ca_file``; :doc:`configuration`) and then speak HTTPS. You bring the certificate, from certbot
+or any other tool, or you put a reverse proxy in front. dzo has no ACME client of its own: it would
+need ports 80 and 443, privileges and certificate state that the host's own tooling already handles.
+
+A renewed certificate is picked up by itself. The files are checked on new connections (every few
+seconds at most) and on ``systemctl --user reload dzo-web`` (SIGHUP), without a restart and without
+dropping connections. A new pair that does not load is logged and the old one stays active. The CA
+files (``client_ca_file``, ``web.api.ca_file``) reload the same way. A certbot renewal needs no deploy
+hook beyond writing the files where ``tls`` points.
+
+``web.listen`` on a non-loopback address is accepted when ``web.tls`` is set (or
+``allow_insecure_http``). ``dzo web`` reaches ``dzo serve`` over HTTPS when ``serve.tls`` is set; for
+a private CA give it ``web.api.ca_file``, and ``serve.tls.client_ca_file`` lets only hosts with a
+certificate of that CA reach the API.
+
+Port 443 without a proxy
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+dzo runs as the ``dayz`` user in user units, which cannot be given ``CAP_NET_BIND_SERVICE``. Two ways
+work:
+
+* Lower the unprivileged port limit to 443 with ``/etc/sysctl.d/50-dzo.conf``::
+
+     net.ipv4.ip_unprivileged_port_start = 443
+
+  Simple, but every local user may then bind port 443 and above.
+
+* Keep the limit and redirect 443 to ``web.listen`` (for example ``0.0.0.0:8443``) with nftables::
+
+     table inet dzo {
+       chain prerouting {
+         type nat hook prerouting priority dstnat; policy accept;
+         tcp dport 443 redirect to :8443
+       }
+     }
+
+``setcap`` on the binary is not suitable: every package upgrade drops it, and it applies to every
+user who runs the binary.
+
 Access control
 --------------
 

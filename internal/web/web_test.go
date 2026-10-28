@@ -54,19 +54,6 @@ func newEnv(t *testing.T, role api.Role) *env {
 	t.Cleanup(ats.Close)
 	secret, _, err := apiSrv.Tokens.Create("web", role, nil, true, time.Hour)
 	require.NoError(t, err)
-	// A second working backend, with its own bans, for the fan-out of a ban form.
-	otherDir := t.TempDir()
-	otherHubs := admin.NewRegistry(otherDir)
-	otherHubs.Add(admin.NewHub("alpha"))
-	otherAPI := api.New("site-b", "v0", otherHubs, api.NewTokenStore(filepath.Join(otherDir, "t.json")), admin.NewAudit(filepath.Join(otherDir, "a.jsonl")))
-	otherStore, err := moderation.Open(t.Context(), filepath.Join(otherDir, "dzo.sqlite"))
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = otherStore.Close() })
-	otherAPI.Moderation = webMod{otherStore}
-	otherTS := httptest.NewServer(otherAPI.Handler())
-	t.Cleanup(otherTS.Close)
-	otherSecret, _, err := otherAPI.Tokens.Create("web", role, nil, true, time.Hour)
-	require.NoError(t, err)
 	assets, docs := filepath.Join(dir, "assets"), filepath.Join(dir, "docs")
 	for _, d := range []string{filepath.Join(assets, "htmx"), docs} {
 		require.NoError(t, os.MkdirAll(d, 0o750))
@@ -77,11 +64,7 @@ func newEnv(t *testing.T, role api.Role) *env {
 	_ = os.WriteFile(filepath.Join(flags, "de.svg"), []byte("<svg/>"), 0o600)
 	apiSrv.GeoIP = geoiptest.Legacy(t, map[string]string{"198.51.100.0/24": "DE"})
 	_ = os.WriteFile(filepath.Join(docs, "index.html"), []byte("<h1>docs</h1>"), 0o600)
-	srv, err := New([]*Backend{
-		{Name: "main", Client: apiclient.New(ats.URL, secret)},
-		{Name: "other", Client: apiclient.New(otherTS.URL, otherSecret)},
-		{Name: "down", Client: apiclient.New("http://127.0.0.1:1", "x")},
-	}, Options{Version: "v0", Assets: assets, DocsDir: docs, FlagsDir: flags, UserHeader: "X-Forwarded-User"})
+	srv, err := New(&Backend{Name: "main", Client: apiclient.New(ats.URL, secret)}, Options{Version: "v0", Assets: assets, DocsDir: docs, FlagsDir: flags, UserHeader: "X-Forwarded-User"})
 	require.NoError(t, err)
 	ws := httptest.NewServer(srv.Handler())
 	t.Cleanup(ws.Close)
@@ -174,7 +157,6 @@ func TestDashboard(t *testing.T) {
 	require.Contains(t, body, "/vendor/fork-awesome/css/fork-awesome.css", "dashboard icons")
 	require.Contains(t, body, `fa-map`, "dashboard icons")
 	require.Contains(t, body, `aria-label="Map of alpha"`, "dashboard icons")
-	require.True(t, strings.Contains(body, "api: ") || strings.Contains(body, "down"), "an unreachable backend must be shown with its error")
 	require.Contains(t, hdr.Get("Content-Security-Policy"), "default-src 'self'")
 	require.Equal(t, "DENY", hdr.Get("X-Frame-Options"))
 	require.Equal(t, "nosniff", hdr.Get("X-Content-Type-Options"))
@@ -256,7 +238,7 @@ func TestVendorAndDocs(t *testing.T) {
 	c, b, _ = e.get("/docs/")
 	require.Equal(t, 200, c, "docs")
 	require.Contains(t, b, "docs")
-	srv, _ := New([]*Backend{{Name: "x", Client: apiclient.New("http://127.0.0.1:1", "t")}}, Options{})
+	srv, _ := New(&Backend{Name: "x", Client: apiclient.New("http://127.0.0.1:1", "t")}, Options{})
 	ts := httptest.NewServer(srv.Handler())
 	defer ts.Close()
 	r, err := http.Get(ts.URL + "/docs/")
@@ -264,7 +246,17 @@ func TestVendorAndDocs(t *testing.T) {
 	_ = r.Body.Close()
 	require.Equal(t, 404, r.StatusCode, "docs without a dir")
 	_, err = New(nil, Options{})
-	require.Error(t, err, "no backends must fail")
+	require.Error(t, err, "no backend must fail")
+}
+
+func TestWebNewOneBackend(t *testing.T) {
+	_, err := New(nil, Options{})
+	require.ErrorContains(t, err, "no backend")
+	e := newEnv(t, api.RoleAdmin)
+	_, body, _ := e.get("/b/main/bans/new")
+	require.NotContains(t, body, "Also send to", "the ban form lists no other installations")
+	code, _, _ := e.get("/b/other/bans")
+	require.Equal(t, 404, code, "only the one installation is served")
 }
 
 func TestActions(t *testing.T) {
@@ -371,9 +363,6 @@ func TestStreamRelay(t *testing.T) {
 	}
 	require.True(t, seen["players"] && seen["status"], "relayed events = %v", seen)
 	cancel()
-	// A backend that is down answers 502.
-	c, _, _ := e.get("/b/down/i/alpha/stream")
-	require.Equal(t, http.StatusBadGateway, c, "down backend")
 }
 
 func TestMapTiles(t *testing.T) {

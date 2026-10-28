@@ -42,7 +42,7 @@ func newLiveEnv(t *testing.T) *liveEnv {
 	require.NotEmpty(t, instance, "DZO_LIVE_INSTANCE")
 	assets := t.TempDir()
 	useRealAssets(t, assets)
-	srv, err := New([]*Backend{{Name: "live", Client: apiclient.New(api, strings.TrimSpace(string(token)))}}, Options{Assets: assets})
+	srv, err := New(&Backend{Name: "live", Client: apiclient.New(api, strings.TrimSpace(string(token)))}, Options{Assets: assets})
 	require.NoError(t, err)
 	ws := httptest.NewServer(srv.Handler())
 	t.Cleanup(ws.Close)

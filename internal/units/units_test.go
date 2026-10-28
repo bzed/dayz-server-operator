@@ -320,6 +320,7 @@ func TestServeAndWebUnits(t *testing.T) {
 	assert.Contains(t, got["dzo-serve.service"], "ExecStart=/usr/bin/dzo serve\n")
 	assert.Contains(t, got["dzo-serve.service"], "ExecReload=/bin/kill -HUP $MAINPID")
 	assert.Contains(t, got["dzo-web.service"], "ExecStart=/usr/bin/dzo web\n")
+	assert.Contains(t, got["dzo-web.service"], "ExecReload=/bin/kill -HUP $MAINPID", "a reload re-reads the certificate files")
 	assert.Contains(t, got["dzo-web.service"], "WantedBy=default.target")
 
 	// an instance with the dzo-admin mod needs serve, unless it is switched off

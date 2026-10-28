@@ -67,9 +67,6 @@
       {{if eq .Kind "image"}}<img src="/b/{{$.Data.Backend}}/evidence/{{.ID}}/file" alt="evidence {{.ID}}" loading="lazy">{{end}}
       {{if .Body}}<pre>{{.Body}}</pre>{{end}}</label>{{end}}
   </fieldset>{{end}}
-  {{if .Others}}<fieldset><legend>Also send to (without the evidence links)</legend>
-    {{range .Others}}<label><input type="checkbox" name="also" value="{{.}}"> {{.}}</label>{{end}}
-  </fieldset>{{end}}
   <button class="danger"><i class="fa fa-ban" aria-hidden="true"></i>Ban</button>
 </form>
 {{end}}

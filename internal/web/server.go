@@ -65,10 +65,11 @@ type Server struct {
 	now      func() time.Time // the clock, replaced by tests
 }
 
-// New returns a Server over the given backends.
-func New(backends []*Backend, opts Options) (*Server, error) {
-	if len(backends) == 0 {
-		return nil, fmt.Errorf("web: no backends configured")
+// New returns a Server over the one installation b. The routes keep the
+// installation's name in their path (/b/{name}/...).
+func New(b *Backend, opts Options) (*Server, error) {
+	if b == nil {
+		return nil, fmt.Errorf("web: no backend configured")
 	}
 	var raw [16]byte
 	if _, err := rand.Read(raw[:]); err != nil {
@@ -78,7 +79,7 @@ func New(backends []*Backend, opts Options) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Server{backends: backends, opts: opts, csrf: hex.EncodeToString(raw[:]), tmpl: t, now: time.Now}, nil
+	return &Server{backends: []*Backend{b}, opts: opts, csrf: hex.EncodeToString(raw[:]), tmpl: t, now: time.Now}, nil
 }
 
 func pct(f float64) string { return fmt.Sprintf("%.0f%%", f*100) }

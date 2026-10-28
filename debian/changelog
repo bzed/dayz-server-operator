@@ -4,6 +4,10 @@ dayz-server-operator (0.1.0-1) UNRELEASED; urgency=medium
     user via sysusers.d/tmpfiles.d, subuid/subgid + linger setup in
     postinst. No instance management commands ship yet (Phase 1 is
     still in progress); see IMPLEMENTATION_PLAN.md.
+  * One web interface serves one installation: web.backends is replaced by
+    web.api and refused if still set (see docs/migration.rst). serve and web
+    can speak HTTPS from certificate files that reload on change (serve.tls,
+    web.tls). dzo-web.service gains ExecReload; run `dzo units sync`.
   * Player bans with evidence (dzo ban, dzo evidence, web UI, API);
     new dependency modernc.org/sqlite (pure Go, statically linked).
   * Player actions: kick with a reason (BattlEye), heal, fix gear and kill

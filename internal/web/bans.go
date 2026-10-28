@@ -51,7 +51,6 @@ func (s *Server) bansPage(w http.ResponseWriter, r *http.Request) {
 type banFormView struct {
 	Backend, SteamID, Instance string
 	Instances                  []admin.Status
-	Others                     []string
 	Identities                 []moderation.Sighting
 	Evidence                   []moderation.Evidence
 	CanIP, CanGlobal           bool
@@ -65,11 +64,6 @@ func (s *Server) banForm(w http.ResponseWriter, r *http.Request) {
 	}
 	q := r.URL.Query()
 	v := banFormView{Backend: b.Name, SteamID: q.Get("steam_id"), Instance: q.Get("instance")}
-	for _, o := range s.backends {
-		if o.Name != b.Name {
-			v.Others = append(v.Others, o.Name)
-		}
-	}
 	var err error
 	if v.Instances, err = c.Instances(r.Context()); err != nil {
 		v.Err = err.Error()
@@ -149,27 +143,13 @@ func (s *Server) createBan(w http.ResponseWriter, r *http.Request) {
 		s.render(w, "flash", flash{Text: err.Error()})
 		return
 	}
-	targets := []*Backend{b}
-	for _, name := range r.PostForm["also"] {
-		if o := s.backend(name); o != nil && o != b && !slices.Contains(targets, o) {
-			targets = append(targets, o)
-		}
+	o := banOutcome{Backend: b.Name}
+	if res, err := s.client(b, r).CreateBan(r.Context(), in); err != nil {
+		o.Err = err.Error()
+	} else {
+		o.ID, o.Sync = res.Ban.ID, res.Sync
 	}
-	var out []banOutcome
-	for i, t := range targets {
-		tin := in
-		if i > 0 {
-			tin.Evidence = nil // evidence ids belong to the first backend's database
-		}
-		o := banOutcome{Backend: t.Name}
-		if res, err := s.client(t, r).CreateBan(r.Context(), tin); err != nil {
-			o.Err = err.Error()
-		} else {
-			o.ID, o.Sync = res.Ban.ID, res.Sync
-		}
-		out = append(out, o)
-	}
-	s.render(w, "banresult", out)
+	s.render(w, "banresult", []banOutcome{o})
 }
 
 type banView struct {

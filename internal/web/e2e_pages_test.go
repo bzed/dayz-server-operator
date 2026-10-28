@@ -39,7 +39,7 @@ func TestE2EPlayerNameIsText(t *testing.T) {
 	require.Zero(t, bold)
 }
 
-func TestE2ESwitcherReachesAnotherBackendsInstance(t *testing.T) {
+func TestE2ESwitcherOpensAndReachesAnInstance(t *testing.T) {
 	e := newEnv(t, api.RoleAdmin)
 	useRealAssets(t, e.assets)
 	b := newBrowser(t)
@@ -58,11 +58,11 @@ func TestE2ESwitcherReachesAnotherBackendsInstance(t *testing.T) {
 	require.False(t, open, "Escape closes the switcher")
 	b.run(t,
 		chromedp.Click(`details.switch summary`),
-		chromedp.Click(`.switchmenu a[href="/b/other/i/alpha"]`),
+		chromedp.Click(`.switchmenu a[href="/b/main/i/alpha"]`),
 		chromedp.WaitVisible(`.instbar`),
 		chromedp.Evaluate(`location.pathname`, &path),
 	)
-	require.Equal(t, "/b/other/i/alpha", path)
+	require.Equal(t, "/b/main/i/alpha", path)
 }
 
 func TestE2ENoHorizontalScrollOnAPhone(t *testing.T) {

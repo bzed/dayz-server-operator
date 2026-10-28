@@ -71,25 +71,23 @@ func (e *env) postForm(path string, form url.Values, csrf bool) (int, string) {
 	return resp.StatusCode, string(b)
 }
 
-func TestBanFormCreatesAndFansOut(t *testing.T) {
+func TestBanFormCreates(t *testing.T) {
 	e := newEnv(t, api.RoleAdmin)
 	code, body, _ := e.get("/b/main/bans/new?steam_id=" + webSteam + "&instance=alpha")
 	require.Equal(t, 200, code, "form: %s", body)
 	require.Contains(t, body, webSteam)
-	require.Contains(t, body, `name="also" value="other"`)
+	require.NotContains(t, body, `name="also"`, "one web interface serves one installation: no other installation to send the ban to")
 	form := url.Values{"steam_id": {webSteam}, "reason": {"aimbot <script>"}, "message": {"bye"}, "duration": {"7d"},
-		"scope": {"instances"}, "instances": {"alpha"}, "also": {"other"}}
+		"scope": {"instances"}, "instances": {"alpha"}}
 	code, _ = e.postForm("/b/main/bans", form, false)
 	require.Equal(t, 403, code, "no CSRF token")
 	code, body = e.postForm("/b/main/bans", form, true)
 	require.Equal(t, 200, code, "create: %s", body)
-	require.Equal(t, 2, strings.Count(body, "ban #1"), "create: %s", body)
+	require.Equal(t, 1, strings.Count(body, "ban #1"), "create: %s", body)
 	require.Contains(t, body, "alpha: ok")
 	_, list, _ := e.get("/b/main/bans?state=active")
 	require.Contains(t, list, "aimbot &lt;script&gt;")
 	require.NotContains(t, list, "<script>")
-	_, other, _ := e.get("/b/other/bans")
-	require.Contains(t, other, "aimbot", "the other backend has no ban")
 }
 
 func TestBanDetailEditAndRevoke(t *testing.T) {

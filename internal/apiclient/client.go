@@ -11,6 +11,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -36,6 +37,15 @@ type Client struct {
 // New returns a client with a sane timeout. Streams use their own context.
 func New(base, token string) *Client {
 	return &Client{Base: strings.TrimRight(base, "/"), Token: token, HTTP: &http.Client{Timeout: 40 * time.Second}}
+}
+
+// NewTLS is New with its own TLS configuration, for an API served over HTTPS
+// with a private CA (web.api.ca_file) or that asks for a client certificate.
+func NewTLS(base, token string, tlsConf *tls.Config) *Client {
+	c := New(base, token)
+	c.HTTP.Transport = &http.Transport{TLSClientConfig: tlsConf, Proxy: http.ProxyFromEnvironment,
+		TLSHandshakeTimeout: 10 * time.Second, MaxIdleConnsPerHost: 4, IdleConnTimeout: 90 * time.Second}
+	return c
 }
 
 // WithActor returns a copy that reports the given actor and source.
