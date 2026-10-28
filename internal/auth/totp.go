@@ -34,6 +34,9 @@ func TOTPURI(secret []byte, issuer, account string) string {
 	return "otpauth://totp/" + label + "?" + q.Encode()
 }
 
+// TOTPCode is the code an authenticator app shows at time t.
+func TOTPCode(secret []byte, t time.Time) string { return totpCode(secret, t.Unix()/totpPeriod) }
+
 func totpCode(secret []byte, step int64) string {
 	var msg [8]byte
 	binary.BigEndian.PutUint64(msg[:], uint64(step)) //nolint:gosec // G115: steps are positive times

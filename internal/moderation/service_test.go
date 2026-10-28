@@ -328,6 +328,25 @@ func TestSweepPurgesOldSessions(t *testing.T) {
 	})
 }
 
+func TestSweepPrunesLogins(t *testing.T) {
+	e := newSvc(t)
+	ctx := t.Context()
+	require.NoError(t, e.st.PutPerson(ctx, Person{SteamID: steamA, Grants: []Grant{{"*", "admin"}}}, t0))
+	require.NoError(t, e.st.CreateSession(ctx, "old", steamA, "", t0.Add(-10*24*time.Hour)))
+	require.NoError(t, e.st.CreateSession(ctx, "new", steamA, "", t0.Add(-time.Hour)))
+	e.tick <- t0
+	eventually(t, "the expired login session pruned", func() bool {
+		var n int
+		return e.st.db.QueryRow(`SELECT COUNT(*) FROM login_sessions`).Scan(&n) == nil && n == 1
+	})
+	e.svc.SessionIdle = 30 * time.Minute // a shorter idle time drops the other one at the next sweep
+	e.tick <- t0
+	eventually(t, "the idle login session pruned", func() bool {
+		var n int
+		return e.st.db.QueryRow(`SELECT COUNT(*) FROM login_sessions`).Scan(&n) == nil && n == 0
+	})
+}
+
 func TestNegativeSessionRetentionKeepsSessions(t *testing.T) {
 	e := newSvc(t)
 	e.svc.SessionRetention = -1

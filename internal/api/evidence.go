@@ -91,7 +91,7 @@ func (s *Server) addEvidence(w http.ResponseWriter, r *http.Request, c *call) {
 		storeFail(w, err)
 		return
 	}
-	_ = s.Audit.Log(admin.AuditEntry{Actor: c.actor, Source: c.src, Instance: e.Instance, Action: "evidence.add",
+	_ = s.Audit.Log(admin.AuditEntry{Actor: c.actor, Source: c.src, Client: c.client, Instance: e.Instance, Action: "evidence.add",
 		Target: firstNonEmpty(e.SteamID, e.GUID, ipLabel(e.IP)), Detail: fmt.Sprintf("evidence #%d %s", e.ID, e.Kind), OK: true}) // stored either way
 	writeJSON(w, http.StatusCreated, maskEvidence(c, e))
 }
@@ -198,7 +198,7 @@ func (s *Server) identities(w http.ResponseWriter, r *http.Request, c *call) {
 		}
 	}
 	if shown { // an address history is personal data: who read it is recorded, without the addresses
-		_ = s.Audit.Log(admin.AuditEntry{Actor: c.actor, Source: c.src, Action: "ip.history", Target: r.PathValue("steamid"), OK: true}) // the read goes on if the line cannot be written
+		_ = s.Audit.Log(admin.AuditEntry{Actor: c.actor, Source: c.src, Client: c.client, Action: "ip.history", Target: r.PathValue("steamid"), OK: true}) // the read goes on if the line cannot be written
 	}
 	writeJSON(w, 200, out)
 }

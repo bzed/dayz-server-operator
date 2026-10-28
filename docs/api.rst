@@ -93,6 +93,49 @@ Routes without an instance in the path check the permission like this:
      - ``player.history`` on at least one instance; everything about instances where it does not hold is
        left out (sessions, names per instance, bans, friends seen there)
 
+Login
+~~~~~
+
+Only ``dzo web`` logs people in, with its web token and no session. Logging in is always two steps: a
+first factor (password or Steam) and a second factor (TOTP code, passkey or recovery code). A passkey is
+never a first factor. The routes need ``serve.web_url`` (``503`` without) and answer ``403`` to any
+other kind of token.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 40 60
+
+   * - Request
+     - Answer
+   * - ``POST /auth/password`` ``{"username","password"}``
+     - ``{"pending":"dzp_…","factors":["totp","recovery"],"enrol":false}``. ``pending`` identifies the
+       half-finished login for 5 minutes. ``factors`` lists what can finish it. ``enrol`` is true when the
+       person has no second factor yet and has to set one up first.
+   * - ``GET /auth/steam?return_to=<url>``
+     - ``{"url":"…"}``: where to send the browser to sign in through Steam. ``return_to`` must be under
+       ``serve.web_url``, else ``400``.
+   * - ``POST /auth/steam`` ``{"params":{…},"return_to":"…"}``
+     - the query Steam sent the browser back with. Serve has Steam check it (``check_authentication``),
+       compares ``return_to`` and the fields, accepts the response nonce once, and answers as for the
+       password. A Steam ID without a grant (or a disabled person) gets ``403``; nothing is stored for it.
+   * - ``POST /auth/totp`` ``{"pending","code"}``, ``POST /auth/recovery`` ``{"pending","code"}``
+     - ``{"session":"dzs_…","expires":"…"}``. A TOTP code and a recovery code work once. Recovery codes
+       are compared ignoring case and dashes.
+   * - ``POST /auth/logout`` (with the session)
+     - ``204``; the session is gone.
+
+The browser's address is sent in ``X-Dzo-Client`` (from a web token only; other tokens' header is ignored)
+and, behind a proxy, the proxy's address in ``X-Dzo-Proxy``; without ``X-Dzo-Client`` it is the connection's
+address. Failed first and second factors are counted per account and per address: five are free, then the
+wait doubles from one second to 15 minutes (a success clears the account, 1 hour without a failure
+clears all). While waiting a request gets ``429`` with ``Retry-After``, with the same message whether or
+not the username exists. The counters live in the memory of ``dzo serve``.
+
+Every step writes one line to the service log, ``login: <step> <ok|failed|refused> steamid=<id|unknown>
+client=<addr> proxy=<addr|->``, never a secret, and a finished login or logout writes an audit entry
+(``auth.login``, ``auth.logout``) with the client address. Every audit entry of a web action has the
+client address in its ``client`` field.
+
 Reading
 -------
 

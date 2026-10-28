@@ -15,15 +15,18 @@ import (
 // AuditEntry is one admin action (§C16: who, what, which player/vehicle,
 // result). Source says where it came from: api, web or cli.
 type AuditEntry struct {
-	Time     time.Time `json:"time"`
-	Actor    string    `json:"actor"`
-	Source   string    `json:"source"`
-	Instance string    `json:"instance"`
-	Action   string    `json:"action"`
-	Target   string    `json:"target,omitempty"`
-	Detail   string    `json:"detail,omitempty"`
-	OK       bool      `json:"ok"`
-	Result   string    `json:"result,omitempty"`
+	Time   time.Time `json:"time"`
+	Actor  string    `json:"actor"`
+	Source string    `json:"source"`
+	// Client is the address of the browser behind a web action. It is personal data: dzo serve blanks it
+	// after serve.audit_ip_retention_days.
+	Client   string `json:"client,omitempty"`
+	Instance string `json:"instance"`
+	Action   string `json:"action"`
+	Target   string `json:"target,omitempty"`
+	Detail   string `json:"detail,omitempty"`
+	OK       bool   `json:"ok"`
+	Result   string `json:"result,omitempty"`
 }
 
 // Audit is an append-only JSON-lines file. It is deliberately not a

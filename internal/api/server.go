@@ -55,8 +55,11 @@ type Server struct {
 	// Say sends text over the instance's RCon (style rcon of a message): to everyone when steamID
 	// is empty. nil answers the rcon style 503.
 	Say func(ctx context.Context, instance, steamID, text string) error
+	// Logf receives the login log lines (one per step, never a secret); nil logs nothing.
+	Logf func(format string, args ...any)
 
 	now     func() time.Time
+	login   *auth.Backoff
 	actions *admin.Limiter
 	targets *admin.Limiter
 }
@@ -64,12 +67,26 @@ type Server struct {
 // Accounts is what the API needs of the people and their sessions (moderation.Store).
 type Accounts interface {
 	Session(ctx context.Context, hash string, now time.Time, idle, max time.Duration) (moderation.LoginSession, error)
+	CreateSession(ctx context.Context, hash, steamID, client string, now time.Time) error
+	DeleteSession(ctx context.Context, hash string) error
 	Person(ctx context.Context, steamID string) (moderation.Person, error)
+	PersonByUsername(ctx context.Context, username string) (moderation.Person, error)
+	Credentials(ctx context.Context, steamID string) (moderation.Credentials, error)
+	UseTOTPStep(ctx context.Context, steamID string, step int64) (bool, error)
+	UseRecoveryCode(ctx context.Context, steamID, hash string) (bool, error)
+	CreatePending(ctx context.Context, hash string, p moderation.PendingLogin) error
+	Pending(ctx context.Context, hash string, now time.Time) (moderation.PendingLogin, error)
+	DeletePending(ctx context.Context, hash string) error
+	UseSteamNonce(ctx context.Context, nonce string, now time.Time) (bool, error)
 }
 
 // LoginSettings are the settings of user logins.
 type LoginSettings struct {
+	// WebURL is serve.web_url; logins are off without it.
+	WebURL                  string
 	SessionIdle, SessionMax time.Duration
+	// Steam verifies "Sign in through Steam"; the zero value talks to the real one.
+	Steam auth.Steam
 }
 
 func (l LoginSettings) idle() time.Duration {
@@ -88,10 +105,12 @@ func (l LoginSettings) max() time.Duration {
 
 // New returns a Server over the given hubs, tokens and audit log.
 func New(installation, version string, hubs *admin.Registry, tokens *TokenStore, audit *admin.Audit) *Server {
-	return &Server{
+	s := &Server{
 		Installation: installation, Version: version, Hubs: hubs, Tokens: tokens, Audit: audit,
 		now: time.Now, actions: admin.NewLimiter(actionsPerMin, time.Minute), targets: admin.NewLimiter(perTargetPerMin, time.Minute),
 	}
+	s.login = auth.NewBackoff(func() time.Time { return s.now() }) // s.now is replaced by tests
+	return s
 }
 
 // Info is GET /api/v1.
@@ -134,7 +153,10 @@ type call struct {
 	who   Principal
 	actor string // who is blamed in the audit log
 	src   string
-	hub   *admin.Hub // nil for non-instance routes
+	// client is the browser's address behind a web action (X-Dzo-Client, web tokens only); session is the
+	// hash of the login session it acts in.
+	client, session string
+	hub             *admin.Hub // nil for non-instance routes
 }
 
 // Handler returns the http.Handler of /api/v1 and /healthz.
@@ -153,6 +175,8 @@ func (s *Server) Handler() http.Handler {
 	const base = "/api/v1"
 	route("GET "+base, PermView, false, s.info)
 	route("GET "+base+"/instances", PermView, false, s.instances)
+	s.loginRoutes(mux, base)
+	route("POST "+base+"/auth/logout", PermView, false, s.logout)
 	route("GET "+base+"/audit", PermAuditView, false, s.audit)
 	route("GET "+base+"/tiles/{map}/{rest...}", PermView, false, s.tile)
 	route("GET "+base+"/instances/{instance}", PermView, true, func(w http.ResponseWriter, _ *http.Request, c *call) { writeJSON(w, 200, c.hub.Status()) })
@@ -225,6 +249,7 @@ func (s *Server) authorize(w http.ResponseWriter, r *http.Request, perm string, 
 		if src := cleanHeader(r.Header.Get("X-Dzo-Source")); src != "" {
 			c.src = src
 		}
+		c.client = clientHeader(r)
 	case who.Token.Delegate:
 		if a := cleanHeader(r.Header.Get("X-Dzo-Actor")); a != "" {
 			c.actor = who.Token.Name + ":" + a
@@ -283,7 +308,8 @@ func (s *Server) resolveSession(w http.ResponseWriter, r *http.Request, c *call)
 		fail(w, http.StatusForbidden, "this token needs a user session")
 		return false
 	}
-	sess, err := s.Accounts.Session(r.Context(), auth.HashSecret(secret), s.now(), s.Login.idle(), s.Login.max())
+	c.session = auth.HashSecret(secret)
+	sess, err := s.Accounts.Session(r.Context(), c.session, s.now(), s.Login.idle(), s.Login.max())
 	if err == nil {
 		var person moderation.Person
 		if person, err = s.Accounts.Person(r.Context(), sess.SteamID); err == nil {
@@ -496,7 +522,7 @@ func (s *Server) command(w http.ResponseWriter, r *http.Request, c *call) {
 // run submits a command, audits it and writes the answer. wait=0 queues it
 // and returns 202 with the command id.
 func (s *Server) run(w http.ResponseWriter, r *http.Request, c *call, cmd admin.Command, action, target string) {
-	entry := admin.AuditEntry{Actor: c.actor, Source: c.src, Instance: c.hub.Name, Action: action, Target: target, Detail: detail(cmd)}
+	entry := admin.AuditEntry{Actor: c.actor, Source: c.src, Client: c.client, Instance: c.hub.Name, Action: action, Target: target, Detail: detail(cmd)}
 	deny := func(code int, err error) {
 		entry.Result = err.Error()
 		_ = s.Audit.Log(entry)
@@ -621,7 +647,7 @@ func (s *Server) message(w http.ResponseWriter, r *http.Request, c *call) {
 
 // say is the rcon way of a message: no mod, no queue, the answer is the RCon command's.
 func (s *Server) say(w http.ResponseWriter, r *http.Request, c *call, cmd admin.Command, target string) {
-	entry := admin.AuditEntry{Actor: c.actor, Source: c.src, Instance: c.hub.Name, Action: "message", Target: target, Detail: detail(cmd)}
+	entry := admin.AuditEntry{Actor: c.actor, Source: c.src, Client: c.client, Instance: c.hub.Name, Action: "message", Target: target, Detail: detail(cmd)}
 	deny := func(code int, err error) {
 		entry.Result = err.Error()
 		_ = s.Audit.Log(entry)

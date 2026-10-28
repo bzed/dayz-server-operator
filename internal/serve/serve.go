@@ -248,6 +248,7 @@ func Run(ctx context.Context, cfg *config.Config, o Options) error {
 	mctx, mcancel := context.WithCancel(ctx)
 	svc := moderation.NewService(store, audit, logf)
 	svc.AddressRetention, svc.VacuumEvery, svc.SessionRetention = cfg.Serve.IPRetention(), cfg.Serve.VacuumEvery(), cfg.Serve.SessionRetention()
+	svc.SessionIdle, svc.SessionMax = cfg.Serve.SessionIdle(), cfg.Serve.SessionMax()
 	svc.OnEvent = feedFromRCon(reg)
 	audit.OnLog = feedFromAudit(reg)
 	svc.Start(mctx)
@@ -277,9 +278,10 @@ func Run(ctx context.Context, cfg *config.Config, o Options) error {
 	rec.Set(pctx, presence.FromRegistry(reg), reg.Names())
 	apiSrv := api.New(cfg.Serve.Installation, o.Version, reg, api.NewTokenStore(APITokens(cfg)), audit)
 	apiSrv.Moderation = svc
+	apiSrv.Logf = logf
 	if cfg.Serve.WebURL != "" { // user logins need to know where the web interface lives
 		apiSrv.Accounts = store
-		apiSrv.Login = api.LoginSettings{SessionIdle: cfg.Serve.SessionIdle(), SessionMax: cfg.Serve.SessionMax()}
+		apiSrv.Login = api.LoginSettings{WebURL: cfg.Serve.WebURL, SessionIdle: cfg.Serve.SessionIdle(), SessionMax: cfg.Serve.SessionMax()}
 	}
 	apiSrv.Lookups = lookupAPI
 	apiSrv.TilesDir = TilesDir(cfg)

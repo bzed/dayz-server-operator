@@ -149,7 +149,7 @@ func (s *Server) detail(r *http.Request, c *call, st *moderation.Store, rec mode
 		d.Identities = append(d.Identities, x)
 	}
 	if shown { // an address history is personal data: who read it is recorded, without the addresses
-		_ = s.Audit.Log(admin.AuditEntry{Actor: c.actor, Source: c.src, Action: "ip.history", Target: rec.SteamID, OK: true}) // the read goes on if the line cannot be written
+		_ = s.Audit.Log(admin.AuditEntry{Actor: c.actor, Source: c.src, Client: c.client, Action: "ip.history", Target: rec.SteamID, OK: true}) // the read goes on if the line cannot be written
 	}
 	friends, err := st.FriendsSeen(r.Context(), rec.Steam.FriendIDs)
 	if err != nil {
@@ -189,7 +189,7 @@ func (s *Server) lookupPlayer(w http.ResponseWriter, r *http.Request, c *call) {
 		return
 	}
 	err := s.Lookups.LookupNow(r.Context(), rec.SteamID)
-	_ = s.Audit.Log(admin.AuditEntry{Actor: c.actor, Source: c.src, Action: "player.lookup", Target: rec.SteamID, OK: err == nil}) // the lookup itself is what matters
+	_ = s.Audit.Log(admin.AuditEntry{Actor: c.actor, Source: c.src, Client: c.client, Action: "player.lookup", Target: rec.SteamID, OK: err == nil}) // the lookup itself is what matters
 	switch {
 	case errors.Is(err, moderation.ErrLookupTooSoon):
 		fail(w, http.StatusTooManyRequests, "this player was looked up a moment ago; try again in a few minutes")

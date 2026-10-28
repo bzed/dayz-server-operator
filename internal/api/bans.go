@@ -134,7 +134,7 @@ func targetsOf(b moderation.Ban) string {
 }
 
 func (s *Server) logBan(c *call, action string, b moderation.Ban, ok bool, detail string) {
-	_ = s.Audit.Log(admin.AuditEntry{Actor: c.actor, Source: c.src, Instance: strings.Join(b.Instances, ","), Action: action,
+	_ = s.Audit.Log(admin.AuditEntry{Actor: c.actor, Source: c.src, Client: c.client, Instance: strings.Join(b.Instances, ","), Action: action,
 		Target: targetsOf(b), Detail: detail, OK: ok}) // the ban itself is stored; a failed audit line must not undo it
 }
 
@@ -305,7 +305,7 @@ func (s *Server) kick(w http.ResponseWriter, r *http.Request, c *call) {
 		return
 	}
 	id := r.PathValue("steamid")
-	entry := admin.AuditEntry{Actor: c.actor, Source: c.src, Instance: c.hub.Name, Action: "player.kick", Target: id, Detail: reason}
+	entry := admin.AuditEntry{Actor: c.actor, Source: c.src, Client: c.client, Instance: c.hub.Name, Action: "player.kick", Target: id, Detail: reason}
 	err := s.Moderation.Kick(r.Context(), c.hub.Name, id, reason)
 	entry.OK = err == nil
 	if err != nil {
