@@ -23,6 +23,7 @@ type bansView struct {
 	Backend, State, Query string
 	Bans                  []moderation.Ban
 	Now                   time.Time
+	CanBan                bool // may ban on at least one instance
 	Err                   string
 }
 
@@ -40,7 +41,7 @@ func (s *Server) bansPage(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	v := bansView{Backend: b.Name, State: r.URL.Query().Get("state"), Query: r.URL.Query().Get("q"), Now: time.Now()}
+	v := bansView{Backend: b.Name, State: r.URL.Query().Get("state"), Query: r.URL.Query().Get("q"), Now: time.Now(), CanBan: canAnywhere(r).BanInstance}
 	var err error
 	if v.Bans, err = c.Bans(r.Context(), apiclient.BanFilter{State: v.State, Query: v.Query, Limit: 200}); err != nil {
 		v.Err = err.Error()
@@ -68,8 +69,11 @@ func (s *Server) banForm(w http.ResponseWriter, r *http.Request) {
 	if v.Instances, err = c.Instances(r.Context()); err != nil {
 		v.Err = err.Error()
 	}
-	if info, err := c.Info(r.Context()); err == nil {
-		v.CanIP, v.CanGlobal = info.Role.Can(api.PermBanIP), info.Role.Can(api.PermBanGlobal)
+	v.CanGlobal = holds(r, api.PermBanGlobal)
+	if v.Instance != "" {
+		v.CanIP = roleOn(infoOf(r), v.Instance).Can(api.PermBanIP)
+	} else {
+		v.CanIP = infoOf(r).Role.Can(api.PermBanIP)
 	}
 	if moderation.ValidSteamID(v.SteamID) {
 		v.Identities, _ = c.Identities(r.Context(), v.SteamID) // optional extras; the form works without them
@@ -160,6 +164,8 @@ type banView struct {
 	Unlinked []moderation.Evidence // the player's other evidence, which can be linked
 	Instance []string              // where evidence can be filed
 	Now      time.Time
+	CanBan   bool // may change the ban: the API decides in the end
+	CanFile  bool // may file evidence
 	Err      string
 }
 
@@ -181,7 +187,7 @@ func (s *Server) banPage(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	v := banView{Backend: b.Name, Now: time.Now()}
+	v := banView{Backend: b.Name, Now: time.Now(), CanBan: canAnywhere(r).BanInstance, CanFile: canAnywhere(r).EvidenceAdd}
 	var err error
 	if v.Ban, err = c.Ban(r.Context(), id); err != nil {
 		v.Err = err.Error()

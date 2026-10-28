@@ -430,3 +430,7 @@ body.login { display: flex; justify-content: center; padding: 2rem 1rem; }
 .logincard a.button, .logincard button { display: inline-block; padding: .45rem .8rem; text-decoration: none; }
 .logout { display: inline; }
 .logout button { background: none; border: 0; color: inherit; cursor: pointer; font: inherit; }
+form.inline { display: inline-flex; gap: .4rem; align-items: center; flex-wrap: wrap; margin: 0 .3rem .3rem 0; }
+form.stack { display: grid; gap: .5rem; max-width: 28rem; }
+form.stack label { display: grid; gap: .2rem; }
+a.account { margin-left: auto; text-decoration: none; }

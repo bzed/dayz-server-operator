@@ -124,6 +124,17 @@
       });
   }
 
+  function account() {
+    var nameInput = document.getElementById('passkey-name');
+    var pending;
+    return post('/account/passkeys/begin')
+      .then(function (res) { pending = res.pending; return navigator.credentials.create(creationOptions(res.options)); })
+      .then(function (cred) {
+        return post('/account/passkeys/finish', { pending: pending, response: attestation(cred), name: nameInput ? nameInput.value : '' });
+      })
+      .then(function (res) { window.location.href = res.next || '/account'; });
+  }
+
   document.addEventListener('click', function (ev) {
     var btn = ev.target.closest ? ev.target.closest('[data-passkey]') : null;
     if (!btn) return;
@@ -134,6 +145,7 @@
     ev.preventDefault();
     var box = document.getElementById('passkey-error');
     if (box) box.hidden = true;
-    (btn.dataset.passkey === 'enrol' ? enrol() : login()).catch(fail);
+    var kind = btn.dataset.passkey;
+    (kind === 'enrol' ? enrol() : kind === 'account' ? account() : login()).catch(fail);
   });
 })();

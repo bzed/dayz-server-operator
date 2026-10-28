@@ -38,6 +38,7 @@ type env struct {
 	assets  string
 	csrf    string // the token of the logged-in fixture person
 	session string
+	st      *moderation.Store
 
 	mu   sync.Mutex
 	sent []string // the kinds of the commands answerCommands has seen, in order
@@ -85,7 +86,17 @@ func newEnv(t *testing.T, role api.Role) *env {
 		Vehicles: []admin.Vehicle{{ID: "1.2.3.4", Kind: "car", Type: "OffroadHatchback", Health: 0.5, Fuel: 0.25}, {ID: "5.6.7.8", Kind: "motorbike", Type: "Motorbike_01"}, {ID: "9.9.9.9", Kind: "bicycle", Type: "Old_Bike_Red"}, {ID: "b.b.b.b", Kind: "boat", Type: "Boat_01_Orange"}, {ID: "c.c.c.c", Kind: "car", Type: "Sedan_02", Owner: "Rita", Covered: true}},
 		Types:    &admin.TypesChunk{Hash: "h", Total: 2, Names: []string{"AKM", "AK74"}},
 	})
-	return &env{t: t, web: ws, srv: srv, hub: hub, api: apiSrv, assets: assets, csrf: csrfFor(session), session: session}
+	return &env{t: t, web: ws, srv: srv, hub: hub, api: apiSrv, assets: assets, csrf: csrfFor(session), session: session, st: st}
+}
+
+const fixturePerson = "76561198000000077"
+
+// grant replaces the grants of the logged-in fixture person, as an admin would, and drops what the pages cached.
+func (e *env) grant(grants ...moderation.Grant) {
+	e.t.Helper()
+	require.NoError(e.t, e.st.PutPerson(e.t.Context(), moderation.Person{SteamID: fixturePerson, Name: "Fixture", Grants: grants}, time.Now()))
+	e.srv.forgetInfo(e.session)
+	e.srv.navc = navCache{}
 }
 
 // apiClient is the API client of the fixture person, for tests that look at the API directly.

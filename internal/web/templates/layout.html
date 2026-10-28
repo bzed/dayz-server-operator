@@ -14,6 +14,7 @@
 <link rel="stylesheet" href="/static/app.css">
 <script src="/vendor/htmx/htmx.min.js" defer></script>
 <script src="/static/rows.js" defer></script>
+<script src="/static/confirm.js" defer></script>
 </head>
 <body class="{{.Class}}" hx-headers='{"X-CSRF-Token": "{{.CSRF}}"}'>
 <header>
@@ -32,9 +33,11 @@
     {{if .HasPlayers}}<a href="/b/{{.Home}}/players"{{if eq .Section "players"}} aria-current="page"{{end}}><i class="fa fa-address-book" aria-hidden="true"></i>Players</a>{{end}}
     <a href="/b/{{.Home}}/bans"{{if eq .Section "bans"}} aria-current="page"{{end}}><i class="fa fa-ban" aria-hidden="true"></i>Bans</a>
     <a href="/b/{{.Home}}/audit"{{if eq .Section "audit"}} aria-current="page"{{end}}><i class="fa fa-history" aria-hidden="true"></i>Audit log</a>
+    {{if .CanUsers}}<a href="/users"{{if eq .Section "users"}} aria-current="page"{{end}}><i class="fa fa-users" aria-hidden="true"></i>People</a>{{end}}
     <a href="/docs/"><i class="fa fa-book" aria-hidden="true"></i>docs</a>
   </nav>
   <span class="ver">{{.Version}}</span>
+  <a class="account" href="/account"{{if eq .Section "account"}} aria-current="page"{{end}}><i class="fa fa-user" aria-hidden="true"></i>{{if .UserName}}{{.UserName}}{{else}}Account{{end}}</a>
   <form class="logout" method="post" action="/logout"><input type="hidden" name="csrf" value="{{.CSRF}}"><button title="Log out"><i class="fa fa-sign-out" aria-hidden="true"></i>Log out</button></form>
 </header>
 {{if .Instance}}{{template "instbar" .}}{{end}}

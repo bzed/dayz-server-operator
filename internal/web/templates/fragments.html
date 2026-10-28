@@ -78,42 +78,43 @@
   <h3><i class="fa fa-user" aria-hidden="true"></i>{{.Player.Name}} <small>{{.Player.SteamID}}</small> {{if .Cells}}<a class="btn" href="/b/{{.Backend}}/players/{{.Player.SteamID}}"><i class="fa fa-id-card" aria-hidden="true"></i>Profile</a>{{end}} <button class="quiet" data-close><i class="fa fa-times" aria-hidden="true"></i>Close</button></h3>
   {{if .Cells}}{{template "verdictmini" .Cells}}{{end}}
   <div id="panel-flash"></div>
-  <div class="grp"><span class="gname">Tell</span>
+  {{if not .Can.Any}}<p class="mute">Your role has no actions on this instance.</p>{{end}}
+  {{if .Can.Message}}<div class="grp"><span class="gname">Tell</span>
     <form hx-post="{{$base}}/message" hx-target="#panel-flash" data-reset>
       <input name="text" placeholder="Direct message" maxlength="400" required size="40">
       {{template "msgfields" .}}
       <button><i class="fa fa-comment" aria-hidden="true"></i>Message</button>
     </form>
-  </div>
-  <div class="grp"><span class="gname">Move</span>
+  </div>{{end}}
+  {{if .Can.Teleport}}<div class="grp"><span class="gname">Move</span>
     <form hx-post="{{$base}}/teleport" hx-target="#panel-flash">
       <input name="x" type="number" step="any" placeholder="x (east)" size="8">
       <input name="z" type="number" step="any" placeholder="z (north)" size="8">
       or to player <select name="to"><option value="">-</option>{{range .Others}}<option value="{{.SteamID}}">{{.Name}}</option>{{end}}</select>
       <button><i class="fa fa-location-arrow" aria-hidden="true"></i>Teleport</button>
     </form>
-  </div>
-  <div class="grp"><span class="gname">Help</span>
+  </div>{{end}}
+  {{if .Can.Help}}<div class="grp"><span class="gname">Help</span>
     <span>
-      <button hx-post="{{$base}}/heal" hx-target="#panel-flash" title="Health, blood, shock, bones, bleeding and diseases"><i class="fa fa-medkit" aria-hidden="true"></i>Heal</button>
-      <button hx-post="{{$base}}/fixgear" hx-target="#panel-flash" title="Repair everything the player carries and wears"><i class="fa fa-wrench" aria-hidden="true"></i>Fix gear</button>
+      {{if .Can.Heal}}<button hx-post="{{$base}}/heal" hx-target="#panel-flash" title="Health, blood, shock, bones, bleeding and diseases"><i class="fa fa-medkit" aria-hidden="true"></i>Heal</button>{{end}}
+      {{if .Can.FixGear}}<button hx-post="{{$base}}/fixgear" hx-target="#panel-flash" title="Repair everything the player carries and wears"><i class="fa fa-wrench" aria-hidden="true"></i>Fix gear</button>{{end}}
     </span>
-  </div>
-  <div class="grp"><span class="gname">Remove</span>
+  </div>{{end}}
+  {{if or .Can.Kick .Can.Kill .Can.BanInstance}}<div class="grp"><span class="gname">Remove</span>
     <span>
-      <button type="button" data-dialog="kick-{{.Player.SteamID}}"><i class="fa fa-sign-out" aria-hidden="true"></i>Kick…</button>
-      <button class="danger" hx-post="{{$base}}/kill" hx-target="#panel-flash" hx-confirm="Kill {{.Player.Name}}? This cannot be undone."><i class="fa fa-skull" aria-hidden="true"></i>Kill</button>
-      <a class="btn danger" href="/b/{{.Backend}}/bans/new?steam_id={{.Player.SteamID}}&amp;instance={{.Instance}}"><i class="fa fa-ban" aria-hidden="true"></i>Ban…</a>
+      {{if .Can.Kick}}<button type="button" data-dialog="kick-{{.Player.SteamID}}"><i class="fa fa-sign-out" aria-hidden="true"></i>Kick…</button>{{end}}
+      {{if .Can.Kill}}<button class="danger" hx-post="{{$base}}/kill" hx-target="#panel-flash" hx-confirm="Kill {{.Player.Name}}? This cannot be undone."><i class="fa fa-skull" aria-hidden="true"></i>Kill</button>{{end}}
+      {{if .Can.BanInstance}}<a class="btn danger" href="/b/{{.Backend}}/bans/new?steam_id={{.Player.SteamID}}&amp;instance={{.Instance}}"><i class="fa fa-ban" aria-hidden="true"></i>Ban…</a>{{end}}
     </span>
-    <dialog id="kick-{{.Player.SteamID}}" aria-labelledby="kick-title-{{.Player.SteamID}}">
+    {{if .Can.Kick}}<dialog id="kick-{{.Player.SteamID}}" aria-labelledby="kick-title-{{.Player.SteamID}}">
       <form hx-post="{{$base}}/kick" hx-target="#panel-flash" data-close-dialog>
         <h3 id="kick-title-{{.Player.SteamID}}">Kick {{.Player.Name}}</h3>
         <label>Reason, shown to the player <input name="reason" required maxlength="64" size="40" autocomplete="off"></label>
         <div class="btns"><button type="button" class="quiet" data-dialog-close>Cancel</button><button><i class="fa fa-sign-out" aria-hidden="true"></i>Kick</button></div>
       </form>
-    </dialog>
-  </div>
-  <details class="grp give"><summary><span class="gname">Give</span></summary>
+    </dialog>{{end}}
+  </div>{{end}}
+  {{if .Can.Spawn}}<details class="grp give"><summary><span class="gname">Give</span></summary>
     <form hx-post="{{$base}}/give" hx-target="#panel-flash">
       <input name="type" list="types" placeholder="Class name" required size="26" autocomplete="off"
              hx-get="/b/{{.Backend}}/i/{{.Instance}}/types" hx-trigger="input changed delay:300ms" hx-target="#types" hx-swap="innerHTML">
@@ -126,7 +127,7 @@
       <label><input type="checkbox" name="attachments" value="1"> with attachments</label>
       <button><i class="fa fa-gift" aria-hidden="true"></i>Give</button>
     </form>
-  </details>
+  </details>{{end}}
 </div>
 {{end}}
 </td></tr>
@@ -139,7 +140,8 @@
 <div class="panel">
   <h3><i class="fa fa-wrench" aria-hidden="true"></i>{{.Vehicle.Type}} <small>{{.Vehicle.ID}}</small> <button class="quiet" data-close><i class="fa fa-times" aria-hidden="true"></i>Close</button></h3>
   <div id="panel-flash"></div>
-  <p>
+  {{if not .Can.Any}}<p class="mute">Your role has no actions on this instance.</p>{{end}}
+  {{if .Can.Repair}}<p>
     <strong>Repair:</strong>
     <button hx-post="{{$base}}/repair" hx-target="#panel-flash" hx-vals='{"scope": "all"}' title="Repair every part, refuel and add the parts that are missing"><i class="fa fa-wrench" aria-hidden="true"></i>Everything</button>
     <button hx-post="{{$base}}/repair" hx-target="#panel-flash" hx-vals='{"scope": "engine"}'>Body</button>
@@ -147,10 +149,10 @@
     <button hx-post="{{$base}}/repair" hx-target="#panel-flash" hx-vals='{"scope": "wheels"}'>Wheels</button>
     <button hx-post="{{$base}}/repair" hx-target="#panel-flash" hx-vals='{"scope": "fluids"}'><i class="fa fa-tint" aria-hidden="true"></i>Refuel</button>
     <button hx-post="{{$base}}/repair" hx-target="#panel-flash" hx-vals='{"scope": "missing"}'><i class="fa fa-plus" aria-hidden="true"></i>Add missing parts</button>
-  </p>
+  </p>{{end}}
   <p>
-    <button hx-post="{{$base}}/flip" hx-target="#panel-flash" title="Stand it upright on its wheels"><i class="fa fa-refresh" aria-hidden="true"></i>Flip upright</button>
-    <button class="danger" hx-post="{{$base}}/delete" hx-target="#panel-flash" {{if .Vehicle.Occupants}}hx-vals='{"force": "1"}' {{end}}hx-confirm="Delete this {{.Vehicle.Type}}{{if .Vehicle.Occupants}} with {{len .Vehicle.Occupants}} inside{{end}}?"><i class="fa fa-trash" aria-hidden="true"></i>Delete</button>
+    {{if .Can.Repair}}<button hx-post="{{$base}}/flip" hx-target="#panel-flash" title="Stand it upright on its wheels"><i class="fa fa-refresh" aria-hidden="true"></i>Flip upright</button>{{end}}
+    {{if .Can.Delete}}<button class="danger" hx-post="{{$base}}/delete" hx-target="#panel-flash" {{if .Vehicle.Occupants}}hx-vals='{"force": "1"}' {{end}}hx-confirm="Delete this {{.Vehicle.Type}}{{if .Vehicle.Occupants}} with {{len .Vehicle.Occupants}} inside{{end}}?"><i class="fa fa-trash" aria-hidden="true"></i>Delete</button>{{end}}
   </p>
 </div>
 {{end}}

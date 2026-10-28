@@ -88,6 +88,30 @@ work:
 ``setcap`` on the binary is not suitable: every package upgrade drops it, and it applies to every
 user who runs the binary.
 
+.. _web-account:
+
+Account and people pages
+------------------------
+
+The **account page** (your name in the header) is for everybody:
+
+* username and password, so that you can sign in without Steam (the second step stays); changing a password
+  asks for the current one, and a wrong one counts like a failed login;
+* the authenticator app: set up a new one with a QR code and prove it with a first code, which replaces the
+  old one;
+* passkeys: register more, see when each was used, remove one;
+* new recovery codes (shown once, the old ones stop working);
+* "log out everywhere else", which ends your other sessions.
+
+The last second factor cannot be removed. Logging out is in the header.
+
+The **people page** (``People`` in the header) is shown to admins on every instance only. It lists everybody
+with a grant and lets you add a person by Steam ID, change their name and grants (``alpha=operator,
+*=viewer``: a role per instance, ``*`` for all of them), disable them, reset them (password, username, second
+factors and sessions are removed; they sign in through Steam and set up a second factor again) or delete
+them. Your own row has no controls: nobody can change their own access in the web interface or the API;
+another admin, or ``dzo user`` on the serve host, does that. Changes are in the audit log.
+
 .. _web-login:
 
 Login
@@ -150,8 +174,11 @@ the API (:doc:`api`).
 Roles
 -----
 
-The role of a token decides what the interface may do. Without a permission the
-action fails with a clear message.
+A person's role **on an instance** decides what the interface offers them there: controls are shown only
+where the role allows them (an operator on ``chernarus`` and a viewer on ``livonia`` sees the buttons on the
+first and none on the second; instances without a role are not listed). That hiding is a convenience: ``dzo
+serve`` checks every action against the instance it touches, so a forged request gets a refusal with a clear
+message. The effective role is the lower of the person's grant and the role of the web token. The roles are:
 
 .. list-table::
    :header-rows: 1

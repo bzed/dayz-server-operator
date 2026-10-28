@@ -23,6 +23,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/bzed/dayz-server-operator/internal/api"
 	"github.com/bzed/dayz-server-operator/internal/apiclient"
 	"github.com/bzed/dayz-server-operator/internal/auth"
 	"github.com/bzed/dayz-server-operator/internal/moderation"
@@ -123,6 +124,8 @@ func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	root.Handle("/", s.requireSession(mux))
 	mux.HandleFunc("POST /logout", s.logout)
+	s.accountRoutes(mux)
+	s.usersRoutes(mux)
 	mux.HandleFunc("GET /{$}", s.dashboard)
 
 	const inst = "/b/{backend}/i/{instance}"
@@ -227,6 +230,8 @@ type page struct {
 	Now        time.Time    // when the page was made, for the facts
 	Facts      *factsView   // the facts of Instance, in the instance bar
 	HasPlayers bool         // the player database is served: the header links it
+	UserName   string       // the person logged in, for the header
+	CanUsers   bool         // the person may manage people: the header links the users page
 }
 
 func (s *Server) page(r *http.Request, title, backend, instance, section string, data any) page {
@@ -238,6 +243,14 @@ func (s *Server) page(r *http.Request, title, backend, instance, section string,
 	if d := sessionFrom(r.Context()); d != nil {
 		csrf = csrfFor(d.secret)
 	}
-	return page{Home: home, Title: title, CSRF: csrf, Backends: s.backends, Backend: backend, Version: s.opts.Version, Data: data,
+	pg := page{Home: home, Title: title, CSRF: csrf, Backends: s.backends, Backend: backend, Version: s.opts.Version, Data: data,
 		Now: s.now(), Nav: s.navFor(r), Instance: instance, Section: section, HasPlayers: true}
+	if u := infoOf(r).User; u != nil {
+		pg.UserName = u.Name
+		if pg.UserName == "" {
+			pg.UserName = u.SteamID
+		}
+	}
+	pg.CanUsers = holds(r, api.PermUsersManage)
+	return pg
 }
