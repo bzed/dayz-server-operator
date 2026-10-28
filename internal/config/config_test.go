@@ -375,3 +375,17 @@ func TestSteamProfileLookupDefaultsOn(t *testing.T) {
 	_, err = Parse([]byte("steam: {web_api_key_file: relative/key}\n"))
 	require.Error(t, err, "a relative key path is refused")
 }
+
+func TestAuditIPRetentionDefault(t *testing.T) {
+	c, err := Parse([]byte("{}\n"))
+	require.NoError(t, err)
+	require.Equal(t, 90*24*time.Hour, c.Serve.AuditIPRetention())
+	c, err = Parse([]byte("serve: {audit_ip_retention_days: 30}\n"))
+	require.NoError(t, err)
+	require.Equal(t, 30*24*time.Hour, c.Serve.AuditIPRetention())
+	c, err = Parse([]byte("serve: {audit_ip_retention_days: 0}\n"))
+	require.NoError(t, err)
+	require.Negative(t, c.Serve.AuditIPRetention(), "0 keeps the addresses for ever (a negative duration)")
+	_, err = Parse([]byte("serve: {audit_ip_retention_days: -1}\n"))
+	require.ErrorContains(t, err, "serve.audit_ip_retention_days")
+}

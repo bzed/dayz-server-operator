@@ -55,13 +55,18 @@ type Service struct {
 	// SessionIdle and SessionMax are the lifetimes of web login sessions (default 12 hours and 7 days);
 	// the sweep deletes the sessions past them, and pending logins and Steam nonces that expired.
 	SessionIdle, SessionMax time.Duration
+	// AuditClientRetention is how long the audit log keeps the client address of an entry (default 90
+	// days; negative keeps them all). The sweep blanks older ones once a day.
+	AuditClientRetention time.Duration
 	// OnEvent, when set, sees every BattlEye event of an instance after the ban logic ran. It runs on
 	// the instance's event goroutine and must not block. Set it before Start.
 	OnEvent func(instance string, ev battleye.Event)
 
 	store *Store
 	audit *admin.Audit
-	logf  func(string, ...any)
+	// lastAuditPass is when the client addresses of the audit log were last expired (the sweep goroutine only).
+	lastAuditPass time.Time
+	logf          func(string, ...any)
 
 	mu    sync.Mutex
 	ctx   context.Context
@@ -217,11 +222,12 @@ func (s *Service) Changed(ctx context.Context, b Ban, prev *Ban) map[string]stri
 
 // Retention defaults.
 const (
-	DefaultAddressRetention = 90 * 24 * time.Hour
-	DefaultVacuumEvery      = 7 * 24 * time.Hour
-	DefaultSessionRetention = 365 * 24 * time.Hour
-	DefaultSessionIdle      = 12 * time.Hour
-	DefaultSessionMax       = 7 * 24 * time.Hour
+	DefaultAddressRetention     = 90 * 24 * time.Hour
+	DefaultVacuumEvery          = 7 * 24 * time.Hour
+	DefaultSessionRetention     = 365 * 24 * time.Hour
+	DefaultAuditClientRetention = 90 * 24 * time.Hour
+	DefaultSessionIdle          = 12 * time.Hour
+	DefaultSessionMax           = 7 * 24 * time.Hour
 )
 
 // maintain drops the addresses past their retention and vacuums the database when it is due.
@@ -239,6 +245,14 @@ func (s *Service) maintain(ctx context.Context) {
 			s.logf("players: dropping old sessions: %v", err)
 		} else if n > 0 {
 			s.logf("players: dropped %d sessions older than %s", n, keep)
+		}
+	}
+	if keep := cmp.Or(s.AuditClientRetention, DefaultAuditClientRetention); keep > 0 && now.Sub(s.lastAuditPass) >= 24*time.Hour {
+		s.lastAuditPass = now
+		if n, err := s.audit.ForgetClients(now.Add(-keep)); err != nil {
+			s.logf("audit: dropping old client addresses: %v", err)
+		} else if n > 0 {
+			s.logf("audit: dropped the client address of %d entries older than %s", n, keep)
 		}
 	}
 	if err := s.store.PruneLogins(ctx, now, cmp.Or(s.SessionIdle, DefaultSessionIdle), cmp.Or(s.SessionMax, DefaultSessionMax)); err != nil {

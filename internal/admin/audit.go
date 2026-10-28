@@ -5,10 +5,13 @@ package admin
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -67,6 +70,11 @@ func (a *Audit) write(e AuditEntry) error {
 	if err := os.MkdirAll(filepath.Dir(a.Path), 0o750); err != nil {
 		return err
 	}
+	unlock, err := a.lockFile()
+	if err != nil {
+		return err
+	}
+	defer unlock()
 	f, err := os.OpenFile(a.Path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600) //nolint:gosec // path is operator config
 	if err != nil {
 		return err
@@ -109,4 +117,83 @@ func (a *Audit) Tail(instance string, limit int) ([]AuditEntry, error) {
 		out = append(out, all[i])
 	}
 	return out, nil
+}
+
+// lockFile takes an exclusive lock on <audit path>.lock, so that another process that appends to the log
+// (`dzo user`) and the daily expiry of client addresses never overlap: a rewrite of the file replaces it,
+// and a line appended to the old file meanwhile would be lost. The caller holds a.mu.
+func (a *Audit) lockFile() (unlock func(), err error) {
+	f, err := os.OpenFile(a.Path+".lock", os.O_CREATE|os.O_RDWR, 0o600) //nolint:gosec // path is operator config
+	if err != nil {
+		return nil, fmt.Errorf("audit lock: %w", err)
+	}
+	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX); err != nil { //nolint:gosec // G115: a file descriptor fits an int
+		_ = f.Close()
+		return nil, fmt.Errorf("audit lock: %w", err)
+	}
+	return func() { _ = f.Close() }, nil // closing releases the lock
+}
+
+// ForgetClients blanks the client address of the entries from before the given time and returns how many
+// entries changed. The entries themselves stay. The file is only rewritten (through a temporary file in the
+// same directory, mode 0600) when something changes.
+func (a *Audit) ForgetClients(before time.Time) (int, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if _, err := os.Stat(a.Path); os.IsNotExist(err) {
+		return 0, nil
+	}
+	unlock, err := a.lockFile()
+	if err != nil {
+		return 0, err
+	}
+	defer unlock()
+	data, err := os.ReadFile(a.Path)
+	if err != nil {
+		return 0, err
+	}
+	var out bytes.Buffer
+	changed := 0
+	for _, line := range bytes.SplitAfter(data, []byte("\n")) {
+		if len(line) == 0 {
+			continue
+		}
+		var e AuditEntry
+		if json.Unmarshal(line, &e) != nil || e.Client == "" || !e.Time.Before(before) {
+			out.Write(line)
+			continue
+		}
+		e.Client = ""
+		b, err := json.Marshal(e)
+		if err != nil {
+			return 0, err
+		}
+		out.Write(append(b, '\n'))
+		changed++
+	}
+	if changed == 0 {
+		return 0, nil
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(a.Path), filepath.Base(a.Path)+".tmp*")
+	if err != nil {
+		return 0, err
+	}
+	name := tmp.Name()
+	if err := tmp.Chmod(0o600); err == nil {
+		_, err = tmp.Write(out.Bytes())
+		if cerr := tmp.Close(); err == nil {
+			err = cerr
+		}
+		if err == nil {
+			err = os.Rename(name, a.Path)
+		}
+		if err != nil {
+			_ = os.Remove(name)
+			return 0, err
+		}
+		return changed, nil
+	}
+	_ = tmp.Close()
+	_ = os.Remove(name)
+	return 0, fmt.Errorf("audit: %s: cannot set the mode", name)
 }

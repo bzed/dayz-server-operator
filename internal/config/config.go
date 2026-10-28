@@ -115,6 +115,9 @@ type Serve struct {
 	// SessionRetentionDays is how long the sessions of the player history (who was on which instance
 	// when) are kept (unset: 365; 0: for ever). The players, their names and first-seen times stay.
 	SessionRetentionDays *int `yaml:"session_retention_days"`
+	// AuditIPRetentionDays is how long an audit entry keeps the browser address of a web action (unset: 90;
+	// 0: for ever). The entries themselves stay.
+	AuditIPRetentionDays *int `yaml:"audit_ip_retention_days"`
 	// GeoIPDir holds the GeoLite2 databases geoipupdate keeps (GeoLite2-City, -Country and -ASN, .mmdb); with
 	// them the player list shows flags and the player info the city, location and provider. GeoIPLegacyDir
 	// holds GeoIP.dat and GeoIPv6.dat of Debian's geoip-database, which know the country only and are the
@@ -151,6 +154,9 @@ func (s Serve) IPRetention() time.Duration { return days(s.IPRetentionDays, 90) 
 
 // SessionRetention is how long the sessions of the player history are kept; negative means for ever.
 func (s Serve) SessionRetention() time.Duration { return days(s.SessionRetentionDays, 365) }
+
+// AuditIPRetention is how long an audit entry keeps its client address; negative means for ever.
+func (s Serve) AuditIPRetention() time.Duration { return days(s.AuditIPRetentionDays, 90) }
 
 // VacuumEvery is how often the ban database is vacuumed; negative means never.
 func (s Serve) VacuumEvery() time.Duration { return days(s.VacuumDays, 7) }
@@ -397,7 +403,7 @@ func (c *Config) Validate() error {
 	if k := c.Steam.WebAPIKeyFile; k != "" && !filepath.IsAbs(k) {
 		errs = append(errs, "steam.web_api_key_file: must be an absolute path")
 	}
-	for name, v := range map[string]*int{"serve.ip_retention_days": c.Serve.IPRetentionDays, "serve.vacuum_days": c.Serve.VacuumDays, "serve.session_retention_days": c.Serve.SessionRetentionDays} {
+	for name, v := range map[string]*int{"serve.ip_retention_days": c.Serve.IPRetentionDays, "serve.vacuum_days": c.Serve.VacuumDays, "serve.session_retention_days": c.Serve.SessionRetentionDays, "serve.audit_ip_retention_days": c.Serve.AuditIPRetentionDays} {
 		if v != nil && *v < 0 {
 			errs = append(errs, fmt.Sprintf("%s: must be 0 (off) or a number of days", name))
 		}

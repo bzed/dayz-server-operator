@@ -232,6 +232,20 @@ Logs
   of the newest ``error.log``, script log, crash log and RPT go to the journal and to Discord. It
   runs before the next start rotates the files.
 
+.. _audit-log:
+
+Audit log
+~~~~~~~~~
+
+Every admin action (player and vehicle actions, bans, evidence, logins and logouts) is appended to
+``<paths.db>/audit.jsonl``, one JSON object per line, with the actor, where it came from, the instance and the
+result. Actions of the web interface name the person (``<token>:<Steam ID>``) and carry the browser's
+address in ``client``. That address is personal data and expires: ``serve.audit_ip_retention_days``
+(default 90, ``0`` keeps it) says how long; once a day ``dzo serve`` blanks the address of older entries and
+keeps the entries. The file is 0600. Next to it lies ``audit.jsonl.lock``, which the writers (``dzo serve``
+and ``dzo user``) take so that the daily rewrite never loses a line. Read the log in the web interface
+(admin) or with ``GET /api/v1/audit``; the login attempts are in the service log of ``dzo serve``.
+
 .. _profile-log-rotation:
 
 Profile log rotation

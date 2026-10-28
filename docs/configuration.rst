@@ -72,6 +72,7 @@ built-in ones, and an entry of the same name replaces the built-in entry as a wh
      ip_retention_days: 90           # default (unset = 90)
      vacuum_days: 7                  # default (unset = 7)
      session_retention_days: 365     # default (unset = 365)
+     audit_ip_retention_days: 90     # default (unset = 90)
      geoip_dir: /var/lib/GeoIP       # default
      geoip_legacy_dir: /usr/share/GeoIP   # default
      tls:                            # default: none (plain HTTP on listen)
@@ -242,6 +243,13 @@ and print what is wrong. A key dzo does not know is ignored.
       kept. Unset: 365. ``0``: for ever. Negative values are refused. Only the sessions go: the players, the
       names they used and the times they were first and last seen stay (:ref:`player-history`). ``dzo serve``
       applies it every minute with the other upkeep; a change takes effect when ``dzo serve`` starts.
+   ``audit_ip_retention_days``
+      How many days an entry of the audit log keeps the browser address (``client``) of a web action.
+      Unset: 90. ``0``: for ever. Negative values are refused. Once a day ``dzo serve`` blanks the address
+      of older entries; the entries themselves stay, as does the rest of the log. The address is personal
+      data, so it expires like the sightings of ``ip_retention_days``. A change takes effect when ``dzo
+      serve`` starts. The login lines in the service log (journald) are subject to the host's log
+      retention, not to this setting. See :ref:`audit-log`.
    ``geoip_dir``, ``geoip_legacy_dir``
       Where the GeoLite2 databases (``GeoLite2-City``, ``-Country``, ``-ASN``, ``.mmdb``) and
       the legacy ``GeoIP.dat`` / ``GeoIPv6.dat`` (country only, the fallback) are looked up,

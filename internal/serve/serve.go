@@ -249,6 +249,7 @@ func Run(ctx context.Context, cfg *config.Config, o Options) error {
 	svc := moderation.NewService(store, audit, logf)
 	svc.AddressRetention, svc.VacuumEvery, svc.SessionRetention = cfg.Serve.IPRetention(), cfg.Serve.VacuumEvery(), cfg.Serve.SessionRetention()
 	svc.SessionIdle, svc.SessionMax = cfg.Serve.SessionIdle(), cfg.Serve.SessionMax()
+	svc.AuditClientRetention = cfg.Serve.AuditIPRetention()
 	svc.OnEvent = feedFromRCon(reg)
 	audit.OnLog = feedFromAudit(reg)
 	svc.Start(mctx)
