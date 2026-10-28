@@ -41,7 +41,7 @@ func (s *Server) geo(w http.ResponseWriter, r *http.Request, c *call) {
 	var info geoip.Info
 	if s.GeoIP.Available() {
 		info = s.GeoIP.Lookup(s.connectionIP(r.Context(), r.PathValue("instance"), r.PathValue("steamid")))
-		if !c.who.Token.Role.Can(PermPlayerIP) {
+		if !c.who.Can(c.hub.Name, PermPlayerIP) {
 			info = info.CountryOnly()
 		}
 	}

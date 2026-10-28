@@ -13,7 +13,9 @@ import (
 	"time"
 
 	"github.com/bzed/dayz-server-operator/internal/admin"
+	"github.com/bzed/dayz-server-operator/internal/auth"
 	"github.com/bzed/dayz-server-operator/internal/geoip"
+	"github.com/bzed/dayz-server-operator/internal/moderation"
 )
 
 // APIVersion is the version of the /api/v1 contract (additive changes keep
@@ -46,6 +48,10 @@ type Server struct {
 	Lookups Lookups
 	// GeoIP locates the players' addresses (flags and the connection info); nil shows none.
 	GeoIP *geoip.DB
+	// Accounts resolves web sessions to people; nil turns user logins off (web tokens get 503).
+	Accounts Accounts
+	// Login holds the session lifetimes (serve.login.*); zero means the defaults.
+	Login LoginSettings
 	// Say sends text over the instance's RCon (style rcon of a message): to everyone when steamID
 	// is empty. nil answers the rcon style 503.
 	Say func(ctx context.Context, instance, steamID, text string) error
@@ -53,6 +59,31 @@ type Server struct {
 	now     func() time.Time
 	actions *admin.Limiter
 	targets *admin.Limiter
+}
+
+// Accounts is what the API needs of the people and their sessions (moderation.Store).
+type Accounts interface {
+	Session(ctx context.Context, hash string, now time.Time, idle, max time.Duration) (moderation.LoginSession, error)
+	Person(ctx context.Context, steamID string) (moderation.Person, error)
+}
+
+// LoginSettings are the settings of user logins.
+type LoginSettings struct {
+	SessionIdle, SessionMax time.Duration
+}
+
+func (l LoginSettings) idle() time.Duration {
+	if l.SessionIdle <= 0 {
+		return 12 * time.Hour
+	}
+	return l.SessionIdle
+}
+
+func (l LoginSettings) max() time.Duration {
+	if l.SessionMax <= 0 {
+		return 7 * 24 * time.Hour
+	}
+	return l.SessionMax
 }
 
 // New returns a Server over the given hubs, tokens and audit log.
@@ -129,10 +160,10 @@ func (s *Server) Handler() http.Handler {
 	route("GET "+base+"/instances/{instance}/vehicles", PermView, true, func(w http.ResponseWriter, _ *http.Request, c *call) { writeJSON(w, 200, c.hub.Vehicles()) })
 	route("GET "+base+"/instances/{instance}/events", PermView, true, func(w http.ResponseWriter, _ *http.Request, c *call) { writeJSON(w, 200, c.hub.Events()) })
 	route("GET "+base+"/instances/{instance}/layers", PermView, true, func(w http.ResponseWriter, _ *http.Request, c *call) {
-		writeJSON(w, 200, filterLayers(c.hub.Layers(), c.who.Token.Role))
+		writeJSON(w, 200, filterLayers(c.hub.Layers(), c.role()))
 	})
 	route("GET "+base+"/instances/{instance}/map/markers", PermView, true, func(w http.ResponseWriter, r *http.Request, c *call) {
-		writeJSON(w, 200, filterMarkers(c.hub.Markers(r.URL.Query().Get("layer")), c.who.Token.Role))
+		writeJSON(w, 200, filterMarkers(c.hub.Markers(r.URL.Query().Get("layer")), c.role()))
 	})
 	route("GET "+base+"/instances/{instance}/types", PermView, true, s.types)
 	route("GET "+base+"/instances/{instance}/vehicle-types", PermView, true, s.vehicleTypes)
@@ -176,7 +207,7 @@ func (s *Server) Handler() http.Handler {
 
 // authorize authenticates the request, checks the permission and instance
 // access, and resolves the actor (§C12: API tokens are scoped, delegate tokens
-// name the human).
+// name the human, web tokens act for the person of a login session).
 func (s *Server) authorize(w http.ResponseWriter, r *http.Request, perm string, instance bool) (*call, bool) {
 	secret, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
 	who, found := s.Tokens.Lookup(secret)
@@ -185,12 +216,16 @@ func (s *Server) authorize(w http.ResponseWriter, r *http.Request, perm string, 
 		fail(w, http.StatusUnauthorized, "missing or invalid token")
 		return nil, false
 	}
-	if !who.Token.Role.Can(perm) {
-		fail(w, http.StatusForbidden, "role %s lacks %s", who.Token.Role, perm)
-		return nil, false
-	}
 	c := &call{who: who, actor: who.Token.Name, src: "api"}
-	if who.Token.Delegate {
+	switch {
+	case who.Token.Web:
+		if !s.resolveSession(w, r, c) {
+			return nil, false
+		}
+		if src := cleanHeader(r.Header.Get("X-Dzo-Source")); src != "" {
+			c.src = src
+		}
+	case who.Token.Delegate:
 		if a := cleanHeader(r.Header.Get("X-Dzo-Actor")); a != "" {
 			c.actor = who.Token.Name + ":" + a
 		}
@@ -200,15 +235,81 @@ func (s *Server) authorize(w http.ResponseWriter, r *http.Request, perm string, 
 	}
 	if instance {
 		name := r.PathValue("instance")
-		hub, ok := s.Hubs.Hub(name)
-		if !ok || !who.Allowed(name) {
+		hub, found := s.Hubs.Hub(name)
+		if !found || !c.who.Allowed(name) {
+			if !c.who.CanAny(perm) {
+				forbidden(w, c.who.TopRole(), perm)
+				return nil, false
+			}
 			fail(w, http.StatusNotFound, "unknown instance %q", name)
 			return nil, false
 		}
+		if !c.who.Can(name, perm) {
+			forbidden(w, c.who.RoleOn(name), perm)
+			return nil, false
+		}
 		c.hub = hub
+		return c, true
+	}
+	allowed := c.who.CanAny(perm)
+	if installationWide(perm) {
+		allowed = c.who.CanAll(perm)
+	}
+	if !allowed {
+		forbidden(w, c.who.TopRole(), perm)
+		return nil, false
 	}
 	return c, true
 }
+
+func forbidden(w http.ResponseWriter, role Role, perm string) {
+	if role == "" {
+		fail(w, http.StatusForbidden, "no role that grants %s", perm)
+		return
+	}
+	fail(w, http.StatusForbidden, "role %s lacks %s", role, perm)
+}
+
+// resolveSession finds the person a web token acts for, from X-Dzo-Session. It answers the request itself
+// when there is none: 503 without logins, 403 without a session, 401 for an expired one, 403 for a person who
+// is disabled or has no role on any instance.
+func (s *Server) resolveSession(w http.ResponseWriter, r *http.Request, c *call) bool {
+	if s.Accounts == nil {
+		fail(w, http.StatusServiceUnavailable, "logins are not configured: set serve.web_url")
+		return false
+	}
+	secret := r.Header.Get("X-Dzo-Session")
+	if secret == "" {
+		fail(w, http.StatusForbidden, "this token needs a user session")
+		return false
+	}
+	sess, err := s.Accounts.Session(r.Context(), auth.HashSecret(secret), s.now(), s.Login.idle(), s.Login.max())
+	if err == nil {
+		var person moderation.Person
+		if person, err = s.Accounts.Person(r.Context(), sess.SteamID); err == nil {
+			if person.Disabled {
+				fail(w, http.StatusForbidden, "this account is disabled")
+				return false
+			}
+			c.who.User = &User{SteamID: person.SteamID, Name: person.Name, Grants: person.Grants}
+			c.actor = c.who.Token.Name + ":" + person.SteamID
+			if len(c.who.Instances(s.Hubs.Names())) == 0 {
+				fail(w, http.StatusForbidden, "no access: this account has no role on any instance")
+				return false
+			}
+			return true
+		}
+	}
+	if errors.Is(err, moderation.ErrNotFound) {
+		fail(w, http.StatusUnauthorized, "session expired")
+		return false
+	}
+	fail(w, http.StatusInternalServerError, "database error")
+	return false
+}
+
+// role is the caller's effective role on the instance of the request.
+func (c *call) role() Role { return c.who.RoleOn(c.hub.Name) }
 
 func cleanHeader(v string) string {
 	v = strings.Map(func(r rune) rune {
@@ -224,7 +325,11 @@ func cleanHeader(v string) string {
 }
 
 func (s *Server) info(w http.ResponseWriter, _ *http.Request, c *call) {
-	writeJSON(w, 200, Info{Installation: s.Installation, Version: s.Version, APIVersion: APIVersion, Principal: c.who.Token.Name, Role: c.who.Token.Role})
+	name := c.who.Token.Name
+	if c.who.User != nil {
+		name = c.actor
+	}
+	writeJSON(w, 200, Info{Installation: s.Installation, Version: s.Version, APIVersion: APIVersion, Principal: name, Role: c.who.TopRole()})
 }
 
 func (s *Server) instances(w http.ResponseWriter, _ *http.Request, c *call) {
@@ -342,7 +447,7 @@ func (s *Server) stream(w http.ResponseWriter, r *http.Request, c *call) {
 		send("status", c.hub.Status())
 		send("players", c.hub.Players())
 		send("vehicles", c.hub.Vehicles())
-		send("markers", filterMarkers(c.hub.Markers(""), c.who.Token.Role))
+		send("markers", filterMarkers(c.hub.Markers(""), c.role()))
 		send("events", c.hub.Events())
 	} else {
 		// Headers go out now, so the client knows it is subscribed.
@@ -370,7 +475,7 @@ func (s *Server) stream(w http.ResponseWriter, r *http.Request, c *call) {
 			data := ev.Data
 			if ev.Kind == "markers" {
 				// The mod's markers plus the file drop, per the role's visibility.
-				data = filterMarkers(c.hub.Markers(""), c.who.Token.Role)
+				data = filterMarkers(c.hub.Markers(""), c.role())
 			}
 			if !send(ev.Kind, data) {
 				return
@@ -397,7 +502,7 @@ func (s *Server) run(w http.ResponseWriter, r *http.Request, c *call, cmd admin.
 		_ = s.Audit.Log(entry)
 		fail(w, code, "%v", err)
 	}
-	if !s.actions.Allow(c.who.Token.ID) || !s.targets.Allow(c.hub.Name+"/"+target) {
+	if !s.actions.Allow(c.who.Key()) || !s.targets.Allow(c.hub.Name+"/"+target) {
 		deny(http.StatusTooManyRequests, errors.New("rate limit reached, try again in a minute"))
 		return
 	}
@@ -529,7 +634,7 @@ func (s *Server) say(w http.ResponseWriter, r *http.Request, c *call, cmd admin.
 		deny(http.StatusBadRequest, errors.New("rcon says to everyone only"))
 	case cmd.Text == "" || len(cmd.Text) > 400:
 		deny(http.StatusBadRequest, errors.New("message needs text of at most 400 bytes"))
-	case !s.actions.Allow(c.who.Token.ID) || !s.targets.Allow(c.hub.Name+"/"+target):
+	case !s.actions.Allow(c.who.Key()) || !s.targets.Allow(c.hub.Name+"/"+target):
 		deny(http.StatusTooManyRequests, errors.New("rate limit reached, try again in a minute"))
 	default:
 		ctx, cancel := context.WithTimeout(r.Context(), maxWait)

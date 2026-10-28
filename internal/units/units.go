@@ -452,7 +452,7 @@ func ensureAnnounceToken(cfg *config.Config) (bool, error) {
 	if err := os.MkdirAll(cfg.Paths.Secrets, 0o750); err != nil {
 		return false, err
 	}
-	secret, _, err := store.Create("announce", api.RoleAnnouncer, nil, false, 0)
+	secret, _, err := store.Create("announce", api.RoleAnnouncer, nil, false, false, 0)
 	if err != nil {
 		return false, err
 	}

@@ -81,7 +81,7 @@ func TestRunStartsAndStopsTheLookups(t *testing.T) {
 			Ready: func(a, m string) { ready <- [2]string{a, m} }, Logf: t.Logf})
 	}()
 	addrs := <-ready
-	secret, _, err := api.NewTokenStore(APITokens(cfg)).Create("mod", api.RoleModerator, nil, false, time.Hour)
+	secret, _, err := api.NewTokenStore(APITokens(cfg)).Create("mod", api.RoleModerator, nil, false, false, time.Hour)
 	require.NoError(t, err)
 	// the route is wired: an unknown player is 404, not 503 ("lookups are not available")
 	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, "http://"+addrs[0]+"/api/v1/players/76561198000000001/lookup", nil)

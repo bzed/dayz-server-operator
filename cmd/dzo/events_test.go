@@ -45,7 +45,7 @@ func newEventsAPI(t *testing.T) *eventsAPI {
 		srv.Handler().ServeHTTP(w, r)
 	}))
 	t.Cleanup(ts.Close)
-	secret, _, err := srv.Tokens.Create("cli", api.RoleViewer, nil, false, time.Hour)
+	secret, _, err := srv.Tokens.Create("cli", api.RoleViewer, nil, false, false, time.Hour)
 	require.NoError(t, err)
 	tokenFile := filepath.Join(dir, "token")
 	writeFile(t, tokenFile, secret+"\n")

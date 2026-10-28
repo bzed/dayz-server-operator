@@ -20,7 +20,7 @@ func TestTokenLifecycle(t *testing.T) {
 	s := NewTokenStore(path)
 	_, ok := s.Lookup("x")
 	require.False(t, ok, "empty store accepted a token")
-	secret, tok, err := s.Create("bot", RoleOperator, []string{"alpha"}, false, time.Hour)
+	secret, tok, err := s.Create("bot", RoleOperator, []string{"alpha"}, false, false, time.Hour)
 	require.NoError(t, err, "create: %v %q", err, secret)
 	require.True(t, strings.HasPrefix(secret, "dzo_"), "create: %v %q", err, secret)
 	raw, _ := os.ReadFile(path)
@@ -50,15 +50,15 @@ func TestTokenExpiryAndValidation(t *testing.T) {
 	s := NewTokenStore(filepath.Join(t.TempDir(), "t.json"))
 	now := time.Now()
 	s.now = func() time.Time { return now }
-	secret, _, _ := s.Create("a", RoleViewer, nil, false, time.Minute)
+	secret, _, _ := s.Create("a", RoleViewer, nil, false, false, time.Minute)
 	s.now = func() time.Time { return now.Add(2 * time.Minute) }
 	_, ok := s.Lookup(secret)
 	require.False(t, ok, "expired token accepted")
-	_, _, err := s.Create("", RoleViewer, nil, false, 0)
+	_, _, err := s.Create("", RoleViewer, nil, false, false, 0)
 	require.Error(t, err, "empty name")
-	_, _, err = s.Create("a", "root", nil, false, 0)
+	_, _, err = s.Create("a", "root", nil, false, false, 0)
 	require.Error(t, err, "unknown role")
-	_, long, _ := s.Create("long", RoleViewer, nil, false, 100000*time.Hour)
+	_, long, _ := s.Create("long", RoleViewer, nil, false, false, 100000*time.Hour)
 	require.LessOrEqual(t, long.Expires.Sub(long.Created), 366*24*time.Hour, "ttl must be capped")
 	err = os.WriteFile(s.Path, []byte("{broken"), 0o600)
 	require.NoError(t, err)
@@ -116,5 +116,24 @@ func TestAnnouncerRoleOnlyViewsAndBroadcasts(t *testing.T) {
 	}
 	for _, perm := range []string{PermMessage, PermKick, PermKill, PermSpawn, PermDelete, PermTeleport, PermBanInstance, PermPlayerIP, PermAuditView} {
 		assert.False(t, r.Can(perm), "announcer can %s", perm)
+	}
+}
+
+func TestWebTokens(t *testing.T) {
+	s := NewTokenStore(filepath.Join(t.TempDir(), "tokens.json"))
+	secret, tok, err := s.Create("web", RoleAdmin, nil, false, true, time.Hour)
+	require.NoError(t, err)
+	assert.True(t, tok.Web)
+	assert.False(t, tok.Delegate)
+	who, ok := s.Lookup(secret)
+	require.True(t, ok)
+	assert.True(t, who.Token.Web, "the flag is stored")
+	assert.Nil(t, who.User)
+
+	_, _, err = s.Create("both", RoleAdmin, nil, true, true, time.Hour)
+	require.Error(t, err, "a token is a delegate or a web token")
+	for _, r := range []Role{RoleDetector, RoleAnnouncer} {
+		_, _, err = s.Create("w", r, nil, false, true, time.Hour)
+		require.Error(t, err, "a web token needs a role a person can have: %s", r)
 	}
 }

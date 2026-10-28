@@ -78,7 +78,7 @@ var rolePerms = map[Role][]string{
 	RoleModerator: {PermView, PermMessage, PermKick, PermBanView, PermBanInstance, PermEvidenceAdd, PermPlayerHistory},
 	RoleOperator:  {PermView, PermMessage, PermKick, PermKill, PermHeal, PermFixGear, PermBroadcast, PermTeleport, PermSpawn, PermRepair, PermDelete, PermRaise, PermBanView, PermBanInstance, PermBanLong, PermBanIP, PermEvidenceAdd, PermPlayerIP, PermPlayerHistory},
 	RoleAdmin: {PermView, PermMessage, PermKick, PermKill, PermHeal, PermFixGear, PermBroadcast, PermTeleport, PermSpawn, PermRepair, PermDelete, PermRaise, PermAuditView,
-		PermBanView, PermBanInstance, PermBanLong, PermBanIP, PermBanGlobal, PermBanRevokeAny, PermEvidenceAdd, PermPlayerIP, PermIPHistory, PermPlayerHistory},
+		PermBanView, PermBanInstance, PermBanLong, PermBanIP, PermBanGlobal, PermBanRevokeAny, PermEvidenceAdd, PermPlayerIP, PermIPHistory, PermPlayerHistory, PermUsersManage},
 }
 
 // Rank orders roles; a marker is visible to roles of at least its rank.
@@ -118,27 +118,10 @@ type Token struct {
 	Hash      string    `json:"hash"`
 	Role      Role      `json:"role"`
 	Instances []string  `json:"instances,omitempty"` // empty = all
-	Delegate  bool      `json:"delegate,omitempty"`  // may name the acting user (web interface)
+	Delegate  bool      `json:"delegate,omitempty"`  // may name the acting user (scripts and tools)
+	Web       bool      `json:"web,omitempty"`       // the web interface: acts for a logged-in person (X-Dzo-Session)
 	Created   time.Time `json:"created"`
 	Expires   time.Time `json:"expires"`
-}
-
-// Principal is an authenticated caller.
-type Principal struct {
-	Token Token
-}
-
-// Allowed reports whether the principal may touch an instance.
-func (p Principal) Allowed(instance string) bool {
-	if len(p.Token.Instances) == 0 {
-		return true
-	}
-	for _, i := range p.Token.Instances {
-		if i == instance {
-			return true
-		}
-	}
-	return false
 }
 
 // TokenStore is the token file: JSON, 0600, re-read when it changes so that
@@ -207,12 +190,18 @@ func (s *TokenStore) saveLocked() error {
 
 // Create adds a token and returns its secret, which is shown once and never
 // stored. ttl is bounded to a year; a token always expires.
-func (s *TokenStore) Create(name string, role Role, instances []string, delegate bool, ttl time.Duration) (secret string, tok Token, err error) {
+func (s *TokenStore) Create(name string, role Role, instances []string, delegate, web bool, ttl time.Duration) (secret string, tok Token, err error) {
 	if name == "" {
 		return "", Token{}, errors.New("api: token name is required")
 	}
 	if !role.Valid() {
 		return "", Token{}, fmt.Errorf("api: unknown role %q", role)
+	}
+	if delegate && web {
+		return "", Token{}, errors.New("api: a token is either a delegate or a web token")
+	}
+	if web && role != RoleViewer && role != RoleModerator && role != RoleOperator && role != RoleAdmin {
+		return "", Token{}, fmt.Errorf("api: a web token needs the role viewer, moderator, operator or admin, not %q", role)
 	}
 	if limit := defaultMaxDays * 24 * time.Hour; ttl <= 0 || ttl > limit {
 		ttl = limit
@@ -228,7 +217,7 @@ func (s *TokenStore) Create(name string, role Role, instances []string, delegate
 		return "", Token{}, err
 	}
 	now := s.now().UTC()
-	tok = Token{ID: hex.EncodeToString(raw[:4]), Name: name, Hash: hashSecret(secret), Role: role, Instances: instances, Delegate: delegate, Created: now, Expires: now.Add(ttl)}
+	tok = Token{ID: hex.EncodeToString(raw[:4]), Name: name, Hash: hashSecret(secret), Role: role, Instances: instances, Delegate: delegate, Web: web, Created: now, Expires: now.Add(ttl)}
 	s.tokens = append(s.tokens, tok)
 	return secret, tok, s.saveLocked()
 }

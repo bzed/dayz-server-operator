@@ -277,6 +277,10 @@ func Run(ctx context.Context, cfg *config.Config, o Options) error {
 	rec.Set(pctx, presence.FromRegistry(reg), reg.Names())
 	apiSrv := api.New(cfg.Serve.Installation, o.Version, reg, api.NewTokenStore(APITokens(cfg)), audit)
 	apiSrv.Moderation = svc
+	if cfg.Serve.WebURL != "" { // user logins need to know where the web interface lives
+		apiSrv.Accounts = store
+		apiSrv.Login = api.LoginSettings{SessionIdle: cfg.Serve.SessionIdle(), SessionMax: cfg.Serve.SessionMax()}
+	}
 	apiSrv.Lookups = lookupAPI
 	apiSrv.TilesDir = TilesDir(cfg)
 	apiSrv.Say = newRConSay(rconDialer(cfg, tree))

@@ -117,7 +117,7 @@ func TestPlayerAndVehicleCommands(t *testing.T) {
 	srv := api.New("s", "v", hubs, api.NewTokenStore(filepath.Join(dir, "t.json")), admin.NewAudit(filepath.Join(dir, "a.jsonl")))
 	ts := httptest.NewServer(srv.Handler())
 	defer ts.Close()
-	secret, _, _ := srv.Tokens.Create("cli", api.RoleOperator, nil, true, time.Hour)
+	secret, _, _ := srv.Tokens.Create("cli", api.RoleOperator, nil, true, false, time.Hour)
 	tokenFile := filepath.Join(dir, "token")
 	writeFile(t, tokenFile, secret+"\n")
 	hub.Sync(admin.SyncRequest{Proto: 1, Hello: true, Players: []admin.Player{{SteamID: "7656", Name: "alice"}}, Vehicles: []admin.Vehicle{{ID: "v1", Type: "Truck"}}})

@@ -43,6 +43,56 @@ person it acts for in the ``X-Dzo-Actor`` header, and the origin in
 ``X-Dzo-Source``; both go into the audit log. For other tokens these headers are
 ignored.
 
+A token created with ``--web`` is for ``dzo web`` and the only kind that acts for logged-in people
+(:doc:`web`). On its own it can do nothing: every request must also carry the login session of a
+person in ``X-Dzo-Session``, and then acts as that person. Without the header the answer is ``403 this
+token needs a user session``, for an unknown or expired session ``401 session expired``, for a
+disabled person or one with no role on any existing instance ``403``, and while ``serve.web_url`` is
+not set (user logins are off) ``503 logins are not configured``. The audit actor is ``<token
+name>:<Steam ID>``; ``X-Dzo-Actor`` is ignored. A token is either ``--delegate`` or ``--web``, and a web
+token has the role viewer, moderator, operator or admin.
+
+Roles per instance
+~~~~~~~~~~~~~~~~~~
+
+A person has grants: a role on an instance, or on ``*`` (every instance, also later ones). Their
+effective role on an instance is the higher of the grant on the instance and the grant on ``*``,
+**capped by the web token**: it is the lower of that and the token's role, and nothing at all on
+instances the token's list does not include. An instance without a role does not exist for them
+(``404``, and it is left out of lists). Being moderator on one instance never unlocks anything on
+another. A token without a person is checked against its own role on the instances it may touch, as it
+always was.
+
+Routes without an instance in the path check the permission like this:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 35 65
+
+   * - Route
+     - Rule
+   * - ``GET /audit``
+     - ``audit.view`` is installation-wide: admin on ``*`` (and a token for every instance)
+   * - ``GET /instances``, ``GET /``, ``GET /tiles/...``
+     - ``view`` on at least one instance; the list holds the instances with any role
+   * - ``POST /bans``
+     - ``ban.instance`` on every instance of the ban; ``ban.permanent`` (bans over 7 days) and
+       ``ban.ip`` on every one of them too; a global ban needs ``ban.global``, which is installation-wide
+   * - ``GET /bans``, ``GET /bans/<id>``, ``GET /bans/<id>/history``
+     - ``ban.view`` on at least one instance of the ban (a global ban: anywhere); the lists keep only
+       those bans. IP addresses in a ban are shown only with ``ip.history`` on every instance of it
+   * - ``PUT /bans/<id>``, ``POST /bans/<id>/revoke``
+     - as for creating, on the old and the new instances; only the creator or whoever holds
+       ``ban.revoke_any`` (installation-wide) may change a ban
+   * - ``GET|POST /evidence``, ``GET /evidence/<id>[/file]``
+     - ``ban.view`` and ``evidence.add`` on the evidence's instance; lists keep the instances where it holds
+   * - ``GET /players/<steamid>/identities``
+     - ``ban.view`` on at least one instance; sightings are kept for the instances where it holds, and
+       their addresses are shown only with ``ip.history`` on that instance
+   * - ``GET /players``, ``GET /players/<steamid>``, ``POST /players/<steamid>/lookup``
+     - ``player.history`` on at least one instance; everything about instances where it does not hold is
+       left out (sessions, names per instance, bans, friends seen there)
+
 Reading
 -------
 

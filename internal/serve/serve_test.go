@@ -13,6 +13,7 @@ import (
 	"crypto/x509/pkix"
 	"encoding/pem"
 	"fmt"
+	"io"
 	"math/big"
 	"net"
 	"net/http"
@@ -115,7 +116,7 @@ func TestRunEndToEnd(t *testing.T) {
 	cfg, tree := fixture(t)
 	insts, _ := resolve.ResolveAll(cfg, tree)
 	require.NoError(t, WriteModConfig(cfg, insts[0]))
-	secret, _, err := api.NewTokenStore(APITokens(cfg)).Create("op", api.RoleOperator, nil, false, time.Hour)
+	secret, _, err := api.NewTokenStore(APITokens(cfg)).Create("op", api.RoleOperator, nil, false, false, time.Hour)
 	require.NoError(t, err)
 	tokenB, _ := os.ReadFile(filepath.Join(TokenDir(cfg), "alpha.token"))
 
@@ -190,7 +191,7 @@ func TestServeAPIOverTLS(t *testing.T) {
 	cfg, tree := fixture(t)
 	certFile, keyFile := selfSigned(t, t.TempDir())
 	cfg.Serve.TLS = config.TLS{CertFile: certFile, KeyFile: keyFile}
-	secret, _, err := api.NewTokenStore(APITokens(cfg)).Create("op", api.RoleOperator, nil, false, time.Hour)
+	secret, _, err := api.NewTokenStore(APITokens(cfg)).Create("op", api.RoleOperator, nil, false, false, time.Hour)
 	require.NoError(t, err)
 
 	ready := make(chan [2]string, 1)
@@ -223,6 +224,38 @@ func TestServeAPIOverTLS(t *testing.T) {
 
 	cancel()
 	require.NoError(t, <-done)
+}
+
+func TestRunWebTokensNeedLogins(t *testing.T) {
+	for _, tc := range []struct {
+		webURL string
+		code   int
+		msg    string
+	}{{"", http.StatusServiceUnavailable, "serve.web_url"}, {"https://dzo.example", http.StatusForbidden, "user session"}} {
+		cfg, tree := fixture(t)
+		cfg.Serve.WebURL = tc.webURL
+		secret, _, err := api.NewTokenStore(APITokens(cfg)).Create("web", api.RoleAdmin, nil, false, true, time.Hour)
+		require.NoError(t, err)
+		ready := make(chan [2]string, 1)
+		ctx, cancel := context.WithCancel(t.Context())
+		done := make(chan error, 1)
+		go func() {
+			done <- Run(ctx, cfg, Options{Version: "test", Load: func() (*site.Tree, error) { return tree, nil },
+				Ready: func(a, m string) { ready <- [2]string{a, m} }, Logf: t.Logf})
+		}()
+		addrs := <-ready
+		req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+addrs[0]+"/api/v1", nil)
+		req.Header.Set("Authorization", "Bearer "+secret)
+		resp, err := http.DefaultClient.Do(req)
+		require.NoError(t, err)
+		body := new(strings.Builder)
+		_, _ = io.Copy(body, resp.Body)
+		_ = resp.Body.Close()
+		require.Equal(t, tc.code, resp.StatusCode, "web_url %q: %s", tc.webURL, body)
+		require.Contains(t, body.String(), tc.msg)
+		cancel()
+		require.NoError(t, <-done)
+	}
 }
 
 func TestRunErrors(t *testing.T) {

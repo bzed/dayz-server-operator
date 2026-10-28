@@ -36,7 +36,7 @@ func TestPlayersClientRoundTrip(t *testing.T) {
 	srv.Lookups = look
 	ts := httptest.NewServer(srv.Handler())
 	t.Cleanup(ts.Close)
-	secret, _, _ := srv.Tokens.Create("admin", api.RoleAdmin, nil, true, time.Hour)
+	secret, _, _ := srv.Tokens.Create("admin", api.RoleAdmin, nil, true, false, time.Hour)
 	c := New(ts.URL, secret).WithActor("alice", "test")
 	require.NoError(t, st.PlayerJoined(t.Context(), "alpha", "76561198000000001", "Alice", time.Now()))
 

@@ -42,7 +42,7 @@ func banClient(t testing.TB) *Client {
 	srv.Moderation = okMod{st}
 	ts := httptest.NewServer(srv.Handler())
 	t.Cleanup(ts.Close)
-	secret, _, _ := srv.Tokens.Create("admin", api.RoleAdmin, nil, true, time.Hour)
+	secret, _, _ := srv.Tokens.Create("admin", api.RoleAdmin, nil, true, false, time.Hour)
 	return New(ts.URL, secret).WithActor("alice", "test")
 }
 

@@ -52,7 +52,7 @@ func newEnv(t *testing.T, role api.Role) *env {
 	apiSrv.Moderation = webMod{st}
 	ats := httptest.NewServer(apiSrv.Handler())
 	t.Cleanup(ats.Close)
-	secret, _, err := apiSrv.Tokens.Create("web", role, nil, true, time.Hour)
+	secret, _, err := apiSrv.Tokens.Create("web", role, nil, true, false, time.Hour)
 	require.NoError(t, err)
 	assets, docs := filepath.Join(dir, "assets"), filepath.Join(dir, "docs")
 	for _, d := range []string{filepath.Join(assets, "htmx"), docs} {

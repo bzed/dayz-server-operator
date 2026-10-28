@@ -12,14 +12,25 @@ import (
 	"github.com/bzed/dayz-server-operator/internal/moderation"
 )
 
-// seesIPs reports whether the caller may see stored IP addresses: those in bans, evidence and the history
-// of a player's addresses.
-func seesIPs(c *call) bool { return c.who.Token.Role.Can(PermIPHistory) }
+// seesIPsOn reports whether the caller may see stored IP addresses of an instance: those in sightings,
+// evidence and the history of a player's addresses. An empty instance asks about any.
+func seesIPsOn(c *call, instance string) bool {
+	if instance == "" {
+		return c.who.CanAny(PermIPHistory)
+	}
+	return c.who.Can(instance, PermIPHistory)
+}
+
+// seesBanIPs reports whether the addresses of a ban may be shown: the permission has to hold on every
+// instance the ban applies to, on all of them for a global one.
+func seesBanIPs(c *call, b moderation.Ban) bool {
+	return canEvery(c.who, b.Scope == moderation.ScopeGlobal, b.Instances, PermIPHistory)
+}
 
 // maskBan hides the addresses of a ban's targets from a caller who may not see them. Each keeps its Ref,
 // which is enough to keep it when the ban is edited.
 func maskBan(c *call, b moderation.Ban) moderation.Ban {
-	if seesIPs(c) {
+	if seesBanIPs(c, b) {
 		return b
 	}
 	b.Targets = slices.Clone(b.Targets)
@@ -39,15 +50,15 @@ func maskBans(c *call, bans []moderation.Ban) []moderation.Ban {
 }
 
 func maskEvidence(c *call, e moderation.Evidence) moderation.Evidence {
-	if !seesIPs(c) {
+	if !seesIPsOn(c, e.Instance) {
 		e.IP = ""
 	}
 	return e
 }
 
 // maskHistory removes the addresses from the old and new versions of a ban kept in its history.
-func maskHistory(c *call, h []moderation.HistoryEntry) []moderation.HistoryEntry {
-	if seesIPs(c) {
+func maskHistory(c *call, b moderation.Ban, h []moderation.HistoryEntry) []moderation.HistoryEntry {
+	if seesBanIPs(c, b) {
 		return h
 	}
 	for i := range h {

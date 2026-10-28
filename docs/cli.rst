@@ -186,8 +186,8 @@ Web interface and API
      - run the JSON API and the endpoint the dzo-admin mods call (see :doc:`api`)
    * - ``dzo web``
      - run the web interface (see :doc:`web`)
-   * - ``dzo token create <name> --role <role> [--instance <name>…] [--delegate] [--ttl <d>]``
-     - create an API token; the secret is printed once
+   * - ``dzo token create <name> --role <role> [--instance <name>…] [--delegate | --web] [--ttl <d>]``
+     - create an API token; the secret is printed once. ``--delegate`` may name the acting user (scripts and tools), ``--web`` is the token of ``dzo web``, which acts for logged-in people (see :doc:`api`)
    * - ``dzo token list`` / ``dzo token revoke <id>``
      - list or delete tokens
 
