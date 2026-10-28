@@ -37,6 +37,8 @@ type LoginPending struct {
 type LoginSession struct {
 	Session string    `json:"session"`
 	Expires time.Time `json:"expires"`
+	// RecoveryCodes are shown once, when a person has set up their first second factor.
+	RecoveryCodes []string `json:"recovery_codes,omitempty"`
 }
 
 // loginCall is a login request: a web token without a session.
@@ -101,6 +103,12 @@ func (s *Server) loginRoutes(mux *http.ServeMux, base string) {
 	login("POST "+base+"/auth/steam", s.loginSteam)
 	login("POST "+base+"/auth/totp", func(w http.ResponseWriter, r *http.Request, lc *loginCall) { s.loginSecond(w, r, lc, "totp") })
 	login("POST "+base+"/auth/recovery", func(w http.ResponseWriter, r *http.Request, lc *loginCall) { s.loginSecond(w, r, lc, "recovery") })
+	login("POST "+base+"/auth/passkey/begin", s.passkeyLoginBegin)
+	login("POST "+base+"/auth/passkey/finish", s.passkeyLoginFinish)
+	login("POST "+base+"/auth/enrol/totp/begin", s.enrolTOTPBegin)
+	login("POST "+base+"/auth/enrol/totp/finish", s.enrolTOTPFinish)
+	login("POST "+base+"/auth/enrol/passkey/begin", s.enrolPasskeyBegin)
+	login("POST "+base+"/auth/enrol/passkey/finish", s.enrolPasskeyFinish)
 }
 
 // logStep writes the log line of a login step. steamID is "" when unknown.
@@ -352,7 +360,7 @@ func (s *Server) checkSecond(ctx context.Context, kind, steamID, code string) (b
 }
 
 // issueSession ends a pending login with a new session.
-func (s *Server) issueSession(w http.ResponseWriter, r *http.Request, lc *loginCall, person moderation.Person, pend moderation.PendingLogin, pendingHash, kind string) {
+func (s *Server) issueSession(w http.ResponseWriter, r *http.Request, lc *loginCall, person moderation.Person, pend moderation.PendingLogin, pendingHash, kind string, recovery ...string) {
 	ctx := r.Context()
 	secret, hash, err := auth.NewSecret("dzs_")
 	if err != nil {
@@ -367,7 +375,11 @@ func (s *Server) issueSession(w http.ResponseWriter, r *http.Request, lc *loginC
 	_ = s.Accounts.DeletePending(ctx, pendingHash) // it expires by itself otherwise
 	_ = s.Audit.Log(admin.AuditEntry{Actor: lc.token.Name + ":" + person.SteamID, Source: "web", Client: lc.client, Action: "auth.login",
 		Target: person.SteamID, Detail: fmt.Sprintf("%s + %s", pend.Via, kind), OK: true}) // the session exists either way
-	writeJSON(w, http.StatusOK, LoginSession{Session: secret, Expires: now.Add(s.Login.max())})
+	out := LoginSession{Session: secret, Expires: now.Add(s.Login.max())}
+	if len(recovery) > 0 {
+		out.RecoveryCodes = recovery
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 // logout ends the session of the request.

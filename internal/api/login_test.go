@@ -36,6 +36,7 @@ type loginEnv struct {
 	steam    *httptest.Server
 	logs     *lockedLines
 	recovery []string
+	nonce    int
 }
 
 type lockedLines struct {
@@ -224,6 +225,7 @@ func TestRecoveryCodeOnce(t *testing.T) {
 }
 
 func (l *loginEnv) steamQuery(id string) map[string][]string {
+	l.nonce++
 	return map[string][]string{
 		"openid.ns":             {"http://specs.openid.net/auth/2.0"},
 		"openid.mode":           {"id_res"},
@@ -231,7 +233,7 @@ func (l *loginEnv) steamQuery(id string) map[string][]string {
 		"openid.claimed_id":     {"https://steamcommunity.com/openid/id/" + id},
 		"openid.identity":       {"https://steamcommunity.com/openid/id/" + id},
 		"openid.return_to":      {returnTo},
-		"openid.response_nonce": {"2026-10-16T12:00:00Z" + id},
+		"openid.response_nonce": {"2026-10-16T12:00:00Z" + id + strconv.Itoa(l.nonce)},
 		"openid.assoc_handle":   {"1"},
 		"openid.signed":         {"signed,op_endpoint,claimed_id,identity,return_to,response_nonce,assoc_handle"},
 		"openid.sig":            {"good"},
@@ -239,7 +241,11 @@ func (l *loginEnv) steamQuery(id string) map[string][]string {
 }
 
 func (l *loginEnv) steamStep(id string) (int, map[string]any, http.Header) {
-	b, _ := json.Marshal(map[string]any{"params": l.steamQuery(id), "return_to": returnTo})
+	return l.steamStepQ(l.steamQuery(id))
+}
+
+func (l *loginEnv) steamStepQ(q map[string][]string) (int, map[string]any, http.Header) {
+	b, _ := json.Marshal(map[string]any{"params": q, "return_to": returnTo})
 	return l.post("/api/v1/auth/steam", string(b))
 }
 
@@ -311,9 +317,10 @@ func TestSteamBadSignature(t *testing.T) {
 func TestSteamNonceReplay(t *testing.T) {
 	l := newLoginEnv(t)
 	l.ann(g("alpha", RoleModerator))
-	code, _, _ := l.steamStep(steamA)
+	q := l.steamQuery(steamA)
+	code, _, _ := l.steamStepQ(q)
 	require.Equal(t, 200, code)
-	code, _, _ = l.steamStep(steamA)
+	code, _, _ = l.steamStepQ(q)
 	assert.Equal(t, 401, code, "the same Steam response twice")
 }
 

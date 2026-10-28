@@ -412,3 +412,17 @@ func TestMigration0004FromV3(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, people)
 }
+
+func TestClearPassword(t *testing.T) {
+	s, _ := newStore(t)
+	putAnn(t, s, Grant{"*", "admin"})
+	ctx := t.Context()
+	require.NoError(t, s.SetPassword(ctx, steamA, "ann", "hash"))
+	require.NoError(t, s.ClearPassword(ctx, steamA))
+	c, err := s.Credentials(ctx, steamA)
+	require.NoError(t, err)
+	assert.Empty(t, c.PasswordHash)
+	_, err = s.PersonByUsername(ctx, "ann")
+	require.ErrorIs(t, err, ErrNotFound, "the name is free again")
+	require.ErrorIs(t, s.ClearPassword(ctx, steamB), ErrNotFound)
+}

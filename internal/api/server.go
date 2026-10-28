@@ -69,6 +69,16 @@ type Accounts interface {
 	Session(ctx context.Context, hash string, now time.Time, idle, max time.Duration) (moderation.LoginSession, error)
 	CreateSession(ctx context.Context, hash, steamID, client string, now time.Time) error
 	DeleteSession(ctx context.Context, hash string) error
+	DeleteSessions(ctx context.Context, steamID, keepHash string) error
+	SetPassword(ctx context.Context, steamID, username, hash string) error
+	ClearPassword(ctx context.Context, steamID string) error
+	SetTOTP(ctx context.Context, steamID string, secret []byte) error
+	ClearTOTP(ctx context.Context, steamID string) error
+	AddPasskey(ctx context.Context, steamID string, p moderation.Passkey) error
+	UpdatePasskey(ctx context.Context, steamID string, id, data []byte, used time.Time) error
+	DeletePasskey(ctx context.Context, steamID string, id []byte) error
+	SetRecoveryCodes(ctx context.Context, steamID string, hashes []string) error
+	UpdatePending(ctx context.Context, hash string, p moderation.PendingLogin) error
 	Person(ctx context.Context, steamID string) (moderation.Person, error)
 	PersonByUsername(ctx context.Context, username string) (moderation.Person, error)
 	Credentials(ctx context.Context, steamID string) (moderation.Credentials, error)
@@ -177,6 +187,7 @@ func (s *Server) Handler() http.Handler {
 	route("GET "+base+"/instances", PermView, false, s.instances)
 	s.loginRoutes(mux, base)
 	route("POST "+base+"/auth/logout", PermView, false, s.logout)
+	s.accountRoutes(route, base)
 	route("GET "+base+"/audit", PermAuditView, false, s.audit)
 	route("GET "+base+"/tiles/{map}/{rest...}", PermView, false, s.tile)
 	route("GET "+base+"/instances/{instance}", PermView, true, func(w http.ResponseWriter, _ *http.Request, c *call) { writeJSON(w, 200, c.hub.Status()) })

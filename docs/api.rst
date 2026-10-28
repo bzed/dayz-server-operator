@@ -124,6 +124,42 @@ other kind of token.
    * - ``POST /auth/logout`` (with the session)
      - ``204``; the session is gone.
 
+Passkeys are a second factor, checked with the WebAuthn library (relying party ID: the host of
+``serve.web_url``; the only accepted origin is ``serve.web_url`` itself; the person's passkeys are listed in
+``allowCredentials``; user verification is ``preferred``). The options and the answers are the JSON the
+browser's ``navigator.credentials`` takes and gives:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 40 60
+
+   * - Request
+     - Answer
+   * - ``POST /auth/passkey/begin`` ``{"pending"}``
+     - the WebAuthn request options (``400`` if the person has no passkey)
+   * - ``POST /auth/passkey/finish`` ``{"pending","response"}``
+     - ``{"session","expires"}``. The ceremony is good for one answer; a signature counter that did not
+       increase (a cloned key) is refused. The counter and the time of use are stored.
+
+A person who signs in and has **no second factor yet** gets ``"enrol": true`` and may only enrol one, with one
+of the following; each ``finish`` ends the login with a session and shows the 10 recovery codes once
+(``{"session","expires","recovery_codes":[…]}``). Any other pending login is refused with ``403``.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 40 60
+
+   * - Request
+     - Answer
+   * - ``POST /auth/enrol/totp/begin`` ``{"pending"}``
+     - ``{"secret":"<base32>","uri":"otpauth://…"}`` (the address for the QR code)
+   * - ``POST /auth/enrol/totp/finish`` ``{"pending","code"}``
+     - a first code of the new secret proves the app; it is stored and that code is used up
+   * - ``POST /auth/enrol/passkey/begin`` ``{"pending"}``
+     - the WebAuthn creation options
+   * - ``POST /auth/enrol/passkey/finish`` ``{"pending","response","name"}``
+     - the passkey is stored under ``name``
+
 The browser's address is sent in ``X-Dzo-Client`` (from a web token only; other tokens' header is ignored)
 and, behind a proxy, the proxy's address in ``X-Dzo-Proxy``; without ``X-Dzo-Client`` it is the connection's
 address. Failed first and second factors are counted per account and per address: five are free, then the
@@ -135,6 +171,42 @@ Every step writes one line to the service log, ``login: <step> <ok|failed|refuse
 client=<addr> proxy=<addr|->``, never a secret, and a finished login or logout writes an audit entry
 (``auth.login``, ``auth.logout``) with the client address. Every audit entry of a web action has the
 client address in its ``client`` field.
+
+Account
+~~~~~~~
+
+What a logged-in person (a web token with a session) does with their own login. No role is needed beyond
+being logged in; every change is audited (``account.*``) without secrets.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 42 58
+
+   * - Request
+     - Answer
+   * - ``GET /account``
+     - ``{"steam_id","name","username","has_password","totp":bool,"passkeys":[{"id","name","created","last_used"}],"recovery_left":n}``
+   * - ``PUT /account/password`` ``{"username","current","new"}``
+     - ``204``. ``current`` is needed when a password exists (``403`` if wrong, counted like a failed
+       login). The username is 3 to 32 characters of ``a-z 0-9 . _ -`` (case-insensitive, stored in lower
+       case), unique (``409``), and needed with the first password; the password is 12 to 256 bytes
+       (``400``)
+   * - ``DELETE /account/password``
+     - ``204``; the username is free again
+   * - ``POST /account/totp/begin``
+     - ``{"pending","secret","uri"}``; ``POST /account/totp/finish`` ``{"pending","code"}`` → ``204``
+       once the code of the new secret is right; the old secret is replaced
+   * - ``DELETE /account/totp``
+     - ``204``, or ``409`` if it is the last second factor
+   * - ``POST /account/passkeys/begin``
+     - ``{"pending","options"}``; ``POST /account/passkeys/finish`` ``{"pending","response","name"}`` →
+       ``201`` with the passkey
+   * - ``DELETE /account/passkeys/<id>``
+     - ``204``, ``404``, or ``409`` for the last second factor
+   * - ``POST /account/recovery``
+     - ``{"recovery_codes":[…]}``: a new set of 10, which replaces the old one
+   * - ``DELETE /account/sessions``
+     - ``204``; the person's other sessions end
 
 Reading
 -------
