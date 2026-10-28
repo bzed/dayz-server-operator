@@ -35,6 +35,7 @@
     <a href="/docs/"><i class="fa fa-book" aria-hidden="true"></i>docs</a>
   </nav>
   <span class="ver">{{.Version}}</span>
+  <form class="logout" method="post" action="/logout"><input type="hidden" name="csrf" value="{{.CSRF}}"><button title="Log out"><i class="fa fa-sign-out" aria-hidden="true"></i>Log out</button></form>
 </header>
 {{if .Instance}}{{template "instbar" .}}{{end}}
 <main>

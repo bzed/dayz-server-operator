@@ -48,6 +48,11 @@ type responseReq struct {
 
 // ---- login (a web token without a session) ----
 
+// AuthInfo asks whether logins are on and where the web interface is meant to be reached (needs no session).
+func (c *Client) AuthInfo(ctx context.Context) (out api.AuthInfo, err error) {
+	return out, c.get(ctx, "/api/v1/auth/info", &out)
+}
+
 // LoginPassword is the first factor with a password.
 func (c *Client) LoginPassword(ctx context.Context, username, password string) (out api.LoginPending, err error) {
 	return out, c.post(ctx, "/api/v1/auth/password", map[string]string{"username": username, "password": password}, &out)

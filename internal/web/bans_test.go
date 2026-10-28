@@ -62,7 +62,7 @@ func (e *env) postForm(path string, form url.Values, csrf bool) (int, string) {
 	req, _ := http.NewRequest("POST", e.web.URL+path, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	if csrf {
-		req.Header.Set("X-CSRF-Token", e.srv.csrf)
+		req.Header.Set("X-CSRF-Token", e.csrf)
 	}
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(e.t, err)
@@ -118,7 +118,7 @@ func TestBanDetailEditAndRevoke(t *testing.T) {
 func TestEvidenceImageProxy(t *testing.T) {
 	e := newEnv(t, api.RoleAdmin)
 	png := append([]byte("\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR"), make([]byte, 64)...)
-	c := e.srv.backend("main").Client
+	c := e.apiClient()
 	ev, err := c.AddEvidenceImage(t.Context(), moderation.EvidenceInput{SteamID: webSteam, Instance: "alpha", Body: "shot"}, png)
 	require.NoError(t, err)
 	code, body, hdr := e.get("/b/main/evidence/" + itoa(ev.ID) + "/file")
@@ -192,13 +192,13 @@ func TestBanFormDefaultsToAllInstancesAndPermanent(t *testing.T) {
 	}
 	form := url.Values{"steam_id": {webSteam}, "reason": {"x"}, "duration": {"7d"}, "scope_choice": {"this"}, "this_instance": {"alpha"}}
 	e.postForm("/b/main/bans", form, true)
-	b, err := e.srv.backend("main").Client.Ban(t.Context(), 1)
+	b, err := e.apiClient().Ban(t.Context(), 1)
 	require.NoError(t, err)
 	require.Equal(t, moderation.ScopeInstances, b.Scope)
 	require.Equal(t, []string{"alpha"}, b.Instances)
 	form.Set("scope_choice", "global")
 	e.postForm("/b/main/bans", form, true)
-	b, err = e.srv.backend("main").Client.Ban(t.Context(), 2)
+	b, err = e.apiClient().Ban(t.Context(), 2)
 	require.NoError(t, err)
 	require.Equal(t, moderation.ScopeGlobal, b.Scope)
 	// Without an instance in the link there is no "this instance" choice.
@@ -261,7 +261,7 @@ func (e *env) postMultipart(path string, fields map[string]string, file []byte) 
 	_ = mw.Close()
 	req, _ := http.NewRequest("POST", e.web.URL+path, &buf)
 	req.Header.Set("Content-Type", mw.FormDataContentType())
-	req.Header.Set("X-CSRF-Token", e.srv.csrf)
+	req.Header.Set("X-CSRF-Token", e.csrf)
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(e.t, err)
 	defer func() { _ = resp.Body.Close() }()

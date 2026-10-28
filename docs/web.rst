@@ -14,7 +14,7 @@ one web interface serves **one dzo installation**.
 
 .. code-block:: sh
 
-   sudo -iu dayz dzo token create web --role operator --delegate > /var/lib/dzo/secrets/web.token
+   sudo -iu dayz dzo token create web --role admin --web > /var/lib/dzo/secrets/web.token
    sudo -iu dayz dzo serve &      # the API (to try it by hand, see below)
    sudo -iu dayz dzo web          # http://127.0.0.1:8081 (to try it by hand, see below)
 
@@ -88,22 +88,48 @@ work:
 ``setcap`` on the binary is not suitable: every package upgrade drops it, and it applies to every
 user who runs the binary.
 
-Access control
---------------
+.. _web-login:
 
-.. warning::
+Login
+-----
 
-   The web interface has **no login of its own yet** (no users, passwords or
-   second factor). Anyone who can reach it acts with the role of the backend
-   token. Keep it on localhost, or put it behind a reverse proxy that
-   authenticates your users (with multi-factor login) and terminates HTTPS.
-   dzo refuses to listen on a non-local address unless
-   ``web.allow_insecure_http`` is set.
+Everybody who opens the web interface logs in. A login has two steps, always:
 
-What the interface does about browser attacks: every change needs a per-session
-token that the pages hand to htmx (and a same-origin check), responses carry a
-strict content security policy without inline scripts, and pages cannot be
-framed.
+1. **A first factor**: username and password, or **Sign in through Steam**.
+2. **A second factor**: a code from an authenticator app (TOTP), a **passkey**, or a one-time **recovery code**.
+
+A passkey is only ever the second step. Without ``serve.web_url`` (:doc:`configuration`) logins are off and
+the pages say so. ``dzo web`` only relays the steps: ``dzo serve`` checks the passwords, talks to Steam, holds
+the sessions and decides every permission; the web interface keeps just a cookie.
+
+**First visit.** Someone (an admin in the users page, or ``dzo user grant`` on the host) grants a Steam ID a
+role. That person opens the web interface and signs in through Steam. A Steam ID without a grant gets "no
+access", and nothing is stored for it. Because there is no second factor yet, the person is asked to set one
+up: scan a QR code with an authenticator app, or register a passkey. Then they see their recovery codes, once.
+Afterwards they may set a username and a password on the account page, so that they can also log in without
+Steam; the second step stays.
+
+**Sessions.** A session ends after ``serve.login.session_idle_hours`` (default 12) without a request, and
+after ``serve.login.session_max_days`` (default 7) at the latest. Logging out, ``dzo user reset``, disabling a
+person and removing their last grant end it at once. The cookie is ``HttpOnly`` and ``SameSite=Strict``;
+on HTTPS (``serve.web_url`` starts with ``https://``) it is ``__Host-dzo_session``, ``Secure`` and host-only.
+The half-finished login between the two steps lives five minutes in a ``SameSite=Lax`` cookie
+(``dzo_login``): Steam sends the browser back with a navigation from another site, which a Strict cookie
+would not survive. The return from Steam carries a random state that must match that cookie, so that nobody
+can log a victim into the attacker's account with a prepared link, and it answers with a small page that moves
+on by itself, so that the next request starts on this site.
+
+**Guessing.** Five wrong passwords or codes per account and per client address are free, then every further
+attempt makes the wait longer (one second, doubling, up to 15 minutes); a success clears the account. Waiting
+logins get "too many failed logins" whether or not the username exists. Behind a reverse proxy, set
+``web.trusted_proxies`` to the proxy's address: only then is its ``X-Forwarded-For`` believed (the right-most
+address that is not a trusted proxy), and the browser's real address is what the login log and the audit log
+show.
+
+What the interface does about browser attacks: every change needs a token of the session that the pages hand
+to htmx (and a same-origin check), responses carry a strict content security policy without inline scripts,
+and pages cannot be framed. Behind HTTPS (:ref:`web-https`) nothing here needs a reverse proxy; dzo refuses
+to listen on a non-local address without ``web.tls`` unless ``web.allow_insecure_http`` is set.
 
 People and the first admin
 --------------------------

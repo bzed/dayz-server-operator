@@ -23,18 +23,21 @@ import (
 	"github.com/bzed/dayz-server-operator/internal/admin"
 	"github.com/bzed/dayz-server-operator/internal/api"
 	"github.com/bzed/dayz-server-operator/internal/apiclient"
+	"github.com/bzed/dayz-server-operator/internal/auth"
 	"github.com/bzed/dayz-server-operator/internal/geoip"
 	"github.com/bzed/dayz-server-operator/internal/geoip/geoiptest"
 	"github.com/bzed/dayz-server-operator/internal/moderation"
 )
 
 type env struct {
-	t      *testing.T
-	web    *httptest.Server
-	srv    *Server
-	hub    *admin.Hub
-	api    *api.Server
-	assets string
+	t       *testing.T
+	web     *httptest.Server
+	srv     *Server
+	hub     *admin.Hub
+	api     *api.Server
+	assets  string
+	csrf    string // the token of the logged-in fixture person
+	session string
 
 	mu   sync.Mutex
 	sent []string // the kinds of the commands answerCommands has seen, in order
@@ -50,10 +53,18 @@ func newEnv(t *testing.T, role api.Role) *env {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = st.Close() })
 	apiSrv.Moderation = webMod{st}
+	apiSrv.Accounts = st
 	ats := httptest.NewServer(apiSrv.Handler())
 	t.Cleanup(ats.Close)
-	secret, _, err := apiSrv.Tokens.Create("web", role, nil, true, false, time.Hour)
+	secret, _, err := apiSrv.Tokens.Create("web", api.RoleAdmin, nil, false, true, time.Hour)
 	require.NoError(t, err)
+	// The pages need a login. These tests are about the pages, so one fixture person with the role under
+	// test is logged in and their session cookie is added to every request; auth_test.go logs in for real.
+	const fixture = "76561198000000077"
+	require.NoError(t, st.PutPerson(t.Context(), moderation.Person{SteamID: fixture, Name: "Fixture", Grants: []moderation.Grant{{Instance: "*", Role: string(role)}}}, time.Now()))
+	session, hash, err := auth.NewSecret("dzs_")
+	require.NoError(t, err)
+	require.NoError(t, st.CreateSession(t.Context(), hash, fixture, "", time.Now()))
 	assets, docs := filepath.Join(dir, "assets"), filepath.Join(dir, "docs")
 	for _, d := range []string{filepath.Join(assets, "htmx"), docs} {
 		require.NoError(t, os.MkdirAll(d, 0o750))
@@ -64,16 +75,30 @@ func newEnv(t *testing.T, role api.Role) *env {
 	_ = os.WriteFile(filepath.Join(flags, "de.svg"), []byte("<svg/>"), 0o600)
 	apiSrv.GeoIP = geoiptest.Legacy(t, map[string]string{"198.51.100.0/24": "DE"})
 	_ = os.WriteFile(filepath.Join(docs, "index.html"), []byte("<h1>docs</h1>"), 0o600)
-	srv, err := New(&Backend{Name: "main", Client: apiclient.New(ats.URL, secret)}, Options{Version: "v0", Assets: assets, DocsDir: docs, FlagsDir: flags, UserHeader: "X-Forwarded-User"})
+	srv, err := New(&Backend{Name: "main", Client: apiclient.New(ats.URL, secret)}, Options{Version: "v0", Assets: assets, DocsDir: docs, FlagsDir: flags})
 	require.NoError(t, err)
-	ws := httptest.NewServer(srv.Handler())
+	ws := httptest.NewServer(withSession(srv.Handler(), session))
 	t.Cleanup(ws.Close)
+	apiSrv.Login = api.LoginSettings{WebURL: ws.URL}
 	hub.Sync(admin.SyncRequest{Proto: 1, Hello: true, ModVersion: "0.1.0", World: "enoch",
 		Players:  []admin.Player{{SteamID: "7656", Name: "<b>alice</b>", Alive: true, X: 1, Z: 2}},
 		Vehicles: []admin.Vehicle{{ID: "1.2.3.4", Kind: "car", Type: "OffroadHatchback", Health: 0.5, Fuel: 0.25}, {ID: "5.6.7.8", Kind: "motorbike", Type: "Motorbike_01"}, {ID: "9.9.9.9", Kind: "bicycle", Type: "Old_Bike_Red"}, {ID: "b.b.b.b", Kind: "boat", Type: "Boat_01_Orange"}, {ID: "c.c.c.c", Kind: "car", Type: "Sedan_02", Owner: "Rita", Covered: true}},
 		Types:    &admin.TypesChunk{Hash: "h", Total: 2, Names: []string{"AKM", "AK74"}},
 	})
-	return &env{t: t, web: ws, srv: srv, hub: hub, api: apiSrv, assets: assets}
+	return &env{t: t, web: ws, srv: srv, hub: hub, api: apiSrv, assets: assets, csrf: csrfFor(session), session: session}
+}
+
+// apiClient is the API client of the fixture person, for tests that look at the API directly.
+func (e *env) apiClient() *apiclient.Client {
+	return e.srv.backend("main").Client.ForUser(e.session, "")
+}
+
+// withSession adds the session cookie to every request, as a logged-in browser would send it.
+func withSession(h http.Handler, session string) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r.AddCookie(&http.Cookie{Name: sessionCookie, Value: session})
+		h.ServeHTTP(w, r)
+	})
 }
 
 func (e *env) get(path string) (int, string, http.Header) {
@@ -89,7 +114,7 @@ func (e *env) post(path string, form url.Values, hdr map[string]string) (int, st
 	e.t.Helper()
 	req, _ := http.NewRequest(http.MethodPost, e.web.URL+path, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("X-CSRF-Token", e.srv.csrf)
+	req.Header.Set("X-CSRF-Token", e.csrf)
 	for k, v := range hdr {
 		req.Header.Set(k, v)
 	}
@@ -160,7 +185,7 @@ func TestDashboard(t *testing.T) {
 	require.Contains(t, hdr.Get("Content-Security-Policy"), "default-src 'self'")
 	require.Equal(t, "DENY", hdr.Get("X-Frame-Options"))
 	require.Equal(t, "nosniff", hdr.Get("X-Content-Type-Options"))
-	require.Contains(t, body, e.srv.csrf, "page must carry the CSRF token")
+	require.Contains(t, body, e.csrf, "page must carry the CSRF token")
 	c, _, _ := e.get("/nope")
 	require.Equal(t, 404, c, "unknown path")
 }
@@ -278,19 +303,14 @@ func TestActions(t *testing.T) {
 		"/b/main/i/alpha/flags/f1.2/raise":        {},
 		"/b/main/i/alpha/vehicles/1.2.3.4/delete": {"force": {"1"}},
 	} {
-		code, body := e.post(path, form, map[string]string{"X-Forwarded-User": "alice@example.invalid"})
+		code, body := e.post(path, form, nil)
 		require.Equal(t, 200, code, "%s: %s", path, body)
 		require.Contains(t, body, "flash ok", path)
 	}
 	entries, _ := e.api.Audit.Tail("alpha", 1)
 	require.Len(t, entries, 1)
-	require.Equal(t, "web:alice@example.invalid", entries[0].Actor)
+	require.Equal(t, "web:76561198000000077", entries[0].Actor, "the person of the session")
 	require.Equal(t, "web", entries[0].Source)
-	// Without the proxy header the actor is plain "web".
-	e.post("/b/main/i/alpha/message", url.Values{"text": {"x"}}, nil)
-	entries, _ = e.api.Audit.Tail("alpha", 1)
-	require.NotEmpty(t, entries)
-	require.Equal(t, "web:web", entries[0].Actor)
 }
 
 func TestQuantityMaxAndInvalid(t *testing.T) {
@@ -337,9 +357,9 @@ func TestCSRF(t *testing.T) {
 	}
 	require.Equal(t, 403, post(nil, ""), "no token")
 	require.Equal(t, 403, post(nil, "wrong"), "wrong token")
-	require.Equal(t, 403, post(map[string]string{"Origin": "https://evil.example"}, e.srv.csrf), "foreign origin")
-	require.NotEqual(t, 403, post(map[string]string{"Origin": e.web.URL}, e.srv.csrf), "same origin must pass")
-	require.Equal(t, 403, post(map[string]string{"Origin": "::bad"}, e.srv.csrf), "unparsable origin")
+	require.Equal(t, 403, post(map[string]string{"Origin": "https://evil.example"}, e.csrf), "foreign origin")
+	require.NotEqual(t, 403, post(map[string]string{"Origin": e.web.URL}, e.csrf), "same origin must pass")
+	require.Equal(t, 403, post(map[string]string{"Origin": "::bad"}, e.csrf), "unparsable origin")
 }
 
 func TestStreamRelay(t *testing.T) {

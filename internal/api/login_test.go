@@ -473,3 +473,23 @@ func TestSecondFactorBadInput(t *testing.T) {
 	code, _, _ = l.post("/api/v1/auth/password", `{"username":"","password":""}`)
 	assert.Equal(t, 401, code)
 }
+
+func TestAuthInfo(t *testing.T) {
+	l := newLoginEnv(t)
+	code, out := l.get("/api/v1/auth/info")
+	require.Equal(t, 200, code)
+	assert.Equal(t, "test-site", out["installation"])
+	assert.Equal(t, true, out["logins"])
+	assert.Equal(t, webURL, out["web_url"])
+
+	l.srv.Login.WebURL = ""
+	code, out = l.get("/api/v1/auth/info")
+	require.Equal(t, 200, code, "the web interface can ask while logins are off")
+	assert.Equal(t, false, out["logins"])
+	assert.Empty(t, out["web_url"])
+
+	code, _ = l.do("GET", "/api/v1/auth/info", l.token(RoleAdmin, nil, true), "")
+	assert.Equal(t, 403, code, "web tokens only")
+	code, _ = l.do("GET", "/api/v1/auth/info", "", "")
+	assert.Equal(t, 401, code)
+}

@@ -25,6 +25,14 @@ import (
 // pendingLife is how long a login stays open between its two steps.
 const pendingLife = 5 * time.Minute
 
+// AuthInfo is GET /auth/info, which a web token may ask before anybody is logged in: whether logins are
+// on, and the address people open the web interface at (serve.web_url).
+type AuthInfo struct {
+	Installation string `json:"installation"`
+	Logins       bool   `json:"logins"`
+	WebURL       string `json:"web_url,omitempty"`
+}
+
 // LoginPending answers a first factor: the id of the half-finished login, and what can finish it. With Enrol
 // the person has no second factor yet and has to set one up first.
 type LoginPending struct {
@@ -68,24 +76,42 @@ func clientHeader(r *http.Request) string { return addrOf(r.Header.Get("X-Dzo-Cl
 
 // loginRoutes registers the routes that start a session. They take a web token and no session.
 func (s *Server) loginRoutes(mux *http.ServeMux, base string) {
+	// webToken answers the request itself unless it carries a web token.
+	webToken := func(w http.ResponseWriter, r *http.Request) (Token, bool) {
+		secret, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
+		who, found := s.Tokens.Lookup(secret)
+		if !ok || !found {
+			w.Header().Set("WWW-Authenticate", `Bearer realm="dzo"`)
+			fail(w, http.StatusUnauthorized, "missing or invalid token")
+			return Token{}, false
+		}
+		if !who.Token.Web {
+			fail(w, http.StatusForbidden, "the login routes need a web token")
+			return Token{}, false
+		}
+		return who.Token, true
+	}
+	mux.HandleFunc("GET "+base+"/auth/info", func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := webToken(w, r); !ok {
+			return
+		}
+		out := AuthInfo{Installation: s.Installation}
+		if out.Logins = s.Accounts != nil && s.Login.WebURL != ""; out.Logins {
+			out.WebURL = s.Login.WebURL
+		}
+		writeJSON(w, http.StatusOK, out)
+	})
 	login := func(pattern string, h func(http.ResponseWriter, *http.Request, *loginCall)) {
 		mux.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
-			secret, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
-			who, found := s.Tokens.Lookup(secret)
-			if !ok || !found {
-				w.Header().Set("WWW-Authenticate", `Bearer realm="dzo"`)
-				fail(w, http.StatusUnauthorized, "missing or invalid token")
-				return
-			}
-			if !who.Token.Web {
-				fail(w, http.StatusForbidden, "the login routes need a web token")
+			token, ok := webToken(w, r)
+			if !ok {
 				return
 			}
 			if s.Accounts == nil || s.Login.WebURL == "" {
 				fail(w, http.StatusServiceUnavailable, "logins are not configured: set serve.web_url")
 				return
 			}
-			lc := &loginCall{token: who.Token, client: clientHeader(r), proxy: "-"}
+			lc := &loginCall{token: token, client: clientHeader(r), proxy: "-"}
 			if lc.client == "" {
 				host, _, err := net.SplitHostPort(r.RemoteAddr)
 				if lc.client = addrOf(host); err != nil || lc.client == "" {

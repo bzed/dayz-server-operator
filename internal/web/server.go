@@ -2,30 +2,29 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 // Package web is the dzo web interface (§C12): server-rendered pages with
-// htmx and a Leaflet map. It reaches every installation only through its
-// /api/v1 (internal/apiclient), never through the core packages, so one web
-// interface can serve several installations and can run on another host.
+// htmx and a Leaflet map. It reaches the installation only through its
+// /api/v1 (internal/apiclient), never through the core packages, so it can
+// run on another host.
 //
-// There is no login in this package yet: the interface acts with the token of
-// each backend and must be reachable only on localhost or behind an
-// authenticating reverse proxy, whose user header (Options.UserHeader) is
-// passed to the API as the audit actor.
+// People log in here (a password or Steam, then a second factor), but dzo
+// serve runs every step and holds the sessions: this package relays the steps
+// with its web token, keeps the session secret in a cookie and sends it back
+// with every API call. It stores nothing else.
 package web
 
 import (
-	"crypto/rand"
 	"crypto/subtle"
 	"embed"
-	"encoding/hex"
 	"fmt"
 	"html/template"
 	"io/fs"
 	"net/http"
-	"net/url"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/bzed/dayz-server-operator/internal/apiclient"
+	"github.com/bzed/dayz-server-operator/internal/auth"
 	"github.com/bzed/dayz-server-operator/internal/moderation"
 )
 
@@ -51,18 +50,21 @@ type Options struct {
 	DocsDir string
 	// FlagsDir holds the country flags, <code>.svg (Debian's iso-flags-svg country-4x3); empty serves none.
 	FlagsDir string
-	// UserHeader is the header an authenticating proxy puts the user in.
-	UserHeader string
+	// TrustedProxies are the reverse proxies whose X-Forwarded-For is believed when working out the
+	// browser's address for the login log and the audit log.
+	TrustedProxies auth.Proxies
 }
 
 // Server is the web interface.
 type Server struct {
 	backends []*Backend
 	opts     Options
-	csrf     string
 	tmpl     *template.Template
 	navc     navCache
 	now      func() time.Time // the clock, replaced by tests
+
+	infos       infoCache
+	webURLCache atomic.Pointer[webURLInfo]
 }
 
 // New returns a Server over the one installation b. The routes keep the
@@ -71,15 +73,11 @@ func New(b *Backend, opts Options) (*Server, error) {
 	if b == nil {
 		return nil, fmt.Errorf("web: no backend configured")
 	}
-	var raw [16]byte
-	if _, err := rand.Read(raw[:]); err != nil {
-		return nil, err
-	}
 	t, err := template.New("").Funcs(template.FuncMap{"pct": pct, "deref": func(f *float64) float64 { return *f }, "join": strings.Join, "expiry": moderation.FormatExpiry, "facts": factsOf, "day": func(t time.Time) string { return t.UTC().Format("2006-01-02") }, "stamp": func(t time.Time) string { return t.UTC().Format("2006-01-02 15:04") }, "ago": ago, "hours": hours}).ParseFS(templateFS, "templates/*.html")
 	if err != nil {
 		return nil, err
 	}
-	return &Server{backends: []*Backend{b}, opts: opts, csrf: hex.EncodeToString(raw[:]), tmpl: t, now: time.Now}, nil
+	return &Server{backends: []*Backend{b}, opts: opts, tmpl: t, now: time.Now}, nil
 }
 
 func pct(f float64) string { return fmt.Sprintf("%.0f%%", f*100) }
@@ -95,16 +93,36 @@ func (s *Server) backend(name string) *Backend {
 
 // Handler returns the web interface's http.Handler.
 func (s *Server) Handler() http.Handler {
-	mux := http.NewServeMux()
+	// root holds what needs no login: the login pages and the files they use. Everything else is the
+	// application in mux, behind the check of the session.
+	root := http.NewServeMux()
 	static, _ := fs.Sub(staticFS, "static")
-	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServerFS(static)))
+	root.Handle("GET /static/", http.StripPrefix("/static/", http.FileServerFS(static)))
 	if s.opts.Assets != "" {
-		mux.Handle("GET /vendor/", http.StripPrefix("/vendor/", http.FileServer(http.Dir(s.opts.Assets))))
+		root.Handle("GET /vendor/", http.StripPrefix("/vendor/", http.FileServer(http.Dir(s.opts.Assets))))
 	}
 	if s.opts.DocsDir != "" {
-		mux.Handle("GET /docs/", http.StripPrefix("/docs/", http.FileServer(http.Dir(s.opts.DocsDir))))
+		root.Handle("GET /docs/", http.StripPrefix("/docs/", http.FileServer(http.Dir(s.opts.DocsDir))))
+	} else {
+		root.Handle("GET /docs/", http.NotFoundHandler())
 	}
-	mux.HandleFunc("GET /flags/{code}", s.flag)
+	root.HandleFunc("GET /flags/{code}", s.flag)
+	root.HandleFunc("GET /login", s.loginPage)
+	root.HandleFunc("POST /login", s.loginPassword)
+	root.HandleFunc("GET /login/steam", s.loginSteam)
+	root.HandleFunc("GET /login/steam/return", s.loginSteamReturn)
+	root.HandleFunc("GET /login/second", s.loginSecondPage)
+	root.HandleFunc("POST /login/second", s.loginSecond)
+	root.HandleFunc("POST /login/passkey/begin", s.passkeyBegin)
+	root.HandleFunc("POST /login/passkey/finish", s.passkeyFinish)
+	root.HandleFunc("GET /login/enrol", s.enrolPage)
+	root.HandleFunc("POST /login/enrol", s.enrol)
+	root.HandleFunc("POST /login/enrol/passkey/begin", s.enrolPasskeyBegin)
+	root.HandleFunc("POST /login/enrol/passkey/finish", s.enrolPasskeyFinish)
+
+	mux := http.NewServeMux()
+	root.Handle("/", s.requireSession(mux))
+	mux.HandleFunc("POST /logout", s.logout)
 	mux.HandleFunc("GET /{$}", s.dashboard)
 
 	const inst = "/b/{backend}/i/{instance}"
@@ -150,7 +168,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST "+inst+"/vehicles/{id}/move", s.act(actMoveVehicle))
 	mux.HandleFunc("POST "+inst+"/flags/{id}/raise", s.act(actRaise))
 	mux.HandleFunc("POST "+inst+"/vehicles/{id}/delete", s.act(actDelete))
-	return secure(mux)
+	return secure(root)
 }
 
 // secure adds the browser hardening headers (§C12): a strict CSP without
@@ -166,34 +184,14 @@ func secure(h http.Handler) http.Handler {
 	})
 }
 
-// csrfOK checks a mutating request: the per-process token that every page
-// hands to htmx and the map script, plus a same-origin check.
+// csrfOK checks a mutating request of a logged-in person: the token of their session, which every page hands to
+// htmx and the map script (or a form carries), plus a same-origin check.
 func (s *Server) csrfOK(r *http.Request) bool {
-	if subtle.ConstantTimeCompare([]byte(r.Header.Get("X-CSRF-Token")), []byte(s.csrf)) != 1 {
+	d := sessionFrom(r.Context())
+	if d == nil {
 		return false
 	}
-	if o := r.Header.Get("Origin"); o != "" {
-		u, err := url.Parse(o)
-		if err != nil || u.Host != r.Host {
-			return false
-		}
-	}
-	return true
-}
-
-// actor is who the audit log blames: the proxy-authenticated user if one is
-// configured, else just "web".
-func (s *Server) actor(r *http.Request) string {
-	if s.opts.UserHeader != "" {
-		if u := strings.TrimSpace(r.Header.Get(s.opts.UserHeader)); u != "" {
-			return u
-		}
-	}
-	return "web"
-}
-
-func (s *Server) client(b *Backend, r *http.Request) *apiclient.Client {
-	return b.Client.WithActor(s.actor(r), "web")
+	return subtle.ConstantTimeCompare([]byte(requestCSRF(r)), []byte(csrfFor(d.secret))) == 1 && sameOrigin(r)
 }
 
 func (s *Server) render(w http.ResponseWriter, name string, data any) {
@@ -236,6 +234,10 @@ func (s *Server) page(r *http.Request, title, backend, instance, section string,
 	if home == "" {
 		home = s.backends[0].Name
 	}
-	return page{Home: home, Title: title, CSRF: s.csrf, Backends: s.backends, Backend: backend, Version: s.opts.Version, Data: data,
-		Now: s.now(), Nav: s.nav(r.Context()), Instance: instance, Section: section, HasPlayers: true}
+	csrf := ""
+	if d := sessionFrom(r.Context()); d != nil {
+		csrf = csrfFor(d.secret)
+	}
+	return page{Home: home, Title: title, CSRF: csrf, Backends: s.backends, Backend: backend, Version: s.opts.Version, Data: data,
+		Now: s.now(), Nav: s.navFor(r), Instance: instance, Section: section, HasPlayers: true}
 }

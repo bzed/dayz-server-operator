@@ -20,6 +20,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/bzed/dayz-server-operator/internal/apiclient"
+	"github.com/bzed/dayz-server-operator/internal/auth"
 	"github.com/bzed/dayz-server-operator/internal/config"
 	"github.com/bzed/dayz-server-operator/internal/tlsfiles"
 	"github.com/bzed/dayz-server-operator/internal/version"
@@ -40,7 +41,7 @@ func webBackend(cfg *config.Config, logf func(string, ...any)) (*web.Backend, fu
 	}
 	tok, err := os.ReadFile(tokenFile) //nolint:gosec // operator-configured secret file
 	if err != nil {
-		return nil, nil, fmt.Errorf("%w (create one with `dzo token create web --role operator --delegate`)", err)
+		return nil, nil, fmt.Errorf("%w (create one with `dzo token create web --role admin --web`)", err)
 	}
 	token := strings.TrimSpace(string(tok))
 	client, reload := apiclient.New(url, token), func() {}
@@ -72,7 +73,11 @@ func newWebCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			srv, err := web.New(backend, web.Options{Version: version.String(), Assets: cfg.Web.Assets, DocsDir: cfg.Web.DocsDir, FlagsDir: cfg.Web.FlagsDir})
+			proxies, err := auth.ParseProxies(cfg.Web.TrustedProxies)
+			if err != nil {
+				return fmt.Errorf("web.trusted_proxies: %w", err)
+			}
+			srv, err := web.New(backend, web.Options{Version: version.String(), Assets: cfg.Web.Assets, DocsDir: cfg.Web.DocsDir, FlagsDir: cfg.Web.FlagsDir, TrustedProxies: proxies})
 			if err != nil {
 				return err
 			}

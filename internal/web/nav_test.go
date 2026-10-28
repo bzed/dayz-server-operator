@@ -46,14 +46,14 @@ func TestNavIsCachedForTheTTL(t *testing.T) {
 	now := time.Unix(1000, 0)
 	s.now = func() time.Time { return now }
 
-	got := s.nav(t.Context())
+	got := s.nav(t.Context(), "s", s.backends[0].Client)
 	require.Len(t, got, 1)
 	assert.Equal(t, []navInstance{{Name: "a b", World: "enoch", Connected: true}}, got[0].Instances)
-	s.nav(t.Context())
+	s.nav(t.Context(), "s", s.backends[0].Client)
 	assert.EqualValues(t, 1, calls.Load(), "within the TTL the list is served from the cache")
 
 	now = now.Add(navTTL + time.Second)
-	s.nav(t.Context())
+	s.nav(t.Context(), "s", s.backends[0].Client)
 	assert.EqualValues(t, 2, calls.Load())
 }
 
@@ -66,10 +66,10 @@ func TestNavKeepsTheLastListWhenABackendFails(t *testing.T) {
 	now := time.Unix(1000, 0)
 	s.now = func() time.Time { return now }
 
-	s.nav(t.Context())
+	s.nav(t.Context(), "s", s.backends[0].Client)
 	fail.Store(true)
 	now = now.Add(navTTL + time.Second)
-	got := s.nav(t.Context())
+	got := s.nav(t.Context(), "s", s.backends[0].Client)
 	require.Len(t, got, 1)
 	require.Len(t, got[0].Instances, 1)
 	assert.Equal(t, "alpha", got[0].Instances[0].Name)

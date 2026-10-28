@@ -305,3 +305,12 @@ func TestPasskeyCallsPassTheJSONThrough(t *testing.T) {
 func decodeBase32(s string) ([]byte, error) {
 	return base32.StdEncoding.WithPadding(base32.NoPadding).DecodeString(s)
 }
+
+func TestAuthInfo(t *testing.T) {
+	w := newWebEnv(t)
+	info, err := w.c.AuthInfo(t.Context())
+	require.NoError(t, err)
+	assert.True(t, info.Logins)
+	assert.Equal(t, webURL, info.WebURL)
+	assert.Equal(t, "site", info.Installation)
+}
