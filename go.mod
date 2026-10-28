@@ -19,8 +19,9 @@ require (
 	github.com/woozymasta/rap v0.1.6
 	github.com/woozymasta/rvmat v0.4.0
 	go.uber.org/goleak v1.3.0
+	golang.org/x/crypto v0.58.0
 	golang.org/x/sys v0.49.0
-	golang.org/x/term v0.35.0
+	golang.org/x/term v0.47.0
 	gopkg.in/yaml.v3 v3.0.1
 	modernc.org/sqlite v1.60.1
 )

@@ -107,7 +107,10 @@ FUZZ_TARGETS := \
 	internal/battleye:FuzzParseEvent \
 	internal/a2s:FuzzParseInfoResponse \
 	internal/servercfg:FuzzServercfgParse \
-	internal/admin:FuzzParseQuantity
+	internal/admin:FuzzParseQuantity \
+	internal/auth:FuzzClientAddr \
+	internal/auth:FuzzSteamClaimedID \
+	internal/auth:FuzzCheckSigned
 fuzz:
 	@set -e; for t in $(FUZZ_TARGETS); do \
 		echo "fuzz $${t#*:} ($(FUZZTIME))"; \
