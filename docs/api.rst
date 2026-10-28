@@ -208,6 +208,46 @@ being logged in; every change is audited (``account.*``) without secrets.
    * - ``DELETE /account/sessions``
      - ``204``; the person's other sessions end
 
+Users
+~~~~~
+
+Managing people needs ``users.manage``, which only an admin on ``*`` holds (through a token for every
+instance). Every change goes to the audit log (``users.put``, ``users.delete``, ``users.reset``) with the
+Steam ID and the grants.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 42 58
+
+   * - Request
+     - Answer
+   * - ``GET /users``
+     - the people: ``steam_id``, ``name``, ``username``, ``disabled``, ``created``, ``grants``; no secret
+   * - ``PUT /users/<steamid>`` ``{"name","disabled","grants":[{"instance","role"}]}``
+     - creates the person or replaces their name, disabled flag and grants, and answers the person. A role
+       is ``viewer``, ``moderator``, ``operator`` or ``admin``; an instance is a name (letters, digits,
+       ``_ . -``, at most 64) or ``*`` for every instance, also later ones; it need not exist yet. Anything
+       else is ``400``. Credentials are not touched. Disabling a person, or leaving them without a grant,
+       ends their sessions
+   * - ``DELETE /users/<steamid>``
+     - ``204``; the person and everything of theirs is gone
+   * - ``POST /users/<steamid>/reset``
+     - ``204``; password, username, TOTP, passkeys, recovery codes and sessions are removed, the person
+       and their grants stay. The person enrols again through Steam
+
+Nobody can change their own access through the API: a ``PUT`` for oneself that changes the grants (up or
+down) or the disabled flag, and a ``DELETE`` or ``reset`` for oneself, answer ``409 you cannot change your
+own access; another admin or dzo user on the serve host can``. Changing only the display name is fine. The
+rule also holds if ``users.manage`` is ever given to a lower role.
+
+``GET /`` of a request that acts for a person has a ``user`` part: ``{"steam_id","name","roles":{"<instance>":"<role>"},
+"installation":["audit.view",…]}``. ``roles`` is the effective role on each existing instance the person has
+one on (the web interface shows controls from it; the API checks every action regardless), ``installation``
+the installation-wide permissions they hold. ``role`` stays the highest role anywhere.
+
+Streams (``/stream``) of a person are re-checked every 60 seconds: when the session ended, the person was
+disabled or lost the right to view the instance, the stream closes.
+
 Reading
 -------
 

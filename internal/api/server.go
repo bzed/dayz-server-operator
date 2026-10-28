@@ -4,6 +4,7 @@
 package api
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -55,6 +56,8 @@ type Server struct {
 	// Say sends text over the instance's RCon (style rcon of a message): to everyone when steamID
 	// is empty. nil answers the rcon style 503.
 	Say func(ctx context.Context, instance, steamID, text string) error
+	// Recheck is how often an open stream checks that the person behind it is still allowed (default 60 s).
+	Recheck time.Duration
 	// Logf receives the login log lines (one per step, never a secret); nil logs nothing.
 	Logf func(format string, args ...any)
 
@@ -79,6 +82,10 @@ type Accounts interface {
 	DeletePasskey(ctx context.Context, steamID string, id []byte) error
 	SetRecoveryCodes(ctx context.Context, steamID string, hashes []string) error
 	UpdatePending(ctx context.Context, hash string, p moderation.PendingLogin) error
+	People(ctx context.Context) ([]moderation.Person, error)
+	PutPerson(ctx context.Context, p moderation.Person, now time.Time) error
+	DeletePerson(ctx context.Context, steamID string) error
+	ResetCredentials(ctx context.Context, steamID string) error
 	Person(ctx context.Context, steamID string) (moderation.Person, error)
 	PersonByUsername(ctx context.Context, username string) (moderation.Person, error)
 	Credentials(ctx context.Context, steamID string) (moderation.Credentials, error)
@@ -129,7 +136,19 @@ type Info struct {
 	Version      string `json:"version"`
 	APIVersion   int    `json:"api_version"`
 	Principal    string `json:"principal"`
-	Role         Role   `json:"role"`
+	// Role is the token's role, or for a person the highest role they have anywhere.
+	Role Role `json:"role"`
+	// User is set when the request acts for a logged-in person: what they may do where.
+	User *UserInfo `json:"user,omitempty"`
+}
+
+// UserInfo is the person behind a request and what they may do: their effective role per instance (the
+// instances they have no role on are left out) and the installation-wide permissions they hold.
+type UserInfo struct {
+	SteamID      string          `json:"steam_id"`
+	Name         string          `json:"name"`
+	Roles        map[string]Role `json:"roles"`
+	Installation []string        `json:"installation"`
 }
 
 // ActionResult is the answer to every action. ID is the command id; when the
@@ -187,6 +206,10 @@ func (s *Server) Handler() http.Handler {
 	route("GET "+base+"/instances", PermView, false, s.instances)
 	s.loginRoutes(mux, base)
 	route("POST "+base+"/auth/logout", PermView, false, s.logout)
+	route("GET "+base+"/users", PermUsersManage, false, s.listUsers)
+	route("PUT "+base+"/users/{steamid}", PermUsersManage, false, s.putUser)
+	route("DELETE "+base+"/users/{steamid}", PermUsersManage, false, s.deleteUser)
+	route("POST "+base+"/users/{steamid}/reset", PermUsersManage, false, s.resetUser)
 	s.accountRoutes(route, base)
 	route("GET "+base+"/audit", PermAuditView, false, s.audit)
 	route("GET "+base+"/tiles/{map}/{rest...}", PermView, false, s.tile)
@@ -320,29 +343,37 @@ func (s *Server) resolveSession(w http.ResponseWriter, r *http.Request, c *call)
 		return false
 	}
 	c.session = auth.HashSecret(secret)
-	sess, err := s.Accounts.Session(r.Context(), c.session, s.now(), s.Login.idle(), s.Login.max())
-	if err == nil {
-		var person moderation.Person
-		if person, err = s.Accounts.Person(r.Context(), sess.SteamID); err == nil {
-			if person.Disabled {
-				fail(w, http.StatusForbidden, "this account is disabled")
-				return false
-			}
-			c.who.User = &User{SteamID: person.SteamID, Name: person.Name, Grants: person.Grants}
-			c.actor = c.who.Token.Name + ":" + person.SteamID
-			if len(c.who.Instances(s.Hubs.Names())) == 0 {
-				fail(w, http.StatusForbidden, "no access: this account has no role on any instance")
-				return false
-			}
-			return true
-		}
-	}
-	if errors.Is(err, moderation.ErrNotFound) {
-		fail(w, http.StatusUnauthorized, "session expired")
+	user, code, msg := s.loadUser(r.Context(), c.who, c.session)
+	if user == nil {
+		fail(w, code, "%s", msg)
 		return false
 	}
-	fail(w, http.StatusInternalServerError, "database error")
-	return false
+	c.who.User = user
+	c.actor = c.who.Token.Name + ":" + user.SteamID
+	return true
+}
+
+// loadUser finds the person of a session hash and checks they may still act through the token. It is used
+// when a request starts and again by open streams. Without a person it returns the status and message to answer.
+func (s *Server) loadUser(ctx context.Context, who Principal, sessionHash string) (*User, int, string) {
+	sess, err := s.Accounts.Session(ctx, sessionHash, s.now(), s.Login.idle(), s.Login.max())
+	var person moderation.Person
+	if err == nil {
+		person, err = s.Accounts.Person(ctx, sess.SteamID)
+	}
+	switch {
+	case errors.Is(err, moderation.ErrNotFound):
+		return nil, http.StatusUnauthorized, "session expired"
+	case err != nil:
+		return nil, http.StatusInternalServerError, "database error"
+	case person.Disabled:
+		return nil, http.StatusForbidden, "this account is disabled"
+	}
+	who.User = &User{SteamID: person.SteamID, Name: person.Name, Grants: person.Grants}
+	if len(who.Instances(s.Hubs.Names())) == 0 {
+		return nil, http.StatusForbidden, "no access: this account has no role on any instance"
+	}
+	return who.User, 0, ""
 }
 
 // role is the caller's effective role on the instance of the request.
@@ -366,7 +397,21 @@ func (s *Server) info(w http.ResponseWriter, _ *http.Request, c *call) {
 	if c.who.User != nil {
 		name = c.actor
 	}
-	writeJSON(w, 200, Info{Installation: s.Installation, Version: s.Version, APIVersion: APIVersion, Principal: name, Role: c.who.TopRole()})
+	info := Info{Installation: s.Installation, Version: s.Version, APIVersion: APIVersion, Principal: name, Role: c.who.TopRole()}
+	if u := c.who.User; u != nil {
+		info.User = &UserInfo{SteamID: u.SteamID, Name: u.Name, Roles: map[string]Role{}, Installation: []string{}}
+		for _, n := range s.Hubs.Names() {
+			if r := c.who.RoleOn(n); r != "" {
+				info.User.Roles[n] = r
+			}
+		}
+		for _, perm := range []string{PermAuditView, PermBanGlobal, PermBanRevokeAny, PermUsersManage} {
+			if c.who.CanAll(perm) {
+				info.User.Installation = append(info.User.Installation, perm)
+			}
+		}
+	}
+	writeJSON(w, 200, info)
 }
 
 func (s *Server) instances(w http.ResponseWriter, _ *http.Request, c *call) {
@@ -493,10 +538,16 @@ func (s *Server) stream(w http.ResponseWriter, r *http.Request, c *call) {
 	}
 	beat := time.NewTicker(15 * time.Second)
 	defer beat.Stop()
+	recheck := time.NewTicker(cmp.Or(s.Recheck, time.Minute))
+	defer recheck.Stop()
 	for {
 		select {
 		case <-r.Context().Done():
 			return
+		case <-recheck.C:
+			if !s.stillAllowed(r.Context(), c) {
+				return
+			}
 		case <-beat.C:
 			if _, err := fmt.Fprint(w, ": keepalive\n\n"); err != nil {
 				return
@@ -519,6 +570,20 @@ func (s *Server) stream(w http.ResponseWriter, r *http.Request, c *call) {
 			}
 		}
 	}
+}
+
+// stillAllowed re-checks a stream that acts for a person: the session must be alive, the person enabled
+// and their role on the instance must still allow viewing. It also takes over a changed role.
+func (s *Server) stillAllowed(ctx context.Context, c *call) bool {
+	if c.session == "" {
+		return true
+	}
+	user, _, _ := s.loadUser(ctx, c.who, c.session)
+	if user == nil {
+		return false
+	}
+	c.who.User = user
+	return c.who.Can(c.hub.Name, PermView)
 }
 
 func (s *Server) command(w http.ResponseWriter, r *http.Request, c *call) {
