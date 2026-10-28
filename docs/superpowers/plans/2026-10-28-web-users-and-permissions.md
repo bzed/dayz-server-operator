@@ -59,7 +59,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 | `internal/api/tokens.go` | `Web` flag on tokens. |
 | `internal/api/server.go`, `bans.go`, `evidence.go`, `players.go`, `ips.go`, `geo.go` | Per-instance checks (U12), session resolution, stream re-check, `Info.User`. |
 | `internal/api/login.go`, `passkeys.go`, `account.go`, `users.go` (new) | Login, WebAuthn, account and user-management endpoints. |
-| `internal/admin/audit.go` | `Client` field on `AuditEntry`. |
+| `internal/admin/audit.go` | `Client` field on `AuditEntry`; expiring client addresses. |
 | `internal/apiclient/client.go`, `auth.go`, `users.go` (new) | Session and client headers; client methods for the new endpoints. |
 | `cmd/dzo/serve.go`, `cmd/dzo/user.go` (new), `cmd/dzo/web.go` | `--web` tokens, `dzo user …`, single-installation web, TLS wiring. |
 | `internal/serve/serve.go` | TLS on the API listener, accounts wiring, session pruning in upkeep. |
@@ -230,6 +230,20 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 - [ ] **Step 4: Run** → PASS; `make check`.
 - [ ] **Step 5: Commit** `api: login with password or Steam and a second factor`.
 
+### Task 7b: Client addresses in the audit log expire
+
+**Files:**
+- Modify: `internal/admin/audit.go`, `internal/admin/audit_test.go`, `internal/config/config.go` (`Serve.AuditIPRetentionDays *int \`yaml:"audit_ip_retention_days"\``, `func (s Serve) AuditIPRetention() time.Duration` via `days(…, 90)`), `internal/serve/serve.go` (daily upkeep)
+- Docs: `docs/configuration.rst` (example `audit_ip_retention_days: 90  # default` and prose: what is kept, `0`, negative refused, takes effect at `dzo serve` start, journald is the host's retention), `docs/operations.rst` (audit log section)
+
+**Interfaces:**
+- Consumes: Task 7 `AuditEntry.Client`.
+- Produces: `func (a *Audit) ForgetClients(before time.Time) (int, error)`: rewrites the file (temp file in the same directory, mode 0600, rename) with `Client` emptied on entries whose `Time` is before `before`; no rewrite when nothing changes; returns how many entries changed. `Log` and `ForgetClients` take an exclusive `flock` on `<audit path>.lock` besides the mutex, because `dzo user` (another process) appends to the same file.
+
+- [ ] **Step 1: Write failing tests**: `TestForgetClientsBlanksOld` (entries at now-100d and now-10d, before = now-90d → only the first loses its client, both entries stay, order kept), `TestForgetClientsNoChangeNoRewrite` (mtime unchanged), `TestForgetClientsKeepsMode0600`, `TestForgetClientsWithConcurrentLog` (goroutines logging while it runs, `-race`: no entry lost), `TestAuditIPRetentionDefault` (90 days; `0` → negative duration = for ever; `-1` refused at load).
+- [ ] **Step 2: Run** → FAIL. **Step 3: Implement**; serve calls `ForgetClients(now - AuditIPRetention())` once a day from the upkeep loop when the retention is not "for ever". **Step 4: Run** → PASS; `make docs`; `make check`.
+- [ ] **Step 5: Commit** `audit: client addresses expire after serve.audit_ip_retention_days (default 90)`.
+
 ### Task 8: Passkeys, enrolment and the account endpoints
 
 **Files:**
@@ -350,5 +364,5 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 ## Self-review notes
 
-- Spec coverage: U1 T5; U2 T3; U3/U8 T7–T8; U4 T4, T7, T8; U5 T5; U6 T6; U7 T7, T11, T12; U9 T4, T7; U10 T8; U11 T5, T12; U12 T6; U13 T9, T13; U14 T9, T13; U15 T9; U16 T2; U17 T10; U18 T4, T7, T12; U19 T6, T7; U20 T4, T8, T13; U21 T1–T3; Migration T2, T3, T14; Later section: Global Constraints + T5.
-- My calls beyond the spec, for review: `serve.login.session_idle_hours` / `session_max_days` key names; `/b/{installation}/` URLs kept; `dzo user` writes the database directly; the meta-refresh step after Steam; self-protection (no change of one's own grants, up or down, nor disabling, deleting or resetting oneself) enforced in the API, not only the web UI; TOTP secrets stored unencrypted in the 0600 database; audit client addresses kept as long as the audit log (retention left open in the spec discussion).
+- Spec coverage: U1 T5; U2 T3; U3/U8 T7–T8; U4 T4, T7, T8; U5 T5; U6 T6; U7 T7, T11, T12; U9 T4, T7; U10 T8; U11 T5, T12; U12 T6; U13 T9, T13; U14 T9, T13; U15 T9; U16 T2; U17 T10; U18 T4, T7, T12; U19 T6, T7, T7b; U20 T4, T8, T13; U21 T1–T3; Migration T2, T3, T14; Later section: Global Constraints + T5.
+- My calls beyond the spec, for review: `serve.login.session_idle_hours` / `session_max_days` key names; `/b/{installation}/` URLs kept; `dzo user` writes the database directly; the meta-refresh step after Steam; self-protection (no change of one's own grants, up or down, nor disabling, deleting or resetting oneself) enforced in the API, not only the web UI; TOTP secrets stored unencrypted in the 0600 database; a lock file next to the audit log so that the daily address expiry and `dzo user` appends cannot lose lines.
