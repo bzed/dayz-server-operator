@@ -190,6 +190,20 @@ Web interface and API
      - create an API token; the secret is printed once. ``--delegate`` may name the acting user (scripts and tools), ``--web`` is the token of ``dzo web``, which acts for logged-in people (see :doc:`api`)
    * - ``dzo token list`` / ``dzo token revoke <id>``
      - list or delete tokens
+   * - ``dzo user list``
+     - the people who may use the web interface, with their grants (Steam ID, name, username, ``instance=role``, state)
+   * - ``dzo user grant <steamid> --role <role> [--instance <name>…] [--name <text>]``
+     - give a role (``viewer``, ``moderator``, ``operator``, ``admin``) on the listed instances, or on ``*`` (every instance, also later ones) without ``--instance``. Creates the person and replaces the role on instances they already have. This is how the first admin is made
+   * - ``dzo user revoke <steamid> [--instance <name>…]``
+     - take the roles on the listed instances away, or every grant without ``--instance``. A person left without a grant is logged out
+   * - ``dzo user disable <steamid>`` / ``enable`` / ``delete``
+     - block a person from logging in (their sessions end, grants stay) / allow it again / delete the person with grants, credentials and sessions
+   * - ``dzo user reset <steamid|username>``
+     - remove password, username, TOTP, passkeys, recovery codes and sessions; the person signs in through Steam and sets up a second factor again
+
+``dzo user`` runs on the host of ``dzo serve`` and writes its database (``<paths.db>/dzo.sqlite``) directly,
+which is safe while ``dzo serve`` runs, like ``dzo token`` with the token file. So it works when nobody can
+log in. Every change is written to the audit log with the source ``cli`` and the actor ``cli:$USER``.
 
 Map tiles
 ---------

@@ -105,6 +105,22 @@ token that the pages hand to htmx (and a same-origin check), responses carry a
 strict content security policy without inline scripts, and pages cannot be
 framed.
 
+People and the first admin
+--------------------------
+
+People are identified by their Steam ID and have a role per instance (``viewer``, ``moderator``, ``operator``
+or ``admin``, below), or on ``*`` for every instance. The first admin is made on the host of ``dzo serve``,
+where nothing else is needed:
+
+.. code-block:: sh
+
+   dzo user grant 76561198000000001 --role admin --name Ann          # every instance
+   dzo user grant 76561198000000002 --role operator --instance chernarus --instance livonia
+   dzo user list
+
+``dzo user`` also revokes, disables, deletes and resets (:doc:`cli`); an admin on ``*`` does the same through
+the API (:doc:`api`).
+
 Roles
 -----
 
