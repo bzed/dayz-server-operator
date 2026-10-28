@@ -10,7 +10,7 @@ also do with ``dzo player``, ``dzo vehicle`` or a script.
 
 The web interface only ever talks to installations through their API. It can
 run on the same host as ``dzo serve`` (the default), or on another host, and
-one web interface can show **several dzo installations** side by side.
+one web interface serves **one dzo installation**.
 
 .. code-block:: sh
 
@@ -19,7 +19,7 @@ one web interface can show **several dzo installations** side by side.
    sudo -iu dayz dzo web          # http://127.0.0.1:8081 (to try it by hand, see below)
 
 ``dzo instance apply <name>`` (or ``dzo units sync``) writes ``dzo-web.service`` and starts it as soon
-as the web interface is set up, that is when ``web.backends`` in ``config.yaml`` lists a backend or the
+as the web interface is set up, that is when ``web.api`` in ``config.yaml`` is set or the
 token file above (``<paths.secrets>/web.token``) exists. ``web.enabled: true`` forces the unit on (it then
 fails until the token exists), ``false`` keeps it off. It is not written before that, because the web
 interface is optional and cannot start without a token. ``dzo-serve.service`` is written when an
@@ -27,21 +27,21 @@ instance runs the dzo-admin mod. With the units running, ``dzo serve`` and ``dzo
 find their ports taken: stop the unit first (``systemctl --user stop dzo-web``) if you want to run one
 in the foreground, for example to see its output.
 
-Several installations
----------------------
+Another host
+------------
 
-List one backend per installation in ``/etc/dzo/config.yaml``. Each needs an API
-token created *on that installation*:
+On another host than ``dzo serve``, set ``web.api`` in ``/etc/dzo/config.yaml``. The token is
+created *on the installation*:
 
 .. code-block:: yaml
 
    web:                             # excerpt; every key of ``web:`` is explained in :doc:`configuration`
-     backends:                      # name, url and token_file are all required
-       - {name: eu, url: "https://dzo-eu.example.invalid", token_file: /var/lib/dzo/secrets/eu.token}
-       - {name: us, url: "https://dzo-us.example.invalid", token_file: /var/lib/dzo/secrets/us.token}
+     api:
+       url: "https://dzo.example.invalid:8080"
+       token_file: /var/lib/dzo/secrets/web.token
+       ca_file: /etc/dzo/tls/serve-ca.pem   # only for a private CA
 
-The dashboard shows every installation with its instances. An installation that
-is down is shown with its error; the others keep working.
+For several installations run one web interface for each.
 
 Access control
 --------------
@@ -54,11 +54,6 @@ Access control
    authenticates your users (with multi-factor login) and terminates HTTPS.
    dzo refuses to listen on a non-local address unless
    ``web.allow_insecure_http`` is set.
-
-Set ``web.user_header`` to the header your proxy fills with the signed-in user
-(for example ``X-Forwarded-User``). That name goes into the audit log next to
-each action. Only use this behind a proxy that strips the header from incoming
-requests.
 
 What the interface does about browser attacks: every change needs a per-session
 token that the pages hand to htmx (and a same-origin check), responses carry a

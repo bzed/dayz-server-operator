@@ -246,11 +246,15 @@ func TestWebCommand(t *testing.T) {
 	writeFile(t, filepath.Join(dir, "secrets", "web.token"), "dzo_x\n")
 	out := runUntil(t, "web interface on", "web", "--config", cfg)
 	require.Contains(t, out, "1 backend(s)")
-	// Explicit backends, several installations.
+	// The API of another host.
 	writeFile(t, filepath.Join(dir, "a.token"), "ta")
-	writeFile(t, cfg, "paths:\n  data: "+dir+"\nweb:\n  listen: 127.0.0.1:0\n  backends:\n    - {name: one, url: http://127.0.0.1:1, token_file: "+filepath.Join(dir, "a.token")+"}\n    - {name: two, url: http://127.0.0.1:2, token_file: "+filepath.Join(dir, "a.token")+"}\n")
+	writeFile(t, cfg, "paths:\n  data: "+dir+"\nweb:\n  listen: 127.0.0.1:0\n  api: {url: \"http://127.0.0.1:1\", token_file: "+filepath.Join(dir, "a.token")+"}\n")
 	out = runUntil(t, "web interface on", "web", "--config", cfg)
-	require.Contains(t, out, "2 backend(s)")
+	require.Contains(t, out, "1 backend(s)")
+	// The removed keys are refused with a pointer to the migration notes.
+	writeFile(t, cfg, "paths:\n  data: "+dir+"\nweb:\n  backends: []\n  user_header: X-User\n")
+	_, err = runCmd(t, "web", "--config", cfg)
+	require.ErrorContains(t, err, "migration")
 	_, err = runCmd(t, "web", "--config", filepath.Join(dir, "nope.yaml"))
 	require.Error(t, err, "missing config")
 	// A listen address that cannot be bound fails cleanly.

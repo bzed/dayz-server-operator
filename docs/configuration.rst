@@ -74,6 +74,14 @@ built-in ones, and an entry of the same name replaces the built-in entry as a wh
      session_retention_days: 365     # default (unset = 365)
      geoip_dir: /var/lib/GeoIP       # default
      geoip_legacy_dir: /usr/share/GeoIP   # default
+     tls:                            # default: none (plain HTTP on listen)
+       cert_file: /etc/dzo/tls/serve-cert.pem   # default: empty
+       key_file: /etc/dzo/tls/serve-key.pem     # default: empty
+       client_ca_file: /etc/dzo/tls/ca.pem      # default: empty (no client certificates)
+     web_url: https://dzo.example.invalid       # default: none (user logins are off)
+     login:
+       session_idle_hours: 12        # default (unset = 12)
+       session_max_days: 7           # default (unset = 7)
 
    web:                              # `dzo web`, see the web interface page
      enabled: null                   # default: unset (see below)
@@ -82,9 +90,15 @@ built-in ones, and an entry of the same name replaces the built-in entry as a wh
      assets: /usr/share/javascript   # default
      docs_dir: /usr/share/doc/dzo/html   # default
      flags_dir: /usr/share/iso-flags-svg/country-4x3   # default
-     user_header: X-Forwarded-User   # default: empty (no proxy user)
-     backends:                       # default: none (see below)
-       - {name: main, url: "http://127.0.0.1:8080", token_file: /var/lib/dzo/secrets/web.token}
+     tls:                            # default: none (plain HTTP on listen)
+       cert_file: /etc/dzo/tls/web-cert.pem     # default: empty
+       key_file: /etc/dzo/tls/web-key.pem       # default: empty
+       client_ca_file: /etc/dzo/tls/ca.pem      # default: empty (no client certificates)
+     api:                            # default: none (this host's API, see below)
+       url: https://dzo.example.invalid:8080    # default: none
+       token_file: /var/lib/dzo/secrets/web.token   # default: none
+       ca_file: /etc/dzo/tls/serve-ca.pem       # default: none (the system's CAs)
+     trusted_proxies: ["192.0.2.10", "198.51.100.0/24"]   # default: none
 
    map_tiles:                        # `dzo map tiles build`, see the admin map page
      maps:                           # default: none
@@ -184,7 +198,7 @@ and print what is wrong. A key dzo does not know is ignored.
       Whether ``dzo units sync`` runs ``dzo serve`` as a unit. Unset: when an instance runs the
       dzo-admin mod, which needs the endpoint. ``true`` and ``false`` force it.
    ``installation``
-      The name of this installation in the API, so one web interface can tell several apart.
+      The name of this installation in the API and in the web interface.
    ``listen``
       The address of ``/api/v1``. Plain HTTP is only accepted on a loopback address unless
       ``allow_insecure_http`` is set; put a reverse proxy with HTTPS in front otherwise.
@@ -192,7 +206,32 @@ and print what is wrong. A key dzo does not know is ignored.
       The address of ``/mod/v1/sync``, where the game servers' dzo-admin mods connect. The same
       loopback rule applies.
    ``allow_insecure_http``
-      Allows plain HTTP on ``listen`` and ``mod_listen`` on a non-loopback address.
+      Allows plain HTTP on ``listen`` and ``mod_listen`` on a non-loopback address. It is not needed
+      for ``listen`` when ``tls`` is set.
+   ``tls``
+      ``cert_file`` and ``key_file`` go together and switch the API listener (``listen``) to HTTPS,
+      with TLS 1.2 or later. ``client_ca_file`` (needs the other two) makes client certificates
+      mandatory (mutual TLS), for example so that only the web host can reach the API. ``mod_listen``
+      stays plain HTTP: the game servers on this host call it. A non-loopback ``listen`` is accepted
+      without ``allow_insecure_http`` when ``tls`` is set. The files are checked on new connections
+      (every few seconds at most) and on ``systemctl reload``: a renewed certificate or CA takes
+      effect without a restart and without dropping connections, and a replacement that does not load
+      is logged and the old one stays active. Everything else in this block is read at start. Giving
+      only one of the two files, or ``client_ca_file`` alone, is refused when the configuration loads.
+   ``web_url``
+      The address people open the web interface at, as scheme and host (and port) only, for example
+      ``https://dzo.example.invalid``. User logins (:doc:`web`) need it: it fixes the return address
+      of the Steam sign-in and the relying party of passkeys. Unset: logins are off and the web
+      interface says so. It must be ``https``; plain ``http`` is only accepted for ``localhost``,
+      ``127.0.0.1`` and ``[::1]``. A path, query, fragment or user name is refused. ``dzo web`` learns
+      the address from the API, so it is set once, on the host of ``dzo serve``. Changing it takes
+      effect when ``dzo serve`` starts, and passkeys registered under the old name stop working.
+   ``login``
+      ``session_idle_hours`` (unset: 12) is how long a web session may sit unused before it ends,
+      ``session_max_days`` (unset: 7) how long it lives at most however busy the person is. Both are
+      whole numbers and must be at least 1; ``0`` and negative values are refused when the
+      configuration loads. A change affects the sessions that exist as soon as ``dzo serve``
+      is restarted.
    ``ip_retention_days``
       How many days the address of a player sighting is kept, unless a ban uses it. Unset: 90.
       ``0``: for ever. Negative values are refused.
@@ -209,13 +248,31 @@ and print what is wrong. A key dzo does not know is ignored.
       see :doc:`geoip`.
 
 ``web``
-   ``dzo web``, the web interface (:doc:`web`). It reaches installations only through their API.
+   ``dzo web``, the web interface (:doc:`web`). One web interface serves one installation and reaches
+   it only through its API.
 
    ``enabled``
       Whether ``dzo units sync`` runs ``dzo web`` as a unit. Unset: when the web interface is set
-      up, that is when ``backends`` lists a backend or ``${paths.secrets}/web.token`` exists.
+      up, that is when ``api`` is set or ``${paths.secrets}/web.token`` exists.
    ``listen``, ``allow_insecure_http``
       As for ``serve``.
+   ``tls``
+      As ``serve.tls``, for the web listener: ``cert_file`` and ``key_file`` switch it to HTTPS and
+      allow a non-loopback ``listen`` without ``allow_insecure_http``; ``client_ca_file`` requires
+      client certificates. The files reload as for ``serve.tls``.
+   ``api``
+      Where the installation's API is, when it is not this host's. ``url`` (``https``, or ``http`` for
+      a loopback address) and ``token_file`` (an absolute path; a ``web`` token created on that
+      installation) go together: giving one without the other is refused, and so is ``ca_file``
+      without them. ``ca_file`` is a PEM file with the CA that signed the API's certificate, for a
+      private CA; unset, the system's CAs are used. It reloads when it changes, like the other TLS
+      files. Without ``api`` the web interface uses this host's API (``serve.listen``) with
+      ``${paths.secrets}/web.token``. Read at start.
+   ``trusted_proxies``
+      Reverse proxies, as addresses or CIDR networks, whose ``X-Forwarded-For`` header is believed
+      when working out the browser's address for the login log and the audit log. Default: none, then
+      the address of the connection is used and forwarding headers are ignored. A value that is
+      neither an address nor a CIDR network is refused, naming it. Read at start.
    ``assets``
       The directory with htmx and Leaflet (Debian's ``libjs-*`` packages).
    ``docs_dir``
@@ -223,15 +280,10 @@ and print what is wrong. A key dzo does not know is ignored.
    ``flags_dir``
       The country flags as ``<code>.svg`` in the 4:3 shape (Debian's ``iso-flags-svg``); without
       them the player list shows the country code.
-   ``user_header``
-      The request header an authenticating reverse proxy sets to the signed-in user (for example
-      ``X-Forwarded-User``). The web interface has no login of its own: it reports this user to the
-      audit log, and must only be reachable through such a proxy or on localhost.
-   ``backends``
-      The installations to show: ``name`` (unique), the ``url`` of the API and the ``token_file``
-      with an API token of that installation (role operator, ``dzo token create --delegate``).
-      All three are required. Without ``backends`` but with ``web.token`` the web interface uses
-      this host's own API (``serve.listen``) with that token.
+   ``backends``, ``user_header``
+      Removed. One web interface serves one installation (use ``api``), and ``dzo web`` has its own
+      login. A configuration that still sets either key is refused with a pointer to the migration
+      notes (:doc:`migration`).
 
 ``map_tiles.maps``
    The data PBO each map's tiles are built from, by the name of the mission's world

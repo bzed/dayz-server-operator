@@ -212,10 +212,10 @@ func exporterUnit(o Options) File {
 			"[Install]\nWantedBy=default.target\n")}
 }
 
-// webConfigured reports whether the web interface has been set up: it has backends of its own, or
-// the API token it uses for this host's API exists.
+// webConfigured reports whether the web interface has been set up: it has an API of its own
+// (web.api), or the API token it uses for this host's API exists.
 func webConfigured(cfg *config.Config) bool {
-	if len(cfg.Web.Backends) > 0 {
+	if cfg.Web.API.URL != "" {
 		return true
 	}
 	_, err := os.Stat(filepath.Join(cfg.Paths.Secrets, "web.token"))

@@ -24,22 +24,18 @@ import (
 	"github.com/bzed/dayz-server-operator/internal/web"
 )
 
-// webBackends turns web.backends into clients. Without any, the web
-// interface uses this host's own API with ${paths.secrets}/web.token.
+// webBackends turns web.api into the one client of the web interface. Without
+// it, the web interface uses this host's own API with ${paths.secrets}/web.token.
 func webBackends(cfg *config.Config) ([]*web.Backend, error) {
-	bs := cfg.Web.Backends
-	if len(bs) == 0 {
-		bs = []config.Backend{{Name: cfg.Serve.Installation, URL: "http://" + cfg.Serve.Listen, TokenFile: filepath.Join(cfg.Paths.Secrets, "web.token")}}
+	url, tokenFile := "http://"+cfg.Serve.Listen, filepath.Join(cfg.Paths.Secrets, "web.token")
+	if cfg.Web.API.URL != "" {
+		url, tokenFile = cfg.Web.API.URL, cfg.Web.API.TokenFile
 	}
-	var out []*web.Backend
-	for _, b := range bs {
-		tok, err := os.ReadFile(b.TokenFile) //nolint:gosec // operator-configured secret file
-		if err != nil {
-			return nil, fmt.Errorf("backend %q: %w (create one with `dzo token create web --role operator --delegate`)", b.Name, err)
-		}
-		out = append(out, &web.Backend{Name: b.Name, Client: apiclient.New(b.URL, strings.TrimSpace(string(tok)))})
+	tok, err := os.ReadFile(tokenFile) //nolint:gosec // operator-configured secret file
+	if err != nil {
+		return nil, fmt.Errorf("%w (create one with `dzo token create web --role operator --delegate`)", err)
 	}
-	return out, nil
+	return []*web.Backend{{Name: cfg.Serve.Installation, Client: apiclient.New(url, strings.TrimSpace(string(tok)))}}, nil
 }
 
 func newWebCmd() *cobra.Command {
@@ -58,7 +54,7 @@ func newWebCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			srv, err := web.New(backends, web.Options{Version: version.String(), Assets: cfg.Web.Assets, DocsDir: cfg.Web.DocsDir, FlagsDir: cfg.Web.FlagsDir, UserHeader: cfg.Web.UserHeader})
+			srv, err := web.New(backends, web.Options{Version: version.String(), Assets: cfg.Web.Assets, DocsDir: cfg.Web.DocsDir, FlagsDir: cfg.Web.FlagsDir})
 			if err != nil {
 				return err
 			}
