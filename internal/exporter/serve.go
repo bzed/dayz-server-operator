@@ -7,103 +7,17 @@ import (
 	"context"
 	"crypto/subtle"
 	"crypto/tls"
-	"crypto/x509"
 	"errors"
 	"fmt"
 	"net"
 	"net/http"
 	"os"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/bzed/dayz-server-operator/internal/config"
+	"github.com/bzed/dayz-server-operator/internal/tlsfiles"
 )
-
-// certChecks bounds how often the certificate files are looked at.
-const certChecks = 5 * time.Second
-
-// certs holds the TLS certificate and re-reads it when the files change, so a
-// replaced certificate takes effect without a restart. A new certificate that
-// does not load is rejected and logged, and the old one stays active.
-type certs struct {
-	cert, key string
-	logf      func(string, ...any)
-
-	mu      sync.Mutex
-	current *tls.Certificate
-	mtime   [2]time.Time
-	checked time.Time
-}
-
-func newCerts(certFile, keyFile string, logf func(string, ...any)) (*certs, error) {
-	c := &certs{cert: certFile, key: keyFile, logf: logf}
-	if err := c.load(); err != nil {
-		return nil, err
-	}
-	return c, nil
-}
-
-func (c *certs) stat() (m [2]time.Time, err error) {
-	for i, f := range []string{c.cert, c.key} {
-		fi, err := os.Stat(f)
-		if err != nil {
-			return m, err
-		}
-		m[i] = fi.ModTime()
-	}
-	return m, nil
-}
-
-func (c *certs) load() error {
-	m, err := c.stat()
-	if err != nil {
-		return err
-	}
-	pair, err := tls.LoadX509KeyPair(c.cert, c.key)
-	if err != nil {
-		return err
-	}
-	c.mu.Lock()
-	c.current, c.mtime, c.checked = &pair, m, time.Now()
-	c.mu.Unlock()
-	return nil
-}
-
-// Reload re-reads the files now (SIGHUP, systemctl reload).
-func (c *certs) Reload() {
-	if err := c.load(); err != nil {
-		c.logf("tls: the new certificate was rejected, the old one stays active: %v", err)
-		return
-	}
-	c.logf("tls: certificate reloaded")
-}
-
-func (c *certs) get(*tls.ClientHelloInfo) (*tls.Certificate, error) {
-	c.mu.Lock()
-	recheck := time.Since(c.checked) > certChecks
-	if recheck {
-		c.checked = time.Now()
-	}
-	c.mu.Unlock()
-	if recheck {
-		if m, err := c.stat(); err == nil {
-			c.mu.Lock()
-			changed := m != c.mtime
-			c.mu.Unlock()
-			if changed {
-				c.Reload()
-				// whether it loaded or not, do not try the same files on every handshake
-				c.mu.Lock()
-				c.mtime = m
-				c.mu.Unlock()
-			}
-		}
-	}
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return c.current, nil
-}
 
 // Guard wraps h with the access rules: the IP allow-list and the bearer token.
 func Guard(h http.Handler, c config.Exporter, token string) (http.Handler, error) {
@@ -168,30 +82,28 @@ func Serve(ctx context.Context, c config.Exporter, h http.Handler, reload <-chan
 	}
 	srv := &http.Server{Handler: guarded, ReadHeaderTimeout: 10 * time.Second, ReadTimeout: time.Minute, WriteTimeout: time.Minute, IdleTimeout: 2 * time.Minute}
 	if c.TLS.CertFile != "" {
-		cs, err := newCerts(c.TLS.CertFile, c.TLS.KeyFile, logf)
+		pair, err := tlsfiles.NewPair(c.TLS.CertFile, c.TLS.KeyFile, logf)
 		if err != nil {
 			_ = ln.Close()
 			return fmt.Errorf("exporter.tls: %w", err)
 		}
-		srv.TLSConfig = &tls.Config{GetCertificate: cs.get, MinVersion: tls.VersionTLS12}
+		var pool *tlsfiles.Pool
 		if c.TLS.ClientCAFile != "" {
-			pem, err := os.ReadFile(c.TLS.ClientCAFile) //nolint:gosec // the operator's own file
+			pool, err = tlsfiles.NewPool(c.TLS.ClientCAFile, logf)
 			if err != nil {
 				_ = ln.Close()
 				return fmt.Errorf("exporter.tls.client_ca_file: %w", err)
 			}
-			pool := x509.NewCertPool()
-			if !pool.AppendCertsFromPEM(pem) {
-				_ = ln.Close()
-				return errors.New("exporter.tls.client_ca_file holds no certificate")
-			}
-			srv.TLSConfig.ClientCAs, srv.TLSConfig.ClientAuth = pool, tls.RequireAndVerifyClientCert
 		}
+		srv.TLSConfig = tlsfiles.ServerConfig(pair, pool)
 		go func() {
 			for {
 				select {
 				case <-reload:
-					cs.Reload()
+					pair.Reload()
+					if pool != nil {
+						pool.Reload()
+					}
 				case <-ctx.Done():
 					return
 				}

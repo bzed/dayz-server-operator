@@ -247,7 +247,8 @@ and print what is wrong. A key dzo does not know is ignored.
    ``tls``
       ``cert_file`` and ``key_file`` go together and switch on HTTPS; they are reloaded when
       they change. ``client_ca_file`` (needs the other two) makes client certificates
-      mandatory (mutual TLS).
+      mandatory (mutual TLS); it is reloaded the same way, so a replaced CA file takes effect
+      without a restart. A replacement that does not load is logged and the old one stays active.
    ``allow``
       The networks (CIDR) that may connect. Empty allows every address.
    ``bearer_token_file``
