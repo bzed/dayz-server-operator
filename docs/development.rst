@@ -273,7 +273,11 @@ as above; it fails without them. The script sets:
    fail (the ``live`` tag is an explicit opt-in)
 
 ``DZO_LIVE_TOKEN_FILE``
-   an admin API token
+   a web token (``dzo token create web --role admin --web``)
+
+``DZO_LIVE_DB``
+   the database of that ``dzo serve``; the test logs the admin ``76561198000000077`` (granted by the
+   script) in by making a session there, because the pages need a login
 
 ``DZO_LIVE_INSTANCE``
    the instance, ``t1``
