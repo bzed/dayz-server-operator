@@ -112,6 +112,34 @@ factors and sessions are removed; they sign in through Steam and set up a second
 them. Your own row has no controls: nobody can change their own access in the web interface or the API;
 another admin, or ``dzo user`` on the serve host, does that. Changes are in the audit log.
 
+.. _web-setup-login:
+
+Setting up logins (the minimum)
+-------------------------------
+
+On the host of ``dzo serve``:
+
+1. Set ``serve.web_url`` in ``/etc/dzo/config.yaml`` to the address people type into their browser, for example
+   ``https://dzo.example.org`` (scheme and host, no path; ``https``, or ``http`` for ``localhost`` only), and
+   restart ``dzo serve``.
+2. Make the token of the web interface and give it to ``dzo web``: ``dzo token create web --role admin --web >
+   <paths.secrets>/web.token`` (with ``web.api`` on another host, :ref:`web-https`).
+3. Make the first admin, with your own Steam64 ID (the 17-digit number from your Steam profile address, or
+   from a site like steamid.io)::
+
+      dzo user grant 76561198000000001 --role admin --name Ann
+
+4. Open ``serve.web_url``, choose **Sign in through Steam**, then set up your second factor (authenticator app
+   or passkey) and keep the recovery codes. Add everybody else on the people page (:ref:`web-account`).
+
+**What signing in through Steam needs.** Steam's sign-in is OpenID: there is no Steam Web API key, no
+registration with Valve and no secret. It needs two things. First, ``serve.web_url`` has to be the address
+the *browser* uses: Steam sends the browser back to it (``<web_url>/login/steam/return``), and it also names
+the site Steam shows on its sign-in page; behind a reverse proxy this is the proxy's public address. Second,
+``dzo serve`` has to reach ``https://steamcommunity.com`` outbound (HTTPS, port 443), because it asks Steam to
+confirm every sign-in; nothing needs to reach ``dzo serve`` from Steam. Without Steam, a person who already
+has a username and password can still log in with those.
+
 .. _web-login:
 
 Login
