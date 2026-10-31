@@ -32,7 +32,7 @@ func (s *Server) listEvidence(w http.ResponseWriter, r *http.Request, c *call) {
 	}
 	out := []moderation.Evidence{}
 	for _, e := range list {
-		if c.who.Allowed(e.Instance) {
+		if canOnRecord(c, e.Instance, PermBanView) {
 			out = append(out, maskEvidence(c, e))
 		}
 	}
@@ -82,12 +82,16 @@ func (s *Server) addEvidence(w http.ResponseWriter, r *http.Request, c *call) {
 		fail(w, http.StatusBadRequest, "unknown instance %q", in.Instance)
 		return
 	}
+	if !c.who.Can(in.Instance, PermEvidenceAdd) {
+		forbidden(w, c.who.RoleOn(in.Instance), PermEvidenceAdd)
+		return
+	}
 	e, err := st.AddEvidence(r.Context(), c.actor, in, image, s.now())
 	if err != nil {
 		storeFail(w, err)
 		return
 	}
-	_ = s.Audit.Log(admin.AuditEntry{Actor: c.actor, Source: c.src, Instance: e.Instance, Action: "evidence.add",
+	_ = s.Audit.Log(admin.AuditEntry{Actor: c.actor, Source: c.src, Client: c.client, Instance: e.Instance, Action: "evidence.add",
 		Target: firstNonEmpty(e.SteamID, e.GUID, ipLabel(e.IP)), Detail: fmt.Sprintf("evidence #%d %s", e.ID, e.Kind), OK: true}) // stored either way
 	writeJSON(w, http.StatusCreated, maskEvidence(c, e))
 }
@@ -98,6 +102,15 @@ func ipLabel(ip string) string {
 		return ""
 	}
 	return "ip"
+}
+
+// canOnRecord reports whether a permission holds for a record of an instance; a record without one needs it on
+// any instance.
+func canOnRecord(c *call, instance, perm string) bool {
+	if instance == "" {
+		return c.who.CanAny(perm)
+	}
+	return c.who.Can(instance, perm)
 }
 
 func firstNonEmpty(v ...string) string {
@@ -120,7 +133,7 @@ func (s *Server) loadEvidence(w http.ResponseWriter, r *http.Request, c *call) (
 		return nil, moderation.Evidence{}, false
 	}
 	e, err := st.GetEvidence(r.Context(), id)
-	if err == nil && !c.who.Allowed(e.Instance) {
+	if err == nil && !canOnRecord(c, e.Instance, PermBanView) {
 		err = moderation.ErrNotFound
 	}
 	if err != nil {
@@ -172,17 +185,20 @@ func (s *Server) identities(w http.ResponseWriter, r *http.Request, c *call) {
 		storeFail(w, err)
 		return
 	}
-	if seesIPs(c) { // an address history is personal data: who read it is recorded, without the addresses
-		_ = s.Audit.Log(admin.AuditEntry{Actor: c.actor, Source: c.src, Action: "ip.history", Target: r.PathValue("steamid"), OK: true}) // the read goes on if the line cannot be written
-	}
 	out := []moderation.Sighting{}
+	shown := false
 	for _, x := range list {
-		if c.who.Allowed(x.Instance) {
-			if !seesIPs(c) {
+		if canOnRecord(c, x.Instance, PermBanView) {
+			if seesIPsOn(c, x.Instance) {
+				shown = shown || x.IP != ""
+			} else {
 				x.IP = ""
 			}
 			out = append(out, x)
 		}
+	}
+	if shown { // an address history is personal data: who read it is recorded, without the addresses
+		_ = s.Audit.Log(admin.AuditEntry{Actor: c.actor, Source: c.src, Client: c.client, Action: "ip.history", Target: r.PathValue("steamid"), OK: true}) // the read goes on if the line cannot be written
 	}
 	writeJSON(w, 200, out)
 }

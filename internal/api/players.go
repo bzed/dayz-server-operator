@@ -36,15 +36,18 @@ type PlayerDetail struct {
 // maxFriendsSeen caps the friends in an answer.
 const maxFriendsSeen = 10
 
-// restrict cuts a summary down to the instances a token may see.
+// restrict cuts a summary down to the instances whose player history the caller may read.
 func restrict(who Principal, p *moderation.PlayerSummary) {
-	if len(who.Token.Instances) > 0 {
-		p.Instances = slices.DeleteFunc(slices.Clone(p.Instances), func(i string) bool { return !who.Allowed(i) })
+	if all, _ := who.Scope(PermPlayerHistory); !all {
+		p.Instances = slices.DeleteFunc(slices.Clone(p.Instances), func(i string) bool { return !who.Can(i, PermPlayerHistory) })
 	}
 }
 
 func visibleTo(who Principal, p moderation.PlayerSummary) bool {
-	return len(who.Token.Instances) == 0 || slices.ContainsFunc(p.Instances, who.Allowed)
+	if all, _ := who.Scope(PermPlayerHistory); all {
+		return true
+	}
+	return slices.ContainsFunc(p.Instances, func(i string) bool { return who.Can(i, PermPlayerHistory) })
 }
 
 func (s *Server) listPlayers(w http.ResponseWriter, r *http.Request, c *call) {
@@ -53,7 +56,7 @@ func (s *Server) listPlayers(w http.ResponseWriter, r *http.Request, c *call) {
 		return
 	}
 	q := r.URL.Query()
-	if inst := q.Get("instance"); inst != "" && !c.who.Allowed(inst) {
+	if inst := q.Get("instance"); inst != "" && !c.who.Can(inst, PermPlayerHistory) {
 		fail(w, http.StatusNotFound, "unknown instance %q", inst)
 		return
 	}
@@ -62,8 +65,16 @@ func (s *Server) listPlayers(w http.ResponseWriter, r *http.Request, c *call) {
 		fail(w, http.StatusBadRequest, "unknown sort %q (name, last, first, be, steam or here)", sort)
 		return
 	}
+	all, only := c.who.Scope(PermPlayerHistory)
+	if !all && len(only) == 0 { // the filter takes no list to mean everything
+		writeJSON(w, http.StatusOK, struct {
+			Players []moderation.PlayerSummary `json:"players"`
+			Total   int                        `json:"total"`
+		}{[]moderation.PlayerSummary{}, 0})
+		return
+	}
 	f := moderation.PlayerFilter{Sort: sort, Desc: q.Get("dir") == "desc", Query: q.Get("q"), Instance: q.Get("instance"), Flagged: q.Get("flagged") == "1" || q.Get("flagged") == "true", Online: q.Get("online") == "1" || q.Get("online") == "true",
-		Limit: queryInt(r, "limit", 50, 200), Offset: max(queryInt(r, "offset", 0, 1<<30), 0), Only: c.who.Token.Instances, Now: s.now()}
+		Limit: queryInt(r, "limit", 50, 200), Offset: max(queryInt(r, "offset", 0, 1<<30), 0), Only: only, Now: s.now()}
 	list, total, err := st.Players(r.Context(), f)
 	if err != nil {
 		storeFail(w, err)
@@ -106,8 +117,8 @@ func (s *Server) player(w http.ResponseWriter, r *http.Request, c *call) (*moder
 func (s *Server) detail(r *http.Request, c *call, st *moderation.Store, rec moderation.PlayerRecord) (PlayerDetail, error) {
 	d := PlayerDetail{PlayerRecord: rec, Bans: []moderation.Ban{}, Identities: []moderation.Sighting{}, FriendsSeen: []moderation.PlayerSummary{}, ProfileURL: steamweb.ProfileURL(rec.SteamID)}
 	restrict(c.who, &d.PlayerSummary)
-	d.PerInstance = slices.DeleteFunc(slices.Clone(d.PerInstance), func(x moderation.PlayerInstance) bool { return !c.who.Allowed(x.Instance) })
-	d.Sessions = slices.DeleteFunc(slices.Clone(d.Sessions), func(x moderation.Session) bool { return !c.who.Allowed(x.Instance) })
+	d.PerInstance = slices.DeleteFunc(slices.Clone(d.PerInstance), func(x moderation.PlayerInstance) bool { return !c.who.Can(x.Instance, PermPlayerHistory) })
+	d.Sessions = slices.DeleteFunc(slices.Clone(d.Sessions), func(x moderation.Session) bool { return !c.who.Can(x.Instance, PermPlayerHistory) })
 
 	bans, err := st.ListBans(r.Context(), moderation.BanFilter{Query: rec.SteamID, Now: s.now()})
 	if err != nil {
@@ -125,17 +136,20 @@ func (s *Server) detail(r *http.Request, c *call, st *moderation.Store, rec mode
 	if err != nil {
 		return d, err
 	}
+	shown := false
 	for _, x := range ids {
-		if !c.who.Allowed(x.Instance) {
+		if !c.who.Can(x.Instance, PermPlayerHistory) {
 			continue
 		}
-		if !seesIPs(c) {
+		if seesIPsOn(c, x.Instance) {
+			shown = shown || x.IP != ""
+		} else {
 			x.IP = ""
 		}
 		d.Identities = append(d.Identities, x)
 	}
-	if seesIPs(c) && len(d.Identities) > 0 { // an address history is personal data: who read it is recorded, without the addresses
-		_ = s.Audit.Log(admin.AuditEntry{Actor: c.actor, Source: c.src, Action: "ip.history", Target: rec.SteamID, OK: true}) // the read goes on if the line cannot be written
+	if shown { // an address history is personal data: who read it is recorded, without the addresses
+		_ = s.Audit.Log(admin.AuditEntry{Actor: c.actor, Source: c.src, Client: c.client, Action: "ip.history", Target: rec.SteamID, OK: true}) // the read goes on if the line cannot be written
 	}
 	friends, err := st.FriendsSeen(r.Context(), rec.Steam.FriendIDs)
 	if err != nil {
@@ -175,7 +189,7 @@ func (s *Server) lookupPlayer(w http.ResponseWriter, r *http.Request, c *call) {
 		return
 	}
 	err := s.Lookups.LookupNow(r.Context(), rec.SteamID)
-	_ = s.Audit.Log(admin.AuditEntry{Actor: c.actor, Source: c.src, Action: "player.lookup", Target: rec.SteamID, OK: err == nil}) // the lookup itself is what matters
+	_ = s.Audit.Log(admin.AuditEntry{Actor: c.actor, Source: c.src, Client: c.client, Action: "player.lookup", Target: rec.SteamID, OK: err == nil}) // the lookup itself is what matters
 	switch {
 	case errors.Is(err, moderation.ErrLookupTooSoon):
 		fail(w, http.StatusTooManyRequests, "this player was looked up a moment ago; try again in a few minutes")

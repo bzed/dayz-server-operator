@@ -43,6 +43,211 @@ person it acts for in the ``X-Dzo-Actor`` header, and the origin in
 ``X-Dzo-Source``; both go into the audit log. For other tokens these headers are
 ignored.
 
+A token created with ``--web`` is for ``dzo web`` and the only kind that acts for logged-in people
+(:doc:`web`). On its own it can do nothing: every request must also carry the login session of a
+person in ``X-Dzo-Session``, and then acts as that person. Without the header the answer is ``403 this
+token needs a user session``, for an unknown or expired session ``401 session expired``, for a
+disabled person or one with no role on any existing instance ``403``, and while ``serve.web_url`` is
+not set (user logins are off) ``503 logins are not configured``. The audit actor is ``<token
+name>:<Steam ID>``; ``X-Dzo-Actor`` is ignored. A token is either ``--delegate`` or ``--web``, and a web
+token has the role viewer, moderator, operator or admin.
+
+Roles per instance
+~~~~~~~~~~~~~~~~~~
+
+A person has grants: a role on an instance, or on ``*`` (every instance, also later ones). Their
+effective role on an instance is the higher of the grant on the instance and the grant on ``*``,
+**capped by the web token**: it is the lower of that and the token's role, and nothing at all on
+instances the token's list does not include. An instance without a role does not exist for them
+(``404``, and it is left out of lists). Being moderator on one instance never unlocks anything on
+another. A token without a person is checked against its own role on the instances it may touch, as it
+always was.
+
+Routes without an instance in the path check the permission like this:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 35 65
+
+   * - Route
+     - Rule
+   * - ``GET /audit``
+     - ``audit.view`` is installation-wide: admin on ``*`` (and a token for every instance)
+   * - ``GET /instances``, ``GET /``, ``GET /tiles/...``
+     - ``view`` on at least one instance; the list holds the instances with any role
+   * - ``POST /bans``
+     - ``ban.instance`` on every instance of the ban; ``ban.permanent`` (bans over 7 days) and
+       ``ban.ip`` on every one of them too; a global ban needs ``ban.global``, which is installation-wide
+   * - ``GET /bans``, ``GET /bans/<id>``, ``GET /bans/<id>/history``
+     - ``ban.view`` on at least one instance of the ban (a global ban: anywhere); the lists keep only
+       those bans. IP addresses in a ban are shown only with ``ip.history`` on every instance of it
+   * - ``PUT /bans/<id>``, ``POST /bans/<id>/revoke``
+     - as for creating, on the old and the new instances; only the creator or whoever holds
+       ``ban.revoke_any`` (installation-wide) may change a ban
+   * - ``GET|POST /evidence``, ``GET /evidence/<id>[/file]``
+     - ``ban.view`` and ``evidence.add`` on the evidence's instance; lists keep the instances where it holds
+   * - ``GET /players/<steamid>/identities``
+     - ``ban.view`` on at least one instance; sightings are kept for the instances where it holds, and
+       their addresses are shown only with ``ip.history`` on that instance
+   * - ``GET /players``, ``GET /players/<steamid>``, ``POST /players/<steamid>/lookup``
+     - ``player.history`` on at least one instance; everything about instances where it does not hold is
+       left out (sessions, names per instance, bans, friends seen there)
+
+Login
+~~~~~
+
+Only ``dzo web`` logs people in, with its web token and no session. Logging in is always two steps: a
+first factor (password or Steam) and a second factor (TOTP code, passkey or recovery code). A passkey is
+never a first factor. The routes need ``serve.web_url`` (``503`` without) and answer ``403`` to any
+other kind of token.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 40 60
+
+   * - Request
+     - Answer
+   * - ``POST /auth/password`` ``{"username","password"}``
+     - ``{"pending":"dzp_…","factors":["totp","recovery"],"enrol":false}``. ``pending`` identifies the
+       half-finished login for 5 minutes. ``factors`` lists what can finish it. ``enrol`` is true when the
+       person has no second factor yet and has to set one up first.
+   * - ``GET /auth/steam?return_to=<url>``
+     - ``{"url":"…"}``: where to send the browser to sign in through Steam. ``return_to`` must be under
+       ``serve.web_url``, else ``400``.
+   * - ``POST /auth/steam`` ``{"params":{…},"return_to":"…"}``
+     - the query Steam sent the browser back with. Serve has Steam check it (``check_authentication``),
+       compares ``return_to`` and the fields, accepts the response nonce once, and answers as for the
+       password. A Steam ID without a grant (or a disabled person) gets ``403``; nothing is stored for it.
+   * - ``POST /auth/totp`` ``{"pending","code"}``, ``POST /auth/recovery`` ``{"pending","code"}``
+     - ``{"session":"dzs_…","expires":"…"}``. A TOTP code and a recovery code work once. Recovery codes
+       are compared ignoring case and dashes.
+   * - ``POST /auth/logout`` (with the session)
+     - ``204``; the session is gone.
+
+Passkeys are a second factor, checked with the WebAuthn library (relying party ID: the host of
+``serve.web_url``; the only accepted origin is ``serve.web_url`` itself; the person's passkeys are listed in
+``allowCredentials``; user verification is ``preferred``). The options and the answers are the JSON the
+browser's ``navigator.credentials`` takes and gives:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 40 60
+
+   * - Request
+     - Answer
+   * - ``POST /auth/passkey/begin`` ``{"pending"}``
+     - the WebAuthn request options (``400`` if the person has no passkey)
+   * - ``POST /auth/passkey/finish`` ``{"pending","response"}``
+     - ``{"session","expires"}``. The ceremony is good for one answer; a signature counter that did not
+       increase (a cloned key) is refused. The counter and the time of use are stored.
+
+A person who signs in and has **no second factor yet** gets ``"enrol": true`` and may only enrol one, with one
+of the following; each ``finish`` ends the login with a session and shows the 10 recovery codes once
+(``{"session","expires","recovery_codes":[…]}``). Any other pending login is refused with ``403``.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 40 60
+
+   * - Request
+     - Answer
+   * - ``POST /auth/enrol/totp/begin`` ``{"pending"}``
+     - ``{"secret":"<base32>","uri":"otpauth://…"}`` (the address for the QR code)
+   * - ``POST /auth/enrol/totp/finish`` ``{"pending","code"}``
+     - a first code of the new secret proves the app; it is stored and that code is used up
+   * - ``POST /auth/enrol/passkey/begin`` ``{"pending"}``
+     - the WebAuthn creation options
+   * - ``POST /auth/enrol/passkey/finish`` ``{"pending","response","name"}``
+     - the passkey is stored under ``name``
+
+The browser's address is sent in ``X-Dzo-Client`` (from a web token only; other tokens' header is ignored)
+and, behind a proxy, the proxy's address in ``X-Dzo-Proxy``; without ``X-Dzo-Client`` it is the connection's
+address. Failed first and second factors are counted per account and per address: five are free, then the
+wait doubles from one second to 15 minutes (a success clears the account, 1 hour without a failure
+clears all). While waiting a request gets ``429`` with ``Retry-After``, with the same message whether or
+not the username exists. The counters live in the memory of ``dzo serve``.
+
+Every step writes one line to the service log, ``login: <step> <ok|failed|refused> steamid=<id|unknown>
+client=<addr> proxy=<addr|->``, never a secret, and a finished login or logout writes an audit entry
+(``auth.login``, ``auth.logout``) with the client address. Every audit entry of a web action has the
+client address in its ``client`` field.
+
+Account
+~~~~~~~
+
+What a logged-in person (a web token with a session) does with their own login. No role is needed beyond
+being logged in; every change is audited (``account.*``) without secrets.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 42 58
+
+   * - Request
+     - Answer
+   * - ``GET /account``
+     - ``{"steam_id","name","username","has_password","totp":bool,"passkeys":[{"id","name","created","last_used"}],"recovery_left":n}``
+   * - ``PUT /account/password`` ``{"username","current","new"}``
+     - ``204``. ``current`` is needed when a password exists (``403`` if wrong, counted like a failed
+       login). The username is 3 to 32 characters of ``a-z 0-9 . _ -`` (case-insensitive, stored in lower
+       case), unique (``409``), and needed with the first password; the password is 12 to 256 bytes
+       (``400``). The person's other sessions end
+   * - ``DELETE /account/password``
+     - ``204``; the username is free again, the other sessions end
+   * - ``POST /account/totp/begin``
+     - ``{"pending","secret","uri"}``; ``POST /account/totp/finish`` ``{"pending","code"}`` → ``204``
+       once the code of the new secret is right; the old secret is replaced
+   * - ``DELETE /account/totp``
+     - ``204`` (the other sessions end), or ``409`` if it is the last second factor
+   * - ``POST /account/passkeys/begin``
+     - ``{"pending","options"}``; ``POST /account/passkeys/finish`` ``{"pending","response","name"}`` →
+       ``201`` with the passkey
+   * - ``DELETE /account/passkeys/<id>``
+     - ``204`` (the other sessions end), ``404``, or ``409`` for the last second factor
+   * - ``POST /account/recovery``
+     - ``{"recovery_codes":[…]}``: a new set of 10, which replaces the old one
+   * - ``DELETE /account/sessions``
+     - ``204``; the person's other sessions end
+
+Users
+~~~~~
+
+Managing people needs ``users.manage``, which only an admin on ``*`` holds (through a token for every
+instance). Every change goes to the audit log (``users.put``, ``users.delete``, ``users.reset``) with the
+Steam ID and the grants.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 42 58
+
+   * - Request
+     - Answer
+   * - ``GET /users``
+     - the people: ``steam_id``, ``name``, ``username``, ``disabled``, ``created``, ``grants``; no secret
+   * - ``PUT /users/<steamid>`` ``{"name","disabled","grants":[{"instance","role"}]}``
+     - creates the person or replaces their name, disabled flag and grants, and answers the person. A role
+       is ``viewer``, ``moderator``, ``operator`` or ``admin``; an instance is a name (letters, digits,
+       ``_ . -``, at most 64) or ``*`` for every instance, also later ones; it need not exist yet. Anything
+       else is ``400``. Credentials are not touched. Disabling a person, or leaving them without a grant,
+       ends their sessions
+   * - ``DELETE /users/<steamid>``
+     - ``204``; the person and everything of theirs is gone
+   * - ``POST /users/<steamid>/reset``
+     - ``204``; password, username, TOTP, passkeys, recovery codes and sessions are removed, the person
+       and their grants stay. The person enrols again through Steam
+
+Nobody can change their own access through the API: a ``PUT`` for oneself that changes the grants (up or
+down) or the disabled flag, and a ``DELETE`` or ``reset`` for oneself, answer ``409 you cannot change your
+own access; another admin or dzo user on the serve host can``. Changing only the display name is fine. The
+rule also holds if ``users.manage`` is ever given to a lower role.
+
+``GET /`` of a request that acts for a person has a ``user`` part: ``{"steam_id","name","roles":{"<instance>":"<role>"},
+"installation":["audit.view",…]}``. ``roles`` is the effective role on each existing instance the person has
+one on (the web interface shows controls from it; the API checks every action regardless), ``installation``
+the installation-wide permissions they hold. ``role`` stays the highest role anywhere.
+
+Streams (``/stream``) of a person are re-checked every 60 seconds: when the session ended, the person was
+disabled or lost the right to view the instance, the stream closes.
+
 Reading
 -------
 

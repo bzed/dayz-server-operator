@@ -99,6 +99,8 @@ e2e:
 ## Go fuzzes one target per invocation. Fuzz longer with FUZZTIME=5m or one target by hand
 ## (see docs/development.rst); a crash leaves its input in testdata/fuzz/, commit it with the fix.
 FUZZTIME ?= 10s
+## Fuzz workers: half the CPUs, so a check does not take over the machine (override with FUZZ_PARALLEL=n).
+FUZZ_PARALLEL ?= $(shell n=$$(nproc); echo $$(( n > 1 ? n / 2 : 1 )))
 FUZZ_TARGETS := \
 	internal/battleye:FuzzDecodeLoginResponse \
 	internal/battleye:FuzzDecodeServerMessage \
@@ -107,11 +109,14 @@ FUZZ_TARGETS := \
 	internal/battleye:FuzzParseEvent \
 	internal/a2s:FuzzParseInfoResponse \
 	internal/servercfg:FuzzServercfgParse \
-	internal/admin:FuzzParseQuantity
+	internal/admin:FuzzParseQuantity \
+	internal/auth:FuzzClientAddr \
+	internal/auth:FuzzSteamClaimedID \
+	internal/auth:FuzzCheckSigned
 fuzz:
 	@set -e; for t in $(FUZZ_TARGETS); do \
 		echo "fuzz $${t#*:} ($(FUZZTIME))"; \
-		$(GO) test -run '^$$' -fuzz "^$${t#*:}$$" -fuzztime $(FUZZTIME) ./$${t%%:*}; \
+		$(GO) test -run '^$$' -fuzz "^$${t#*:}$$" -fuzztime $(FUZZTIME) -parallel $(FUZZ_PARALLEL) ./$${t%%:*}; \
 	done
 
 ## check: everything to run before pushing (mirrors CI; see AGENTS.md).

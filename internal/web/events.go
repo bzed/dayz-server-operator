@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/bzed/dayz-server-operator/internal/admin"
-	"github.com/bzed/dayz-server-operator/internal/api"
 )
 
 // backlogRows is how many events the events page opens with.
@@ -136,9 +135,7 @@ func (s *Server) eventsPage(w http.ResponseWriter, r *http.Request) {
 	if len(evs) > 0 {
 		v.Last = evs[len(evs)-1].ID
 	}
-	if info, err := c.Info(r.Context()); err == nil {
-		v.CanBroadcast = info.Role.Can(api.PermBroadcast)
-	}
+	v.CanBroadcast = canOn(r, inst).Broadcast
 	pg := s.page(r, inst+" events", b.Name, inst, "events", v)
 	st, err := c.Status(r.Context(), inst)
 	pg.setFacts(st, err)

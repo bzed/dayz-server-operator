@@ -41,19 +41,19 @@ func TestNavIsCachedForTheTTL(t *testing.T) {
 	var fail atomic.Bool
 	var calls atomic.Int32
 	ts := fakeInstances(t, `[{"instance":"a b","connected":true,"hello":{"world":"enoch"}}]`, &fail, &calls)
-	s, err := New([]*Backend{{Name: "main", Client: apiclient.New(ts.URL, "x")}}, Options{})
+	s, err := New(&Backend{Name: "main", Client: apiclient.New(ts.URL, "x")}, Options{})
 	require.NoError(t, err)
 	now := time.Unix(1000, 0)
 	s.now = func() time.Time { return now }
 
-	got := s.nav(t.Context())
+	got := s.nav(t.Context(), "s", s.backends[0].Client)
 	require.Len(t, got, 1)
 	assert.Equal(t, []navInstance{{Name: "a b", World: "enoch", Connected: true}}, got[0].Instances)
-	s.nav(t.Context())
+	s.nav(t.Context(), "s", s.backends[0].Client)
 	assert.EqualValues(t, 1, calls.Load(), "within the TTL the list is served from the cache")
 
 	now = now.Add(navTTL + time.Second)
-	s.nav(t.Context())
+	s.nav(t.Context(), "s", s.backends[0].Client)
 	assert.EqualValues(t, 2, calls.Load())
 }
 
@@ -61,15 +61,15 @@ func TestNavKeepsTheLastListWhenABackendFails(t *testing.T) {
 	var fail atomic.Bool
 	var calls atomic.Int32
 	ts := fakeInstances(t, `[{"instance":"alpha"}]`, &fail, &calls)
-	s, err := New([]*Backend{{Name: "main", Client: apiclient.New(ts.URL, "x")}}, Options{})
+	s, err := New(&Backend{Name: "main", Client: apiclient.New(ts.URL, "x")}, Options{})
 	require.NoError(t, err)
 	now := time.Unix(1000, 0)
 	s.now = func() time.Time { return now }
 
-	s.nav(t.Context())
+	s.nav(t.Context(), "s", s.backends[0].Client)
 	fail.Store(true)
 	now = now.Add(navTTL + time.Second)
-	got := s.nav(t.Context())
+	got := s.nav(t.Context(), "s", s.backends[0].Client)
 	require.Len(t, got, 1)
 	require.Len(t, got[0].Instances, 1)
 	assert.Equal(t, "alpha", got[0].Instances[0].Name)
@@ -84,8 +84,6 @@ func TestEveryPageHasTheSwitcher(t *testing.T) {
 		assert.Contains(t, body, `<details class="switch"`, path)
 		assert.Contains(t, body, `href="/b/main/i/alpha"`, path)
 	}
-	_, body, _ := e.get("/b/down/audit")
-	assert.Contains(t, body, "unreachable")
 }
 
 func TestInstanceBarMarksTheActiveTab(t *testing.T) {

@@ -164,29 +164,131 @@ func TestServeAndWebDefaults(t *testing.T) {
 
 func TestCheckListen(t *testing.T) {
 	for _, ok := range []string{"127.0.0.1:80", "[::1]:80", "localhost:80"} {
-		require.NoError(t, CheckListen(ok, false), ok)
+		require.NoError(t, CheckListen(ok, false, false), ok)
 	}
 	for _, bad := range []string{"0.0.0.0:80", "example.invalid:80", ":80", "nonsense", "127.0.0.1:"} {
-		require.Error(t, CheckListen(bad, false), "%s must be refused", bad)
+		require.Error(t, CheckListen(bad, false, false), "%s must be refused", bad)
 	}
-	require.NoError(t, CheckListen("0.0.0.0:80", true), "insecure override")
-	assert.Error(t, CheckListen("nonsense", true), "a malformed address is refused even with the override")
+	require.NoError(t, CheckListen("0.0.0.0:80", true, false), "insecure override")
+	assert.Error(t, CheckListen("nonsense", true, false), "a malformed address is refused even with the override")
 }
 
-func TestValidateListenAndBackends(t *testing.T) {
+func TestValidateListen(t *testing.T) {
 	for name, yml := range map[string]string{
 		"serve.listen":     "serve: {listen: '0.0.0.0:8080'}",
 		"serve.mod_listen": "serve: {mod_listen: '10.0.0.1:2400'}",
 		"web.listen":       "web: {listen: ':8081'}",
-		"every entry":      "web: {backends: [{name: a, url: http://x}]}",
-		"duplicate name":   "web: {backends: [{name: a, url: http://x, token_file: /t}, {name: a, url: http://y, token_file: /t}]}",
 	} {
 		_, err := Parse([]byte(yml))
 		require.ErrorContains(t, err, name)
 	}
-	good := "serve: {listen: '0.0.0.0:8080', allow_insecure_http: true}\nweb: {backends: [{name: a, url: http://x, token_file: /t}]}"
-	_, err := Parse([]byte(good))
+	_, err := Parse([]byte("serve: {listen: '0.0.0.0:8080', allow_insecure_http: true}"))
 	require.NoError(t, err)
+}
+
+func TestCheckListenWithTLS(t *testing.T) {
+	require.NoError(t, CheckListen("0.0.0.0:443", false, true), "TLS makes a public address fine")
+	require.Error(t, CheckListen("0.0.0.0:443", false, false))
+	require.Error(t, CheckListen("nonsense", false, true))
+
+	_, err := Parse([]byte("serve: {listen: '0.0.0.0:8443', tls: {cert_file: /c, key_file: /k}}"))
+	require.NoError(t, err, "serve.listen with serve.tls")
+	_, err = Parse([]byte("web: {listen: ':443', tls: {cert_file: /c, key_file: /k}}"))
+	require.NoError(t, err, "web.listen with web.tls")
+	_, err = Parse([]byte("serve: {mod_listen: '10.0.0.1:2400', tls: {cert_file: /c, key_file: /k}}"))
+	require.Error(t, err, "mod_listen stays plain HTTP, serve.tls does not cover it")
+}
+
+func TestLoadRefusesWebBackends(t *testing.T) {
+	_, err := Parse([]byte("web: {backends: [{name: a, url: http://x, token_file: /t}]}"))
+	require.ErrorContains(t, err, "web.backends is no longer supported")
+	require.ErrorContains(t, err, "migration")
+}
+
+func TestLoadRefusesUserHeader(t *testing.T) {
+	_, err := Parse([]byte("web: {user_header: X-Forwarded-User}"))
+	require.ErrorContains(t, err, "web.user_header is no longer supported")
+	require.ErrorContains(t, err, "migration")
+}
+
+func TestServeWebURLMustBeHTTPS(t *testing.T) {
+	for _, ok := range []string{"https://dzo.example", "https://dzo.example:8443", "http://127.0.0.1:8081", "http://localhost:8081", "http://[::1]:8081", "https://dzo.example/"} {
+		_, err := Parse([]byte("serve: {web_url: '" + ok + "'}"))
+		require.NoError(t, err, ok)
+	}
+	for _, bad := range []string{"http://dzo.example", "dzo.example", "ftp://dzo.example", "https://dzo.example/path", "https://dzo.example/?q=1", "https://dzo.example/#f", "https://", "https://user@dzo.example"} {
+		_, err := Parse([]byte("serve: {web_url: '" + bad + "'}"))
+		require.ErrorContains(t, err, "serve.web_url", bad)
+	}
+	c, err := Parse([]byte("{}"))
+	require.NoError(t, err)
+	require.Empty(t, c.Serve.WebURL, "optional: logins are off without it")
+}
+
+func TestSessionDefaults(t *testing.T) {
+	c, err := Parse([]byte("{}"))
+	require.NoError(t, err)
+	require.Equal(t, 12*time.Hour, c.Serve.SessionIdle())
+	require.Equal(t, 7*24*time.Hour, c.Serve.SessionMax())
+	c, err = Parse([]byte("serve: {login: {session_idle_hours: 1, session_max_days: 30}}"))
+	require.NoError(t, err)
+	require.Equal(t, time.Hour, c.Serve.SessionIdle())
+	require.Equal(t, 30*24*time.Hour, c.Serve.SessionMax())
+	for _, bad := range []string{"serve: {login: {session_idle_hours: 0}}", "serve: {login: {session_max_days: 0}}", "serve: {login: {session_idle_hours: -1}}"} {
+		_, err := Parse([]byte(bad))
+		require.ErrorContains(t, err, "serve.login.", bad)
+	}
+}
+
+func TestTLSPairsGoTogether(t *testing.T) {
+	for key, yml := range map[string]string{
+		"serve.tls": "serve: {tls: {cert_file: /c}}",
+		"web.tls":   "web: {tls: {key_file: /k}}",
+	} {
+		_, err := Parse([]byte(yml))
+		require.ErrorContains(t, err, key+": cert_file and key_file go together")
+	}
+	for key, yml := range map[string]string{
+		"serve.tls.client_ca_file": "serve: {tls: {client_ca_file: /ca}}",
+		"web.tls.client_ca_file":   "web: {tls: {client_ca_file: /ca}}",
+	} {
+		_, err := Parse([]byte(yml))
+		require.ErrorContains(t, err, key+" needs cert_file and key_file")
+	}
+	c, err := Parse([]byte("serve: {tls: {cert_file: /c, key_file: /k, client_ca_file: /ca}}\nweb: {tls: {cert_file: /c2, key_file: /k2}}"))
+	require.NoError(t, err)
+	require.Equal(t, "/ca", c.Serve.TLS.ClientCAFile)
+	require.Equal(t, "/c2", c.Web.TLS.CertFile)
+}
+
+func TestWebAPIRequiresURLAndToken(t *testing.T) {
+	c, err := Parse([]byte("web: {api: {url: 'https://serve.example:8443', token_file: /t, ca_file: /ca}}"))
+	require.NoError(t, err)
+	require.Equal(t, "/ca", c.Web.API.CAFile)
+	for _, bad := range []string{
+		"web: {api: {url: 'https://serve.example'}}",
+		"web: {api: {token_file: /t}}",
+		"web: {api: {ca_file: /ca}}",
+		"web: {api: {url: 'serve.example', token_file: /t}}",
+		"web: {api: {url: 'ftp://serve.example', token_file: /t}}",
+		"web: {api: {url: 'https://serve.example', token_file: t}}",
+	} {
+		_, err := Parse([]byte(bad))
+		require.ErrorContains(t, err, "web.api", bad)
+	}
+	_, err = Parse([]byte("web: {api: {url: 'http://serve.example', token_file: /t}}"))
+	require.ErrorContains(t, err, "web.api.url", "plain HTTP to another host is refused")
+	_, err = Parse([]byte("web: {api: {url: 'http://127.0.0.1:8080', token_file: /t}}"))
+	require.NoError(t, err, "plain HTTP to loopback")
+}
+
+func TestTrustedProxiesParse(t *testing.T) {
+	c, err := Parse([]byte("web: {trusted_proxies: [10.0.0.1, '192.0.2.0/24', '2001:db8::/32', '::1']}"))
+	require.NoError(t, err)
+	require.Len(t, c.Web.TrustedProxies, 4)
+	_, err = Parse([]byte("web: {trusted_proxies: [10.0.0.1, 'nonsense']}"))
+	require.ErrorContains(t, err, `"nonsense"`)
+	require.ErrorContains(t, err, "web.trusted_proxies")
 }
 
 func TestExporterConfig(t *testing.T) {
@@ -272,4 +374,18 @@ func TestSteamProfileLookupDefaultsOn(t *testing.T) {
 	require.Equal(t, "/var/lib/dzo/secrets/steam-web-api.key", c.Steam.WebAPIKeyFile)
 	_, err = Parse([]byte("steam: {web_api_key_file: relative/key}\n"))
 	require.Error(t, err, "a relative key path is refused")
+}
+
+func TestAuditIPRetentionDefault(t *testing.T) {
+	c, err := Parse([]byte("{}\n"))
+	require.NoError(t, err)
+	require.Equal(t, 90*24*time.Hour, c.Serve.AuditIPRetention())
+	c, err = Parse([]byte("serve: {audit_ip_retention_days: 30}\n"))
+	require.NoError(t, err)
+	require.Equal(t, 30*24*time.Hour, c.Serve.AuditIPRetention())
+	c, err = Parse([]byte("serve: {audit_ip_retention_days: 0}\n"))
+	require.NoError(t, err)
+	require.Negative(t, c.Serve.AuditIPRetention(), "0 keeps the addresses for ever (a negative duration)")
+	_, err = Parse([]byte("serve: {audit_ip_retention_days: -1}\n"))
+	require.ErrorContains(t, err, "serve.audit_ip_retention_days")
 }

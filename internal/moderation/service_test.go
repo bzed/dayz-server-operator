@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/bzed/dayz-server-operator/internal/admin"
@@ -326,6 +327,52 @@ func TestSweepPurgesOldSessions(t *testing.T) {
 		p, err := e.st.Player(t.Context(), steamA)
 		return err == nil && len(p.Sessions) == 1
 	})
+}
+
+func TestSweepPrunesLogins(t *testing.T) {
+	e := newSvc(t)
+	ctx := t.Context()
+	require.NoError(t, e.st.PutPerson(ctx, Person{SteamID: steamA, Grants: []Grant{{"*", "admin"}}}, t0))
+	require.NoError(t, e.st.CreateSession(ctx, "old", steamA, "", t0.Add(-10*24*time.Hour)))
+	require.NoError(t, e.st.CreateSession(ctx, "new", steamA, "", t0.Add(-time.Hour)))
+	e.tick <- t0
+	eventually(t, "the expired login session pruned", func() bool {
+		var n int
+		return e.st.db.QueryRow(`SELECT COUNT(*) FROM login_sessions`).Scan(&n) == nil && n == 1
+	})
+	e.svc.SessionIdle = 30 * time.Minute // a shorter idle time drops the other one at the next sweep
+	e.tick <- t0
+	eventually(t, "the idle login session pruned", func() bool {
+		var n int
+		return e.st.db.QueryRow(`SELECT COUNT(*) FROM login_sessions`).Scan(&n) == nil && n == 0
+	})
+}
+
+func TestSweepForgetsAuditClientsOncePerDay(t *testing.T) {
+	e := newSvc(t)
+	a := admin.NewAudit(e.audit) // the service's own Audit is on the same file, as `dzo user` is another process
+	old := t0.Add(-100 * 24 * time.Hour)
+	require.NoError(t, a.Log(admin.AuditEntry{Time: old, Client: "203.0.113.1", Action: "x"}))
+	e.svc.AuditClientRetention = 90 * 24 * time.Hour
+	e.tick <- t0
+	eventually(t, "the old address blanked", func() bool {
+		got, err := a.Tail("", 5)
+		return err == nil && len(got) == 1 && got[0].Client == ""
+	})
+	// an entry that is already too old, written afterwards, waits for the next daily pass
+	require.NoError(t, a.Log(admin.AuditEntry{Time: old, Client: "203.0.113.2", Action: "y"}))
+	e.setNow(t0.Add(time.Hour))
+	e.tick <- t0
+	e.tick <- t0 // the second tick is taken only after the first sweep finished
+	got, err := a.Tail("", 5)
+	require.NoError(t, err)
+	require.Len(t, got, 2)
+	assert.Equal(t, "203.0.113.2", got[0].Client, "once a day, not every minute")
+	e.setNow(t0.Add(25 * time.Hour))
+	e.tick <- t0
+	e.tick <- t0
+	got, _ = a.Tail("", 5)
+	assert.Empty(t, got[0].Client, "the next day")
 }
 
 func TestNegativeSessionRetentionKeepsSessions(t *testing.T) {

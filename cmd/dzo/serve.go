@@ -64,7 +64,7 @@ func newTokenCmd() *cobra.Command {
 
 	var role string
 	var instances []string
-	var delegate bool
+	var delegate, web bool
 	var ttl time.Duration
 	create := &cobra.Command{
 		Use:   "create <name>",
@@ -75,7 +75,7 @@ func newTokenCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			secret, tok, err := s.Create(args[0], api.Role(role), instances, delegate, ttl)
+			secret, tok, err := s.Create(args[0], api.Role(role), instances, delegate, web, ttl)
 			if err != nil {
 				return err
 			}
@@ -86,7 +86,8 @@ func newTokenCmd() *cobra.Command {
 	}
 	create.Flags().StringVar(&role, "role", "viewer", "detector, viewer, moderator, operator or admin")
 	create.Flags().StringSliceVar(&instances, "instance", nil, "limit the token to these instances (default: all)")
-	create.Flags().BoolVar(&delegate, "delegate", false, "may name the acting user (for the web interface)")
+	create.Flags().BoolVar(&delegate, "delegate", false, "may name the acting user (for scripts and tools)")
+	create.Flags().BoolVar(&web, "web", false, "a token for dzo web: it acts for logged-in people, capped by this role and these instances")
 	create.Flags().DurationVar(&ttl, "ttl", 365*24*time.Hour, "lifetime (at most one year)")
 
 	list := &cobra.Command{
@@ -107,7 +108,7 @@ func newTokenCmd() *cobra.Command {
 				if len(t.Instances) > 0 {
 					scope = fmt.Sprint(t.Instances)
 				}
-				_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%s  %-16s %-9s delegate=%-5t %s  expires %s\n", t.ID, t.Name, t.Role, t.Delegate, scope, t.Expires.Format("2006-01-02"))
+				_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%s  %-16s %-9s delegate=%-5t web=%-5t %s  expires %s\n", t.ID, t.Name, t.Role, t.Delegate, t.Web, scope, t.Expires.Format("2006-01-02"))
 			}
 			return nil
 		},

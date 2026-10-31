@@ -71,21 +71,34 @@ func pathID(w http.ResponseWriter, r *http.Request) (int64, bool) {
 	return id, true
 }
 
-// canSee reports whether a principal may see a ban: global ones, and those on an instance it may touch.
+// canSee reports whether a principal may see a ban: a global one if it may view bans anywhere, an instance
+// one if it may on at least one of its instances.
 func canSee(who Principal, b moderation.Ban) bool {
-	if b.Scope == moderation.ScopeGlobal || len(who.Token.Instances) == 0 {
-		return true
+	if b.Scope == moderation.ScopeGlobal {
+		return who.CanAny(PermBanView)
 	}
-	return slices.ContainsFunc(b.Instances, who.Allowed)
+	return slices.ContainsFunc(b.Instances, func(i string) bool { return who.Can(i, PermBanView) })
+}
+
+// canEvery reports whether a principal holds a permission on every instance of a ban input; for a global ban
+// that is every instance there is, and for one without instances at least one.
+func canEvery(who Principal, global bool, instances []string, perm string) bool {
+	switch {
+	case global:
+		return who.CanAll(perm)
+	case len(instances) == 0:
+		return who.CanAny(perm)
+	}
+	return !slices.ContainsFunc(instances, func(i string) bool { return !who.Can(i, perm) })
 }
 
 // banRights checks a ban's input against the caller's role and token. code is 403 for missing rights
 // and 400 for instances it cannot use.
 func (s *Server) banRights(c *call, in moderation.BanInput) (code int, err error) {
-	role := c.who.Token.Role
-	switch in.Scope {
-	case moderation.ScopeGlobal:
-		if !role.Can(PermBanGlobal) || len(c.who.Token.Instances) > 0 {
+	global := in.Scope == moderation.ScopeGlobal
+	switch {
+	case global:
+		if !c.who.CanAll(PermBanGlobal) {
 			return http.StatusForbidden, fmt.Errorf("global bans need the admin role and a token for every instance")
 		}
 	default:
@@ -94,11 +107,14 @@ func (s *Server) banRights(c *call, in moderation.BanInput) (code int, err error
 				return http.StatusBadRequest, fmt.Errorf("unknown instance %q", i)
 			}
 		}
+		if !canEvery(c.who, false, in.Instances, PermBanInstance) {
+			return http.StatusForbidden, fmt.Errorf("you may not ban on every one of these instances")
+		}
 	}
-	if (in.ExpiresAt == nil || in.ExpiresAt.Sub(s.now()) > shortBan) && !role.Can(PermBanLong) {
+	if (in.ExpiresAt == nil || in.ExpiresAt.Sub(s.now()) > shortBan) && !canEvery(c.who, global, in.Instances, PermBanLong) {
 		return http.StatusForbidden, fmt.Errorf("bans longer than 7 days need the operator role")
 	}
-	if len(in.IPs)+len(in.IPRefs) > 0 && !role.Can(PermBanIP) {
+	if len(in.IPs)+len(in.IPRefs) > 0 && !canEvery(c.who, global, in.Instances, PermBanIP) {
 		return http.StatusForbidden, fmt.Errorf("IP bans need the operator role")
 	}
 	return 0, nil
@@ -118,7 +134,7 @@ func targetsOf(b moderation.Ban) string {
 }
 
 func (s *Server) logBan(c *call, action string, b moderation.Ban, ok bool, detail string) {
-	_ = s.Audit.Log(admin.AuditEntry{Actor: c.actor, Source: c.src, Instance: strings.Join(b.Instances, ","), Action: action,
+	_ = s.Audit.Log(admin.AuditEntry{Actor: c.actor, Source: c.src, Client: c.client, Instance: strings.Join(b.Instances, ","), Action: action,
 		Target: targetsOf(b), Detail: detail, OK: ok}) // the ban itself is stored; a failed audit line must not undo it
 }
 
@@ -180,7 +196,7 @@ func (s *Server) banHistory(w http.ResponseWriter, r *http.Request, c *call) {
 		storeFail(w, err)
 		return
 	}
-	writeJSON(w, 200, maskHistory(c, h))
+	writeJSON(w, 200, maskHistory(c, b, h))
 }
 
 func (s *Server) createBan(w http.ResponseWriter, r *http.Request, c *call) {
@@ -207,7 +223,7 @@ func (s *Server) createBan(w http.ResponseWriter, r *http.Request, c *call) {
 
 // mayChange: the ban's creator (who must still be allowed to make it) or whoever may revoke any ban.
 func (s *Server) mayChange(c *call, b moderation.Ban) (int, error) {
-	if c.who.Token.Role.Can(PermBanRevokeAny) {
+	if c.who.CanAll(PermBanRevokeAny) {
 		return 0, nil
 	}
 	if b.CreatedBy != c.actor {
@@ -289,7 +305,7 @@ func (s *Server) kick(w http.ResponseWriter, r *http.Request, c *call) {
 		return
 	}
 	id := r.PathValue("steamid")
-	entry := admin.AuditEntry{Actor: c.actor, Source: c.src, Instance: c.hub.Name, Action: "player.kick", Target: id, Detail: reason}
+	entry := admin.AuditEntry{Actor: c.actor, Source: c.src, Client: c.client, Instance: c.hub.Name, Action: "player.kick", Target: id, Detail: reason}
 	err := s.Moderation.Kick(r.Context(), c.hub.Name, id, reason)
 	entry.OK = err == nil
 	if err != nil {

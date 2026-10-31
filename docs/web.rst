@@ -10,16 +10,16 @@ also do with ``dzo player``, ``dzo vehicle`` or a script.
 
 The web interface only ever talks to installations through their API. It can
 run on the same host as ``dzo serve`` (the default), or on another host, and
-one web interface can show **several dzo installations** side by side.
+one web interface serves **one dzo installation**.
 
 .. code-block:: sh
 
-   sudo -iu dayz dzo token create web --role operator --delegate > /var/lib/dzo/secrets/web.token
+   sudo -iu dayz dzo token create web --role admin --web > /var/lib/dzo/secrets/web.token
    sudo -iu dayz dzo serve &      # the API (to try it by hand, see below)
    sudo -iu dayz dzo web          # http://127.0.0.1:8081 (to try it by hand, see below)
 
 ``dzo instance apply <name>`` (or ``dzo units sync``) writes ``dzo-web.service`` and starts it as soon
-as the web interface is set up, that is when ``web.backends`` in ``config.yaml`` lists a backend or the
+as the web interface is set up, that is when ``web.api`` in ``config.yaml`` is set or the
 token file above (``<paths.secrets>/web.token``) exists. ``web.enabled: true`` forces the unit on (it then
 fails until the token exists), ``false`` keeps it off. It is not written before that, because the web
 interface is optional and cannot start without a token. ``dzo-serve.service`` is written when an
@@ -27,49 +27,200 @@ instance runs the dzo-admin mod. With the units running, ``dzo serve`` and ``dzo
 find their ports taken: stop the unit first (``systemctl --user stop dzo-web``) if you want to run one
 in the foreground, for example to see its output.
 
-Several installations
----------------------
+Another host
+------------
 
-List one backend per installation in ``/etc/dzo/config.yaml``. Each needs an API
-token created *on that installation*:
+On another host than ``dzo serve``, set ``web.api`` in ``/etc/dzo/config.yaml``. The token is
+created *on the installation*:
 
 .. code-block:: yaml
 
    web:                             # excerpt; every key of ``web:`` is explained in :doc:`configuration`
-     backends:                      # name, url and token_file are all required
-       - {name: eu, url: "https://dzo-eu.example.invalid", token_file: /var/lib/dzo/secrets/eu.token}
-       - {name: us, url: "https://dzo-us.example.invalid", token_file: /var/lib/dzo/secrets/us.token}
+     api:
+       url: "https://dzo.example.invalid:8080"
+       token_file: /var/lib/dzo/secrets/web.token
+       ca_file: /etc/dzo/tls/serve-ca.pem   # only for a private CA
 
-The dashboard shows every installation with its instances. An installation that
-is down is shown with its error; the others keep working.
+For several installations run one web interface for each.
 
-Access control
---------------
+.. _web-https:
 
-.. warning::
+HTTPS
+-----
 
-   The web interface has **no login of its own yet** (no users, passwords or
-   second factor). Anyone who can reach it acts with the role of the backend
-   token. Keep it on localhost, or put it behind a reverse proxy that
-   authenticates your users (with multi-factor login) and terminates HTTPS.
-   dzo refuses to listen on a non-local address unless
-   ``web.allow_insecure_http`` is set.
+``dzo serve`` and ``dzo web`` both take a ``tls`` block (``cert_file`` and ``key_file``, optionally
+``client_ca_file``; :doc:`configuration`) and then speak HTTPS. You bring the certificate, from certbot
+or any other tool, or you put a reverse proxy in front. dzo has no ACME client of its own: it would
+need ports 80 and 443, privileges and certificate state that the host's own tooling already handles.
 
-Set ``web.user_header`` to the header your proxy fills with the signed-in user
-(for example ``X-Forwarded-User``). That name goes into the audit log next to
-each action. Only use this behind a proxy that strips the header from incoming
-requests.
+A renewed certificate is picked up by itself. The files are checked on new connections (every few
+seconds at most) and on ``systemctl --user reload dzo-web`` (SIGHUP), without a restart and without
+dropping connections. A new pair that does not load is logged and the old one stays active. The CA
+file ``client_ca_file`` reloads the same way; ``web.api.ca_file`` is read at start, so after replacing that CA restart ``dzo web``. A certbot renewal needs no deploy
+hook beyond writing the files where ``tls`` points.
 
-What the interface does about browser attacks: every change needs a per-session
-token that the pages hand to htmx (and a same-origin check), responses carry a
-strict content security policy without inline scripts, and pages cannot be
-framed.
+``web.listen`` on a non-loopback address is accepted when ``web.tls`` is set (or
+``allow_insecure_http``). ``dzo web`` reaches ``dzo serve`` over HTTPS when ``serve.tls`` is set; for
+a private CA give it ``web.api.ca_file``, and ``serve.tls.client_ca_file`` lets only hosts with a
+certificate of that CA reach the API.
+
+Port 443 without a proxy
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+dzo runs as the ``dayz`` user in user units, which cannot be given ``CAP_NET_BIND_SERVICE``. Two ways
+work:
+
+* Lower the unprivileged port limit to 443 with ``/etc/sysctl.d/50-dzo.conf``::
+
+     net.ipv4.ip_unprivileged_port_start = 443
+
+  Simple, but every local user may then bind port 443 and above.
+
+* Keep the limit and redirect 443 to ``web.listen`` (for example ``0.0.0.0:8443``) with nftables::
+
+     table inet dzo {
+       chain prerouting {
+         type nat hook prerouting priority dstnat; policy accept;
+         tcp dport 443 redirect to :8443
+       }
+     }
+
+``setcap`` on the binary is not suitable: every package upgrade drops it, and it applies to every
+user who runs the binary.
+
+.. _web-account:
+
+Account and people pages
+------------------------
+
+The **account page** (your name in the header) is for everybody:
+
+* username and password, so that you can sign in without Steam (the second step stays); changing a password
+  asks for the current one, and a wrong one counts like a failed login;
+* the authenticator app: set up a new one with a QR code and prove it with a first code, which replaces the
+  old one;
+* passkeys: register more, see when each was used, remove one;
+* new recovery codes (shown once, the old ones stop working);
+* "log out everywhere else", which ends your other sessions.
+
+The last second factor cannot be removed. Logging out is in the header.
+
+The **people page** (``People`` in the header) is shown to admins on every instance only. It lists everybody
+with a grant and lets you add a person by Steam ID, change their name and grants (``alpha=operator,
+*=viewer``: a role per instance, ``*`` for all of them), disable them, reset them (password, username, second
+factors and sessions are removed; they sign in through Steam and set up a second factor again) or delete
+them. Your own row has no controls: nobody can change their own access in the web interface or the API;
+another admin, or ``dzo user`` on the serve host, does that. Changes are in the audit log.
+
+.. _web-setup-login:
+
+Setting up logins (the minimum)
+-------------------------------
+
+On the host of ``dzo serve``:
+
+1. Set ``serve.web_url`` in ``/etc/dzo/config.yaml`` to the address people type into their browser, for example
+   ``https://dzo.example.org`` (scheme and host, no path; ``https``, or ``http`` for ``localhost`` only), and
+   restart ``dzo serve``.
+2. Make the token of the web interface and give it to ``dzo web``: ``dzo token create web --role admin --web >
+   <paths.secrets>/web.token`` (with ``web.api`` on another host, :ref:`web-https`).
+3. Make the first admin, with your own Steam64 ID (the 17-digit number from your Steam profile address, or
+   from a site like steamid.io)::
+
+      dzo user grant 76561198000000001 --role admin --name Ann
+
+4. Open ``serve.web_url``, choose **Sign in through Steam**, then set up your second factor (authenticator app
+   or passkey) and keep the recovery codes. Add everybody else on the people page (:ref:`web-account`).
+
+**If Steam sign-in does not work (yet)**, give the admin a password on the host instead of step 4's Steam
+sign-in::
+
+   dzo user password 76561198000000001 --username ann      # asks twice, no echo
+
+(a password is 12 to 256 bytes; piped in, one line is read). Then log in with that username and password. It
+is only the first factor: the page asks for the second factor to be set up (authenticator app or passkey) and
+shows the recovery codes, and every later login needs the password and that factor. Until it is set up,
+whoever knows the password can set it up, so hand the password over safely; ``dzo user password`` again
+changes it, ``dzo user reset`` removes it.
+
+**What signing in through Steam needs.** Steam's sign-in is OpenID: there is no Steam Web API key, no
+registration with Valve and no secret. It needs two things. First, ``serve.web_url`` has to be the address
+the *browser* uses: Steam sends the browser back to it (``<web_url>/login/steam/return``), and it also names
+the site Steam shows on its sign-in page; behind a reverse proxy this is the proxy's public address. Second,
+``dzo serve`` has to reach ``https://steamcommunity.com`` outbound (HTTPS, port 443), because it asks Steam to
+confirm every sign-in; nothing needs to reach ``dzo serve`` from Steam. Without Steam, a person who already
+has a username and password can still log in with those.
+
+.. _web-login:
+
+Login
+-----
+
+Everybody who opens the web interface logs in. A login has two steps, always:
+
+1. **A first factor**: username and password, or **Sign in through Steam**.
+2. **A second factor**: a code from an authenticator app (TOTP), a **passkey**, or a one-time **recovery code**.
+
+A passkey is only ever the second step. Without ``serve.web_url`` (:doc:`configuration`) logins are off and
+the pages say so. ``dzo web`` only relays the steps: ``dzo serve`` checks the passwords, talks to Steam, holds
+the sessions and decides every permission; the web interface keeps just a cookie.
+
+**First visit.** Someone (an admin in the users page, or ``dzo user grant`` on the host) grants a Steam ID a
+role. That person opens the web interface and signs in through Steam. A Steam ID without a grant gets "no
+access", and nothing is stored for it. Because there is no second factor yet, the person is asked to set one
+up: scan a QR code with an authenticator app, or register a passkey. Then they see their recovery codes, once.
+Afterwards they may set a username and a password on the account page, so that they can also log in without
+Steam; the second step stays.
+
+**Sessions.** A session ends after ``serve.login.session_idle_hours`` (default 12) without a request, and
+after ``serve.login.session_max_days`` (default 7) at the latest. Logging out, ``dzo user reset``, disabling a
+person and removing their last grant end it at once. So do changing or removing the password and removing a
+second factor (an authenticator app or a passkey), in the browser or with ``dzo user password``: every other
+session of that person ends, so a stolen session does not outlive the change; the session that made it stays
+(the command ends all of them). There is no limit on parallel sessions. The cookie is ``HttpOnly`` and ``SameSite=Strict``;
+on HTTPS (``serve.web_url`` starts with ``https://``) it is ``__Host-dzo_session``, ``Secure`` and host-only.
+The half-finished login between the two steps lives five minutes in a ``SameSite=Lax`` cookie
+(``dzo_login``): Steam sends the browser back with a navigation from another site, which a Strict cookie
+would not survive. The return from Steam carries a random state that must match that cookie, so that nobody
+can log a victim into the attacker's account with a prepared link, and it answers with a small page that moves
+on by itself, so that the next request starts on this site.
+
+**Guessing.** Five wrong passwords or codes per account and per client address are free, then every further
+attempt makes the wait longer (one second, doubling, up to 15 minutes); a success clears the account. Waiting
+logins get "too many failed logins" whether or not the username exists. Behind a reverse proxy, set
+``web.trusted_proxies`` to the proxy's address: only then is its ``X-Forwarded-For`` believed (the right-most
+address that is not a trusted proxy), and the browser's real address is what the login log and the audit log
+show.
+
+What the interface does about browser attacks: every change needs a token of the session that the pages hand
+to htmx (and a same-origin check), responses carry a strict content security policy without inline scripts,
+and pages cannot be framed. Behind HTTPS (:ref:`web-https`) nothing here needs a reverse proxy; dzo refuses
+to listen on a non-local address without ``web.tls`` unless ``web.allow_insecure_http`` is set.
+
+People and the first admin
+--------------------------
+
+People are identified by their Steam ID and have a role per instance (``viewer``, ``moderator``, ``operator``
+or ``admin``, below), or on ``*`` for every instance. The first admin is made on the host of ``dzo serve``,
+where nothing else is needed:
+
+.. code-block:: sh
+
+   dzo user grant 76561198000000001 --role admin --name Ann          # every instance
+   dzo user grant 76561198000000002 --role operator --instance chernarus --instance livonia
+   dzo user list
+
+``dzo user`` also revokes, disables, deletes and resets (:doc:`cli`); an admin on ``*`` does the same through
+the API (:doc:`api`).
 
 Roles
 -----
 
-The role of a token decides what the interface may do. Without a permission the
-action fails with a clear message.
+A person's role **on an instance** decides what the interface offers them there: controls are shown only
+where the role allows them (an operator on ``chernarus`` and a viewer on ``livonia`` sees the buttons on the
+first and none on the second; instances without a role are not listed). That hiding is a convenience: ``dzo
+serve`` checks every action against the instance it touches, so a forged request gets a refusal with a clear
+message. The effective role is the lower of the person's grant and the role of the web token. The roles are:
 
 .. list-table::
    :header-rows: 1

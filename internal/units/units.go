@@ -212,10 +212,10 @@ func exporterUnit(o Options) File {
 			"[Install]\nWantedBy=default.target\n")}
 }
 
-// webConfigured reports whether the web interface has been set up: it has backends of its own, or
-// the API token it uses for this host's API exists.
+// webConfigured reports whether the web interface has been set up: it has an API of its own
+// (web.api), or the API token it uses for this host's API exists.
 func webConfigured(cfg *config.Config) bool {
-	if len(cfg.Web.Backends) > 0 {
+	if cfg.Web.API.URL != "" {
 		return true
 	}
 	_, err := os.Stat(filepath.Join(cfg.Paths.Secrets, "web.token"))
@@ -232,7 +232,7 @@ func serveUnit(o Options) File {
 func webUnit(o Options) File {
 	return File{Dir: Systemd, Name: "dzo-web.service", Enable: "dzo-web.service", Content: generated(
 		"[Unit]\nDescription=dzo web interface\nAfter=network.target\n\n" +
-			"[Service]\nEnvironment=" + instance.ServicePathEnv + "\nExecStart=" + o.cmd("web") + "\nRestart=on-failure\nRestartSec=5\n\n" +
+			"[Service]\nEnvironment=" + instance.ServicePathEnv + "\nExecStart=" + o.cmd("web") + "\nExecReload=/bin/kill -HUP $MAINPID\nRestart=on-failure\nRestartSec=5\n\n" +
 			"[Install]\nWantedBy=default.target\n")}
 }
 
@@ -452,7 +452,7 @@ func ensureAnnounceToken(cfg *config.Config) (bool, error) {
 	if err := os.MkdirAll(cfg.Paths.Secrets, 0o750); err != nil {
 		return false, err
 	}
-	secret, _, err := store.Create("announce", api.RoleAnnouncer, nil, false, 0)
+	secret, _, err := store.Create("announce", api.RoleAnnouncer, nil, false, false, 0)
 	if err != nil {
 		return false, err
 	}

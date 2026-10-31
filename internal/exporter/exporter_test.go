@@ -33,6 +33,7 @@ import (
 	"github.com/bzed/dayz-server-operator/internal/monitor"
 	"github.com/bzed/dayz-server-operator/internal/site"
 	"github.com/bzed/dayz-server-operator/internal/steam"
+	"github.com/bzed/dayz-server-operator/internal/tlsfiles"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -433,7 +434,7 @@ func TestTLSCertificateIsReloadedWithoutARestart(t *testing.T) {
 	newCert(t, "three", 3).write(t, dir)
 	old := time.Now().Add(-time.Minute)
 	_ = os.Chtimes(cert, old, old)
-	require.Eventually(t, func() bool { return servedSerial(t, addr) == 3 }, certChecks+5*time.Second, 100*time.Millisecond,
+	require.Eventually(t, func() bool { return servedSerial(t, addr) == 3 }, tlsfiles.Recheck+5*time.Second, 100*time.Millisecond,
 		"changed files are picked up on a new connection")
 }
 

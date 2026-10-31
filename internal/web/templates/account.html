@@ -1,0 +1,64 @@
+{{/* SPDX-FileCopyrightText: 2026 Bernd Zeimetz <bernd@bzed.de> */}}
+{{/* SPDX-License-Identifier: AGPL-3.0-or-later */}}
+{{define "account"}}{{template "head" .}}
+{{$csrf := .CSRF}}
+{{with .Data}}
+<h1><i class="fa fa-user" aria-hidden="true"></i>Your account</h1>
+{{if .Note}}<p class="flash ok" role="status">{{.Note}}</p>{{end}}
+{{if .Error}}<p class="flash err" role="alert">{{.Error}}</p>{{end}}
+{{if .Codes}}<section><h2>Recovery codes</h2><p>Each works once. They are shown only now: write them down.</p>
+<pre id="recovery-codes">{{range .Codes}}{{.}}
+{{end}}</pre></section>{{end}}
+{{$a := .Account}}
+<dl class="facts"><dt>Steam ID</dt><dd>{{$a.SteamID}}</dd><dt>Name</dt><dd>{{$a.Name}}</dd><dt>Username</dt><dd>{{if $a.Username}}{{$a.Username}}{{else}}none{{end}}</dd></dl>
+
+<section><h2>Username and password</h2>
+<p>With a username and a password you can sign in without Steam. The second step stays.</p>
+<form method="post" action="/account/password" class="stack">
+  <input type="hidden" name="csrf" value="{{$csrf}}">
+  <label>Username <input name="username" value="{{$a.Username}}" autocomplete="username" minlength="3" maxlength="32" pattern="[A-Za-z0-9._-]+" {{if not $a.HasPassword}}required{{end}}></label>
+  {{if $a.HasPassword}}<label>Current password <input name="current" type="password" autocomplete="current-password" required></label>{{end}}
+  <label>New password (at least 12 characters) <input name="new" type="password" autocomplete="new-password" minlength="12" maxlength="256" required></label>
+  <button><i class="fa fa-save" aria-hidden="true"></i>{{if $a.HasPassword}}Change{{else}}Set{{end}}</button>
+</form>
+{{if $a.HasPassword}}<form method="post" action="/account/password/delete"><input type="hidden" name="csrf" value="{{$csrf}}"><button class="danger">Remove the password</button></form>{{end}}
+</section>
+
+<section><h2>Authenticator app</h2>
+{{if .Setup}}
+<p>Scan this with a new authenticator app, or type the secret, and enter the code it shows. It replaces the app you use now.</p>
+{{if .Setup.QR}}<p><img class="qr" src="{{.Setup.QR}}" alt="QR code for the authenticator app" width="200" height="200"></p>{{end}}
+<p>Secret: <code id="totp-secret">{{.Setup.Secret}}</code></p>
+<form method="post" action="/account/totp" class="stack">
+  <input type="hidden" name="csrf" value="{{$csrf}}"><input type="hidden" name="pending" value="{{.Setup.Pending}}">
+  <label>Code <input name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="8" required></label>
+  <button>Save</button>
+</form>
+{{else}}
+<p>{{if $a.TOTP}}An authenticator app is set up.{{else}}No authenticator app is set up.{{end}}</p>
+<p><a class="btn" href="/account/totp">{{if $a.TOTP}}Replace it{{else}}Set one up{{end}}</a></p>
+{{if $a.TOTP}}<form method="post" action="/account/totp/delete"><input type="hidden" name="csrf" value="{{$csrf}}"><button class="danger">Remove the app</button></form>{{end}}
+{{end}}
+</section>
+
+<section><h2>Passkeys</h2>
+{{if $a.Passkeys}}<table class="rows"><thead><tr><th>Name</th><th>Added</th><th>Last used</th><th></th></tr></thead><tbody>
+{{range $a.Passkeys}}<tr><td>{{.Name}}</td><td>{{.Created.Format "2006-01-02"}}</td><td>{{if .LastUsed}}{{.LastUsed.Format "2006-01-02 15:04"}}{{else}}never{{end}}</td>
+<td><form method="post" action="/account/passkeys/delete"><input type="hidden" name="csrf" value="{{$csrf}}"><input type="hidden" name="id" value="{{.ID}}"><button class="danger">Remove</button></form></td></tr>{{end}}
+</tbody></table>{{else}}<p>No passkey is registered.</p>{{end}}
+<p><label>Name <input id="passkey-name" value="passkey" maxlength="64"></label>
+<button id="passkey-add" class="button" type="button" data-passkey="account"><i class="fa fa-key" aria-hidden="true"></i>Register a passkey</button></p>
+<p id="passkey-error" class="flash err" role="alert" hidden></p>
+<script src="/static/passkey.js" defer></script>
+</section>
+
+<section><h2>Recovery codes</h2>
+<p>{{$a.RecoveryLeft}} left. A new set replaces the old one.</p>
+<form method="post" action="/account/recovery"><input type="hidden" name="csrf" value="{{$csrf}}"><button>Make new recovery codes</button></form>
+</section>
+
+<section><h2>Sessions</h2>
+<form method="post" action="/account/sessions/delete"><input type="hidden" name="csrf" value="{{$csrf}}"><button>Log out everywhere else</button></form>
+</section>
+{{end}}
+{{template "foot" .}}{{end}}

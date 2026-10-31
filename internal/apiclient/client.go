@@ -11,6 +11,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -30,7 +31,11 @@ type Client struct {
 	// Actor and Source go into the audit log (delegate tokens only): the
 	// human the web interface acts for, and where the action came from.
 	Actor, Source string
-	HTTP          *http.Client
+	// Session is the login session of the person a web token acts for (X-Dzo-Session). ClientAddr is
+	// the browser's address and ProxyAddr the proxy it came through (X-Dzo-Client, X-Dzo-Proxy); only
+	// web tokens may report them.
+	Session, ClientAddr, ProxyAddr string
+	HTTP                           *http.Client
 }
 
 // New returns a client with a sane timeout. Streams use their own context.
@@ -38,10 +43,34 @@ func New(base, token string) *Client {
 	return &Client{Base: strings.TrimRight(base, "/"), Token: token, HTTP: &http.Client{Timeout: 40 * time.Second}}
 }
 
+// NewTLS is New with its own TLS configuration, for an API served over HTTPS
+// with a private CA (web.api.ca_file) or that asks for a client certificate.
+func NewTLS(base, token string, tlsConf *tls.Config) *Client {
+	c := New(base, token)
+	c.HTTP.Transport = &http.Transport{TLSClientConfig: tlsConf, Proxy: http.ProxyFromEnvironment,
+		TLSHandshakeTimeout: 10 * time.Second, MaxIdleConnsPerHost: 4, IdleConnTimeout: 90 * time.Second}
+	return c
+}
+
 // WithActor returns a copy that reports the given actor and source.
 func (c *Client) WithActor(actor, source string) *Client {
 	d := *c
 	d.Actor, d.Source = actor, source
+	return &d
+}
+
+// ForUser returns a copy that acts for the person of a login session, reporting the browser's address.
+// It replaces WithActor for the web interface; WithActor stays for other delegate tools.
+func (c *Client) ForUser(session, clientAddr string) *Client {
+	d := *c
+	d.Session, d.ClientAddr = session, clientAddr
+	return &d
+}
+
+// ForProxy returns a copy that also reports the reverse proxy the browser came through.
+func (c *Client) ForProxy(addr string) *Client {
+	d := *c
+	d.ProxyAddr = addr
 	return &d
 }
 
@@ -67,6 +96,11 @@ func (c *Client) newReq(ctx context.Context, method, path string, body io.Reader
 	}
 	if c.Source != "" {
 		r.Header.Set("X-Dzo-Source", c.Source)
+	}
+	for k, v := range map[string]string{"X-Dzo-Session": c.Session, "X-Dzo-Client": c.ClientAddr, "X-Dzo-Proxy": c.ProxyAddr} {
+		if v != "" {
+			r.Header.Set(k, v)
+		}
 	}
 	return r, nil
 }

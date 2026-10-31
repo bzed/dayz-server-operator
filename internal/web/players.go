@@ -386,7 +386,7 @@ func (s *Server) playersPage(w http.ResponseWriter, r *http.Request) {
 	if _, ok := moderation.PlayerSorts[q.Get("sort")]; ok {
 		v.Sort, v.Desc = q.Get("sort"), q.Get("dir") == "desc"
 	}
-	for _, nb := range s.nav(r.Context()) {
+	for _, nb := range s.navFor(r) {
 		if nb.Name == b.Name {
 			for _, i := range nb.Instances {
 				v.Instances = append(v.Instances, i.Name)

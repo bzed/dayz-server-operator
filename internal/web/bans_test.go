@@ -62,7 +62,7 @@ func (e *env) postForm(path string, form url.Values, csrf bool) (int, string) {
 	req, _ := http.NewRequest("POST", e.web.URL+path, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	if csrf {
-		req.Header.Set("X-CSRF-Token", e.srv.csrf)
+		req.Header.Set("X-CSRF-Token", e.csrf)
 	}
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(e.t, err)
@@ -71,25 +71,23 @@ func (e *env) postForm(path string, form url.Values, csrf bool) (int, string) {
 	return resp.StatusCode, string(b)
 }
 
-func TestBanFormCreatesAndFansOut(t *testing.T) {
+func TestBanFormCreates(t *testing.T) {
 	e := newEnv(t, api.RoleAdmin)
 	code, body, _ := e.get("/b/main/bans/new?steam_id=" + webSteam + "&instance=alpha")
 	require.Equal(t, 200, code, "form: %s", body)
 	require.Contains(t, body, webSteam)
-	require.Contains(t, body, `name="also" value="other"`)
+	require.NotContains(t, body, `name="also"`, "one web interface serves one installation: no other installation to send the ban to")
 	form := url.Values{"steam_id": {webSteam}, "reason": {"aimbot <script>"}, "message": {"bye"}, "duration": {"7d"},
-		"scope": {"instances"}, "instances": {"alpha"}, "also": {"other"}}
+		"scope": {"instances"}, "instances": {"alpha"}}
 	code, _ = e.postForm("/b/main/bans", form, false)
 	require.Equal(t, 403, code, "no CSRF token")
 	code, body = e.postForm("/b/main/bans", form, true)
 	require.Equal(t, 200, code, "create: %s", body)
-	require.Equal(t, 2, strings.Count(body, "ban #1"), "create: %s", body)
+	require.Equal(t, 1, strings.Count(body, "ban #1"), "create: %s", body)
 	require.Contains(t, body, "alpha: ok")
 	_, list, _ := e.get("/b/main/bans?state=active")
 	require.Contains(t, list, "aimbot &lt;script&gt;")
 	require.NotContains(t, list, "<script>")
-	_, other, _ := e.get("/b/other/bans")
-	require.Contains(t, other, "aimbot", "the other backend has no ban")
 }
 
 func TestBanDetailEditAndRevoke(t *testing.T) {
@@ -120,7 +118,7 @@ func TestBanDetailEditAndRevoke(t *testing.T) {
 func TestEvidenceImageProxy(t *testing.T) {
 	e := newEnv(t, api.RoleAdmin)
 	png := append([]byte("\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR"), make([]byte, 64)...)
-	c := e.srv.backend("main").Client
+	c := e.apiClient()
 	ev, err := c.AddEvidenceImage(t.Context(), moderation.EvidenceInput{SteamID: webSteam, Instance: "alpha", Body: "shot"}, png)
 	require.NoError(t, err)
 	code, body, hdr := e.get("/b/main/evidence/" + itoa(ev.ID) + "/file")
@@ -194,13 +192,13 @@ func TestBanFormDefaultsToAllInstancesAndPermanent(t *testing.T) {
 	}
 	form := url.Values{"steam_id": {webSteam}, "reason": {"x"}, "duration": {"7d"}, "scope_choice": {"this"}, "this_instance": {"alpha"}}
 	e.postForm("/b/main/bans", form, true)
-	b, err := e.srv.backend("main").Client.Ban(t.Context(), 1)
+	b, err := e.apiClient().Ban(t.Context(), 1)
 	require.NoError(t, err)
 	require.Equal(t, moderation.ScopeInstances, b.Scope)
 	require.Equal(t, []string{"alpha"}, b.Instances)
 	form.Set("scope_choice", "global")
 	e.postForm("/b/main/bans", form, true)
-	b, err = e.srv.backend("main").Client.Ban(t.Context(), 2)
+	b, err = e.apiClient().Ban(t.Context(), 2)
 	require.NoError(t, err)
 	require.Equal(t, moderation.ScopeGlobal, b.Scope)
 	// Without an instance in the link there is no "this instance" choice.
@@ -263,7 +261,7 @@ func (e *env) postMultipart(path string, fields map[string]string, file []byte) 
 	_ = mw.Close()
 	req, _ := http.NewRequest("POST", e.web.URL+path, &buf)
 	req.Header.Set("Content-Type", mw.FormDataContentType())
-	req.Header.Set("X-CSRF-Token", e.srv.csrf)
+	req.Header.Set("X-CSRF-Token", e.csrf)
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(e.t, err)
 	defer func() { _ = resp.Body.Close() }()

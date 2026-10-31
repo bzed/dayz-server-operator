@@ -85,3 +85,32 @@ Review, then roll out
    once the new one is stable.
 
 The old volumes are not touched and not read.
+
+The web interface: logins and one installation
+----------------------------------------------
+
+This is for installations of dzo that already run ``dzo web``. Before, everybody who reached the web interface
+was the same person, acting with one delegate token; ``web.user_header`` only told the audit log what a proxy
+had written. Now people log in (:ref:`web-login`) and have a role per instance, and one web interface serves
+one installation. After the upgrade:
+
+1. **Remove the old keys.** ``dzo web`` and ``dzo serve`` refuse a ``config.yaml`` that still sets
+   ``web.backends`` or ``web.user_header``. Several backends: run one web interface per installation, on the
+   host of each installation or elsewhere with ``web.api`` (``url``, ``token_file``, ``ca_file`` for a private
+   CA). The backend picker and sending a ban to several installations at once are gone.
+2. **Set ``serve.web_url``** to the address people open the web interface at (``https``; plain ``http`` only
+   for localhost). Without it logins are off and the web interface says so. Restart ``dzo serve``.
+3. **Make a web token.** The old delegate token (``--delegate``) no longer gives the web interface anything.
+   Create the new one on the installation: ``dzo token create web --role admin --web >
+   <paths.secrets>/web.token`` (its role and instances cap what any person can do through it). Delegate tokens
+   keep working for scripts and tools.
+4. **Make the first admin.** ``dzo user grant <Steam64 ID> --role admin`` on the host of ``dzo serve`` (and
+   more people, per instance, with ``--instance``). They open the web interface, sign in through Steam and set
+   up a second factor. Everything else is done on the people page.
+5. **Run ``dzo units sync``** (``dzo-web.service`` gained ``ExecReload``) and, for HTTPS, set ``serve.tls`` and
+   ``web.tls`` or put a proxy in front (:ref:`web-https`; behind a proxy set ``web.trusted_proxies``).
+6. Audit entries of web actions now name ``<token>:<Steam ID>`` and carry the browser's address for
+   ``serve.audit_ip_retention_days`` (default 90).
+
+Tokens of bots and scripts are unchanged, except that an admin token limited to some instances no longer reads
+the audit log or revokes other people's bans: those permissions are installation-wide.

@@ -416,3 +416,21 @@ table.pdb td.vcol .bad { color: var(--flare); font-weight: 600; white-space: now
 
 /* The centre of a sandstorm: the marker's arrow points the way the storm moves. */
 .mi .storm-dir { position: absolute; left: 50%; top: 50%; width: 1em; margin: -.5em 0 0 -.5em; font-size: 2.2rem; line-height: 1; text-align: center; color: var(--mc); transform-origin: 50% 50%; pointer-events: none; opacity: .85; }
+
+/* login pages */
+body.login { display: flex; justify-content: center; padding: 2rem 1rem; }
+.logincard { width: 100%; max-width: 26rem; }
+.logincard h1 { font-size: 1.6rem; margin: 0 0 1rem; }
+.logincard form { display: grid; gap: .6rem; margin-bottom: 1rem; }
+.logincard label { display: grid; gap: .2rem; }
+.logincard input { padding: .45rem .5rem; font: inherit; }
+.logincard .or { text-align: center; margin: .5rem 0; }
+.logincard .qr { image-rendering: pixelated; background: #fff; padding: .4rem; }
+.logincard pre { padding: .6rem; background: rgba(127, 127, 127, .15); white-space: pre-wrap; }
+.logincard a.button, .logincard button { display: inline-block; padding: .45rem .8rem; text-decoration: none; }
+.logout { display: inline; }
+.logout button { background: none; border: 0; color: inherit; cursor: pointer; font: inherit; }
+form.inline { display: inline-flex; gap: .4rem; align-items: center; flex-wrap: wrap; margin: 0 .3rem .3rem 0; }
+form.stack { display: grid; gap: .5rem; max-width: 28rem; }
+form.stack label { display: grid; gap: .2rem; }
+a.account { margin-left: auto; text-decoration: none; }

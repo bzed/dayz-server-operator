@@ -8,6 +8,7 @@ package serve
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"net"
@@ -28,6 +29,7 @@ import (
 	"github.com/bzed/dayz-server-operator/internal/presence"
 	"github.com/bzed/dayz-server-operator/internal/resolve"
 	"github.com/bzed/dayz-server-operator/internal/site"
+	"github.com/bzed/dayz-server-operator/internal/tlsfiles"
 )
 
 // gatewayHost is how a container with published (pasta) networking reaches
@@ -246,6 +248,8 @@ func Run(ctx context.Context, cfg *config.Config, o Options) error {
 	mctx, mcancel := context.WithCancel(ctx)
 	svc := moderation.NewService(store, audit, logf)
 	svc.AddressRetention, svc.VacuumEvery, svc.SessionRetention = cfg.Serve.IPRetention(), cfg.Serve.VacuumEvery(), cfg.Serve.SessionRetention()
+	svc.SessionIdle, svc.SessionMax = cfg.Serve.SessionIdle(), cfg.Serve.SessionMax()
+	svc.AuditClientRetention = cfg.Serve.AuditIPRetention()
 	svc.OnEvent = feedFromRCon(reg)
 	audit.OnLog = feedFromAudit(reg)
 	svc.Start(mctx)
@@ -275,6 +279,11 @@ func Run(ctx context.Context, cfg *config.Config, o Options) error {
 	rec.Set(pctx, presence.FromRegistry(reg), reg.Names())
 	apiSrv := api.New(cfg.Serve.Installation, o.Version, reg, api.NewTokenStore(APITokens(cfg)), audit)
 	apiSrv.Moderation = svc
+	apiSrv.Logf = logf
+	if cfg.Serve.WebURL != "" { // user logins need to know where the web interface lives
+		apiSrv.Accounts = store
+		apiSrv.Login = api.LoginSettings{WebURL: cfg.Serve.WebURL, SessionIdle: cfg.Serve.SessionIdle(), SessionMax: cfg.Serve.SessionMax()}
+	}
 	apiSrv.Lookups = lookupAPI
 	apiSrv.TilesDir = TilesDir(cfg)
 	apiSrv.Say = newRConSay(rconDialer(cfg, tree))
@@ -286,9 +295,30 @@ func Run(ctx context.Context, cfg *config.Config, o Options) error {
 	// Open streams end when ctx does, so a shutdown does not wait for them.
 	apiHTTP.BaseContext = func(net.Listener) context.Context { return ctx }
 
+	// TLS on the API listener; the files reload on SIGHUP and when they change.
+	var reloadTLS []func()
+	var apiTLS *tls.Config
+	if t := cfg.Serve.TLS; t.CertFile != "" {
+		pair, err := tlsfiles.NewPair(t.CertFile, t.KeyFile, logf)
+		if err != nil {
+			return fmt.Errorf("serve.tls: %w", err)
+		}
+		reloadTLS = append(reloadTLS, pair.Reload)
+		var pool *tlsfiles.Pool
+		if t.ClientCAFile != "" {
+			if pool, err = tlsfiles.NewPool(t.ClientCAFile, logf); err != nil {
+				return fmt.Errorf("serve.tls.client_ca_file: %w", err)
+			}
+			reloadTLS = append(reloadTLS, pool.Reload)
+		}
+		apiTLS = tlsfiles.ServerConfig(pair, pool)
+	}
 	apiLn, err := net.Listen("tcp", cfg.Serve.Listen)
 	if err != nil {
 		return err
+	}
+	if apiTLS != nil {
+		apiLn = tls.NewListener(apiLn, apiTLS)
 	}
 	modLn, err := net.Listen("tcp", cfg.Serve.ModListen)
 	if err != nil {
@@ -305,6 +335,9 @@ func Run(ctx context.Context, cfg *config.Config, o Options) error {
 	for {
 		select {
 		case <-o.Reload:
+			for _, r := range reloadTLS {
+				r()
+			}
 			t, err := o.Load()
 			if err == nil {
 				err = AddHubs(reg, cfg, t)

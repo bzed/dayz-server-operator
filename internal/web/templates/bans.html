@@ -12,7 +12,7 @@
   </select>
   <input name="q" value="{{.Query}}" placeholder="Steam ID, GUID, IP, name or reason" size="34">
   <button><i class="fa fa-search" aria-hidden="true"></i>Filter</button>
-  <a class="btn" href="/b/{{.Backend}}/bans/new"><i class="fa fa-plus" aria-hidden="true"></i>New ban</a>
+  {{if .CanBan}}<a class="btn" href="/b/{{.Backend}}/bans/new"><i class="fa fa-plus" aria-hidden="true"></i>New ban</a>{{end}}
 </form>
 {{if .Err}}<p class="flash err">{{.Err}}</p>{{else if not .Bans}}<p>No bans.</p>{{else}}
 <div class="scroll"><table class="bans">
@@ -67,9 +67,6 @@
       {{if eq .Kind "image"}}<img src="/b/{{$.Data.Backend}}/evidence/{{.ID}}/file" alt="evidence {{.ID}}" loading="lazy">{{end}}
       {{if .Body}}<pre>{{.Body}}</pre>{{end}}</label>{{end}}
   </fieldset>{{end}}
-  {{if .Others}}<fieldset><legend>Also send to (without the evidence links)</legend>
-    {{range .Others}}<label><input type="checkbox" name="also" value="{{.}}"> {{.}}</label>{{end}}
-  </fieldset>{{end}}
   <button class="danger"><i class="fa fa-ban" aria-hidden="true"></i>Ban</button>
 </form>
 {{end}}
@@ -93,7 +90,7 @@
   {{if $b.RevokedAt}}<dt>Revoked</dt><dd>{{$b.RevokedAt.Format "2006-01-02 15:04"}} by {{$b.RevokedBy}}: {{$b.RevokeReason}}</dd>{{end}}
 </dl>
 <div id="flash"></div>
-{{if not $b.RevokedAt}}
+{{if and .CanBan (not $b.RevokedAt)}}
 <section><h2>Edit</h2>
 <form hx-post="/b/{{.Backend}}/bans/{{$b.ID}}" hx-target="#flash">
   {{with $b.Input}}<input type="hidden" name="steam_id" value="{{.SteamID}}">{{range .GUIDs}}<input type="hidden" name="guid" value="{{.}}">{{end}}
@@ -114,7 +111,7 @@
 </section>
 {{end}}
 <section class="evidence"><h2>Evidence</h2>
-{{$be := .Backend}}{{$bid := $b.ID}}{{$open := not $b.RevokedAt}}
+{{$be := .Backend}}{{$bid := $b.ID}}{{$open := and .CanFile (not $b.RevokedAt)}}
 {{range .Evidence}}<div class="item"><strong>#{{.ID}} {{.Kind}}</strong> from {{.Source}} on {{.Instance}}, {{.CreatedAt.Format "2006-01-02 15:04"}}
   {{if $open}}<button class="quiet" hx-post="/b/{{$be}}/bans/{{$bid}}/evidence/{{.ID}}/unlink" hx-target="#flash" hx-confirm="Unlink evidence #{{.ID}} from this ban? It stays filed against the player."><i class="fa fa-chain-broken" aria-hidden="true"></i>Unlink</button>{{end}}
   {{if eq .Kind "image"}}<img src="/b/{{$be}}/evidence/{{.ID}}/file" alt="evidence {{.ID}}" loading="lazy">{{end}}

@@ -309,10 +309,10 @@ func TestServeAndWebUnits(t *testing.T) {
 	assert.NotContains(t, unitNames(t, e), "dzo-web.service", "web.enabled: false switches the unit off")
 	e.opts.Cfg.Web.Enabled = nil
 	require.NoError(t, os.Remove(filepath.Join(e.opts.Cfg.Paths.Secrets, "web.token")))
-	// set up: backends of its own
-	e.opts.Cfg.Web.Backends = []config.Backend{{Name: "main", URL: "http://127.0.0.1:8080", TokenFile: "/x"}}
-	assert.Contains(t, unitNames(t, e), "dzo-web.service", "with web.backends the web interface is set up")
-	e.opts.Cfg.Web.Backends = nil
+	// set up: an API of its own
+	e.opts.Cfg.Web.API.URL, e.opts.Cfg.Web.API.TokenFile = "https://serve.example", "/x"
+	assert.Contains(t, unitNames(t, e), "dzo-web.service", "with web.api the web interface is set up")
+	e.opts.Cfg.Web.API.URL, e.opts.Cfg.Web.API.TokenFile = "", ""
 
 	yes, no := true, false
 	e.opts.Cfg.Serve.Enabled, e.opts.Cfg.Web.Enabled = &yes, &yes
@@ -320,6 +320,7 @@ func TestServeAndWebUnits(t *testing.T) {
 	assert.Contains(t, got["dzo-serve.service"], "ExecStart=/usr/bin/dzo serve\n")
 	assert.Contains(t, got["dzo-serve.service"], "ExecReload=/bin/kill -HUP $MAINPID")
 	assert.Contains(t, got["dzo-web.service"], "ExecStart=/usr/bin/dzo web\n")
+	assert.Contains(t, got["dzo-web.service"], "ExecReload=/bin/kill -HUP $MAINPID", "a reload re-reads the certificate files")
 	assert.Contains(t, got["dzo-web.service"], "WantedBy=default.target")
 
 	// an instance with the dzo-admin mod needs serve, unless it is switched off

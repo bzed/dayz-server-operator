@@ -41,7 +41,7 @@ func TestBanCommands(t *testing.T) {
 	srv.Moderation = cliMod{st}
 	ts := httptest.NewServer(srv.Handler())
 	defer ts.Close()
-	secret, _, _ := srv.Tokens.Create("cli", api.RoleAdmin, nil, true, time.Hour)
+	secret, _, _ := srv.Tokens.Create("cli", api.RoleAdmin, nil, true, false, time.Hour)
 	tokenFile := filepath.Join(dir, "token")
 	writeFile(t, tokenFile, secret+"\n")
 	common := []string{"--api", ts.URL, "--token-file", tokenFile}
@@ -86,7 +86,7 @@ func TestPlayerKickCommand(t *testing.T) {
 	srv.Moderation = cliMod{st}
 	ts := httptest.NewServer(srv.Handler())
 	defer ts.Close()
-	secret, _, _ := srv.Tokens.Create("cli", api.RoleModerator, nil, true, time.Hour)
+	secret, _, _ := srv.Tokens.Create("cli", api.RoleModerator, nil, true, false, time.Hour)
 	tokenFile := filepath.Join(dir, "token")
 	writeFile(t, tokenFile, secret+"\n")
 	common := []string{"--api", ts.URL, "--token-file", tokenFile}

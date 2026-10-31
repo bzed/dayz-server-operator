@@ -1,0 +1,104 @@
+{{/* SPDX-FileCopyrightText: 2026 Bernd Zeimetz <bernd@bzed.de> */}}
+{{/* SPDX-License-Identifier: AGPL-3.0-or-later */}}
+{{define "loginhead"}}<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="csrf" content="{{.CSRF}}">
+{{if .Refresh}}<meta http-equiv="refresh" content="0; url={{.Refresh}}">{{end}}
+<title>{{.Title}} · dzo</title>
+<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/static/favicon-32.png" type="image/png" sizes="32x32">
+<link rel="stylesheet" href="/vendor/fork-awesome/css/fork-awesome.css">
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body class="login">
+<main class="logincard">
+<h1><i class="fa fa-crosshairs" aria-hidden="true"></i>dzo</h1>
+{{end}}
+{{define "loginfoot"}}<p class="mute ver">{{.Version}}</p>
+</main>
+</body>
+</html>
+{{end}}
+
+{{define "login"}}{{template "loginhead" .}}
+<h2>Sign in</h2>
+{{if .Error}}<div class="flash err" role="alert">{{.Error}}</div>{{end}}
+<form method="post" action="/login" autocomplete="on">
+  <input type="hidden" name="csrf" value="{{.CSRF}}">
+  <label>Username <input name="username" autocomplete="username" required autofocus></label>
+  <label>Password <input name="password" type="password" autocomplete="current-password" required></label>
+  <button class="primary">Sign in</button>
+</form>
+<p class="or">or</p>
+<p><a class="button" href="/login/steam"><i class="fa fa-steam" aria-hidden="true"></i>Sign in through Steam</a></p>
+<p class="mute">A second step follows: a code from your authenticator app, a passkey, or a recovery code.</p>
+{{template "loginfoot" .}}{{end}}
+
+{{define "loginsecond"}}{{template "loginhead" .}}
+<h2>Second step</h2>
+{{if .Error}}<div class="flash err" role="alert">{{.Error}}</div>{{end}}
+{{if .Has "totp"}}<form method="post" action="/login/second">
+  <input type="hidden" name="csrf" value="{{.CSRF}}"><input type="hidden" name="kind" value="totp">
+  <label>Code from your authenticator app <input name="code" inputmode="numeric" pattern="[0-9 ]*" autocomplete="one-time-code" maxlength="8" required autofocus></label>
+  <button class="primary">Continue</button>
+</form>{{end}}
+{{if .Has "passkey"}}<p><button id="passkey-login" class="button" type="button" data-passkey="login"><i class="fa fa-key" aria-hidden="true"></i>Use a passkey</button></p>
+<p id="passkey-error" class="flash err" role="alert" hidden></p>
+<script src="/static/passkey.js" defer></script>{{end}}
+{{if .Has "recovery"}}<details><summary>Use a recovery code</summary>
+<form method="post" action="/login/second">
+  <input type="hidden" name="csrf" value="{{.CSRF}}"><input type="hidden" name="kind" value="recovery">
+  <label>Recovery code <input name="code" autocomplete="off" maxlength="16" required></label>
+  <button>Continue</button>
+</form></details>{{end}}
+<p><a href="/login">Start again</a></p>
+{{template "loginfoot" .}}{{end}}
+
+{{define "loginenrol"}}{{template "loginhead" .}}
+<h2>Set up your second factor</h2>
+<p>Signing in always needs a second factor. Set up one of these; you get recovery codes afterwards.</p>
+{{if .Error}}<div class="flash err" role="alert">{{.Error}}</div>{{end}}
+<h3>Authenticator app</h3>
+<p>Scan this with an authenticator app (Aegis, FreeOTP, Google Authenticator, a password manager), or type the secret.</p>
+{{if .QR}}<p><img class="qr" src="{{.QR}}" alt="QR code for the authenticator app" width="200" height="200"></p>{{end}}
+<p>Secret: <code id="totp-secret">{{.Secret}}</code></p>
+<form method="post" action="/login/enrol">
+  <input type="hidden" name="csrf" value="{{.CSRF}}">
+  <label>Code shown by the app <input name="code" inputmode="numeric" pattern="[0-9 ]*" autocomplete="one-time-code" maxlength="8" required></label>
+  <button class="primary">Finish</button>
+</form>
+<h3>Passkey</h3>
+<p>Or register a passkey (a security key, or the fingerprint or PIN of this device).</p>
+<p><label>Name <input id="passkey-name" value="passkey" maxlength="64"></label>
+<button id="passkey-enrol" class="button" type="button" data-passkey="enrol"><i class="fa fa-key" aria-hidden="true"></i>Register a passkey</button></p>
+<p id="passkey-error" class="flash err" role="alert" hidden></p>
+<div id="recovery-after" hidden>
+  <h3>Your recovery codes</h3>
+  <p>Each works once if you lose your second factor. They are shown only now: write them down.</p>
+  <pre id="recovery-codes"></pre>
+  <p><a id="recovery-continue" class="button primary" href="/">Continue</a></p>
+</div>
+<script src="/static/passkey.js" defer></script>
+{{template "loginfoot" .}}{{end}}
+
+{{define "recovery"}}{{template "loginhead" .}}
+<h2>Your recovery codes</h2>
+<p>Each works once if you lose your second factor. They are shown only now: write them down.</p>
+<pre id="recovery-codes">{{range .Codes}}{{.}}
+{{end}}</pre>
+<p><a class="button primary" href="{{.Next}}">Continue</a></p>
+{{template "loginfoot" .}}{{end}}
+
+{{define "loginmessage"}}{{template "loginhead" .}}
+<h2>{{.Title}}</h2>
+<p>{{.Message}}</p>
+{{if .LoggedIn}}<form method="post" action="/logout"><input type="hidden" name="csrf" value="{{.CSRF}}"><button>Log out</button></form>{{else}}<p><a href="/login">Back to the sign-in page</a></p>{{end}}
+{{template "loginfoot" .}}{{end}}
+
+{{define "loginrefresh"}}{{template "loginhead" .}}
+<h2>{{.Title}}</h2>
+<p>Continuing … <a href="{{.Refresh}}">continue</a> if nothing happens.</p>
+{{template "loginfoot" .}}{{end}}

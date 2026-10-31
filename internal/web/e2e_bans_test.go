@@ -15,7 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestE2EBanFormFansOut(t *testing.T) {
+func TestE2EBanFormCreates(t *testing.T) {
 	e := newEnv(t, api.RoleAdmin)
 	useRealAssets(t, e.assets)
 	b := newBrowser(t)
@@ -24,21 +24,15 @@ func TestE2EBanFormFansOut(t *testing.T) {
 		chromedp.WaitVisible(`form.banform`),
 		chromedp.SendKeys(`textarea[name=reason]`, "aimbot"),
 		chromedp.SetValue(`select[name=duration]`, "7d"),
-		chromedp.Click(`input[name=also][value=other]`),
 		chromedp.Click(`form.banform button.danger`),
 		chromedp.WaitVisible(`#ban-result .flash`),
 	)
-	require.Eventually(t, func() bool { return b.count("#ban-result .flash.ok") == 2 }, 10*time.Second, 100*time.Millisecond,
-		"one result per backend: %s", b.textOf("#ban-result"))
-	result := b.textOf("#ban-result")
-	require.Contains(t, result, "main: ban #1 created")
-	require.Contains(t, result, "other: ban #1 created")
-
-	for _, backend := range []string{"main", "other"} {
-		code, list, _ := e.get("/b/" + backend + "/bans?state=active")
-		require.Equal(t, 200, code)
-		require.Contains(t, list, "aimbot", "backend %s holds the ban", backend)
-	}
+	require.Eventually(t, func() bool { return b.count("#ban-result .flash.ok") == 1 }, 10*time.Second, 100*time.Millisecond,
+		"one result: %s", b.textOf("#ban-result"))
+	require.Contains(t, b.textOf("#ban-result"), "main: ban #1 created")
+	code, list, _ := e.get("/b/main/bans?state=active")
+	require.Equal(t, 200, code)
+	require.Contains(t, list, "aimbot")
 }
 
 func TestE2ERevokeAsksForConfirmation(t *testing.T) {

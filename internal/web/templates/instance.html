@@ -9,14 +9,14 @@
 </p>
 <div id="flash"></div>
 
-<section>
+{{if .Can.Broadcast}}<section>
   <h2><i class="fa fa-bullhorn" aria-hidden="true"></i>Broadcast</h2>
   <form hx-post="/b/{{.Backend}}/i/{{.Instance}}/message" hx-target="#flash" data-reset>
     <input name="text" placeholder="Message to all players" maxlength="400" required size="50">
     {{template "msgfields" .}}
     <button><i class="fa fa-paper-plane" aria-hidden="true"></i>Send</button>
   </form>
-</section>
+</section>{{end}}
 
 <section>
   <h2><i class="fa fa-users" aria-hidden="true"></i>Players</h2>

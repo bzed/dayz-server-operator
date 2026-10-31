@@ -23,6 +23,7 @@ type bansView struct {
 	Backend, State, Query string
 	Bans                  []moderation.Ban
 	Now                   time.Time
+	CanBan                bool // may ban on at least one instance
 	Err                   string
 }
 
@@ -40,7 +41,7 @@ func (s *Server) bansPage(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	v := bansView{Backend: b.Name, State: r.URL.Query().Get("state"), Query: r.URL.Query().Get("q"), Now: time.Now()}
+	v := bansView{Backend: b.Name, State: r.URL.Query().Get("state"), Query: r.URL.Query().Get("q"), Now: time.Now(), CanBan: canAnywhere(r).BanInstance}
 	var err error
 	if v.Bans, err = c.Bans(r.Context(), apiclient.BanFilter{State: v.State, Query: v.Query, Limit: 200}); err != nil {
 		v.Err = err.Error()
@@ -51,7 +52,6 @@ func (s *Server) bansPage(w http.ResponseWriter, r *http.Request) {
 type banFormView struct {
 	Backend, SteamID, Instance string
 	Instances                  []admin.Status
-	Others                     []string
 	Identities                 []moderation.Sighting
 	Evidence                   []moderation.Evidence
 	CanIP, CanGlobal           bool
@@ -65,17 +65,15 @@ func (s *Server) banForm(w http.ResponseWriter, r *http.Request) {
 	}
 	q := r.URL.Query()
 	v := banFormView{Backend: b.Name, SteamID: q.Get("steam_id"), Instance: q.Get("instance")}
-	for _, o := range s.backends {
-		if o.Name != b.Name {
-			v.Others = append(v.Others, o.Name)
-		}
-	}
 	var err error
 	if v.Instances, err = c.Instances(r.Context()); err != nil {
 		v.Err = err.Error()
 	}
-	if info, err := c.Info(r.Context()); err == nil {
-		v.CanIP, v.CanGlobal = info.Role.Can(api.PermBanIP), info.Role.Can(api.PermBanGlobal)
+	v.CanGlobal = holds(r, api.PermBanGlobal)
+	if v.Instance != "" {
+		v.CanIP = roleOn(infoOf(r), v.Instance).Can(api.PermBanIP)
+	} else {
+		v.CanIP = infoOf(r).Role.Can(api.PermBanIP)
 	}
 	if moderation.ValidSteamID(v.SteamID) {
 		v.Identities, _ = c.Identities(r.Context(), v.SteamID) // optional extras; the form works without them
@@ -149,27 +147,13 @@ func (s *Server) createBan(w http.ResponseWriter, r *http.Request) {
 		s.render(w, "flash", flash{Text: err.Error()})
 		return
 	}
-	targets := []*Backend{b}
-	for _, name := range r.PostForm["also"] {
-		if o := s.backend(name); o != nil && o != b && !slices.Contains(targets, o) {
-			targets = append(targets, o)
-		}
+	o := banOutcome{Backend: b.Name}
+	if res, err := s.client(b, r).CreateBan(r.Context(), in); err != nil {
+		o.Err = err.Error()
+	} else {
+		o.ID, o.Sync = res.Ban.ID, res.Sync
 	}
-	var out []banOutcome
-	for i, t := range targets {
-		tin := in
-		if i > 0 {
-			tin.Evidence = nil // evidence ids belong to the first backend's database
-		}
-		o := banOutcome{Backend: t.Name}
-		if res, err := s.client(t, r).CreateBan(r.Context(), tin); err != nil {
-			o.Err = err.Error()
-		} else {
-			o.ID, o.Sync = res.Ban.ID, res.Sync
-		}
-		out = append(out, o)
-	}
-	s.render(w, "banresult", out)
+	s.render(w, "banresult", []banOutcome{o})
 }
 
 type banView struct {
@@ -180,6 +164,8 @@ type banView struct {
 	Unlinked []moderation.Evidence // the player's other evidence, which can be linked
 	Instance []string              // where evidence can be filed
 	Now      time.Time
+	CanBan   bool // may change the ban: the API decides in the end
+	CanFile  bool // may file evidence
 	Err      string
 }
 
@@ -201,7 +187,7 @@ func (s *Server) banPage(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	v := banView{Backend: b.Name, Now: time.Now()}
+	v := banView{Backend: b.Name, Now: time.Now(), CanBan: canAnywhere(r).BanInstance, CanFile: canAnywhere(r).EvidenceAdd}
 	var err error
 	if v.Ban, err = c.Ban(r.Context(), id); err != nil {
 		v.Err = err.Error()

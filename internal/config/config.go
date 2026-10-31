@@ -11,6 +11,7 @@ package config
 import (
 	"fmt"
 	"net"
+	"net/netip"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -85,6 +86,15 @@ type Notify struct {
 	Discord []DiscordWebhook `yaml:"discord"`
 }
 
+// TLS is the certificate pair a listener serves, and optionally the CA that
+// client certificates must be signed by (mutual TLS). The files are reloaded
+// when they change.
+type TLS struct {
+	CertFile     string `yaml:"cert_file"`
+	KeyFile      string `yaml:"key_file"`
+	ClientCAFile string `yaml:"client_ca_file"` // set for mutual TLS
+}
+
 // Serve configures `dzo serve`: the JSON API of this installation and the
 // endpoint the dzo-admin mods call (§C12, §C16).
 type Serve struct {
@@ -105,12 +115,25 @@ type Serve struct {
 	// SessionRetentionDays is how long the sessions of the player history (who was on which instance
 	// when) are kept (unset: 365; 0: for ever). The players, their names and first-seen times stay.
 	SessionRetentionDays *int `yaml:"session_retention_days"`
+	// AuditIPRetentionDays is how long an audit entry keeps the browser address of a web action (unset: 90;
+	// 0: for ever). The entries themselves stay.
+	AuditIPRetentionDays *int `yaml:"audit_ip_retention_days"`
 	// GeoIPDir holds the GeoLite2 databases geoipupdate keeps (GeoLite2-City, -Country and -ASN, .mmdb); with
 	// them the player list shows flags and the player info the city, location and provider. GeoIPLegacyDir
 	// holds GeoIP.dat and GeoIPv6.dat of Debian's geoip-database, which know the country only and are the
 	// fallback.
 	GeoIPDir       string `yaml:"geoip_dir"`
 	GeoIPLegacyDir string `yaml:"geoip_legacy_dir"`
+	// TLS switches the API listener (listen) to HTTPS; mod_listen stays plain HTTP for the game servers.
+	TLS TLS `yaml:"tls"`
+	// WebURL is the address people open the web interface at. User logins need it: it fixes the Steam
+	// return address and the WebAuthn relying party.
+	WebURL string `yaml:"web_url"`
+	// Login holds the lifetimes of web sessions.
+	Login struct {
+		SessionIdleHours *int `yaml:"session_idle_hours"`
+		SessionMaxDays   *int `yaml:"session_max_days"`
+	} `yaml:"login"`
 }
 
 const day = 24 * time.Hour
@@ -132,27 +155,48 @@ func (s Serve) IPRetention() time.Duration { return days(s.IPRetentionDays, 90) 
 // SessionRetention is how long the sessions of the player history are kept; negative means for ever.
 func (s Serve) SessionRetention() time.Duration { return days(s.SessionRetentionDays, 365) }
 
+// AuditIPRetention is how long an audit entry keeps its client address; negative means for ever.
+func (s Serve) AuditIPRetention() time.Duration { return days(s.AuditIPRetentionDays, 90) }
+
 // VacuumEvery is how often the ban database is vacuumed; negative means never.
 func (s Serve) VacuumEvery() time.Duration { return days(s.VacuumDays, 7) }
 
-// Backend is one installation the web interface talks to.
-type Backend struct {
-	Name string `yaml:"name"`
-	URL  string `yaml:"url"`
-	// TokenFile holds an API token of that installation (role operator,
-	// created with `dzo token create --delegate`).
-	TokenFile string `yaml:"token_file"`
+// SessionIdle is how long a web session may sit unused (default 12 hours).
+func (s Serve) SessionIdle() time.Duration {
+	if s.Login.SessionIdleHours == nil {
+		return 12 * time.Hour
+	}
+	return time.Duration(*s.Login.SessionIdleHours) * time.Hour
 }
 
-// Web configures `dzo web`, the web interface. It reaches installations only
-// through their API, so it can run on another host and serve several.
+// SessionMax is how long a web session lives at most, however busy (default 7 days).
+func (s Serve) SessionMax() time.Duration {
+	if s.Login.SessionMaxDays == nil {
+		return 7 * day
+	}
+	return time.Duration(*s.Login.SessionMaxDays) * day
+}
+
+// Web configures `dzo web`, the web interface of one installation. It reaches
+// the installation only through its API, so it can run on another host.
 type Web struct {
 	// Enabled says whether `dzo units sync` runs `dzo web` as a unit. Unset means: when the web
-	// interface is set up, that is when web.backends lists a backend or ${paths.secrets}/web.token
-	// exists; true and false force it.
+	// interface is set up, that is when web.api is set or ${paths.secrets}/web.token exists; true
+	// and false force it.
 	Enabled           *bool  `yaml:"enabled"`
 	Listen            string `yaml:"listen"`
 	AllowInsecureHTTP bool   `yaml:"allow_insecure_http"`
+	// TLS switches the web listener to HTTPS.
+	TLS TLS `yaml:"tls"`
+	// API says where the installation's API is when it is not this host's: its URL, the file with a
+	// web token, and the CA file for a private CA.
+	API struct {
+		URL       string `yaml:"url"`
+		TokenFile string `yaml:"token_file"`
+		CAFile    string `yaml:"ca_file"`
+	} `yaml:"api"`
+	// TrustedProxies are the reverse proxies (addresses or CIDRs) whose X-Forwarded-For is believed.
+	TrustedProxies []string `yaml:"trusted_proxies"`
 	// Assets is the directory with htmx and Leaflet (Debian's libjs-*).
 	Assets string `yaml:"assets"`
 	// DocsDir is the built documentation, served under /docs/.
@@ -160,23 +204,18 @@ type Web struct {
 	// FlagsDir holds the country flags as <code>.svg in the 4:3 shape (Debian's iso-flags-svg); without
 	// them the player list shows the country code.
 	FlagsDir string `yaml:"flags_dir"`
-	// UserHeader names the request header an authenticating reverse proxy
-	// sets to the signed-in user (e.g. X-Forwarded-User). The web interface
-	// has no login of its own yet: it reports this user to the audit log, and
-	// must only be reachable through such a proxy or on localhost.
-	UserHeader string    `yaml:"user_header"`
-	Backends   []Backend `yaml:"backends"`
+
+	// RemovedBackends and RemovedUserHeader only exist so that a config that still sets the keys
+	// web.backends and web.user_header is refused with an explanation.
+	RemovedBackends   any `yaml:"backends"`
+	RemovedUserHeader any `yaml:"user_header"`
 }
 
 // Exporter configures `dzo exporter`: /metrics for Prometheus and /status for
 // Icinga (§C9). It listens on plain HTTP unless TLS is configured.
 type Exporter struct {
 	Listen string `yaml:"listen"`
-	TLS    struct {
-		CertFile     string `yaml:"cert_file"`
-		KeyFile      string `yaml:"key_file"`
-		ClientCAFile string `yaml:"client_ca_file"` // set for mutual TLS
-	} `yaml:"tls"`
+	TLS    TLS    `yaml:"tls"`
 	// Allow lists the networks (CIDR) that may connect; empty allows all.
 	Allow []string `yaml:"allow"`
 	// BearerTokenFile, if set, makes every request need that token.
@@ -336,12 +375,9 @@ func (c *Config) Validate() error {
 			errs = append(errs, fmt.Sprintf("exporter.allow: %q is not a CIDR network", cidr))
 		}
 	}
-	if (c.Exporter.TLS.CertFile == "") != (c.Exporter.TLS.KeyFile == "") {
-		errs = append(errs, "exporter.tls: cert_file and key_file go together")
-	}
-	if c.Exporter.TLS.ClientCAFile != "" && c.Exporter.TLS.CertFile == "" {
-		errs = append(errs, "exporter.tls.client_ca_file needs cert_file and key_file")
-	}
+	errs = append(errs, checkTLS("exporter.tls", c.Exporter.TLS)...)
+	errs = append(errs, checkTLS("serve.tls", c.Serve.TLS)...)
+	errs = append(errs, checkTLS("web.tls", c.Web.TLS)...)
 
 	if c.Site.Remote != "" {
 		if _, err := url.Parse(c.Site.Remote); err != nil {
@@ -367,7 +403,7 @@ func (c *Config) Validate() error {
 	if k := c.Steam.WebAPIKeyFile; k != "" && !filepath.IsAbs(k) {
 		errs = append(errs, "steam.web_api_key_file: must be an absolute path")
 	}
-	for name, v := range map[string]*int{"serve.ip_retention_days": c.Serve.IPRetentionDays, "serve.vacuum_days": c.Serve.VacuumDays, "serve.session_retention_days": c.Serve.SessionRetentionDays} {
+	for name, v := range map[string]*int{"serve.ip_retention_days": c.Serve.IPRetentionDays, "serve.vacuum_days": c.Serve.VacuumDays, "serve.session_retention_days": c.Serve.SessionRetentionDays, "serve.audit_ip_retention_days": c.Serve.AuditIPRetentionDays} {
 		if v != nil && *v < 0 {
 			errs = append(errs, fmt.Sprintf("%s: must be 0 (off) or a number of days", name))
 		}
@@ -375,24 +411,17 @@ func (c *Config) Validate() error {
 	for _, l := range []struct {
 		name, addr string
 		insecure   bool
+		tls        bool
 	}{
-		{"serve.listen", c.Serve.Listen, c.Serve.AllowInsecureHTTP},
-		{"serve.mod_listen", c.Serve.ModListen, c.Serve.AllowInsecureHTTP},
-		{"web.listen", c.Web.Listen, c.Web.AllowInsecureHTTP},
+		{"serve.listen", c.Serve.Listen, c.Serve.AllowInsecureHTTP, c.Serve.TLS.CertFile != ""},
+		{"serve.mod_listen", c.Serve.ModListen, c.Serve.AllowInsecureHTTP, false},
+		{"web.listen", c.Web.Listen, c.Web.AllowInsecureHTTP, c.Web.TLS.CertFile != ""},
 	} {
-		if err := CheckListen(l.addr, l.insecure); err != nil {
+		if err := CheckListen(l.addr, l.insecure, l.tls); err != nil {
 			errs = append(errs, fmt.Sprintf("%s: %v", l.name, err))
 		}
 	}
-	names := map[string]bool{}
-	for _, b := range c.Web.Backends {
-		if b.Name == "" || b.URL == "" || b.TokenFile == "" {
-			errs = append(errs, "web.backends: every entry needs name, url and token_file")
-		} else if names[b.Name] {
-			errs = append(errs, fmt.Sprintf("web.backends: duplicate name %q", b.Name))
-		}
-		names[b.Name] = true
-	}
+	errs = append(errs, c.checkLogins()...)
 
 	seen := map[string]bool{}
 	for _, w := range c.Notify.Discord {
@@ -415,22 +444,91 @@ func (c *Config) Validate() error {
 	return nil
 }
 
+// checkTLS checks that a tls block is complete.
+func checkTLS(name string, t TLS) []string {
+	var errs []string
+	if (t.CertFile == "") != (t.KeyFile == "") {
+		errs = append(errs, name+": cert_file and key_file go together")
+	}
+	if t.ClientCAFile != "" && t.CertFile == "" {
+		errs = append(errs, name+".client_ca_file needs cert_file and key_file")
+	}
+	return errs
+}
+
+// loopbackHost reports whether host names this machine.
+func loopbackHost(host string) bool {
+	if host == "localhost" {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
+}
+
+// checkLogins checks the settings of the web interface and of user logins.
+func (c *Config) checkLogins() []string {
+	var errs []string
+	if c.Web.RemovedBackends != nil {
+		errs = append(errs, "web.backends is no longer supported: one web interface serves one installation, see the migration notes (docs/migration.rst)")
+	}
+	if c.Web.RemovedUserHeader != nil {
+		errs = append(errs, "web.user_header is no longer supported: dzo web has its own login now, see the migration notes (docs/migration.rst)")
+	}
+	if v := c.Serve.WebURL; v != "" {
+		u, err := url.Parse(v)
+		switch {
+		case err != nil || u.Host == "" || u.User != nil:
+			errs = append(errs, fmt.Sprintf("serve.web_url: %q is not an address like https://dzo.example", v))
+		case u.Path != "" && u.Path != "/" || u.RawQuery != "" || u.Fragment != "" || u.ForceQuery:
+			errs = append(errs, fmt.Sprintf("serve.web_url: %q must be scheme and host only, without path, query or fragment", v))
+		case u.Scheme != "https" && (u.Scheme != "http" || !loopbackHost(u.Hostname())):
+			errs = append(errs, fmt.Sprintf("serve.web_url: %q must be https (plain http only for localhost)", v))
+		}
+	}
+	if v := c.Serve.Login.SessionIdleHours; v != nil && *v <= 0 {
+		errs = append(errs, "serve.login.session_idle_hours: must be a positive number of hours")
+	}
+	if v := c.Serve.Login.SessionMaxDays; v != nil && *v <= 0 {
+		errs = append(errs, "serve.login.session_max_days: must be a positive number of days")
+	}
+	api := c.Web.API
+	switch {
+	case (api.URL == "") != (api.TokenFile == ""):
+		errs = append(errs, "web.api: url and token_file go together")
+	case api.URL == "" && api.CAFile != "":
+		errs = append(errs, "web.api.ca_file needs web.api.url and web.api.token_file")
+	case api.URL != "":
+		u, err := url.Parse(api.URL)
+		switch {
+		case err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https"):
+			errs = append(errs, fmt.Sprintf("web.api.url: %q is not an http(s) address", api.URL))
+		case u.Scheme == "http" && !loopbackHost(u.Hostname()):
+			errs = append(errs, fmt.Sprintf("web.api.url: %q must be https (plain http only for localhost)", api.URL))
+		}
+		if !filepath.IsAbs(api.TokenFile) {
+			errs = append(errs, "web.api.token_file: must be an absolute path")
+		}
+	}
+	for _, e := range c.Web.TrustedProxies {
+		if _, err := netip.ParsePrefix(e); err != nil {
+			if _, err := netip.ParseAddr(e); err != nil {
+				errs = append(errs, fmt.Sprintf("web.trusted_proxies: %q is not an address or a CIDR network", e))
+			}
+		}
+	}
+	return errs
+}
+
 // CheckListen validates a listen address: host:port, and plain HTTP only on
-// a loopback address unless insecure is set (§C12: the web interface and the
-// mod endpoint sit behind a reverse proxy or on localhost).
-func CheckListen(addr string, insecure bool) error {
+// a loopback address unless tls or insecure is set (§C12: the web interface
+// and the mod endpoint sit behind a reverse proxy or on localhost).
+func CheckListen(addr string, insecure, tls bool) error {
 	host, port, err := net.SplitHostPort(addr)
 	if err != nil || port == "" {
 		return fmt.Errorf("%q is not host:port", addr)
 	}
-	if insecure {
+	if insecure || tls || loopbackHost(host) {
 		return nil
 	}
-	if host == "localhost" {
-		return nil
-	}
-	if ip := net.ParseIP(host); ip == nil || !ip.IsLoopback() {
-		return fmt.Errorf("%q is not a loopback address; put dzo behind a reverse proxy with HTTPS or set allow_insecure_http", addr)
-	}
-	return nil
+	return fmt.Errorf("%q is not a loopback address; set tls, put dzo behind a reverse proxy with HTTPS or set allow_insecure_http", addr)
 }

@@ -44,7 +44,7 @@ func newEnv(t testing.TB) *env {
 
 func (e *env) token(role Role, instances []string, delegate bool) string {
 	e.t.Helper()
-	s, _, err := e.srv.Tokens.Create("t-"+string(role), role, instances, delegate, time.Hour)
+	s, _, err := e.srv.Tokens.Create("t-"+string(role), role, instances, delegate, false, time.Hour)
 	require.NoError(e.t, err)
 	return s
 }

@@ -58,6 +58,7 @@ type instView struct {
 	Backend, Instance string
 	Status            admin.Status
 	Role              api.Role
+	Can               can
 	Err               string
 	Expansion         bool // the mod reports Expansion: its notification types are offered
 	Rcon              bool // the broadcast form may use RCon say
@@ -73,9 +74,7 @@ func (s *Server) instance(w http.ResponseWriter, r *http.Request) {
 	if v.Status, err = c.Status(r.Context(), inst); err != nil {
 		v.Err = err.Error()
 	}
-	if info, err := c.Info(r.Context()); err == nil {
-		v.Role = info.Role
-	}
+	v.Role, v.Can = roleOn(infoOf(r), inst), canOn(r, inst)
 	v.Expansion, v.Rcon = v.Status.Hello.Has("expansion"), true
 	pg := s.page(r, inst, b.Name, inst, "overview", v)
 	pg.setFacts(v.Status, err)
@@ -121,6 +120,7 @@ type panelView struct {
 	Player            admin.Player
 	Others            []admin.Player // the other online players, as teleport targets
 	Err               string
+	Can               can
 	Expansion         bool          // the mod reports Expansion
 	Rcon              bool          // always false: RCon says to everyone only
 	Cells             []verdictCell // the verdicts of the player, for those who may read the player database
@@ -133,7 +133,7 @@ func (s *Server) playerPanel(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	v := panelView{Backend: b.Name, Instance: inst}
+	v := panelView{Backend: b.Name, Instance: inst, Can: canOn(r, inst)}
 	if st, err := c.Status(r.Context(), inst); err == nil {
 		v.Expansion = st.Hello.Has("expansion")
 	}
@@ -202,6 +202,7 @@ func (s *Server) playerInfo(w http.ResponseWriter, r *http.Request) {
 type vpanelView struct {
 	Backend, Instance string
 	Vehicle           admin.Vehicle
+	Can               can
 	Err               string
 }
 
@@ -211,7 +212,7 @@ func (s *Server) vehiclePanel(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	v := vpanelView{Backend: b.Name, Instance: inst}
+	v := vpanelView{Backend: b.Name, Instance: inst, Can: canOn(r, inst)}
 	vehicles, err := c.Vehicles(r.Context(), inst)
 	if err != nil {
 		v.Err = err.Error()
@@ -327,9 +328,7 @@ func (s *Server) mapPage(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	if info, err := c.Info(r.Context()); err == nil {
-		v.Role = info.Role
-	}
+	v.Role = roleOn(infoOf(r), inst)
 	pg := s.page(r, inst+" map", b.Name, inst, "map", v)
 	pg.setFacts(st, err)
 	pg.Class = "map"

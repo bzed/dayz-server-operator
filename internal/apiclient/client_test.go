@@ -26,7 +26,7 @@ func setup(t testing.TB) (*apiclient.Client, *admin.Hub, *api.Server) {
 	srv := api.New("site", "v0", hubs, api.NewTokenStore(filepath.Join(dir, "t.json")), admin.NewAudit(filepath.Join(dir, "a.jsonl")))
 	ts := httptest.NewServer(srv.Handler())
 	t.Cleanup(ts.Close)
-	secret, _, err := srv.Tokens.Create("admin", api.RoleAdmin, nil, true, time.Hour)
+	secret, _, err := srv.Tokens.Create("admin", api.RoleAdmin, nil, true, false, time.Hour)
 	require.NoError(t, err)
 	hub.Sync(admin.SyncRequest{Proto: 1, Hello: true, Players: []admin.Player{{SteamID: "1"}}, Vehicles: []admin.Vehicle{{ID: "v"}},
 		Markers: []admin.Marker{{Layer: "l", ID: "m"}}, Layers: []admin.Layer{{Name: "l"}}, Events: []admin.Event{{ID: "e"}},

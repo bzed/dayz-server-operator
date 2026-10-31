@@ -64,7 +64,7 @@ waitfor() { timeout "$1" bash -c "until $2; do sleep 3; done"; }
 web_tests() {
 	local player=dzotester s=0
 	[ "$noclient" = 1 ] && player=
-	DZO_LIVE_API="http://127.0.0.1:$api" DZO_LIVE_TOKEN_FILE="$work/api.token" DZO_LIVE_INSTANCE=t1 DZO_LIVE_PLAYER="$player" \
+	DZO_LIVE_API="http://127.0.0.1:$api" DZO_LIVE_TOKEN_FILE="$work/web.token" DZO_LIVE_DB="$work/data/db/dzo.sqlite" DZO_LIVE_INSTANCE=t1 DZO_LIVE_PLAYER="$player" \
 		go test -tags 'e2e live' -count=1 -run '^TestLive' ./internal/web/ >"$work/web.log" 2>&1 || s=$?
 	[ "$s" = 0 ] || cat "$work/web.log" >&2
 	verdict "web UI against the real server" $s
@@ -447,7 +447,7 @@ Y
 mkdir -p "$work/site/localmods/dzo-admin/addons"
 cat >"$work/config.yaml" <<Y
 paths: {data: $work/data, cache: $work/cache, site: $work/site, secrets: $work/secrets}
-serve: {installation: t, listen: "127.0.0.1:$api", mod_listen: "127.0.0.1:$mod"}
+serve: {installation: t, listen: "127.0.0.1:$api", mod_listen: "127.0.0.1:$mod", web_url: "http://127.0.0.1:1"}
 Y
 tok=$(head -c16 /dev/urandom | od -An -tx1 | tr -d ' \n')
 echo "$tok" >"$work/secrets/admin/t1.token"
@@ -455,6 +455,10 @@ echo "{\"version\":1,\"endpoint\":\"http://127.0.0.1:$mod/\",\"token\":\"$tok\",
 chmod 600 "$work/secrets/admin/t1.token" "$tree/profiles/dzo/admin/config.json"
 "$work/dzo" token create tester --role admin --config "$work/config.yaml" >"$work/api.token"
 chmod 600 "$work/api.token"
+# For the web UI tests: a web token and an admin, whose session the Go test makes in the database.
+"$work/dzo" token create web --role admin --web --config "$work/config.yaml" >"$work/web.token"
+chmod 600 "$work/web.token"
+"$work/dzo" user grant 76561198000000077 --role admin --name "live test" --config "$work/config.yaml" >/dev/null
 dzo() { "$work/dzo" "$@" --config "$work/config.yaml" --token-file "$work/api.token"; }
 
 start_serve() {

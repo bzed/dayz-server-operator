@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"github.com/bzed/dayz-server-operator/internal/apiclient"
+	"github.com/bzed/dayz-server-operator/internal/auth"
+	"github.com/bzed/dayz-server-operator/internal/moderation"
 	"github.com/chromedp/chromedp"
 	"github.com/stretchr/testify/require"
 )
@@ -22,7 +24,8 @@ import (
 // DZO_LIVE_API the tests fail instead of skipping.
 //
 //	DZO_LIVE_API         base URL of the API of the running dzo serve
-//	DZO_LIVE_TOKEN_FILE  an admin API token
+//	DZO_LIVE_TOKEN_FILE  a web token (dzo token create --web, role admin)
+//	DZO_LIVE_DB          the database of that dzo serve, where the test logs the admin 76561198000000077 in
 //	DZO_LIVE_INSTANCE    the instance, t1
 //	DZO_LIVE_PLAYER      the name of the headless client's player; empty without a client
 
@@ -42,9 +45,16 @@ func newLiveEnv(t *testing.T) *liveEnv {
 	require.NotEmpty(t, instance, "DZO_LIVE_INSTANCE")
 	assets := t.TempDir()
 	useRealAssets(t, assets)
-	srv, err := New([]*Backend{{Name: "live", Client: apiclient.New(api, strings.TrimSpace(string(token)))}}, Options{Assets: assets})
+	// the pages need a login: make a session for the admin the script granted, in the database dzo serve uses
+	st, err := moderation.Open(t.Context(), os.Getenv("DZO_LIVE_DB"))
+	require.NoError(t, err, "DZO_LIVE_DB")
+	t.Cleanup(func() { _ = st.Close() })
+	session, hash, err := auth.NewSecret("dzs_")
 	require.NoError(t, err)
-	ws := httptest.NewServer(srv.Handler())
+	require.NoError(t, st.CreateSession(t.Context(), hash, "76561198000000077", "", time.Now()))
+	srv, err := New(&Backend{Name: "live", Client: apiclient.New(api, strings.TrimSpace(string(token)))}, Options{Assets: assets})
+	require.NoError(t, err)
+	ws := httptest.NewServer(withSession(srv.Handler(), session))
 	t.Cleanup(ws.Close)
 	return &liveEnv{web: ws, instance: instance, player: os.Getenv("DZO_LIVE_PLAYER")}
 }
