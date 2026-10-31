@@ -174,7 +174,10 @@ Steam; the second step stays.
 
 **Sessions.** A session ends after ``serve.login.session_idle_hours`` (default 12) without a request, and
 after ``serve.login.session_max_days`` (default 7) at the latest. Logging out, ``dzo user reset``, disabling a
-person and removing their last grant end it at once. The cookie is ``HttpOnly`` and ``SameSite=Strict``;
+person and removing their last grant end it at once. So do changing or removing the password and removing a
+second factor (an authenticator app or a passkey), in the browser or with ``dzo user password``: every other
+session of that person ends, so a stolen session does not outlive the change; the session that made it stays
+(the command ends all of them). There is no limit on parallel sessions. The cookie is ``HttpOnly`` and ``SameSite=Strict``;
 on HTTPS (``serve.web_url`` starts with ``https://``) it is ``__Host-dzo_session``, ``Secure`` and host-only.
 The half-finished login between the two steps lives five minutes in a ``SameSite=Lax`` cookie
 (``dzo_login``): Steam sends the browser back with a navigation from another site, which a Strict cookie

@@ -213,6 +213,9 @@ func (s *Server) setPassword(w http.ResponseWriter, r *http.Request, c *call) {
 		fail(w, http.StatusInternalServerError, "database error")
 		return
 	}
+	if !s.endOthers(w, r, c) {
+		return
+	}
 	s.accountAudit(c, "account.password", "changed")
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -220,6 +223,9 @@ func (s *Server) setPassword(w http.ResponseWriter, r *http.Request, c *call) {
 func (s *Server) removePassword(w http.ResponseWriter, r *http.Request, c *call) {
 	if err := s.Accounts.ClearPassword(r.Context(), c.who.User.SteamID); err != nil {
 		fail(w, http.StatusInternalServerError, "database error")
+		return
+	}
+	if !s.endOthers(w, r, c) {
 		return
 	}
 	s.accountAudit(c, "account.password", "removed")
@@ -321,6 +327,9 @@ func (s *Server) removeTOTP(w http.ResponseWriter, r *http.Request, c *call) {
 		fail(w, http.StatusInternalServerError, "database error")
 		return
 	}
+	if !s.endOthers(w, r, c) {
+		return
+	}
 	s.accountAudit(c, "account.totp", "removed")
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -398,6 +407,9 @@ func (s *Server) removePasskey(w http.ResponseWriter, r *http.Request, c *call) 
 		fail(w, http.StatusInternalServerError, "database error")
 		return
 	}
+	if !s.endOthers(w, r, c) {
+		return
+	}
 	s.accountAudit(c, "account.passkey", "removed")
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -413,6 +425,16 @@ func (s *Server) newRecoveryCodes(w http.ResponseWriter, r *http.Request, c *cal
 	}
 	s.accountAudit(c, "account.recovery", "new set")
 	writeJSON(w, http.StatusOK, map[string]any{"recovery_codes": codes})
+}
+
+// endOthers ends the person's other sessions after a change of a credential, so that whoever holds a stolen
+// session does not outlive it. The session making the change stays. It answers the request on failure.
+func (s *Server) endOthers(w http.ResponseWriter, r *http.Request, c *call) bool {
+	if err := s.Accounts.DeleteSessions(r.Context(), c.who.User.SteamID, c.session); err != nil {
+		fail(w, http.StatusInternalServerError, "database error")
+		return false
+	}
+	return true
 }
 
 func (s *Server) logoutOthers(w http.ResponseWriter, r *http.Request, c *call) {

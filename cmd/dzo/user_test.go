@@ -296,3 +296,15 @@ func TestUserPasswordIsAudited(t *testing.T) {
 	assert.Equal(t, "cli:bernd", entries[0].Actor)
 	assert.NotContains(t, entries[0].Detail, "correct")
 }
+
+func TestUserPasswordEndsSessions(t *testing.T) {
+	e := newUserEnv(t)
+	_, err := e.run("grant", userSteamA, "--role", "admin", "--name", "Ann")
+	require.NoError(t, err)
+	st := e.store()
+	require.NoError(t, st.CreateSession(t.Context(), "hash", userSteamA, "", time.Now()))
+	_, err = e.runWithStdin("correct horse battery\n", "password", userSteamA, "--username", "ann")
+	require.NoError(t, err)
+	_, err = st.Session(t.Context(), "hash", time.Now(), time.Hour, time.Hour)
+	assert.ErrorIs(t, err, moderation.ErrNotFound, "whoever held a session is out")
+}

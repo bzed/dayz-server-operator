@@ -197,7 +197,7 @@ Web interface and API
    * - ``dzo user revoke <steamid> [--instance <name>…]``
      - take the roles on the listed instances away, or every grant without ``--instance``. A person left without a grant is logged out
    * - ``dzo user password <steamid|username> [--username <name>]``
-     - set the login name and password of a person who has a role, reading the password from the terminal (twice, no echo) or one line from a pipe. For when Steam sign-in does not work: the first login with it sets up a second factor. A first password needs ``--username``
+     - set the login name and password of a person who has a role, reading the password from the terminal (twice, no echo) or one line from a pipe. For when Steam sign-in does not work: the first login with it sets up a second factor. A first password needs ``--username``. All sessions of the person end
    * - ``dzo user disable <steamid>`` / ``enable`` / ``delete``
      - block a person from logging in (their sessions end, grants stay) / allow it again / delete the person with grants, credentials and sessions
    * - ``dzo user reset <steamid|username>``

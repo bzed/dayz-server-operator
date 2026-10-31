@@ -190,19 +190,19 @@ being logged in; every change is audited (``account.*``) without secrets.
      - ``204``. ``current`` is needed when a password exists (``403`` if wrong, counted like a failed
        login). The username is 3 to 32 characters of ``a-z 0-9 . _ -`` (case-insensitive, stored in lower
        case), unique (``409``), and needed with the first password; the password is 12 to 256 bytes
-       (``400``)
+       (``400``). The person's other sessions end
    * - ``DELETE /account/password``
-     - ``204``; the username is free again
+     - ``204``; the username is free again, the other sessions end
    * - ``POST /account/totp/begin``
      - ``{"pending","secret","uri"}``; ``POST /account/totp/finish`` ``{"pending","code"}`` → ``204``
        once the code of the new secret is right; the old secret is replaced
    * - ``DELETE /account/totp``
-     - ``204``, or ``409`` if it is the last second factor
+     - ``204`` (the other sessions end), or ``409`` if it is the last second factor
    * - ``POST /account/passkeys/begin``
      - ``{"pending","options"}``; ``POST /account/passkeys/finish`` ``{"pending","response","name"}`` →
        ``201`` with the passkey
    * - ``DELETE /account/passkeys/<id>``
-     - ``204``, ``404``, or ``409`` for the last second factor
+     - ``204`` (the other sessions end), ``404``, or ``409`` for the last second factor
    * - ``POST /account/recovery``
      - ``{"recovery_codes":[…]}``: a new set of 10, which replaces the old one
    * - ``DELETE /account/sessions``

@@ -435,3 +435,59 @@ func TestAccountChangesAreAudited(t *testing.T) {
 	}
 	assert.True(t, seen)
 }
+
+// otherSession logs in a second time and returns both sessions.
+func (l *loginEnv) otherSession(one string) (other, current string) {
+	l.t.Helper()
+	l.srv.now = func() time.Time { return banNow.Add(40 * time.Second) } // a fresh TOTP step
+	return one, l.loggedIn()
+}
+
+func (l *loginEnv) assertOnlyCurrent(other, current string) {
+	l.t.Helper()
+	code, _ := l.as("GET", "/api/v1", l.tok, other, "")
+	assert.Equal(l.t, 401, code, "the other session is gone")
+	code, _ = l.as("GET", "/api/v1", l.tok, current, "")
+	assert.Equal(l.t, 200, code, "this one stays")
+}
+
+func TestPasswordChangeEndsOtherSessions(t *testing.T) {
+	l := newLoginEnv(t)
+	l.ann(g("alpha", RoleModerator))
+	other, current := l.otherSession(l.loggedIn())
+	b, _ := json.Marshal(map[string]string{"username": "ann", "current": password, "new": "another horse battery"})
+	code, out := l.call("PUT", "/api/v1/account/password", current, string(b))
+	require.Equal(t, 204, code, "%v", out)
+	l.assertOnlyCurrent(other, current)
+}
+
+func TestPasswordRemovalEndsOtherSessions(t *testing.T) {
+	l := newLoginEnv(t)
+	l.ann(g("alpha", RoleModerator))
+	other, current := l.otherSession(l.loggedIn())
+	code, _ := l.call("DELETE", "/api/v1/account/password", current, "")
+	require.Equal(t, 204, code)
+	l.assertOnlyCurrent(other, current)
+}
+
+func TestSecondFactorRemovalEndsOtherSessions(t *testing.T) {
+	l := newLoginEnv(t)
+	l.ann(g("alpha", RoleModerator))
+	one := l.loggedIn()
+	a := newRP(t)
+	code, out := l.accountPasskey(one, a)
+	require.Equal(t, 201, code, "%v", out)
+
+	other, current := l.otherSession(one)
+	code, _ = l.call("DELETE", "/api/v1/account/passkeys/"+b64.EncodeToString(a.credID), current, "")
+	require.Equal(t, 204, code, "the TOTP app is left")
+	l.assertOnlyCurrent(other, current)
+
+	code, out = l.accountPasskey(current, newRP(t))
+	require.Equal(t, 201, code, "%v", out)
+	l.srv.now = func() time.Time { return banNow.Add(80 * time.Second) }
+	other = l.loggedIn()
+	code, _ = l.call("DELETE", "/api/v1/account/totp", current, "")
+	require.Equal(t, 204, code, "a passkey is left")
+	l.assertOnlyCurrent(other, current)
+}

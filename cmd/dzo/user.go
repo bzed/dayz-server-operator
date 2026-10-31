@@ -324,11 +324,14 @@ func newUserCmd() *cobra.Command {
 				}
 				return err
 			}
+			if err := u.store.DeleteSessions(ctx, p.SteamID, ""); err != nil {
+				return err
+			}
 			if username == "" {
 				username = p.Username
 			}
 			u.log("users.password", p.SteamID, "set from the command line")
-			u.say("%s: password set, login name %s; at the first login they set up a second factor", p.SteamID, username)
+			u.say("%s: password set, their sessions ended, login name %s; at the first login they set up a second factor", p.SteamID, username)
 			return nil
 		}),
 	}
