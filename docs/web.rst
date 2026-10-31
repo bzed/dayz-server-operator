@@ -56,7 +56,7 @@ need ports 80 and 443, privileges and certificate state that the host's own tool
 A renewed certificate is picked up by itself. The files are checked on new connections (every few
 seconds at most) and on ``systemctl --user reload dzo-web`` (SIGHUP), without a restart and without
 dropping connections. A new pair that does not load is logged and the old one stays active. The CA
-files (``client_ca_file``, ``web.api.ca_file``) reload the same way. A certbot renewal needs no deploy
+file ``client_ca_file`` reloads the same way; ``web.api.ca_file`` is read at start, so after replacing that CA restart ``dzo web``. A certbot renewal needs no deploy
 hook beyond writing the files where ``tls`` points.
 
 ``web.listen`` on a non-loopback address is accepted when ``web.tls`` is set (or

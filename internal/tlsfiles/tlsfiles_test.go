@@ -204,19 +204,12 @@ func TestServerConfig(t *testing.T) {
 	assert.Same(t, pool.Get(), cfg.ClientCAs, "each handshake sees the pool's current certificates")
 }
 
-func TestClientConfigUsesCurrentPool(t *testing.T) {
+func TestClientConfigTrustsItsRoots(t *testing.T) {
 	dir := t.TempDir()
 	srv := newCert(t, "srv", 1)
 	cert, key := srv.write(t, dir)
-	ca := filepath.Join(dir, "ca.pem")
-	require.NoError(t, os.WriteFile(ca, srv.certPEM, 0o600))
 	p, err := tlsfiles.NewPair(cert, key, func(string, ...any) {})
 	require.NoError(t, err)
-	pool, err := tlsfiles.NewPool(ca, func(string, ...any) {})
-	require.NoError(t, err)
-	clk := newClock()
-	pool.SetClock(clk.now)
-
 	ln, err := tls.Listen("tcp", "127.0.0.1:0", tlsfiles.ServerConfig(p, nil))
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = ln.Close() })
@@ -229,26 +222,25 @@ func TestClientConfigUsesCurrentPool(t *testing.T) {
 			go func() { _ = c.(*tls.Conn).Handshake(); _ = c.Close() }()
 		}
 	}()
-
-	dial := func() error {
-		c, err := tls.Dial("tcp", ln.Addr().String(), tlsfiles.ClientConfig(pool))
+	dial := func(caPEM []byte) error {
+		ca := filepath.Join(dir, "ca.pem")
+		require.NoError(t, os.WriteFile(ca, caPEM, 0o600))
+		roots, err := tlsfiles.LoadRoots(ca)
+		require.NoError(t, err)
+		c, err := tls.Dial("tcp", ln.Addr().String(), tlsfiles.ClientConfig(roots))
 		if err == nil {
 			_ = c.Close()
 		}
 		return err
 	}
-	cc := tlsfiles.ClientConfig(pool)
-	require.NoError(t, dial())
+	require.NoError(t, dial(srv.certPEM))
+	require.Error(t, dial(newCert(t, "other", 5).certPEM), "a server this CA did not sign is refused")
 
-	// the CA file is replaced: the server certificate is no longer trusted
-	require.NoError(t, os.WriteFile(ca, newCert(t, "other", 5).certPEM, 0o600))
-	touch(t, ca, 10)
-	clk.add(tlsfiles.Recheck + time.Second)
-	require.Error(t, dial())
-	// and a config built earlier follows the pool too
-	c, err := tls.Dial("tcp", ln.Addr().String(), cc)
-	if err == nil {
-		_ = c.Close()
-	}
+	assert.NotNil(t, tlsfiles.ClientConfig(nil), "no CA file: the system roots")
+	_, err = tlsfiles.LoadRoots(filepath.Join(dir, "missing.pem"))
 	require.Error(t, err)
+	empty := filepath.Join(dir, "empty.pem")
+	require.NoError(t, os.WriteFile(empty, []byte("nothing"), 0o600))
+	_, err = tlsfiles.LoadRoots(empty)
+	require.ErrorContains(t, err, "no certificate")
 }

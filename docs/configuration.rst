@@ -273,8 +273,8 @@ and print what is wrong. A key dzo does not know is ignored.
       a loopback address) and ``token_file`` (an absolute path; a ``web`` token created on that
       installation) go together: giving one without the other is refused, and so is ``ca_file``
       without them. ``ca_file`` is a PEM file with the CA that signed the API's certificate, for a
-      private CA; unset, the system's CAs are used. It reloads when it changes, like the other TLS
-      files. Without ``api`` the web interface uses this host's API (``serve.listen``) with
+      private CA; unset, the system's CAs are used. It is read at start, unlike the other TLS files: after
+      the CA is replaced, restart ``dzo web`` (a renewed certificate from the same CA needs nothing). Without ``api`` the web interface uses this host's API (``serve.listen``) with
       ``${paths.secrets}/web.token``. Read at start.
    ``trusted_proxies``
       Reverse proxies, as addresses or CIDR networks, whose ``X-Forwarded-For`` header is believed

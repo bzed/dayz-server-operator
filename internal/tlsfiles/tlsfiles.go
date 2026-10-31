@@ -11,7 +11,6 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
-	"fmt"
 	"os"
 	"sync"
 	"time"
@@ -220,31 +219,22 @@ func ServerConfig(p *Pair, clientCA *Pool) *tls.Config {
 	return cfg
 }
 
-// ClientConfig is a client TLS configuration that trusts the pool's current
-// certificates on every handshake. A nil pool means the system roots.
-func ClientConfig(ca *Pool) *tls.Config {
-	cfg := &tls.Config{MinVersion: tls.VersionTLS12}
-	if ca == nil {
-		return cfg
+// LoadRoots reads the CA certificates a client trusts from a PEM file, once; it fails if the file holds
+// no certificate.
+func LoadRoots(caFile string) (*x509.CertPool, error) {
+	pem, err := os.ReadFile(caFile) //nolint:gosec // the operator's own file
+	if err != nil {
+		return nil, err
 	}
-	// The standard verification is replaced by VerifyConnection, which does the
-	// same against the pool as it is now.
-	cfg.InsecureSkipVerify = true //nolint:gosec // VerifyConnection below verifies the chain and the name
-	cfg.VerifyConnection = func(cs tls.ConnectionState) error {
-		if len(cs.PeerCertificates) == 0 {
-			return errors.New("the server sent no certificate")
-		}
-		inter := x509.NewCertPool()
-		for _, c := range cs.PeerCertificates[1:] {
-			inter.AddCert(c)
-		}
-		_, err := cs.PeerCertificates[0].Verify(x509.VerifyOptions{
-			Roots: ca.Get(), Intermediates: inter, DNSName: cs.ServerName,
-		})
-		if err != nil {
-			return fmt.Errorf("server certificate: %w", err)
-		}
-		return nil
+	pool := x509.NewCertPool()
+	if !pool.AppendCertsFromPEM(pem) {
+		return nil, errors.New("the file holds no certificate")
 	}
-	return cfg
+	return pool, nil
+}
+
+// ClientConfig is a client TLS configuration (TLS 1.2 or later) that trusts roots. A nil pool means the
+// system roots.
+func ClientConfig(roots *x509.CertPool) *tls.Config {
+	return &tls.Config{MinVersion: tls.VersionTLS12, RootCAs: roots}
 }

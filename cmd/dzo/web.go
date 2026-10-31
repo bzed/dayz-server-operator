@@ -46,11 +46,11 @@ func webBackend(cfg *config.Config, logf func(string, ...any)) (*web.Backend, fu
 	token := strings.TrimSpace(string(tok))
 	client, reload := apiclient.New(url, token), func() {}
 	if ca := cfg.Web.API.CAFile; ca != "" {
-		pool, err := tlsfiles.NewPool(ca, logf)
+		roots, err := tlsfiles.LoadRoots(ca)
 		if err != nil {
 			return nil, nil, fmt.Errorf("web.api.ca_file: %w", err)
 		}
-		client, reload = apiclient.NewTLS(url, token, tlsfiles.ClientConfig(pool)), pool.Reload
+		client = apiclient.NewTLS(url, token, tlsfiles.ClientConfig(roots))
 	}
 	return &web.Backend{Name: cfg.Serve.Installation, Client: client}, reload, nil
 }
