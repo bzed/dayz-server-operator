@@ -109,7 +109,8 @@ The web interface has real logins (:ref:`web-login`). On the host of ``dzo serve
    sudo -iu dayz dzo user grant <your Steam64 ID> --role admin
    sudo -iu dayz dzo units sync
 
-Then open the web interface, sign in through Steam and set up your second factor (an authenticator app or a
+(If Steam sign-in does not work yet, give yourself a password instead: ``dzo user password <your Steam64 ID>
+--username <name>``.) Then open the web interface, sign in through Steam and set up your second factor (an authenticator app or a
 passkey). Put it behind HTTPS: certificate files in ``web.tls`` or a reverse proxy (:ref:`web-https`).
 
 What next

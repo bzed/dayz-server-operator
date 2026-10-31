@@ -132,6 +132,17 @@ On the host of ``dzo serve``:
 4. Open ``serve.web_url``, choose **Sign in through Steam**, then set up your second factor (authenticator app
    or passkey) and keep the recovery codes. Add everybody else on the people page (:ref:`web-account`).
 
+**If Steam sign-in does not work (yet)**, give the admin a password on the host instead of step 4's Steam
+sign-in::
+
+   dzo user password 76561198000000001 --username ann      # asks twice, no echo
+
+(a password is 12 to 256 bytes; piped in, one line is read). Then log in with that username and password. It
+is only the first factor: the page asks for the second factor to be set up (authenticator app or passkey) and
+shows the recovery codes, and every later login needs the password and that factor. Until it is set up,
+whoever knows the password can set it up, so hand the password over safely; ``dzo user password`` again
+changes it, ``dzo user reset`` removes it.
+
 **What signing in through Steam needs.** Steam's sign-in is OpenID: there is no Steam Web API key, no
 registration with Valve and no secret. It needs two things. First, ``serve.web_url`` has to be the address
 the *browser* uses: Steam sends the browser back to it (``<web_url>/login/steam/return``), and it also names

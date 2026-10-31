@@ -19,6 +19,10 @@ import (
 
 var usernameRE = regexp.MustCompile(`^[a-z0-9._-]{3,32}$`)
 
+// ValidUsername reports whether a login name (already in lower case) is acceptable: 3 to 32 characters of
+// letters, digits, dot, dash and underscore.
+func ValidUsername(name string) bool { return usernameRE.MatchString(name) }
+
 // errLastFactor is answered when removing a second factor would leave none.
 const errLastFactor = "the last second factor cannot be removed"
 

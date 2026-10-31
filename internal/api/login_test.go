@@ -493,3 +493,25 @@ func TestAuthInfo(t *testing.T) {
 	code, _ = l.do("GET", "/api/v1/auth/info", "", "")
 	assert.Equal(t, 401, code)
 }
+
+// A person whose password was set on the command line has no second factor yet: the password opens the
+// enrolment of one, never a session.
+func TestPasswordWithoutSecondFactorMustEnrol(t *testing.T) {
+	l := newLoginEnv(t)
+	l.ann(g("alpha", RoleModerator))
+	require.NoError(t, l.m.st.ClearTOTP(t.Context(), steamA))
+	require.NoError(t, l.m.st.SetRecoveryCodes(t.Context(), steamA, nil))
+	code, out, _ := l.passwordStep("ann", password)
+	require.Equal(t, 200, code, "%v", out)
+	assert.Equal(t, true, out["enrol"])
+	assert.Empty(t, out["factors"])
+	pending := out["pending"].(string)
+	st, _, _ := l.second("totp", pending, "123456")
+	assert.Equal(t, 403, st, "no login without a second factor")
+	st, _ = l.as("GET", "/api/v1", l.tok, pending, "")
+	assert.Equal(t, 401, st)
+	session, _, recovery := l.enrolTOTP(pending)
+	assert.Len(t, recovery, 10)
+	st, _ = l.as("GET", "/api/v1", l.tok, session, "")
+	assert.Equal(t, 200, st, "enrolling ends in a session")
+}

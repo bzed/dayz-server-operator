@@ -4,8 +4,10 @@
 package main
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"sort"
 	"strings"
@@ -13,8 +15,11 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 
 	"github.com/bzed/dayz-server-operator/internal/admin"
+	"github.com/bzed/dayz-server-operator/internal/api"
+	"github.com/bzed/dayz-server-operator/internal/auth"
 	"github.com/bzed/dayz-server-operator/internal/config"
 	"github.com/bzed/dayz-server-operator/internal/moderation"
 	"github.com/bzed/dayz-server-operator/internal/serve"
@@ -273,7 +278,63 @@ func newUserCmd() *cobra.Command {
 		}),
 	}
 
-	cmd.AddCommand(list, grant, revoke,
+	var passwordUser string
+	password := &cobra.Command{
+		Use:   "password <steamid|username> [--username <name>]",
+		Short: "Set the password (and login name) of a person, for when signing in through Steam does not work yet",
+		Long: "Sets a username and password for a person who already has a role (dzo user grant). The password is read " +
+			"from the terminal without echo, twice; piped in, one line is read. It is the first factor only: the person " +
+			"still sets up an authenticator app or a passkey at the first login (they get recovery codes), and logs in " +
+			"with it every time after. Until they have, whoever knows the password can set up that second factor, so " +
+			"hand the password over safely. Passwords are 12 to 256 bytes long. `dzo user reset` removes it again.",
+		Args: cobra.ExactArgs(1),
+		RunE: with(func(u *userTool, args []string) error {
+			ctx := u.cmd.Context()
+			var p moderation.Person
+			var err error
+			if moderation.ValidSteamID(args[0]) {
+				p, err = u.store.Person(ctx, args[0])
+			} else {
+				p, err = u.store.PersonByUsername(ctx, args[0])
+			}
+			if errors.Is(err, moderation.ErrNotFound) {
+				return fmt.Errorf("no such person: %s (give them a role first: dzo user grant <steamid> --role admin)", args[0])
+			}
+			if err != nil {
+				return err
+			}
+			username := strings.ToLower(strings.TrimSpace(passwordUser))
+			switch {
+			case username == "" && p.Username == "":
+				return errors.New("a first password needs a login name: --username <name>")
+			case username != "" && !api.ValidUsername(username):
+				return fmt.Errorf("a username has 3 to 32 characters: letters, digits, dot, dash and underscore (got %q)", username)
+			}
+			pw, err := readNewPassword(u.cmd)
+			if err != nil {
+				return err
+			}
+			hash, err := auth.HashPassword(pw)
+			if err != nil {
+				return err
+			}
+			if err := u.store.SetPassword(ctx, p.SteamID, username, hash); err != nil {
+				if errors.Is(err, moderation.ErrUsernameTaken) {
+					return fmt.Errorf("the username %q is taken", username)
+				}
+				return err
+			}
+			if username == "" {
+				username = p.Username
+			}
+			u.log("users.password", p.SteamID, "set from the command line")
+			u.say("%s: password set, login name %s; at the first login they set up a second factor", p.SteamID, username)
+			return nil
+		}),
+	}
+	password.Flags().StringVar(&passwordUser, "username", "", "the login name (needed for a first password; 3 to 32 of a-z 0-9 . _ -)")
+
+	cmd.AddCommand(list, grant, revoke, password,
 		setDisabled("disable", "Block a person from logging in and end their sessions", true),
 		setDisabled("enable", "Let a disabled person log in again", false),
 		del, reset)
@@ -281,6 +342,36 @@ func newUserCmd() *cobra.Command {
 		configFlag(c, &configPath)
 	}
 	return cmd
+}
+
+// readNewPassword asks for a password twice on a terminal (no echo), or reads one line from a pipe.
+func readNewPassword(cmd *cobra.Command) (string, error) {
+	in := cmd.InOrStdin()
+	if f, ok := in.(*os.File); ok && term.IsTerminal(int(f.Fd())) {
+		read := func(prompt string) (string, error) {
+			_, _ = fmt.Fprint(cmd.ErrOrStderr(), prompt)
+			b, err := term.ReadPassword(int(f.Fd()))
+			_, _ = fmt.Fprintln(cmd.ErrOrStderr())
+			return string(b), err
+		}
+		first, err := read("New password: ")
+		if err != nil {
+			return "", fmt.Errorf("read from terminal: %w", err)
+		}
+		second, err := read("Again: ")
+		if err != nil {
+			return "", fmt.Errorf("read from terminal: %w", err)
+		}
+		if first != second {
+			return "", errors.New("the two passwords differ")
+		}
+		return first, nil
+	}
+	line, err := bufio.NewReader(in).ReadString('\n')
+	if err != nil && !errors.Is(err, io.EOF) {
+		return "", fmt.Errorf("read input: %w", err)
+	}
+	return trimNewline(line), nil
 }
 
 func orDash(s string) string {

@@ -634,3 +634,19 @@ func TestLoginPageWhenLoginsAreOff(t *testing.T) {
 	assert.Equal(t, 503, resp.StatusCode)
 	assert.Contains(t, body, "serve.web_url")
 }
+
+func TestPasswordWithoutSecondFactorGoesToEnrolment(t *testing.T) {
+	l := newLoginEnv(t)
+	l.ann("admin")
+	require.NoError(t, l.st.ClearTOTP(t.Context(), loginSteamA))
+	require.NoError(t, l.st.SetRecoveryCodes(t.Context(), loginSteamA, nil))
+	b := l.visitor()
+	_, body := b.get("/login")
+	resp, _ := b.do("POST", "/login", url.Values{"username": {"ann"}, "password": {loginPW}, "csrf": {formCSRF(t, body)}})
+	require.Equal(t, 303, resp.StatusCode)
+	assert.Equal(t, "/login/enrol", resp.Header.Get("Location"))
+	assert.Nil(t, b.cookie("dzo_session"))
+	resp, body = b.get("/login/enrol")
+	assert.Equal(t, 200, resp.StatusCode)
+	assert.Contains(t, body, `id="totp-secret"`)
+}

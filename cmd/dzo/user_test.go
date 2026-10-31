@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/bzed/dayz-server-operator/internal/admin"
+	"github.com/bzed/dayz-server-operator/internal/auth"
 	"github.com/bzed/dayz-server-operator/internal/config"
 	"github.com/bzed/dayz-server-operator/internal/moderation"
 	"github.com/bzed/dayz-server-operator/internal/serve"
@@ -222,4 +223,76 @@ func TestUserChangesAreAudited(t *testing.T) {
 		assert.True(t, en.OK)
 	}
 	assert.Contains(t, entries[1].Detail, "*=admin")
+}
+
+func (e *userEnv) runWithStdin(stdin string, args ...string) (string, error) {
+	e.t.Helper()
+	return runCmdWithStdin(e.t, stdin, append(append([]string{"user"}, args...), "--config", e.cfg)...)
+}
+
+func TestUserPasswordSetsALogin(t *testing.T) {
+	e := newUserEnv(t)
+	_, err := e.run("grant", userSteamA, "--role", "admin", "--name", "Ann")
+	require.NoError(t, err)
+	out, err := e.runWithStdin("correct horse battery\n", "password", userSteamA, "--username", "Ann.Admin")
+	require.NoError(t, err, out)
+	assert.Contains(t, out, "ann.admin")
+	assert.NotContains(t, out, "correct horse battery", "the password is never printed")
+	st := e.store()
+	p, err := st.PersonByUsername(t.Context(), "ANN.admin")
+	require.NoError(t, err)
+	assert.Equal(t, userSteamA, p.SteamID)
+	c, err := st.Credentials(t.Context(), userSteamA)
+	require.NoError(t, err)
+	assert.True(t, auth.CheckPassword(c.PasswordHash, "correct horse battery"))
+
+	// by username, keeping it; a new password replaces the old one
+	out, err = e.runWithStdin("another horse battery\n", "password", "ann.admin")
+	require.NoError(t, err, out)
+	c, _ = st.Credentials(t.Context(), userSteamA)
+	assert.True(t, auth.CheckPassword(c.PasswordHash, "another horse battery"))
+	assert.False(t, auth.CheckPassword(c.PasswordHash, "correct horse battery"))
+}
+
+func TestUserPasswordRefusals(t *testing.T) {
+	e := newUserEnv(t)
+	_, err := e.runWithStdin("correct horse battery\n", "password", userSteamA, "--username", "ann")
+	require.ErrorContains(t, err, "grant", "the person needs a role first")
+	_, err = e.run("grant", userSteamA, "--role", "admin")
+	require.NoError(t, err)
+	_, err = e.runWithStdin("correct horse battery\n", "password", userSteamA)
+	require.ErrorContains(t, err, "--username", "a first password needs a username")
+	for _, bad := range []string{"ab", "has space", "a/b", "ünï"} {
+		_, err = e.runWithStdin("correct horse battery\n", "password", userSteamA, "--username", bad)
+		require.Error(t, err, bad)
+	}
+	_, err = e.runWithStdin("short\n", "password", userSteamA, "--username", "ann")
+	require.ErrorContains(t, err, "12 to 256")
+	_, err = e.runWithStdin("\n", "password", userSteamA, "--username", "ann")
+	require.Error(t, err, "an empty password")
+	c, _ := e.store().Credentials(t.Context(), userSteamA)
+	assert.Empty(t, c.PasswordHash, "nothing was stored")
+
+	_, err = e.run("grant", userSteamB, "--role", "viewer")
+	require.NoError(t, err)
+	_, err = e.runWithStdin("correct horse battery\n", "password", userSteamB, "--username", "ann")
+	require.NoError(t, err)
+	_, err = e.runWithStdin("correct horse battery\n", "password", userSteamA, "--username", "ANN")
+	require.ErrorContains(t, err, "taken")
+	_, err = e.runWithStdin("correct horse battery\n", "password", "nobody")
+	require.Error(t, err)
+}
+
+func TestUserPasswordIsAudited(t *testing.T) {
+	e := newUserEnv(t)
+	_, err := e.run("grant", userSteamA, "--role", "admin")
+	require.NoError(t, err)
+	_, err = e.runWithStdin("correct horse battery\n", "password", userSteamA, "--username", "ann")
+	require.NoError(t, err)
+	entries, err := admin.NewAudit(serve.AuditLog(e.conf)).Tail("", 1)
+	require.NoError(t, err)
+	require.Len(t, entries, 1)
+	assert.Equal(t, "users.password", entries[0].Action)
+	assert.Equal(t, "cli:bernd", entries[0].Actor)
+	assert.NotContains(t, entries[0].Detail, "correct")
 }
