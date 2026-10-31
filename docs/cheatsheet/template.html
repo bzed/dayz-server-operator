@@ -285,6 +285,23 @@ SPDX-License-Identifier: AGPL-3.0-or-later
       </ul>
     </div>
 
+    <div class="task">
+      <h2>Web, API and metrics</h2>
+      <ul class="rows one">
+        <li class="c"><span class="cmd">dzo token create web --role admin --web</span><span class="what">token for <code>dzo web</code> (save it as <code>web.token</code>), then <code>dzo units sync</code></span></li>
+        <li><span class="cmd">systemctl --user status dzo-{serve,web,exporter}</span><span class="what">API, web UI (<code>:8081</code>), metrics (<code>:9464/metrics</code>)</span></li>
+      </ul>
+    </div>
+
+    <div class="task">
+      <h2>People and the first admin</h2>
+      <ul class="rows one">
+        <li class="c"><span class="cmd">dzo user grant &lt;steam64&gt; --role admin</span><span class="what">first admin; <code>--instance &lt;n&gt;</code> limits it</span></li>
+        <li><span class="cmd">dzo user password &lt;steam64&gt; --username ann</span><span class="what">password login if Steam sign-in fails; 2nd factor at first login</span></li>
+        <li class="c"><span class="cmd">dzo user disable &lt;steam64&gt;</span><span class="what">block the login; also <code>list</code>, <code>revoke</code>, <code>delete</code>, <code>reset</code> (lost second factor)</span></li>
+      </ul>
+    </div>
+
     <div class="danger">
       <h2>These delete data</h2>
       <p style="margin:0 0 1.4mm;color:var(--ink-soft);font-size:7.7pt">They ask you to confirm (<code>--yes</code> skips it). <code>wipe</code>, <code>reinit</code> and <code>restore</code> take a snapshot first.</p>
