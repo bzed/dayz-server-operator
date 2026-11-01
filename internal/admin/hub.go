@@ -9,8 +9,10 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"math"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -178,6 +180,7 @@ func (h *Hub) Sync(req SyncRequest) SyncReply {
 	if req.Vehicles != nil {
 		h.vehicles = req.Vehicles
 		for i := range h.vehicles {
+			h.vehicles[i].checkDrive(now)
 			if h.vehicles[i].Kind == "car" {
 				if k := kindOf(h.Kinds, h.vehicles[i].Type); k != "" {
 					h.vehicles[i].Kind = k
@@ -230,6 +233,37 @@ func (h *Hub) Sync(req SyncRequest) SyncReply {
 	}
 	h.queue = live
 	return reply
+}
+
+const (
+	maxDriveAge   = 400 * 24 * time.Hour // a drive older than this is not believed
+	maxDriverName = 64                   // runes of a driver name kept
+)
+
+// checkDrive validates the driver data the mod sent: a bad driver ID or drive age drops the drive (the
+// vehicle stays), otherwise DrivenAt is set from DrivenAgo and the name is clipped.
+func (v *Vehicle) checkDrive(now time.Time) {
+	v.DrivenAt = time.Time{}
+	age := v.DrivenAgo
+	if v.Driver == "" || !validSteamID(v.Driver) || math.IsNaN(age) || math.IsInf(age, 0) ||
+		age < 0 || age > maxDriveAge.Seconds() {
+		v.Driver, v.DriverName, v.DrivenAgo = "", "", 0
+		return
+	}
+	v.DrivenAt = now.Add(-time.Duration(age * float64(time.Second)))
+	if r := []rune(v.DriverName); len(r) > maxDriverName {
+		v.DriverName = string(r[:maxDriverName]) + "…"
+	}
+}
+
+// validSteamID is moderation.ValidSteamID (moderation imports admin, so admin cannot import it); a test
+// in moderation checks that the two agree.
+func validSteamID(s string) bool {
+	if len(s) != 17 || !strings.HasPrefix(s, "7656119") {
+		return false
+	}
+	_, err := strconv.ParseUint(s, 10, 64)
+	return err == nil
 }
 
 // linkVehiclesLocked sets Player.Vehicle from the vehicles' occupants.

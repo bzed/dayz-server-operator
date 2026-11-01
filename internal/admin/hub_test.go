@@ -5,6 +5,8 @@ package admin
 
 import (
 	"context"
+	"encoding/json"
+	"math"
 	"strings"
 	"testing"
 	"time"
@@ -23,6 +25,49 @@ func testHub() (*Hub, *clock) {
 	h := NewHub("alpha")
 	h.now = c.now
 	return h, c
+}
+
+func TestSyncSetsDrivenAt(t *testing.T) {
+	h, c := testHub()
+	h.Sync(SyncRequest{Proto: 1, Hello: true, Vehicles: []Vehicle{{ID: "v1", Driver: "76561198000000001", DriverName: "Ann", DrivenAgo: 90}}})
+	got := h.Vehicles()
+	require.Len(t, got, 1)
+	require.Equal(t, c.now().Add(-90*time.Second), got[0].DrivenAt)
+	require.Equal(t, "76561198000000001", got[0].Driver)
+	require.Equal(t, "Ann", got[0].DriverName)
+}
+
+func TestSyncIgnoresBadDrives(t *testing.T) {
+	h, _ := testHub()
+	for _, v := range []Vehicle{
+		{ID: "a", Driver: "76561198000000001", DriverName: "n", DrivenAgo: -1},
+		{ID: "b", Driver: "76561198000000001", DriverName: "n", DrivenAgo: math.NaN()},
+		{ID: "c", Driver: "76561198000000001", DriverName: "n", DrivenAgo: math.Inf(1)},
+		{ID: "d", Driver: "76561198000000001", DriverName: "n", DrivenAgo: 401 * 24 * 3600},
+		{ID: "e", Driver: "not-a-steam-id", DriverName: "n", DrivenAgo: 10},
+	} {
+		h.Sync(SyncRequest{Proto: 1, Hello: true, Vehicles: []Vehicle{v}})
+		got := h.Vehicles()
+		require.Len(t, got, 1, v.ID)
+		require.True(t, got[0].DrivenAt.IsZero(), v.ID)
+		require.Empty(t, got[0].Driver, v.ID)
+		require.Empty(t, got[0].DriverName, v.ID)
+		require.Zero(t, got[0].DrivenAgo, v.ID)
+	}
+}
+
+func TestSyncClipsTheDriverName(t *testing.T) {
+	h, _ := testHub()
+	h.Sync(SyncRequest{Proto: 1, Hello: true, Vehicles: []Vehicle{{ID: "v", Driver: "76561198000000001", DriverName: strings.Repeat("ä", 500), DrivenAgo: 1}}})
+	require.Len(t, []rune(h.Vehicles()[0].DriverName), 65)
+}
+
+func TestVehicleJSONHidesDrivenAt(t *testing.T) {
+	b, err := json.Marshal(Vehicle{ID: "v", DrivenAt: time.Now()})
+	require.NoError(t, err)
+	require.NotContains(t, string(b), "DrivenAt")
+	require.NotContains(t, string(b), "driven")
+	require.NotContains(t, string(b), "driver")
 }
 
 func hello(h *Hub) {
