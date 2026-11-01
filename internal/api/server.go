@@ -291,6 +291,8 @@ func (s *Server) Handler() http.Handler {
 	route("POST "+base+"/instances/{instance}/vehicles/{id}/flip", PermRepair, true, s.flip)
 	route("POST "+base+"/instances/{instance}/vehicles/{id}/move", PermTeleport, true, s.moveVehicle)
 	route("POST "+base+"/instances/{instance}/flags/{id}/raise", PermRaise, true, s.raiseFlag)
+	route("GET "+base+"/instances/{instance}/vehicles/unused", PermDelete, true, s.unusedVehicles)
+	route("POST "+base+"/instances/{instance}/vehicles/cleanup", PermDelete, true, s.cleanupVehicles)
 	route("DELETE "+base+"/instances/{instance}/vehicles/{id}", PermDelete, true, s.deleteVehicle)
 	route("GET "+base+"/bans", PermBanView, false, s.listBans)
 	route("POST "+base+"/bans", PermBanInstance, false, s.createBan)
