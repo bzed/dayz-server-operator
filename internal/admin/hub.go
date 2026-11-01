@@ -526,6 +526,9 @@ func (h *Hub) enqueue(cmd Command) (*pending, error) {
 	if !h.connectedLocked() {
 		return nil, ErrOffline
 	}
+	if cmd.Kind == KindVehicleFlip && h.isBoatLocked(cmd.Vehicle) {
+		return nil, errors.New("admin: boats cannot be flipped")
+	}
 	if cmd.Kind == KindMessage && cmd.Style == "expansion" && !h.hello.Has("expansion") {
 		return nil, errors.New("admin: expansion notifications are not available (the mod does not report Expansion)")
 	}
@@ -534,6 +537,17 @@ func (h *Hub) enqueue(cmd Command) (*pending, error) {
 	h.queue = append(h.queue, p)
 	h.byID[cmd.ID] = p
 	return p, nil
+}
+
+// isBoatLocked reports whether the vehicle id is a boat in the last vehicle list (the mod's kind, or
+// admin.vehicle_kinds).
+func (h *Hub) isBoatLocked(id string) bool {
+	for _, v := range h.vehicles {
+		if v.ID == id {
+			return v.Kind == "boat"
+		}
+	}
+	return false
 }
 
 // Wait waits for the result of a command that Enqueue returned, until ctx is done (ErrTimeout, with the id in

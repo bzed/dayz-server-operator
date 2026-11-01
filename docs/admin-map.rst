@@ -41,8 +41,10 @@ admin actions:
 The mod connects *out* to dzo: about once a second it posts what changed and the
 results of finished actions to ``dzo serve``, and gets the next actions in the
 reply. Nothing connects into the game server. The mod knows persistent
-vehicles of the car type (``CarScript``, which includes most modded cars) and, on DayZ 1.30,
-motorbikes (``MotorbikeScript``) and boats (``BoatScript``); all of them can be spawned, repaired, flipped, moved and deleted.
+vehicles of the car type (``CarScript``, which includes most modded cars),
+motorbikes (``MotorbikeScript``) and boats (``BoatScript``); all of them can be spawned, repaired, moved and deleted, and all but
+boats flipped: a boat cannot capsize in the game, so a flip of a boat (a ``boat`` kind, also one of ``admin.vehicle_kinds``) is
+refused with ``boats cannot be flipped``.
 Each vehicle has a kind, ``car``, ``motorbike``, ``boat``, ``bicycle`` or ``helicopter``, shown in the vehicle list, with an icon of its own on the map.
 With DayZ Expansion loaded the mod also reports the vehicle's owner (the name on its key chain), and the
 vehicles under an Expansion cover (``*_Cover``, stored by Expansion, not in the world as cars) as

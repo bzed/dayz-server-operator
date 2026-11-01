@@ -125,8 +125,8 @@ boat_checks() {
 	"$work/dzo" vehicle repair t1 "$id" --scope missing --config "$work/config.yaml" --token-file "$work/api.token" >/dev/null || s=1
 	verdict "$label: repair" $s
 	s=0
-	"$work/dzo" vehicle flip t1 "$id" --config "$work/config.yaml" --token-file "$work/api.token" >/dev/null || s=1
-	verdict "$label: flip" $s
+	"$work/dzo" vehicle flip t1 "$id" --config "$work/config.yaml" --token-file "$work/api.token" 2>&1 | grep -q 'boats cannot be flipped' || s=1
+	verdict "$label: flip is refused" $s
 	s=0
 	"$work/dzo" vehicle move t1 "$id" --x "$((x + 150))" --z "$z" --config "$work/config.yaml" --token-file "$work/api.token" | grep -q ok || s=1
 	waitfor 30 "curl -s -H 'Authorization: Bearer $(cat "$work/api.token")' http://127.0.0.1:$api/api/v1/instances/t1/vehicles | jq -e --arg id '$id' '.[] | select(.id == \$id and .x > $x + 140)' >/dev/null" || s=1

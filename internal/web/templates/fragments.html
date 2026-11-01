@@ -207,7 +207,7 @@
     <button hx-post="{{$base}}/repair" hx-target="#panel-flash" hx-vals='{"scope": "missing"}'><i class="fa fa-plus" aria-hidden="true"></i>Add missing parts</button>
   </p>{{end}}
   <p>
-    {{if .Can.Repair}}<button hx-post="{{$base}}/flip" hx-target="#panel-flash" title="Stand it upright on its wheels"><i class="fa fa-refresh" aria-hidden="true"></i>Flip upright</button>{{end}}
+    {{if and .Can.Repair (ne .Vehicle.Kind "boat")}}<button hx-post="{{$base}}/flip" hx-target="#panel-flash" title="Stand it upright on its wheels"><i class="fa fa-refresh" aria-hidden="true"></i>Flip upright</button>{{end}}
     {{if .Can.Delete}}<button class="danger" hx-post="{{$base}}/delete" hx-target="#panel-flash" {{if .Vehicle.Occupants}}hx-vals='{"force": "1"}' {{end}}hx-confirm="Delete this {{.Vehicle.Type}}{{if .Vehicle.Occupants}} with {{len .Vehicle.Occupants}} inside{{end}}?"><i class="fa fa-trash" aria-hidden="true"></i>Delete</button>{{end}}
   </p>
 </div>

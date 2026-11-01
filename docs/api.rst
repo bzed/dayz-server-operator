@@ -352,7 +352,7 @@ Acting
        ``wheels``, ``fluids`` (refuel) or ``missing`` (fit missing parts)
    * - ``POST /instances/<i>/vehicles/<id>/flip``
      - ``operator``
-     - stand the vehicle upright on its wheels
+     - stand the vehicle upright on its wheels; a boat is refused (``400`` ``admin: boats cannot be flipped``)
    * - ``POST /instances/<i>/vehicles/<id>/move`` ``{"x", "z"}``
      - ``operator`` (``player.teleport``)
      - put the vehicle on the ground at ``x``/``z``, upright, at rest and with its heading, to pull a stuck one out. Players inside

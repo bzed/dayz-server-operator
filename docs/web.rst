@@ -269,7 +269,7 @@ Instance
    as an Expansion notification of a type you pick, with an optional title and duration), the player list (refreshed every 5 seconds) with a panel of
    actions per player (message, teleport to coordinates or to another player, heal, fix gear, kick with a reason, kill after a confirmation,
    give item with a search over the server's item classes), and the vehicle list
-   with repair (everything, or only body, parts, wheels, fuel or missing parts), flip and delete (moving a vehicle is on the map). The
+   with repair (everything, or only body, parts, wheels, fuel or missing parts), flip (not for boats) and delete (moving a vehicle is on the map). The
    actions open directly under the player or vehicle they apply to. The vehicle list also shows who drove each vehicle last (the name links to
    that player, the Steam ID is in the tooltip) and when, as "3d 0h ago" with the exact time (UTC) in the tooltip. Only the driver's
    seat counts, passengers do not. A vehicle nobody has been seen driving since dzo first saw it reads "not since" and that date
