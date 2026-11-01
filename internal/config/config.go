@@ -430,6 +430,8 @@ func (c *Config) Validate() error {
 	}
 	if v := c.Serve.DBBackupHours; v != nil && *v < 0 {
 		errs = append(errs, "serve.db_backup_hours: must be 0 (off) or a number of hours")
+	} else if v != nil && *v > maxDBBackupHours {
+		errs = append(errs, fmt.Sprintf("serve.db_backup_hours: must be at most %d", maxDBBackupHours))
 	}
 	if v := c.Serve.DBBackupKeep; v != nil && *v < 1 {
 		errs = append(errs, "serve.db_backup_keep: must be at least 1")
@@ -558,3 +560,6 @@ func CheckListen(addr string, insecure, tls bool) error {
 	}
 	return fmt.Errorf("%q is not a loopback address; set tls, put dzo behind a reverse proxy with HTTPS or set allow_insecure_http", addr)
 }
+
+// maxDBBackupHours bounds serve.db_backup_hours (ten years); a larger value would overflow a time.Duration.
+const maxDBBackupHours = 87600

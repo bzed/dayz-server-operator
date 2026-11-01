@@ -62,6 +62,21 @@ func (f *fakeStore) nForgets() int {
 type fakeSource struct {
 	vehicles []admin.Vehicle
 	ch       chan admin.StreamEvent
+	mu       sync.Mutex
+	oldMod   bool
+}
+
+// setOldMod makes the mod stop (or start) reporting drivers, as an update of the mod does.
+func (s *fakeSource) setOldMod(v bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.oldMod = v
+}
+
+func (s *fakeSource) ReportsDrivers() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return !s.oldMod
 }
 
 func (s *fakeSource) Vehicles() []admin.Vehicle { return s.vehicles }
@@ -201,4 +216,23 @@ func TestForgetAfter(t *testing.T) {
 	require.Equal(t, 7*24*time.Hour, ForgetAfter(site.AdminConfig{}))
 	d := 30
 	require.Equal(t, 30*24*time.Hour, ForgetAfter(site.AdminConfig{VehicleForgetDays: &d}))
+}
+
+func TestRecorderWaitsForAModThatReportsDrivers(t *testing.T) {
+	st, src := &fakeStore{}, newSource(admin.Vehicle{ID: "a", Type: "Offroad_02"})
+	src.setOldMod(true)
+	rec := &Recorder{Store: st}
+	ctx, cancel := context.WithCancel(t.Context())
+	rec.Set(ctx, hubs(src), []string{"alpha"})
+	src.ch <- admin.StreamEvent{Kind: "vehicles", Data: []admin.Vehicle{{ID: "a"}}}
+	src.ch <- admin.StreamEvent{Kind: "vehicles", Data: []admin.Vehicle{{ID: "a"}}}
+	// The marker event is also ignored; a later one proves the earlier ones were handled.
+	src.ch <- admin.StreamEvent{Kind: "players", Data: []admin.Player{}}
+	require.Eventually(t, func() bool { return len(src.ch) == 0 }, 5*time.Second, 5*time.Millisecond)
+	require.Zero(t, st.nSyncs(), "an old mod reports no drivers: nothing is recorded, or every car would look unused later")
+	src.setOldMod(false) // the mod is updated
+	src.ch <- admin.StreamEvent{Kind: "vehicles", Data: []admin.Vehicle{{ID: "a", Driver: "76561198000000001"}}}
+	require.Eventually(t, func() bool { return st.nSyncs() == 1 }, 5*time.Second, 5*time.Millisecond)
+	cancel()
+	rec.Wait()
 }

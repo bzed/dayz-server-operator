@@ -4,7 +4,9 @@
 package web
 
 import (
+	"fmt"
 	"net/url"
+	"strings"
 	"testing"
 	"time"
 
@@ -137,4 +139,26 @@ func TestCleanupOldMod(t *testing.T) {
 	require.Contains(t, body, "does not report drivers")
 	require.Contains(t, body, "flash err")
 	require.NotContains(t, body, `name="id"`)
+}
+
+func TestCleanupPreviewListsOnlyTheOldest500(t *testing.T) {
+	e := newEnv(t, api.RoleAdmin)
+	const n = 501
+	vs := make([]admin.Vehicle, 0, n)
+	seen := make([]moderation.VehicleSeen, 0, n)
+	now := time.Now()
+	for i := range n {
+		id := fmt.Sprintf("v%03d", i)
+		vs = append(vs, admin.Vehicle{ID: id, Kind: "car", Type: "Offroad_02"})
+		// v000 is the most recently driven, v500 the oldest.
+		seen = append(seen, moderation.VehicleSeen{ID: id, Type: "Offroad_02", Driver: "76561198000000001", DrivenAt: now.Add(-time.Duration(40+i) * time.Hour * 24)})
+	}
+	e.hub.Sync(admin.SyncRequest{Proto: 1, Hello: true, ModVersion: "0.8.0", Features: []string{admin.FeatureDriver}, Vehicles: vs})
+	require.NoError(t, e.st.SyncVehicles(t.Context(), "alpha", seen, now.Add(-1000*24*time.Hour)))
+	_, body, _ := e.get("/b/main/i/alpha/vehicles/cleanup?days=30")
+	require.Equal(t, 500, strings.Count(body, `name="id"`))
+	require.Contains(t, body, `value="v500"`, "the oldest are listed")
+	require.NotContains(t, body, `value="v000"`, "the newest is left for the next round")
+	require.Contains(t, body, "Delete 500 vehicles")
+	require.Contains(t, body, "501 vehicles have gone unused for 30 days; the 500 longest unused are listed. Delete them, then run the cleanup again for the rest.")
 }

@@ -38,6 +38,9 @@ type Store interface {
 type Source interface {
 	Vehicles() []admin.Vehicle
 	Subscribe(ctx context.Context) <-chan admin.StreamEvent
+	// ReportsDrivers tells whether the mod announced admin.FeatureDriver. Without it nothing is recorded: the
+	// age of a vehicle would start long before the mod could tell who drove it.
+	ReportsDrivers() bool
 }
 
 // FromRegistry looks the hubs of a registry up by instance name.
@@ -136,7 +139,7 @@ func (r *Recorder) run(ctx context.Context, in *running, name string, src Source
 	// A snapshot that is already there is recorded. None yet is not "no vehicles": nothing is hidden before
 	// the mod has reported.
 	if list := src.Vehicles(); len(list) > 0 {
-		r.sync(ctx, name, list)
+		r.sync(ctx, name, src, list)
 	}
 	tick := r.Tick
 	if tick == nil {
@@ -153,7 +156,7 @@ func (r *Recorder) run(ctx context.Context, in *running, name string, src Source
 				return
 			}
 			if list, ok := ev.Data.([]admin.Vehicle); ev.Kind == "vehicles" && ok {
-				r.sync(ctx, name, list)
+				r.sync(ctx, name, src, list)
 			}
 		case <-tick:
 			cutoff := r.now().Add(-r.forgetAfter(name))
@@ -165,7 +168,11 @@ func (r *Recorder) run(ctx context.Context, in *running, name string, src Source
 }
 
 // sync records one snapshot. An empty one is a real snapshot (the records are hidden, not deleted).
-func (r *Recorder) sync(ctx context.Context, name string, list []admin.Vehicle) {
+// It is judged at every snapshot, so the records start once the mod is updated.
+func (r *Recorder) sync(ctx context.Context, name string, src Source, list []admin.Vehicle) {
+	if !src.ReportsDrivers() {
+		return
+	}
 	seen := make([]moderation.VehicleSeen, 0, len(list))
 	for _, v := range list {
 		seen = append(seen, moderation.VehicleSeen{ID: v.ID, Type: v.Type, Driver: v.Driver, DriverName: v.DriverName, DrivenAt: v.DrivenAt})

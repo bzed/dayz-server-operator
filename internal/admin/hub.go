@@ -62,6 +62,13 @@ func (h *Hello) Has(feature string) bool {
 	return h != nil && slices.Contains(h.Features, feature)
 }
 
+// ReportsDrivers tells whether the mod announced that it reports the last driver of a vehicle.
+func (h *Hub) ReportsDrivers() bool {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.hello.Has(FeatureDriver)
+}
+
 // NotifyTypes are the Expansion notification types a message can use.
 var NotifyTypes = []string{"toast", "baguette", "activity", "killfeed", "market", "garage"}
 

@@ -71,7 +71,7 @@ built-in ones, and an entry of the same name replaces the built-in entry as a wh
      allow_insecure_http: false      # default
      ip_retention_days: 90           # default (unset = 90)
      vacuum_days: 7                  # default (unset = 7)
-     db_backup_hours: 24             # default (unset = 24); 0 = off
+     db_backup_hours: 24             # default (unset = 24); 0 = off, at most 87600
      db_backup_keep: 7               # default (unset = 7)
      session_retention_days: 365     # default (unset = 365)
      audit_ip_retention_days: 90     # default (unset = 90)
@@ -245,7 +245,8 @@ and print what is wrong. A key dzo does not know is ignored.
       while the server runs and needs no stop) to ``<paths.db>/backup/dzo-<UTC time>.sqlite``, mode
       ``0600`` in a ``0750`` directory. ``db_backup_hours`` (unset: 24) is the interval in whole hours;
       ``0`` turns the copies off, a negative value is refused with ``serve.db_backup_hours: must be 0
-      (off) or a number of hours``. ``db_backup_keep`` (unset: 7) is how many copies stay; older ones
+      (off) or a number of hours``, and more than 87600 (ten years) with ``serve.db_backup_hours: must be at
+      most 87600``. ``db_backup_keep`` (unset: 7) is how many copies stay; older ones
       are deleted after each new copy. It must be at least 1, otherwise ``serve.db_backup_keep: must be
       at least 1`` is reported when the configuration loads. The time of the last copy is kept in the
       database, so a restart does not copy again early. A failed copy is logged and tried again at the
@@ -602,7 +603,7 @@ below as "site default".
      allow_classes: []             # default: none
      deny_classes: ["Land_*"]      # default: none; items admins may not spawn (trailing * = prefix)
      vehicle_kinds: {bicycle: ["Bike_*"], helicopter: ["MyHeli_*"]}   # default: none
-     vehicle_forget_days: 7        # default; days a vehicle's record is kept after it stopped being reported
+     vehicle_forget_days: 7        # default (1..3650); days a vehicle's record is kept after it stopped being reported
    admin_map:
      vanilla_events: true          # default
      watch:                        # default: none
@@ -751,8 +752,11 @@ Keys:
    ``admin.vehicle_forget_days``
       How many days ``dzo serve`` keeps the record of a vehicle (its last driver, the time of the last drive and
       when it was first seen) after the vehicle stopped being reported by the mod, for instance because it was
-      destroyed, despawned or deleted. Default 7; an integer of at least 1, anything else is refused with
-      ``admin.vehicle_forget_days must be at least 1``. A vehicle that is reported again within that time gets its
+      destroyed, despawned or deleted. Default 7; an integer from 1 to 3650 (ten years), anything else is refused with
+      ``admin.vehicle_forget_days must be at least 1`` or ``admin.vehicle_forget_days must be at most 3650``.
+      Records are only made while the mod reports drivers (``dzo-admin`` 0.8.0, hello feature ``driver``); with an
+      older mod none are kept, and they start once the mod is updated, so that no vehicle looks unused for longer
+      than dzo could have known. A vehicle that is reported again within that time gets its
       record back; one that comes back later starts a new record (no driver, a new age). Not a site default (the
       ``admin`` block is per instance). The records are kept in ``dzo.sqlite``; nothing on the vehicles in the game
       changes. Taken up on the next ``dzo serve`` reload or restart; the sweep that forgets records runs hourly, and

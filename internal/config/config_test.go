@@ -344,6 +344,13 @@ func TestServeDBBackup(t *testing.T) {
 	require.Zero(t, c.Serve.DBBackupEvery(), "0 turns the copies off")
 	_, err = Parse([]byte("serve: {db_backup_hours: -1}\n"))
 	require.ErrorContains(t, err, "serve.db_backup_hours: must be 0 (off) or a number of hours")
+	c, err = Parse([]byte("serve: {db_backup_hours: 87600}\n"))
+	require.NoError(t, err)
+	require.Equal(t, 87600*time.Hour, c.Serve.DBBackupEvery())
+	_, err = Parse([]byte("serve: {db_backup_hours: 87601}\n"))
+	require.ErrorContains(t, err, "serve.db_backup_hours: must be at most 87600")
+	_, err = Parse([]byte("serve: {db_backup_hours: 9999999999}\n"))
+	require.ErrorContains(t, err, "serve.db_backup_hours: must be at most 87600")
 	_, err = Parse([]byte("serve: {db_backup_keep: 0}\n"))
 	require.ErrorContains(t, err, "serve.db_backup_keep: must be at least 1")
 }

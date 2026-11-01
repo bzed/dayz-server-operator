@@ -286,7 +286,8 @@ Instance
    listed and never deleted. With no match the page says ``No vehicle has gone unused for N days.``; when dzo has tracked the
    instance for less than N days it adds ``dzo has been tracking vehicles on this instance only since <date>; no vehicle can be
    older than that yet.`` Second, ``Delete N vehicles`` asks once more in a browser dialog (``This cannot be undone.``) and
-   sends exactly the previewed vehicles (at most 500 per cleanup). The API checks every one again at that moment: a vehicle
+   sends exactly the previewed vehicles (at most 500 per cleanup: when more match, the preview lists the 500 longest unused,
+   says how many match in all, and the cleanup is run again afterwards for the rest). The API checks every one again at that moment: a vehicle
    driven or boarded since the preview is skipped, the others are deleted, and the result reads ``Deleted N vehicles; skipped M:``
    followed by each skipped vehicle with its reason. Deletions never use ``force``. Every vehicle writes an audit entry
    (``vehicle_delete``, detail ``cleanup: not driven for N days``; see :doc:`api`). The step needs a ``dzo-admin`` that reports drivers (0.8.0);

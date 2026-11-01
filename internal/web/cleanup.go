@@ -23,9 +23,10 @@ type cleanupView struct {
 	Backend, Instance string
 	Days              int // 0: no threshold chosen yet
 	Err               string
-	Items             []admin.Vehicle
-	Since             *time.Time // the oldest first_seen of a live vehicle
-	Young             bool       // dzo has tracked the instance for less than Days days
+	Items             []admin.Vehicle // the oldest maxCleanupIDs matches
+	Total             int             // all matches, more than len(Items) when the list was cut
+	Since             *time.Time      // the oldest first_seen of a live vehicle
+	Young             bool            // dzo has tracked the instance for less than Days days
 	Now               time.Time
 }
 
@@ -66,7 +67,10 @@ func (s *Server) cleanupStep(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			v.Err = err.Error()
 		} else {
-			v.Items, v.Since = res.Vehicles, res.Since
+			v.Items, v.Since, v.Total = res.Vehicles, res.Since, len(res.Vehicles)
+			if len(v.Items) > maxCleanupIDs { // oldest first: the rest is for the next round
+				v.Items = v.Items[:maxCleanupIDs]
+			}
 			v.Young = res.Since != nil && v.Now.Sub(*res.Since) < time.Duration(days)*24*time.Hour
 		}
 	}

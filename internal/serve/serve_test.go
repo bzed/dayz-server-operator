@@ -402,7 +402,7 @@ func TestRunRecordsVehicles(t *testing.T) {
 			Ready: func(a, m string) { ready <- [2]string{a, m} }, Logf: t.Logf})
 	}()
 	addrs := <-ready
-	body := `{"token":"` + strings.TrimSpace(string(tokenB)) + `","protocol":1,"hello":true,"has":["vehicles"],` +
+	body := `{"token":"` + strings.TrimSpace(string(tokenB)) + `","protocol":1,"hello":true,"features":["driver"],"has":["vehicles"],` +
 		`"vehicles":[{"id":"v1","type":"Offroad_02","driver":"76561198000000001","driver_name":"Alice","driven_ago":60}]}`
 	resp, err := http.Post("http://"+addrs[1]+"/mod/v1/sync", "application/json", strings.NewReader(body))
 	require.NoError(t, err)

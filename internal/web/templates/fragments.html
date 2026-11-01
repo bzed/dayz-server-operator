@@ -81,6 +81,7 @@
   {{else if .Days}}
     {{if .Young}}<p>dzo has been tracking vehicles on this instance only since {{day .Since}}; no vehicle can be older than that yet.</p>{{end}}
     {{if .Items}}
+    {{if gt .Total (len .Items)}}<p class="flash err">{{.Total}} vehicles have gone unused for {{.Days}} days; the {{len .Items}} longest unused are listed. Delete them, then run the cleanup again for the rest.</p>{{end}}
     <form hx-post="/b/{{.Backend}}/i/{{.Instance}}/vehicles/cleanup" hx-target="#cleanup" hx-confirm="Delete {{len .Items}} vehicles? This cannot be undone.">
       <input type="hidden" name="days" value="{{.Days}}">
       {{range .Items}}<input type="hidden" name="id" value="{{.ID}}">{{end}}

@@ -466,6 +466,9 @@ type AdminMap struct {
 	VanillaEvents *bool `yaml:"vanilla_events,omitempty"`
 }
 
+// MaxVehicleForgetDays bounds admin.vehicle_forget_days; a larger value would overflow a time.Duration.
+const MaxVehicleForgetDays = 3650
+
 // Validate checks the intervals and watch rules.
 func (a AdminConfig) Validate() error {
 	for name, v := range map[string]int{"sync_ms": a.SyncMS, "players_s": a.PlayersS, "vehicles_s": a.VehiclesS, "markers_s": a.MarkersS, "events_s": a.EventsS} {
@@ -478,6 +481,9 @@ func (a AdminConfig) Validate() error {
 	}
 	if a.VehicleForgetDays != nil && *a.VehicleForgetDays < 1 {
 		return fmt.Errorf("admin.vehicle_forget_days must be at least 1")
+	}
+	if a.VehicleForgetDays != nil && *a.VehicleForgetDays > MaxVehicleForgetDays {
+		return fmt.Errorf("admin.vehicle_forget_days must be at most %d", MaxVehicleForgetDays)
 	}
 	for k := range a.VehicleKinds {
 		if !admin.VehicleKindOK(k) {

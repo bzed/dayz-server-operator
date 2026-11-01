@@ -368,6 +368,14 @@ func TestAdminVehicleForgetDays(t *testing.T) {
 	zero := 0
 	v.Admin.VehicleForgetDays = &zero
 	require.ErrorContains(t, v.Validate(), "admin.vehicle_forget_days must be at least 1")
+	for _, n := range []int{3650, 3651, 200000} {
+		v.Admin.VehicleForgetDays = &n
+		if n > 3650 {
+			require.ErrorContains(t, v.Validate(), "admin.vehicle_forget_days must be at most 3650", n)
+		} else {
+			require.NoError(t, v.Validate())
+		}
+	}
 }
 
 func TestAgeParsesDaysAndDurations(t *testing.T) {

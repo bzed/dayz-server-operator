@@ -98,7 +98,7 @@ own. Point ``site.yaml`` at it and enable it per instance:
      allow_classes: []            # default: none
      deny_classes: ["Land_*"]     # trailing * = prefix
      vehicle_kinds: {bicycle: ["Bike_*"], helicopter: ["MyHeli_*"]}   # default: none
-     vehicle_forget_days: 7       # default; days a vehicle's record is kept after it stopped being reported
+     vehicle_forget_days: 7       # default; 1..3650; days a vehicle's record is kept after it stopped being reported
 
 Run ``dzo mod add dzo-admin --instance deerisle --server`` to install it, then
 start the instance. dzo recognises the mod by the name ``dzo-admin``.
@@ -134,7 +134,10 @@ Settings in ``instance.yaml`` under ``admin`` (see :doc:`configuration`):
   snapshots of the mod: the type, the last driver and the time of the last drive when the mod reports them, and
   when the vehicle was first seen. A vehicle missing from a snapshot (a restart, a storage problem) is only hidden
   and comes back with its record; it is forgotten after this many days. A vehicle back after longer starts a new
-  record. Nothing on the vehicles in the game changes. Taken up on the next ``dzo serve`` reload.
+  record. Nothing on the vehicles in the game changes. Records start once the mod reports drivers (``dzo-admin``
+  0.8.0, hello feature ``driver``): with an older mod nothing is recorded, so that the age of a vehicle does not
+  start long before the mod could tell who drove it, and recording begins when the mod is updated. The value is an
+  integer from 1 to 3650 (ten years). Taken up on the next ``dzo serve`` reload.
 
 Without dzo-admin the web interface cannot show the map or run actions. Other
 features that do not need it (status, RCon) are unaffected.
