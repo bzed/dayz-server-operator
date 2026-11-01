@@ -5,6 +5,7 @@ package vehicles
 
 import (
 	"context"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -27,8 +28,15 @@ type forgetCall struct {
 	cutoff   time.Time
 }
 
+type removedCall struct {
+	active []string
+	now    time.Time
+	cutoff time.Time
+}
+
 type fakeStore struct {
 	mu      sync.Mutex
+	removed []removedCall
 	syncs   []syncCall
 	forgets []forgetCall
 }
@@ -45,6 +53,19 @@ func (f *fakeStore) ForgetVehicles(_ context.Context, instance string, cutoff ti
 	defer f.mu.Unlock()
 	f.forgets = append(f.forgets, forgetCall{instance, cutoff})
 	return 0, nil
+}
+
+func (f *fakeStore) ForgetRemovedInstances(_ context.Context, active []string, now, cutoff time.Time) (int64, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.removed = append(f.removed, removedCall{slices.Sorted(slices.Values(active)), now, cutoff})
+	return 0, nil
+}
+
+func (f *fakeStore) nRemoved() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return len(f.removed)
 }
 
 func (f *fakeStore) nSyncs() int {
@@ -210,6 +231,23 @@ func TestRecorderSetStopsRemovedInstances(t *testing.T) {
 	rec.Set(ctx, hubs(src), []string{"alpha", "beta"})
 	rec.Set(ctx, hubs(src), []string{"alpha"}) // returns once beta has stopped
 	rec.Set(ctx, func(string) (Source, bool) { return nil, false }, []string{"alpha", "gone"})
+}
+
+func TestRecorderForgetsRemovedInstances(t *testing.T) {
+	st, src := &fakeStore{}, newSource()
+	tick := make(chan time.Time)
+	rec := &Recorder{Store: st, Tick: tick, Now: func() time.Time { return t0 }}
+	ctx, cancel := context.WithCancel(t.Context())
+	defer func() { cancel(); rec.Wait() }()
+	rec.Set(ctx, hubs(src), []string{"alpha", "beta"})
+	require.Equal(t, 1, st.nRemoved(), "a set forgets the removed instances")
+	rec.Set(ctx, hubs(src), []string{"alpha"})
+	require.Equal(t, 2, st.nRemoved())
+	tick <- t0 // the sweep of the remaining instance covers the removed ones too
+	require.Eventually(t, func() bool { return st.nRemoved() == 3 }, 5*time.Second, 5*time.Millisecond)
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	require.Equal(t, removedCall{[]string{"alpha"}, t0, t0.Add(-7 * 24 * time.Hour)}, st.removed[2])
 }
 
 func TestForgetAfter(t *testing.T) {

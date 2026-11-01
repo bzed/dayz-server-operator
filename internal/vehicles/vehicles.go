@@ -8,6 +8,8 @@ package vehicles
 
 import (
 	"context"
+	"maps"
+	"slices"
 	"sync"
 	"time"
 
@@ -32,6 +34,8 @@ func ForgetAfter(a site.AdminConfig) time.Duration {
 type Store interface {
 	SyncVehicles(ctx context.Context, instance string, seen []moderation.VehicleSeen, now time.Time) error
 	ForgetVehicles(ctx context.Context, instance string, cutoff time.Time) (int64, error)
+	// ForgetRemovedInstances forgets the records of instances not in active, after the default time.
+	ForgetRemovedInstances(ctx context.Context, active []string, now, cutoff time.Time) (int64, error)
 }
 
 // Source is what the recorder needs of an instance's hub (admin.Hub).
@@ -67,6 +71,11 @@ type Recorder struct {
 	mu    sync.Mutex
 	insts map[string]*running
 	wg    sync.WaitGroup
+
+	// active is the instance list of the last Set, read by the sweeps (which must not take mu: Set holds it
+	// while it waits for an instance to stop).
+	activeMu sync.Mutex
+	active   []string
 }
 
 type running struct {
@@ -113,6 +122,10 @@ func (r *Recorder) Set(ctx context.Context, hubs func(string) (Source, bool), in
 			delete(r.insts, name)
 		}
 	}
+	r.activeMu.Lock()
+	r.active = slices.Sorted(maps.Keys(want))
+	r.activeMu.Unlock()
+	r.sweepRemoved(ctx)
 	for name := range want {
 		if _, ok := r.insts[name]; ok {
 			continue
@@ -126,6 +139,18 @@ func (r *Recorder) Set(ctx context.Context, hubs func(string) (Source, bool), in
 		r.insts[name] = in
 		r.wg.Add(1)
 		go r.run(ictx, in, name, src)
+	}
+}
+
+// sweepRemoved forgets the records of instances that are no longer on the site, after the default time (the
+// settings of a removed instance are gone).
+func (r *Recorder) sweepRemoved(ctx context.Context) {
+	r.activeMu.Lock()
+	active := slices.Clone(r.active)
+	r.activeMu.Unlock()
+	now := r.now()
+	if _, err := r.Store.ForgetRemovedInstances(ctx, active, now, now.Add(-DefaultForgetDays*24*time.Hour)); err != nil && ctx.Err() == nil {
+		r.logf("vehicles: removed instances: %v", err)
 	}
 }
 
@@ -163,6 +188,7 @@ func (r *Recorder) run(ctx context.Context, in *running, name string, src Source
 			if _, err := r.Store.ForgetVehicles(ctx, name, cutoff); err != nil && ctx.Err() == nil {
 				r.logf("vehicles: %s: %v", name, err)
 			}
+			r.sweepRemoved(ctx)
 		}
 	}
 }

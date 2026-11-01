@@ -136,7 +136,9 @@ Settings in ``instance.yaml`` under ``admin`` (see :doc:`configuration`):
   record. Nothing on the vehicles in the game changes. Records start once the mod reports drivers (``dzo-admin``
   0.8.0, hello feature ``driver``): with an older mod nothing is recorded, so that the age of a vehicle does not
   start long before the mod could tell who drove it, and recording begins when the mod is updated. The value is an
-  integer from 1 to 3650 (ten years). Taken up on the next ``dzo serve`` reload.
+  integer from 1 to 3650 (ten years). Taken up on the next ``dzo serve`` reload. The records of an instance that
+  was removed from the site are forgotten too, after the default of 7 days (its own setting is gone with it),
+  at the next reload or hourly sweep of ``dzo serve``.
 
 Without dzo-admin the web interface cannot show the map or run actions. Other
 features that do not need it (status, RCon) are unaffected.

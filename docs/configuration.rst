@@ -760,7 +760,9 @@ Keys:
       record back; one that comes back later starts a new record (no driver, a new age). Not a site default (the
       ``admin`` block is per instance). The records are kept in ``dzo.sqlite``; nothing on the vehicles in the game
       changes. Taken up on the next ``dzo serve`` reload or restart; the sweep that forgets records runs hourly, and
-      records already forgotten are not restored by a longer value.
+      records already forgotten are not restored by a longer value. The records of an instance removed from the
+      site are forgotten after the default 7 days, whatever this value was (the setting is removed with the
+      instance), at the next reload or hourly sweep.
    ``admin_map.vanilla_events``
       Whether the map shows the events of the Central Economy as marker layers (default true). A
       rule with the same ``layer`` replaces one. Site default.

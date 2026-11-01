@@ -120,3 +120,39 @@ func (s *Store) ForgetVehicles(ctx context.Context, instance string, cutoff time
 	}
 	return n, nil
 }
+
+// ForgetRemovedInstances forgets the records of instances that are not in active (they were removed from the
+// site). Their visible rows are first marked hidden at now, so that the same cutoff as for a vanished vehicle
+// applies, then the rows hidden before cutoff are deleted. It returns how many rows were deleted.
+func (s *Store) ForgetRemovedInstances(ctx context.Context, active []string, now, cutoff time.Time) (int64, error) {
+	marks, args := "", []any{}
+	for i, n := range active {
+		if i > 0 {
+			marks += ", "
+		}
+		marks += "?"
+		args = append(args, n)
+	}
+	where := ""
+	if marks != "" {
+		where = " AND instance NOT IN (" + marks + ")" // marks holds only placeholders
+	}
+	var deleted int64
+	err := s.tx(ctx, func(tx *sql.Tx) error {
+		if _, err := tx.ExecContext(ctx, `UPDATE vehicles SET hidden_since = ? WHERE hidden_since IS NULL`+where,
+			append([]any{now.Unix()}, args...)...); err != nil {
+			return err
+		}
+		res, err := tx.ExecContext(ctx, `DELETE FROM vehicles WHERE hidden_since IS NOT NULL AND hidden_since < ?`+where,
+			append([]any{cutoff.Unix()}, args...)...)
+		if err != nil {
+			return err
+		}
+		deleted, err = res.RowsAffected()
+		return err
+	})
+	if err != nil {
+		return 0, fmt.Errorf("moderation: forget removed instances: %w", err)
+	}
+	return deleted, nil
+}

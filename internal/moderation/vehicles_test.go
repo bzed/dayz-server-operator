@@ -119,3 +119,29 @@ func TestLastUse(t *testing.T) {
 	require.True(t, VehicleRecord{FirstSeen: first}.LastUse().Equal(first))
 	require.True(t, VehicleRecord{FirstSeen: first, DrivenAt: driven}.LastUse().Equal(driven))
 }
+
+func TestForgetRemovedInstances(t *testing.T) {
+	s, _ := newStore(t)
+	syncV(t, s, "kept", t0, VehicleSeen{ID: "k", Type: "T"})
+	syncV(t, s, "gone", t0, VehicleSeen{ID: "g", Type: "T"})
+	count := func() int {
+		var n int
+		require.NoError(t, s.db.QueryRowContext(t.Context(), `SELECT COUNT(*) FROM vehicles`).Scan(&n))
+		return n
+	}
+	// First sweep: the rows of the removed instance are only marked, not yet past the cutoff.
+	n, err := s.ForgetRemovedInstances(t.Context(), []string{"kept"}, t0.Add(time.Hour), t0.Add(-6*24*time.Hour))
+	require.NoError(t, err)
+	require.EqualValues(t, 0, n)
+	require.Equal(t, 2, count())
+	// Later, past the cutoff: gone, while the active instance keeps its (visible) record.
+	n, err = s.ForgetRemovedInstances(t.Context(), []string{"kept"}, t0.Add(8*24*time.Hour), t0.Add(2*time.Hour))
+	require.NoError(t, err)
+	require.EqualValues(t, 1, n)
+	require.Equal(t, 1, count())
+	require.Len(t, records(t, s, "kept"), 1)
+	// Nothing active: everything removed goes the same way.
+	_, err = s.ForgetRemovedInstances(t.Context(), nil, t0.Add(9*24*time.Hour), t0.Add(9*24*time.Hour))
+	require.NoError(t, err)
+	require.Equal(t, 1, count(), "the freshly marked row stays until its cutoff")
+}

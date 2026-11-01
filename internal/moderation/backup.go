@@ -36,12 +36,27 @@ func backupNames(dir string) ([]string, error) {
 	var names []string
 	for _, e := range ents {
 		n := e.Name()
-		if e.Type().IsRegular() && strings.HasPrefix(n, backupPrefix) && strings.HasSuffix(n, backupSuffix) {
+		if e.Type().IsRegular() && isBackupName(n) {
 			names = append(names, n)
 		}
 	}
 	sort.Strings(names)
 	return names, nil
+}
+
+// isBackupName reports whether n is exactly dzo-<UTC stamp>.sqlite, as BackupTo writes it. Any other file
+// (a copy saved by hand, say) is neither returned nor rotated away.
+func isBackupName(n string) bool {
+	stamp, ok := strings.CutPrefix(n, backupPrefix)
+	if !ok {
+		return false
+	}
+	stamp, ok = strings.CutSuffix(stamp, backupSuffix)
+	if !ok {
+		return false
+	}
+	_, err := time.Parse(backupStamp, stamp)
+	return err == nil
 }
 
 // LatestBackup is the newest copy of the database in dir, or "" (and no error) when there is none.
@@ -59,9 +74,22 @@ func (s *Store) BackupTo(ctx context.Context, dir string, now time.Time, keep in
 	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return "", fmt.Errorf("moderation: backup: %w", err)
 	}
+	if err := os.Chmod(dir, 0o750); err != nil { //nolint:gosec // G302: a directory needs the x bit; MkdirAll leaves an existing one as it was
+		return "", fmt.Errorf("moderation: backup: %w", err)
+	}
 	path := filepath.Join(dir, backupPrefix+now.UTC().Format(backupStamp)+backupSuffix)
 	tmp := path + ".tmp"
 	if err := os.Remove(tmp); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return "", fmt.Errorf("moderation: backup: %w", err)
+	}
+	// VACUUM INTO accepts an empty file: create it 0600 so the copy is never readable by others, not even
+	// until the chmod below.
+	f, err := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600) //nolint:gosec // G304: tmp is built from the configured backup directory
+	if err != nil {
+		return "", fmt.Errorf("moderation: backup: %w", err)
+	}
+	if err := f.Close(); err != nil {
+		_ = os.Remove(tmp)
 		return "", fmt.Errorf("moderation: backup: %w", err)
 	}
 	if _, err := s.db.ExecContext(ctx, `VACUUM INTO ?`, tmp); err != nil {

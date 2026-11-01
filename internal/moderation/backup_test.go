@@ -6,6 +6,7 @@ package moderation
 import (
 	"os"
 	"path/filepath"
+	"syscall"
 	"testing"
 	"time"
 
@@ -103,4 +104,52 @@ func TestServiceBackupOffWritesNothing(t *testing.T) {
 	e.tick <- t0
 	e.tick <- t0
 	assert.NoDirExists(t, dir)
+}
+
+func TestBackupNamesOnlyTakeTheStampedForm(t *testing.T) {
+	s, _ := newStore(t)
+	dir := filepath.Join(t.TempDir(), "backup")
+	require.NoError(t, os.MkdirAll(dir, 0o750))
+	for _, n := range []string{"dzo-before-upgrade.sqlite", "dzo-20261101T120000Z.sqlite.bak", "dzo-2026.sqlite", "dzo-99999999T999999Z.sqlite"} {
+		require.NoError(t, os.WriteFile(filepath.Join(dir, n), []byte("x"), 0o600))
+	}
+	latest, err := LatestBackup(dir)
+	require.NoError(t, err)
+	assert.Empty(t, latest, "a hand-saved copy is not a rotating backup")
+
+	now := time.Date(2026, 11, 1, 12, 0, 0, 0, time.UTC)
+	for i := range 3 {
+		_, err := s.BackupTo(t.Context(), dir, now.Add(time.Duration(i)*time.Hour), 1)
+		require.NoError(t, err)
+	}
+	for _, n := range []string{"dzo-before-upgrade.sqlite", "dzo-2026.sqlite", "dzo-99999999T999999Z.sqlite"} {
+		assert.FileExists(t, filepath.Join(dir, n), "rotation leaves %s alone", n)
+	}
+	latest, err = LatestBackup(dir)
+	require.NoError(t, err)
+	assert.Equal(t, filepath.Join(dir, "dzo-20261101T140000Z.sqlite"), latest)
+}
+
+func TestBackupToTightensAnExistingDirectory(t *testing.T) {
+	s, _ := newStore(t)
+	dir := filepath.Join(t.TempDir(), "backup")
+	require.NoError(t, os.Mkdir(dir, 0o755))
+	require.NoError(t, os.Chmod(dir, 0o755)) // whatever the umask was
+	_, err := s.BackupTo(t.Context(), dir, time.Date(2026, 11, 1, 12, 0, 0, 0, time.UTC), 7)
+	require.NoError(t, err)
+	di, err := os.Stat(dir)
+	require.NoError(t, err)
+	assert.Equal(t, os.FileMode(0o750), di.Mode().Perm())
+}
+
+func TestBackupToCopyIsNeverWiderThan0600(t *testing.T) {
+	s, _ := newStore(t)
+	dir := filepath.Join(t.TempDir(), "backup")
+	old := syscall.Umask(0)
+	defer syscall.Umask(old)
+	path, err := s.BackupTo(t.Context(), dir, time.Date(2026, 11, 1, 12, 0, 0, 0, time.UTC), 7)
+	require.NoError(t, err)
+	fi, err := os.Stat(path)
+	require.NoError(t, err)
+	assert.Equal(t, os.FileMode(0o600), fi.Mode().Perm())
 }
