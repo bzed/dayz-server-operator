@@ -357,6 +357,19 @@ admin_map:
 	require.Contains(t, err.Error(), "only_if")
 }
 
+func TestAdminVehicleForgetDays(t *testing.T) {
+	var inst Instance
+	require.NoError(t, yaml.Unmarshal([]byte("name: a\nadmin: {vehicle_forget_days: 14}\n"), &inst))
+	require.NotNil(t, inst.Admin.VehicleForgetDays)
+	require.Equal(t, 14, *inst.Admin.VehicleForgetDays)
+	v := validInstance()
+	v.Admin = inst.Admin
+	require.NoError(t, v.Validate())
+	zero := 0
+	v.Admin.VehicleForgetDays = &zero
+	require.ErrorContains(t, v.Validate(), "admin.vehicle_forget_days must be at least 1")
+}
+
 func TestAgeParsesDaysAndDurations(t *testing.T) {
 	var s struct {
 		A Age `yaml:"a"`

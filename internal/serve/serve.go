@@ -31,6 +31,7 @@ import (
 	"github.com/bzed/dayz-server-operator/internal/resolve"
 	"github.com/bzed/dayz-server-operator/internal/site"
 	"github.com/bzed/dayz-server-operator/internal/tlsfiles"
+	"github.com/bzed/dayz-server-operator/internal/vehicles"
 )
 
 // gatewayHost is how a container with published (pasta) networking reaches
@@ -213,6 +214,35 @@ func KillfeedConfigs(cfg *config.Config, tree *site.Tree) ([]killfeed.Config, er
 	return out, nil
 }
 
+// forgetDays holds admin.vehicle_forget_days of every instance, replaced on a reload.
+type forgetDays struct {
+	mu sync.Mutex
+	by map[string]time.Duration
+}
+
+func (f *forgetDays) set(cfg *config.Config, tree *site.Tree) {
+	all, err := resolve.ResolveAll(cfg, tree)
+	if err != nil {
+		return // keep the old values; the reload reports the error itself
+	}
+	by := map[string]time.Duration{}
+	for _, inst := range all {
+		by[inst.Name] = vehicles.ForgetAfter(inst.Admin)
+	}
+	f.mu.Lock()
+	f.by = by
+	f.mu.Unlock()
+}
+
+func (f *forgetDays) get(name string) time.Duration {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if d, ok := f.by[name]; ok {
+		return d
+	}
+	return vehicles.DefaultForgetDays * 24 * time.Hour
+}
+
 // Run serves until ctx is done.
 func Run(ctx context.Context, cfg *config.Config, o Options) error {
 	logf := o.Logf
@@ -282,6 +312,13 @@ func Run(ctx context.Context, cfg *config.Config, o Options) error {
 		defer func() { pcancel(); lwg.Wait() }()
 	}
 	rec.Set(pctx, presence.FromRegistry(reg), reg.Names())
+	// The vehicle records: the last driver of each vehicle, from the vehicle snapshots. Stopped before the store closes.
+	vctx, vcancel := context.WithCancel(ctx)
+	forget := &forgetDays{}
+	forget.set(cfg, tree)
+	vrec := &vehicles.Recorder{Store: store, Logf: logf, Forget: forget.get}
+	defer func() { vcancel(); vrec.Wait() }()
+	vrec.Set(vctx, vehicles.FromRegistry(reg), reg.Names())
 	apiSrv := api.New(cfg.Serve.Installation, o.Version, reg, api.NewTokenStore(APITokens(cfg)), audit)
 	apiSrv.Moderation = svc
 	apiSrv.Vehicles = store
@@ -368,6 +405,8 @@ func Run(ctx context.Context, cfg *config.Config, o Options) error {
 				kf.Set(kctx, reg, cfgs)
 			}
 			rec.Set(pctx, presence.FromRegistry(reg), reg.Names())
+			forget.set(cfg, t)
+			vrec.Set(vctx, vehicles.FromRegistry(reg), reg.Names())
 			reg.LogTokens()
 			logf("site reloaded")
 		case err := <-errc:

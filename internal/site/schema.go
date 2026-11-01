@@ -422,6 +422,9 @@ type AdminConfig struct {
 	// classes dzo knows (admin.DefaultVehicleKinds): the map and the vehicle list show them with the
 	// icon of the kind.
 	VehicleKinds map[string][]string `yaml:"vehicle_kinds,omitempty"`
+	// VehicleForgetDays is how many days dzo keeps the record (last driver, first seen) of a vehicle that is
+	// no longer reported. Unset means 7; at least 1.
+	VehicleForgetDays *int `yaml:"vehicle_forget_days,omitempty"`
 }
 
 // MergeWatch combines the watch rules of the site defaults with an instance's, by layer name:
@@ -472,6 +475,9 @@ func (a AdminConfig) Validate() error {
 	}
 	if a.MoveOccupiedMax != nil && *a.MoveOccupiedMax < 0 {
 		return fmt.Errorf("admin.move_occupied_max must not be negative")
+	}
+	if a.VehicleForgetDays != nil && *a.VehicleForgetDays < 1 {
+		return fmt.Errorf("admin.vehicle_forget_days must be at least 1")
 	}
 	for k := range a.VehicleKinds {
 		if !admin.VehicleKindOK(k) {

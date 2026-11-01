@@ -602,6 +602,7 @@ below as "site default".
      allow_classes: []             # default: none
      deny_classes: ["Land_*"]      # default: none; items admins may not spawn (trailing * = prefix)
      vehicle_kinds: {bicycle: ["Bike_*"], helicopter: ["MyHeli_*"]}   # default: none
+     vehicle_forget_days: 7        # default; days a vehicle's record is kept after it stopped being reported
    admin_map:
      vanilla_events: true          # default
      watch:                        # default: none
@@ -747,6 +748,15 @@ Keys:
    ``admin.vehicle_kinds``
       Class name patterns by kind, ``bicycle``, ``boat`` or ``helicopter``, of other mods, on top of the
       classes dzo knows: the map and the vehicle list show them with the icon of the kind.
+   ``admin.vehicle_forget_days``
+      How many days ``dzo serve`` keeps the record of a vehicle (its last driver, the time of the last drive and
+      when it was first seen) after the vehicle stopped being reported by the mod, for instance because it was
+      destroyed, despawned or deleted. Default 7; an integer of at least 1, anything else is refused with
+      ``admin.vehicle_forget_days must be at least 1``. A vehicle that is reported again within that time gets its
+      record back; one that comes back later starts a new record (no driver, a new age). Not a site default (the
+      ``admin`` block is per instance). The records are kept in ``dzo.sqlite``; nothing on the vehicles in the game
+      changes. Taken up on the next ``dzo serve`` reload or restart; the sweep that forgets records runs hourly, and
+      records already forgotten are not restored by a longer value.
    ``admin_map.vanilla_events``
       Whether the map shows the events of the Central Economy as marker layers (default true). A
       rule with the same ``layer`` replaces one. Site default.
