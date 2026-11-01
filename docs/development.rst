@@ -89,14 +89,12 @@ lock, which also catches a build that is not reproducible. After a change of a s
 ``make servermods-lock`` and commit the lock file with the new submodule commit. The mod's commit must
 be pushed to its own repository first, or CI cannot check it out.
 
-While 1.30 is experimental, a servermod has to load on **both** 1.29 (stable,
-Steam app 223350) and 1.30 (experimental, app 1042420, "DayZ Server Exp"). One
-PBO serves both; version-specific code belongs behind ``#ifdef DAYZ_1_29`` with
-the new code in ``#else``. Boot it on each, one server tree per version, never
-two servers on one tree and never default ports. ``dzo test boot --server
-<dir>`` takes the experimental install directory; ``--server steam`` is the
-stable one. Each server build needs its own vanilla baseline
-(``dzo test boot --vanilla``).
+A servermod targets DayZ 1.30, the current stable version (Steam app 223350); there is no
+version-specific code for older builds. Boot it on the stable server and on the experimental
+one (app 1042420, "DayZ Server Exp"), which shows what the next build changes: one server tree
+per version, never two servers on one tree and never default ports. ``dzo test boot --server
+<dir>`` takes the experimental install directory; ``--server steam`` is the stable one. Each
+server build needs its own vanilla baseline (``dzo test boot --vanilla``).
 
 The 1.30 ``FindFile`` bug has a test of its own. ``make test-findfile`` (``scripts/test-findfile.sh``)
 boots an experimental server with CF-Test (workshop item 1625463737, subscribed in the Steam
@@ -110,7 +108,7 @@ lines show what the engine's own ``FindFile`` finds for the same patterns (nothi
 network access for the vanilla mission.
 
 The player actions of dzo-admin need a connected player, so they have their own test:
-``make test-client`` (``scripts/test-client.sh``, ``--exp`` for 1.30). It builds the servermod and
+``make test-client`` (``scripts/test-client.sh``, ``--exp`` for the experimental build). It builds the servermod and
 the probe servermod ``testmods/dzo-client-probe``, starts a local server with both (BattlEye off,
 no password, free ports), a real ``dzo serve`` and the DayZ client headless (sway, through the
 ``dayz-dev`` skill's scripts, ``DAYZ_DEV_SCRIPTS``), and drives them with ``dzo player`` and

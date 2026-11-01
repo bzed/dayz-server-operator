@@ -9,8 +9,10 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"math"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -22,13 +24,17 @@ import (
 const (
 	resendAfter    = 3 * time.Second
 	commandTimeout = 30 * time.Second
-	onlineWindow   = 10 * time.Second
+	// resultKeep is how long the result of a finished command can still be read by its id.
+	resultKeep   = 10 * time.Minute
+	onlineWindow = 10 * time.Second
 )
 
 // Errors returned to callers of Submit.
 var (
 	ErrOffline = errors.New("admin: dzo-admin is not connected for this instance")
 	ErrTimeout = errors.New("admin: the mod did not answer in time")
+	// ErrUnknownCommand is a command id the hub never gave out, or whose result is older than resultKeep.
+	ErrUnknownCommand = errors.New("admin: unknown command")
 )
 
 // StreamEvent is something that changed in the world state, for the stream.
@@ -38,11 +44,12 @@ type StreamEvent struct {
 }
 
 type pending struct {
-	cmd    Command
-	sentAt time.Time // zero while still queued
-	queued time.Time
-	result *Result
-	done   chan struct{}
+	cmd      Command
+	sentAt   time.Time // zero while still queued
+	queued   time.Time
+	result   *Result
+	finished time.Time
+	done     chan struct{}
 }
 
 // Hello is what the mod announced about itself.
@@ -58,6 +65,13 @@ type Hello struct {
 // Has reports whether the mod announced feature. A nil Hello has none.
 func (h *Hello) Has(feature string) bool {
 	return h != nil && slices.Contains(h.Features, feature)
+}
+
+// ReportsDrivers tells whether the mod announced that it reports the last driver of a vehicle.
+func (h *Hub) ReportsDrivers() bool {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.hello.Has(FeatureDriver)
 }
 
 // NotifyTypes are the Expansion notification types a message can use.
@@ -178,6 +192,7 @@ func (h *Hub) Sync(req SyncRequest) SyncReply {
 	if req.Vehicles != nil {
 		h.vehicles = req.Vehicles
 		for i := range h.vehicles {
+			h.vehicles[i].checkDrive(now)
 			if h.vehicles[i].Kind == "car" {
 				if k := kindOf(h.Kinds, h.vehicles[i].Type); k != "" {
 					h.vehicles[i].Kind = k
@@ -229,7 +244,43 @@ func (h *Hub) Sync(req SyncRequest) SyncReply {
 		live = append(live, p)
 	}
 	h.queue = live
+	for id, p := range h.byID {
+		if p.result != nil && now.Sub(p.finished) > resultKeep {
+			delete(h.byID, id)
+		}
+	}
 	return reply
+}
+
+const (
+	maxDriveAge   = 400 * 24 * time.Hour // a drive older than this is not believed
+	maxDriverName = 64                   // runes of a driver name kept
+)
+
+// checkDrive validates the driver data the mod sent: a bad driver ID or drive age drops the drive (the
+// vehicle stays), otherwise DrivenAt is set from DrivenAgo and the name is clipped.
+func (v *Vehicle) checkDrive(now time.Time) {
+	v.DrivenAt = time.Time{}
+	age := v.DrivenAgo
+	if v.Driver == "" || !validSteamID(v.Driver) || math.IsNaN(age) || math.IsInf(age, 0) ||
+		age < 0 || age > maxDriveAge.Seconds() {
+		v.Driver, v.DriverName, v.DrivenAgo = "", "", 0
+		return
+	}
+	v.DrivenAt = now.Add(-time.Duration(age * float64(time.Second)))
+	if r := []rune(v.DriverName); len(r) > maxDriverName {
+		v.DriverName = string(r[:maxDriverName]) + "…"
+	}
+}
+
+// validSteamID is moderation.ValidSteamID (moderation imports admin, so admin cannot import it); a test
+// in moderation checks that the two agree.
+func validSteamID(s string) bool {
+	if len(s) != 17 || !strings.HasPrefix(s, "7656119") {
+		return false
+	}
+	_, err := strconv.ParseUint(s, 10, 64)
+	return err == nil
 }
 
 // linkVehiclesLocked sets Player.Vehicle from the vehicles' occupants.
@@ -251,6 +302,7 @@ func (h *Hub) finishLocked(r Result) {
 		return
 	}
 	p.result = &r
+	p.finished = h.now()
 	close(p.done)
 	h.emit("result", r)
 }
@@ -474,6 +526,9 @@ func (h *Hub) enqueue(cmd Command) (*pending, error) {
 	if !h.connectedLocked() {
 		return nil, ErrOffline
 	}
+	if cmd.Kind == KindVehicleFlip && h.isBoatLocked(cmd.Vehicle) {
+		return nil, errors.New("admin: boats cannot be flipped")
+	}
 	if cmd.Kind == KindMessage && cmd.Style == "expansion" && !h.hello.Has("expansion") {
 		return nil, errors.New("admin: expansion notifications are not available (the mod does not report Expansion)")
 	}
@@ -484,15 +539,47 @@ func (h *Hub) enqueue(cmd Command) (*pending, error) {
 	return p, nil
 }
 
-// Result returns the result of a command id, and whether it has arrived.
-func (h *Hub) Result(id string) (Result, bool) {
+// isBoatLocked reports whether the vehicle id is a boat in the last vehicle list (the mod's kind, or
+// admin.vehicle_kinds).
+func (h *Hub) isBoatLocked(id string) bool {
+	for _, v := range h.vehicles {
+		if v.ID == id {
+			return v.Kind == "boat"
+		}
+	}
+	return false
+}
+
+// Wait waits for the result of a command that Enqueue returned, until ctx is done (ErrTimeout, with the id in
+// the result). An unknown id is an error.
+func (h *Hub) Wait(ctx context.Context, id string) (Result, error) {
+	h.mu.Lock()
+	p := h.byID[id]
+	h.mu.Unlock()
+	if p == nil {
+		return Result{ID: id}, fmt.Errorf("%w %s", ErrUnknownCommand, id)
+	}
+	select {
+	case <-p.done:
+		return *p.result, nil
+	case <-ctx.Done():
+		return Result{ID: id}, ErrTimeout
+	}
+}
+
+// Result returns the result of a command id, and whether it has arrived. An id that was never given
+// out, or whose result is older than resultKeep, is ErrUnknownCommand.
+func (h *Hub) Result(id string) (Result, bool, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	p := h.byID[id]
-	if p == nil || p.result == nil {
-		return Result{ID: id}, false
+	switch {
+	case p == nil:
+		return Result{ID: id}, false, ErrUnknownCommand
+	case p.result == nil:
+		return Result{ID: id}, false, nil
 	}
-	return *p.result, true
+	return *p.result, true, nil
 }
 
 // validate checks a command's required fields and the spawn allow/deny

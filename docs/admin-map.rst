@@ -41,8 +41,10 @@ admin actions:
 The mod connects *out* to dzo: about once a second it posts what changed and the
 results of finished actions to ``dzo serve``, and gets the next actions in the
 reply. Nothing connects into the game server. The mod knows persistent
-vehicles of the car type (``CarScript``, which includes most modded cars) and, on DayZ 1.30,
-motorbikes (``MotorbikeScript``) and boats (``BoatScript``); all of them can be spawned, repaired, flipped, moved and deleted.
+vehicles of the car type (``CarScript``, which includes most modded cars),
+motorbikes (``MotorbikeScript``) and boats (``BoatScript``); all of them can be spawned, repaired, moved and deleted, and all but
+boats flipped: a boat cannot capsize in the game, so a flip of a boat (a ``boat`` kind, also one of ``admin.vehicle_kinds``) is
+refused with ``boats cannot be flipped``.
 Each vehicle has a kind, ``car``, ``motorbike``, ``boat``, ``bicycle`` or ``helicopter``, shown in the vehicle list, with an icon of its own on the map.
 With DayZ Expansion loaded the mod also reports the vehicle's owner (the name on its key chain), and the
 vehicles under an Expansion cover (``*_Cover``, stored by Expansion, not in the world as cars) as
@@ -57,8 +59,7 @@ other mods.
 Boats (vanilla ``Boat_01_*`` and the Expansion boats, whose Zodiac is a car to the game and Boat_01 a ``BoatScript``)
 are reported as kind ``boat`` by the mod itself, with a ship icon. A boat has fuel and parts but no wheels: ``wheels`` repairs
 nothing on it and ``fluids`` fills its tank. A spawned or moved boat is put on the surface of the water, not on the
-seabed (the height of the water above the ground is added where there is water). Boats need dzo-admin 0.7.0 and DayZ 1.30;
-1.29 does not report them. ``vehicle_kinds: {boat: [...]}`` adds the boat classes of other mods that are cars to the game.
+seabed (the height of the water above the ground is added where there is water). Boats need dzo-admin 0.7.0. ``vehicle_kinds: {boat: [...]}`` adds the boat classes of other mods that are cars to the game.
 
 Markers have no frame, so that the icon gets all the room, and are told apart by shape and edge: players are round dots
 in the colour of their health, with a white ring; vehicles are white icons with a dark edge; events and other markers are
@@ -98,6 +99,7 @@ own. Point ``site.yaml`` at it and enable it per instance:
      allow_classes: []            # default: none
      deny_classes: ["Land_*"]     # trailing * = prefix
      vehicle_kinds: {bicycle: ["Bike_*"], helicopter: ["MyHeli_*"]}   # default: none
+     vehicle_forget_days: 7       # default; 1..3650; days a vehicle's record is kept after it stopped being reported
 
 Run ``dzo mod add dzo-admin --instance deerisle --server`` to install it, then
 start the instance. dzo recognises the mod by the name ``dzo-admin``.
@@ -127,7 +129,18 @@ Settings in ``instance.yaml`` under ``admin`` (see :doc:`configuration`):
   start of the server, so a change takes effect with the next ``dzo instance render`` and restart;
 * ``vehicle_kinds``: class names (one ``*`` allowed) by kind, ``bicycle``, ``boat`` or ``helicopter``, of other
   mods, on top of the classes dzo knows:
-  ``vehicle_kinds: {helicopter: ["MyHeli_*"], bicycle: ["Tandem*"]}``.
+  ``vehicle_kinds: {helicopter: ["MyHeli_*"], bicycle: ["Tandem*"]}``;
+* ``vehicle_forget_days``: how long ``dzo serve`` keeps the record of a vehicle that is no longer reported
+  (default 7, at least 1). ``dzo serve`` keeps one record per vehicle in its database, taken from the vehicle
+  snapshots of the mod: the type, the last driver and the time of the last drive when the mod reports them, and
+  when the vehicle was first seen. A vehicle missing from a snapshot (a restart, a storage problem) is only hidden
+  and comes back with its record; it is forgotten after this many days. A vehicle back after longer starts a new
+  record. Nothing on the vehicles in the game changes. Records start once the mod reports drivers (``dzo-admin``
+  0.8.0, hello feature ``driver``): with an older mod nothing is recorded, so that the age of a vehicle does not
+  start long before the mod could tell who drove it, and recording begins when the mod is updated. The value is an
+  integer from 1 to 3650 (ten years). Taken up on the next ``dzo serve`` reload. The records of an instance that
+  was removed from the site are forgotten too, after the default of 7 days (its own setting is gone with it),
+  at the next reload or hourly sweep of ``dzo serve``.
 
 Without dzo-admin the web interface cannot show the map or run actions. Other
 features that do not need it (status, RCon) are unaffected.

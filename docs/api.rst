@@ -23,7 +23,8 @@ API and on ``serve.mod_listen`` (default ``127.0.0.1:2400``) for the
 :doc:`dzo-admin mods <admin-map>`. Both refuse non-local addresses unless
 ``serve.allow_insecure_http`` is set: put a reverse proxy with HTTPS in front
 of the API. Send ``SIGHUP`` after changing the site repository; new instances
-appear and the live state of the others is kept.
+appear, the live state of the others is kept, and an instance removed from the site is gone: its routes
+answer ``404``, its mod is turned away and its vehicle records are forgotten after 7 days.
 
 Tokens
 ------
@@ -271,7 +272,7 @@ All paths start with ``/api/v1``. Responses are JSON.
    * - ``GET /instances/<i>/players``
      - online players: Steam ID, name, position, health, ping, vehicle
    * - ``GET /instances/<i>/vehicles``
-     - persistent vehicles: id, kind (``car``, ``motorbike``, ``boat``, ``bicycle`` or ``helicopter``), class, position, health, fuel, crew, and with DayZ Expansion ``owner`` and ``covered``
+     - persistent vehicles: id, kind (``car``, ``motorbike``, ``boat``, ``bicycle`` or ``helicopter``), class, position, health, fuel, crew, and with DayZ Expansion ``owner`` and ``covered``. Four more fields come from dzo's own vehicle records in ``dzo.sqlite``, not from the mod's snapshot: ``last_driver`` (Steam ID) and ``last_driver_name`` of the last player to take the driver's seat, ``last_driven`` (RFC 3339 time of that drive) and ``first_seen`` (when dzo first saw the vehicle). The three driver fields are left out of a vehicle that was never seen driven (``first_seen`` then dates it), and all four are left out when dzo has no record yet or runs without the database. Passengers do not count as drivers. The list and the ``vehicles`` stream event also carry the mod's raw fields ``driver`` (Steam ID of the driver now or last seen), ``driver_name`` and ``driven_ago`` (seconds since that driver was in the seat, ``0`` while somebody is seated; left out when the mod does not report drivers); dzo turns them into the ``last_*`` fields above. The ``vehicles`` stream event does not carry the four fields from the database. A failing database read answers 500
    * - ``GET /instances/<i>/events``
      - active events (effect areas, markers from mods)
    * - ``GET /instances/<i>/layers``
@@ -351,7 +352,7 @@ Acting
        ``wheels``, ``fluids`` (refuel) or ``missing`` (fit missing parts)
    * - ``POST /instances/<i>/vehicles/<id>/flip``
      - ``operator``
-     - stand the vehicle upright on its wheels
+     - stand the vehicle upright on its wheels; a boat is refused (``400`` ``admin: boats cannot be flipped``)
    * - ``POST /instances/<i>/vehicles/<id>/move`` ``{"x", "z"}``
      - ``operator`` (``player.teleport``)
      - put the vehicle on the ground at ``x``/``z``, upright, at rest and with its heading, to pull a stuck one out. Players inside
@@ -361,6 +362,12 @@ Acting
    * - ``POST /instances/<i>/flags/<id>/raise``
      - ``operator``
      - raise a territory flag to the top of its pole and fill its timer (the 40 days a freshly raised flag has); ``<id>`` is the id of its marker on the ``Flags`` layer
+   * - ``GET /instances/<i>/vehicles/unused?days=<n>``
+     - ``operator`` (``vehicle.delete``)
+     - the preview of a cleanup: the vehicles nobody has driven for more than ``days`` days, oldest first, as ``{"days", "tracked_since", "vehicles"}``. ``days`` is a whole number from 1 to 3650; anything else answers ``400`` ``days must be a whole number from 1 to 3650``. A vehicle counts as unused from its ``last_driven`` time, or from ``first_seen`` when it was never seen driven (so a new vehicle is not offered before ``days`` days after dzo first saw it). Vehicles with someone inside, covered Expansion vehicles and vehicles without any recorded time are never listed. ``tracked_since`` is the oldest ``first_seen`` among the vehicles on the map: dzo cannot know about drives before it. Answers ``409`` ``the dzo-admin mod of this instance does not report drivers; update it to 0.8.0`` when the mod's hello lacks the ``driver`` feature, because every vehicle would look never driven; ``503`` when the mod is not connected; ``500`` when the records cannot be read. The list is not capped by the API (the web preview shows the 500 longest unused, as a cleanup takes at most 500 ids). Needs dzo-admin 0.8.0
+   * - ``POST /instances/<i>/vehicles/cleanup`` ``{"days", "ids"}``
+     - ``operator`` (``vehicle.delete``)
+     - delete the vehicles of a confirmed preview: ``ids`` holds 1 to 500 vehicle ids (``400`` ``at most 500 vehicles per cleanup`` otherwise), ``days`` is as above. Every id is checked again against the current vehicle list at this moment, and one that is no longer unused is skipped, the others are deleted. It never uses ``force``. The answer is ``{"deleted": [ids], "skipped": [{"id", "reason"}], "pending": [{"id", "command"}]}`` with the reasons ``not on the map``, ``crew inside``, ``covered by Expansion`` and ``used since the preview`` (driven or first seen again within ``days`` days); a command that cannot be queued is skipped with its error. The answer is the mod's: the request queues one ``vehicle_delete`` per remaining id and waits for all of the answers under one deadline of 25 seconds. A vehicle is in ``deleted`` only when the mod answered OK; one the mod refused (a player got in, the vehicle is in use) is in ``skipped`` with the mod's message as the reason, and one the mod did not answer in time is in ``pending`` with the id of its ``vehicle_delete`` command: it stays queued and may still be deleted, and ``GET /instances/<i>/commands/<command>`` tells the outcome later (the hub gives up on a command after 30 seconds unanswered and reports ``admin: the mod did not answer in time``). The request counts once against the rate limit of the token, not once per vehicle. Each id writes an audit entry with the action ``vehicle_delete``, the vehicle as target and the detail ``cleanup: not driven for <days> days``; each entry is written from the real answer: ``ok`` with the mod's message for a deleted vehicle, not ``ok`` with the reason (ours or the mod's) as result for a skipped one, and not ``ok`` with ``no answer yet, the mod may still delete it (command <command>)`` for a pending one. A request refused by the rate limit (``429``) writes one entry with the target ``<n> vehicles`` and the result ``rate limit reached, try again in a minute``. The ``409`` and ``503`` answers are as for the preview
    * - ``DELETE /instances/<i>/vehicles/<id>[?force=1]``
      - ``operator``
      - delete a vehicle (``force``: even with crew inside)
@@ -377,7 +384,9 @@ Actions are carried out by the game server, so the call waits for its answer:
   target).
 * ``?wait=<seconds>`` changes how long to wait (default 10, at most 25).
   ``?wait=0`` returns ``202`` with a command ``id`` at once; poll
-  ``GET /instances/<i>/commands/<id>`` (``202`` while pending).
+  ``GET /instances/<i>/commands/<id>`` (``202`` while pending). A result can be read for 10 minutes
+  after the mod answered (or the command timed out after 30 seconds); after that, and for an id that was
+  never given out, the answer is ``404`` ``unknown command (results are kept for 10 minutes)``.
 
 Every action, including refused and rate-limited ones, is written to the audit
 log (``${paths.db}/audit.jsonl``) with the actor, the source, the target and the

@@ -72,7 +72,7 @@ web_tests() {
 
 # server_tests: needs the server, dzo serve and the probe, no client.
 server_tests() {
-# 1.30 only: Motorbike is not a Car, dzo-admin keeps a registry for it. 1.29 has no motorbikes.
+# Motorbike is not a Car, dzo-admin keeps a registry for it.
 # The world already has motorbikes of the economy: the probe's is the id that is new.
 vl() { "$work/dzo" vehicle list t1 --config "$work/config.yaml" --token-file "$work/api.token" "$@"; }
 vl | awk '$2 == "motorbike" {print $1}' | sort >"$work/bikes.before"
@@ -125,8 +125,8 @@ boat_checks() {
 	"$work/dzo" vehicle repair t1 "$id" --scope missing --config "$work/config.yaml" --token-file "$work/api.token" >/dev/null || s=1
 	verdict "$label: repair" $s
 	s=0
-	"$work/dzo" vehicle flip t1 "$id" --config "$work/config.yaml" --token-file "$work/api.token" >/dev/null || s=1
-	verdict "$label: flip" $s
+	"$work/dzo" vehicle flip t1 "$id" --config "$work/config.yaml" --token-file "$work/api.token" 2>&1 | grep -q 'boats cannot be flipped' || s=1
+	verdict "$label: flip is refused" $s
 	s=0
 	"$work/dzo" vehicle move t1 "$id" --x "$((x + 150))" --z "$z" --config "$work/config.yaml" --token-file "$work/api.token" | grep -q ok || s=1
 	waitfor 30 "curl -s -H 'Authorization: Bearer $(cat "$work/api.token")' http://127.0.0.1:$api/api/v1/instances/t1/vehicles | jq -e --arg id '$id' '.[] | select(.id == \$id and .x > $x + 140)' >/dev/null" || s=1
@@ -641,7 +641,7 @@ dzo player msg t1 all "notification with a title" --style notification --title R
 verdict "message (notification with title and seconds)" $s
 if [ "$expansion" = 1 ]; then
 	s=1
-	grep -q 'DZOAdmin.*features: expansion' "$script" && s=0
+	grep -q 'DZOAdmin.*features:.*expansion' "$script" && s=0
 	verdict "dzo-admin reports expansion" $s
 	shots=${DZO_SHOTS_DIR:-$work/shots}
 	mkdir -p "$shots"
@@ -734,6 +734,14 @@ verdict "teleport is refused in a vehicle" $s
 s=0
 waitfor 30 "'$work/dzo' vehicle list t1 --config '$work/config.yaml' --token-file '$work/api.token' | grep -q 'Offroad_02.*crew 1'" || s=1
 verdict "vehicle state: the car has crew 1" $s
+# Task 7 (last driver): the mod reports who sits in the driver's seat; the hub keeps the record.
+pid=$(dzo player list t1 | awk '/dzotester/{print $1}')
+s=0
+waitfor 30 "curl -s -H 'Authorization: Bearer $(cat "$work/api.token")' http://127.0.0.1:$api/api/v1/instances/t1/vehicles | jq -e --arg p '$pid' '.[] | select(.type == \"Offroad_02\" and .driver == \$p)' >/dev/null" || s=1
+verdict "vehicle state: the car has a driver" $s
+s=0
+grep -q 'DZOAdmin.*features:.*driver' "$script" || s=1
+verdict "hello: the mod reports the driver feature" $s
 
 # Moving a car with the player inside: refused beyond the cap, otherwise the player stays in the seat
 # and loses no health.
@@ -756,6 +764,11 @@ verdict "vehicle move: the player still sits in the car" $s
 s=1
 [ -n "$hp0" ] && [ "$(pfield hp)" -ge "$hp0" ] && s=0
 verdict "vehicle move: the player is not hurt (hp $hp0 -> $(pfield hp))" $s
+# NEEDS the API of the vehicle-last-driver Tasks 4 and 5 (last_driver, last_driven from the vehicle
+# records); it cannot pass on a tree without them, re-run after the merge.
+s=0
+waitfor 30 "curl -s -H 'Authorization: Bearer $(cat "$work/api.token")' http://127.0.0.1:$api/api/v1/instances/t1/vehicles | jq -e --arg p '$pid' '.[] | select(.type == \"Offroad_02\" and .last_driver == \$p and (.last_driven // 0) > 0)' >/dev/null" || s=1
+verdict "vehicle record: the last driver is kept" $s
 
 server_tests
 # Heal, fix gear and kill, last: a dead player cannot be used for anything after.

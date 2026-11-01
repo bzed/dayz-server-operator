@@ -4,6 +4,7 @@
 package backup
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -93,4 +94,35 @@ func TestForBuildsTheManager(t *testing.T) {
 	require.NotNil(t, m.PostBackup)
 	err := m.PostBackup(t.Context(), "/snap")
 	assert.Error(t, err, "a hook that cannot run must fail the post-backup step")
+}
+
+func TestPostBackupHookGetsTheDatabaseCopy(t *testing.T) {
+	cfg := testConfig(t)
+	cfg.Paths.DB = filepath.Join(t.TempDir(), "db")
+	inst := &resolve.Instance{Name: "x", Paths: resolve.Paths{Root: filepath.Join(cfg.Paths.Instances, "x")}}
+	siteDir := filepath.Join(cfg.Paths.Site, "instances", "x")
+	require.NoError(t, os.MkdirAll(siteDir, 0o750))
+	out := filepath.Join(t.TempDir(), "stdin.json")
+	require.NoError(t, os.WriteFile(filepath.Join(siteDir, "hook.sh"), []byte("#!/bin/sh\ncat > "+out+"\n"), 0o700)) //nolint:gosec // a test hook must be executable
+	inst.Hooks.PostBackup = []string{filepath.Join(siteDir, "hook.sh")}
+
+	run := func() map[string]any {
+		require.NoError(t, os.RemoveAll(out))
+		require.NoError(t, For(cfg, inst).PostBackup(t.Context(), "/snap"))
+		b, err := os.ReadFile(out)
+		require.NoError(t, err)
+		var got struct {
+			Extra map[string]any `json:"extra"`
+		}
+		require.NoError(t, json.Unmarshal(b, &got))
+		return got.Extra
+	}
+	assert.NotContains(t, run(), "db_backup", "no copy yet")
+	dir := DBBackupDir(cfg)
+	require.NoError(t, os.MkdirAll(dir, 0o750))
+	copyPath := filepath.Join(dir, "dzo-20261101T120000Z.sqlite")
+	require.NoError(t, os.WriteFile(copyPath, nil, 0o600))
+	extra := run()
+	assert.Equal(t, copyPath, extra["db_backup"])
+	assert.Equal(t, "/snap", extra["snapshot"])
 }

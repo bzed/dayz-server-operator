@@ -167,8 +167,33 @@ can be undone, and the data it replaces is kept as a snapshot of reason
 ``replaced``. If the restore fails, the instance is left as it was.
 
 What is not there yet: the snapshot before a server or mod update (those
-changes are not automated yet), and the backup of the database, which does not
-exist yet.
+changes are not automated yet).
+
+The database
+------------
+
+Bans, the player history, web users and the audit index live in
+``<paths.db>/dzo.sqlite``, which is not part of an instance snapshot. ``dzo
+serve`` therefore writes a consistent copy of it every ``serve.db_backup_hours``
+(default 24, ``0`` turns it off) to ``<paths.db>/backup/dzo-<UTC time>.sqlite``
+and keeps the newest ``serve.db_backup_keep`` (default 7), see
+:doc:`configuration`. The copy is made while the server runs. Back up
+``<paths.db>/backup`` with the rest of ``paths.db``. Each copy is created
+``0600``, and the directory is set to ``0750`` on every copy, also when it
+existed before. Only files named exactly ``dzo-<UTC time>.sqlite`` (for
+example ``dzo-20261101T120000Z.sqlite``) count as copies: a file you saved there
+by hand, such as ``dzo-before-upgrade.sqlite``, is never offered as the newest
+copy and never deleted by the rotation.
+
+``post_backup`` hooks get the newest copy in their stdin JSON as
+``extra.db_backup`` (the key is absent when there is no copy yet), next to
+``extra.snapshot``, so a hook that ships snapshots offsite can ship the database
+too.
+
+To restore, stop ``dzo serve``, copy the chosen backup over
+``<paths.db>/dzo.sqlite``, delete ``<paths.db>/dzo.sqlite-wal`` and
+``<paths.db>/dzo.sqlite-shm`` if they exist, and start ``dzo serve`` again.
+Entries written after the copy was made are lost.
 
 Offsite copies
 --------------

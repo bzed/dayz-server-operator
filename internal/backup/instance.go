@@ -13,6 +13,7 @@ import (
 	"github.com/bzed/dayz-server-operator/internal/btrfs"
 	"github.com/bzed/dayz-server-operator/internal/config"
 	"github.com/bzed/dayz-server-operator/internal/hooks"
+	"github.com/bzed/dayz-server-operator/internal/moderation"
 	"github.com/bzed/dayz-server-operator/internal/resolve"
 	"github.com/bzed/dayz-server-operator/internal/site"
 )
@@ -29,6 +30,9 @@ func PolicyOf(c site.BackupConfig) Policy {
 	return p
 }
 
+// DBBackupDir is where dzo serve writes the copies of the database: <paths.db>/backup.
+func DBBackupDir(cfg *config.Config) string { return filepath.Join(cfg.Paths.DB, "backup") }
+
 // For builds the manager of a resolved instance: its subvolume under
 // paths.instances, its snapshots under paths.snapshots, the retention of the
 // instance's backup config and its post_backup hooks.
@@ -41,7 +45,11 @@ func For(cfg *config.Config, inst *resolve.Instance) *Manager {
 		runner := &hooks.Runner{Dir: filepath.Join(cfg.Paths.Site, "instances", inst.Name)}
 		m.PostBackup = func(ctx context.Context, path string) error {
 			var failed []string
-			for _, r := range hooks.RunAll(ctx, runner, hs, hooks.Context{Instance: inst.Name, Point: "post_backup", Extra: map[string]any{"snapshot": path}}, false) {
+			extra := map[string]any{"snapshot": path}
+			if db, err := moderation.LatestBackup(DBBackupDir(cfg)); err == nil && db != "" {
+				extra["db_backup"] = db // the newest consistent copy of dzo.sqlite, for the hook to ship along
+			}
+			for _, r := range hooks.RunAll(ctx, runner, hs, hooks.Context{Instance: inst.Name, Point: "post_backup", Extra: extra}, false) {
 				if r.Err != nil {
 					failed = append(failed, r.Err.Error())
 				}

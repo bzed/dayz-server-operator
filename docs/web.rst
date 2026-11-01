@@ -269,8 +269,34 @@ Instance
    as an Expansion notification of a type you pick, with an optional title and duration), the player list (refreshed every 5 seconds) with a panel of
    actions per player (message, teleport to coordinates or to another player, heal, fix gear, kick with a reason, kill after a confirmation,
    give item with a search over the server's item classes), and the vehicle list
-   with repair (everything, or only body, parts, wheels, fuel or missing parts), flip and delete (moving a vehicle is on the map). The
-   actions open directly under the player or vehicle they apply to. Banning is a link
+   with repair (everything, or only body, parts, wheels, fuel or missing parts), flip (not for boats) and delete (moving a vehicle is on the map). The
+   actions open directly under the player or vehicle they apply to. The vehicle list also shows who drove each vehicle last (the name links to
+   that player, the Steam ID is in the tooltip) and when, as "3d 0h ago" with the exact time (UTC) in the tooltip. Only the driver's
+   seat counts, passengers do not. A vehicle nobody has been seen driving since dzo first saw it reads "not since" and that date
+   (the day dzo first saw the vehicle); this needs a ``dzo-admin`` that reports drivers, and the column is empty without a
+   record database. The "Last driven" column sorts by that time. The position links to the map, which opens zoomed in on the vehicle
+   with the class as the label, followed by the owner (the Expansion keychain) and the last driver when they are known, for example
+   ``Offroad_02 (owner Bob, last driver Dora)``. Owner and last driver are named apart, also when they are the same person.
+
+   **Clean up** (above the vehicle list, for people who may delete vehicles; a viewer sees no button and the two routes answer
+   ``403``) deletes the vehicles nobody has driven for a chosen time, in two steps. First you choose the threshold: 2 weeks
+   (14 days), 1 month (30), 2 months (60) or a number of days from 1 to 3650 (anything else shows
+   ``days must be a whole number from 1 to 3650``). The preview then lists, oldest first, the vehicles with no one inside that
+   were last driven longer ago than that (class, kind, position with the map link, last driver, last driven, health); a vehicle
+   never seen driven counts from the day dzo first saw it. Vehicles with crew inside and covered Expansion vehicles are never
+   listed and never deleted. With no match the page says ``No vehicle has gone unused for N days.``; when dzo has tracked the
+   instance for less than N days it adds ``dzo has been tracking vehicles on this instance only since <date>; no vehicle can be
+   older than that yet.`` Second, ``Delete N vehicles`` asks once more in a browser dialog (``This cannot be undone.``) and
+   sends exactly the previewed vehicles (at most 500 per cleanup: when more match, the preview lists the 500 longest unused,
+   says how many match in all, and the cleanup is run again afterwards for the rest). The API checks every one again at that moment: a vehicle
+   driven or boarded since the preview is skipped, the others are sent to the game and the page waits for the mod's answer (up to 25 seconds). The result reads ``Deleted N vehicles; skipped M:``
+   followed by each skipped vehicle with its reason: N counts the vehicles the mod confirmed, and a vehicle the mod refused is listed with the mod's message.
+   Vehicles the mod did not answer for in time are listed apart, under ``No answer yet for K, the mod may still delete them; reload
+   the vehicle list to see:``: their deletes stay queued, so the vehicle list shows later whether they are gone. Deletions never use ``force``. Every vehicle writes an audit entry
+   (``vehicle_delete``, detail ``cleanup: not driven for N days``; see :doc:`api`). The step needs a ``dzo-admin`` that reports drivers (0.8.0);
+   with an older mod it shows the API's refusal instead of a list, because every vehicle would look unused.
+
+   Banning is a link
    in the panel to the ban form with the player filled in. Hovering over a player's name (or tapping its
    ``i`` button on a phone) shows the Steam ID, the ping and, with the ``player.ip`` permission
    (operators and admins), the address the player is connected from now. The history of addresses is not

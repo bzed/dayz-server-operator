@@ -21,6 +21,7 @@ import (
 
 	"github.com/bzed/dayz-server-operator/internal/admin"
 	"github.com/bzed/dayz-server-operator/internal/api"
+	"github.com/bzed/dayz-server-operator/internal/backup"
 	"github.com/bzed/dayz-server-operator/internal/config"
 	"github.com/bzed/dayz-server-operator/internal/geoip"
 	"github.com/bzed/dayz-server-operator/internal/killfeed"
@@ -30,6 +31,7 @@ import (
 	"github.com/bzed/dayz-server-operator/internal/resolve"
 	"github.com/bzed/dayz-server-operator/internal/site"
 	"github.com/bzed/dayz-server-operator/internal/tlsfiles"
+	"github.com/bzed/dayz-server-operator/internal/vehicles"
 )
 
 // gatewayHost is how a container with published (pasta) networking reaches
@@ -52,6 +54,9 @@ func FeedLogPath(cfg *config.Config, instance string) string {
 
 // BanDB is the moderation database (bans, evidence, sightings).
 func BanDB(cfg *config.Config) string { return filepath.Join(cfg.Paths.DB, "dzo.sqlite") }
+
+// DBBackupDir is where the regular copies of the database are written: <paths.db>/backup.
+func DBBackupDir(cfg *config.Config) string { return backup.DBBackupDir(cfg) }
 
 // TilesDir is where the built map tile sets live.
 func TilesDir(cfg *config.Config) string { return filepath.Join(cfg.Paths.Cache, "maptiles") }
@@ -122,13 +127,16 @@ func WriteModConfig(cfg *config.Config, inst *resolve.Instance) error {
 }
 
 // AddHubs registers a hub for every instance of the site. It can run again
-// after a site change: existing hubs keep their state.
+// after a site change: existing hubs keep their state, and the hubs of
+// instances no longer in the site are dropped.
 func AddHubs(reg *admin.Registry, cfg *config.Config, tree *site.Tree) error {
 	all, err := resolve.ResolveAll(cfg, tree)
 	if err != nil {
 		return err
 	}
+	names := make([]string, 0, len(all))
 	for _, inst := range all {
+		names = append(names, inst.Name)
 		h := admin.NewHub(inst.Name)
 		h.Allow, h.Deny, h.Kinds, h.MarkerDir = inst.Admin.AllowClasses, inst.Admin.DenyClasses, vehicleKinds(inst), admin.MarkerDir(inst.Paths.Profiles)
 		if sched := inst.Restarts.Schedule; len(sched) > 0 {
@@ -143,6 +151,7 @@ func AddHubs(reg *admin.Registry, cfg *config.Config, tree *site.Tree) error {
 			return fmt.Errorf("instance %s: %w", inst.Name, err)
 		}
 	}
+	reg.Retain(names)
 	return nil
 }
 
@@ -209,6 +218,35 @@ func KillfeedConfigs(cfg *config.Config, tree *site.Tree) ([]killfeed.Config, er
 	return out, nil
 }
 
+// forgetDays holds admin.vehicle_forget_days of every instance, replaced on a reload.
+type forgetDays struct {
+	mu sync.Mutex
+	by map[string]time.Duration
+}
+
+func (f *forgetDays) set(cfg *config.Config, tree *site.Tree) {
+	all, err := resolve.ResolveAll(cfg, tree)
+	if err != nil {
+		return // keep the old values; the reload reports the error itself
+	}
+	by := map[string]time.Duration{}
+	for _, inst := range all {
+		by[inst.Name] = vehicles.ForgetAfter(inst.Admin)
+	}
+	f.mu.Lock()
+	f.by = by
+	f.mu.Unlock()
+}
+
+func (f *forgetDays) get(name string) time.Duration {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if d, ok := f.by[name]; ok {
+		return d
+	}
+	return vehicles.DefaultForgetDays * 24 * time.Hour
+}
+
 // Run serves until ctx is done.
 func Run(ctx context.Context, cfg *config.Config, o Options) error {
 	logf := o.Logf
@@ -250,6 +288,7 @@ func Run(ctx context.Context, cfg *config.Config, o Options) error {
 	svc.AddressRetention, svc.VacuumEvery, svc.SessionRetention = cfg.Serve.IPRetention(), cfg.Serve.VacuumEvery(), cfg.Serve.SessionRetention()
 	svc.SessionIdle, svc.SessionMax = cfg.Serve.SessionIdle(), cfg.Serve.SessionMax()
 	svc.AuditClientRetention = cfg.Serve.AuditIPRetention()
+	svc.BackupDir, svc.BackupEvery, svc.BackupKeep = DBBackupDir(cfg), cfg.Serve.DBBackupEvery(), cfg.Serve.DBBackupCount()
 	svc.OnEvent = feedFromRCon(reg)
 	audit.OnLog = feedFromAudit(reg)
 	svc.Start(mctx)
@@ -277,8 +316,16 @@ func Run(ctx context.Context, cfg *config.Config, o Options) error {
 		defer func() { pcancel(); lwg.Wait() }()
 	}
 	rec.Set(pctx, presence.FromRegistry(reg), reg.Names())
+	// The vehicle records: the last driver of each vehicle, from the vehicle snapshots. Stopped before the store closes.
+	vctx, vcancel := context.WithCancel(ctx)
+	forget := &forgetDays{}
+	forget.set(cfg, tree)
+	vrec := &vehicles.Recorder{Store: store, Logf: logf, Forget: forget.get}
+	defer func() { vcancel(); vrec.Wait() }()
+	vrec.Set(vctx, vehicles.FromRegistry(reg), reg.Names())
 	apiSrv := api.New(cfg.Serve.Installation, o.Version, reg, api.NewTokenStore(APITokens(cfg)), audit)
 	apiSrv.Moderation = svc
+	apiSrv.Vehicles = store
 	apiSrv.Logf = logf
 	if cfg.Serve.WebURL != "" { // user logins need to know where the web interface lives
 		apiSrv.Accounts = store
@@ -362,6 +409,8 @@ func Run(ctx context.Context, cfg *config.Config, o Options) error {
 				kf.Set(kctx, reg, cfgs)
 			}
 			rec.Set(pctx, presence.FromRegistry(reg), reg.Names())
+			forget.set(cfg, t)
+			vrec.Set(vctx, vehicles.FromRegistry(reg), reg.Names())
 			reg.LogTokens()
 			logf("site reloaded")
 		case err := <-errc:

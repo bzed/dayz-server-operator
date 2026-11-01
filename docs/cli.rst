@@ -262,7 +262,7 @@ installation (default: the local ``serve.listen``). They need the
    * - ``dzo vehicle repair <instance> <id> [--scope all|engine|parts|wheels|fluids|missing]``
      - repair a vehicle; ``all`` also refuels it and fits missing parts
    * - ``dzo vehicle flip <instance> <id>``
-     - stand a vehicle upright on its wheels
+     - stand a vehicle upright on its wheels (not a boat: ``boats cannot be flipped``)
    * - ``dzo vehicle move <instance> <id> --x <x> --z <z>``
      - put a vehicle on the ground at a position, upright and at rest; players inside move with it, at most
        ``admin.move_occupied_max`` metres (:doc:`configuration`)

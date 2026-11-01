@@ -343,3 +343,16 @@ func TestAuditOnLog(t *testing.T) {
 	blocked.OnLog = func(AuditEntry) { require.Fail(t, "called for a failed write") }
 	require.Error(t, blocked.Log(AuditEntry{}))
 }
+
+func TestRetainDropsRemovedInstances(t *testing.T) {
+	r, _ := testRegistry(t)
+	alpha, _ := r.Hub("alpha")
+	r.Retain([]string{"alpha", "gamma"})
+	require.Equal(t, []string{"alpha"}, r.Names(), "a name without a hub adds nothing")
+	_, ok := r.Hub("beta")
+	require.False(t, ok)
+	kept, _ := r.Hub("alpha")
+	require.Same(t, alpha, kept, "a kept instance keeps its hub and its state")
+	r.Retain(nil)
+	require.Empty(t, r.Names())
+}

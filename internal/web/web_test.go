@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -55,6 +56,7 @@ func newEnv(t *testing.T, role api.Role) *env {
 	t.Cleanup(func() { _ = st.Close() })
 	apiSrv.Moderation = webMod{st}
 	apiSrv.Accounts = st
+	apiSrv.Vehicles = st
 	ats := httptest.NewServer(apiSrv.Handler())
 	t.Cleanup(ats.Close)
 	secret, _, err := apiSrv.Tokens.Create("web", api.RoleAdmin, nil, false, true, time.Hour)
@@ -210,6 +212,7 @@ func TestInstanceAndFragments(t *testing.T) {
 	_, body, _ = e.get("/b/main/i/alpha/players")
 	require.Contains(t, body, "&lt;b&gt;alice&lt;/b&gt;", "player names must be escaped")
 	require.NotContains(t, body, "<b>alice", "player names must be escaped")
+	require.NotContains(t, body, "template error", "the player list renders")
 	_, body, _ = e.get("/b/main/i/alpha/vehicles")
 	for _, want := range []string{"OffroadHatchback", "50%", "/vehicles/1.2.3.4/panel", "Motorbike_01", "fa-motorcycle", "Old_Bike_Red", "fa-bicycle", "Boat_01_Orange", "fa-ship", "Sedan_02 <em>(covered)</em>", "Rita"} {
 		require.Contains(t, body, want, "vehicles")
@@ -220,6 +223,9 @@ func TestInstanceAndFragments(t *testing.T) {
 	_, body, _ = e.get("/b/main/i/alpha/vehicles/1.2.3.4/panel")
 	require.Contains(t, body, `hx-post="/b/main/i/alpha/vehicles/1.2.3.4/flip"`, "vehicle panel")
 	require.Contains(t, body, `"scope": "missing"`, "vehicle panel")
+	_, body, _ = e.get("/b/main/i/alpha/vehicles/b.b.b.b/panel")
+	require.NotContains(t, body, "/flip", "a boat cannot be flipped")
+	require.Contains(t, body, `"scope": "all"`, "a boat can be repaired")
 	_, body, _ = e.get("/b/main/i/alpha/vehicles/nope/panel")
 	require.Contains(t, body, "not found", "panel for an absent vehicle")
 	_, body, _ = e.get("/b/main/i/alpha/players/9999/panel")
@@ -650,4 +656,42 @@ func TestPlayersRowsHaveAnchors(t *testing.T) {
 	require.Contains(t, body, `<tr id="player-7656"`, "an event links to this row")
 	_, body, _ = e.get("/b/main/i/alpha")
 	require.Contains(t, body, `id="player-note"`, "the page has a place for the not-online note")
+}
+
+func TestVehicleFragmentShowsTheLastDriver(t *testing.T) {
+	e := newEnv(t, api.RoleAdmin)
+	now := time.Now()
+	e.hub.Sync(admin.SyncRequest{Proto: 1, Vehicles: []admin.Vehicle{{ID: "d1", Kind: "car", Type: "Sedan_02"}, {ID: "n1", Kind: "car", Type: "Truck_01"}}})
+	first := time.Date(2026, 10, 29, 12, 0, 0, 0, time.UTC)
+	require.NoError(t, e.st.SyncVehicles(t.Context(), "alpha", []moderation.VehicleSeen{
+		{ID: "d1", Type: "Sedan_02", Driver: "76561198000000001", DriverName: "<i>Dora</i>", DrivenAt: now.Add(-72 * time.Hour)},
+		{ID: "n1", Type: "Truck_01"}}, first))
+	_, body, _ := e.get("/b/main/i/alpha/vehicles")
+	require.Contains(t, body, "Last driver")
+	require.Contains(t, body, `<a href="/b/main/players/76561198000000001" title="76561198000000001">&lt;i&gt;Dora&lt;/i&gt;</a>`)
+	require.Contains(t, body, "3d 0h ago")
+	require.Contains(t, body, `data-sort="`+strconv.FormatInt(now.Add(-72*time.Hour).Unix(), 10)+`" title="`+now.Add(-72*time.Hour).UTC().Format("2006-01-02 15:04")+`"`)
+	require.Contains(t, body, `data-sort="`+strconv.FormatInt(first.Unix(), 10)+`" title="2026-10-29 12:00">not since 2026-10-29`)
+}
+
+func TestVehicleFragmentLinksToTheMap(t *testing.T) {
+	e := newEnv(t, api.RoleAdmin)
+	e.hub.Sync(admin.SyncRequest{Proto: 1, Vehicles: []admin.Vehicle{{ID: "o1", Kind: "car", Type: "Offroad_02", Owner: "Bob", X: 7500.4, Z: 7599.6}}})
+	_, body, _ := e.get("/b/main/i/alpha/vehicles")
+	require.Contains(t, body, `<a href="/b/main/i/alpha/map?label=Offroad_02&#43;%28owner&#43;Bob%29&amp;x=7500&amp;z=7600">7500 / 7600</a>`)
+}
+
+func TestMapLinkLabel(t *testing.T) {
+	label := func(v admin.Vehicle) string {
+		u, err := url.Parse(mapLink("main", "alpha", v))
+		require.NoError(t, err)
+		return u.Query().Get("label")
+	}
+	require.Equal(t, "Sedan_02", label(admin.Vehicle{Type: "Sedan_02"}))
+	require.Equal(t, "Sedan_02 (owner Bob)", label(admin.Vehicle{Type: "Sedan_02", Owner: "Bob"}))
+	require.Equal(t, "Sedan_02 (last driver Dora)", label(admin.Vehicle{Type: "Sedan_02", LastDriver: "76561198000000001", LastDriverName: "Dora"}))
+	require.Equal(t, "Sedan_02 (last driver 76561198000000001)", label(admin.Vehicle{Type: "Sedan_02", LastDriver: "76561198000000001"}),
+		"a driver without a known name is named by the Steam ID")
+	require.Equal(t, "Sedan_02 (owner Bob, last driver Bob)", label(admin.Vehicle{Type: "Sedan_02", Owner: "Bob", LastDriver: "76561198000000001", LastDriverName: "Bob"}),
+		"owner and last driver are different things, even when they are the same person")
 }

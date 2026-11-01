@@ -227,3 +227,26 @@ func TestFeedAndStreamOnly(t *testing.T) {
 	require.Equal(t, "feed", kinds[0])
 	require.NotContains(t, kinds, "players")
 }
+
+func TestUnusedAndCleanupVehicles(t *testing.T) {
+	c, hub, _ := setup(t)
+	ctx := t.Context()
+	// The mod of setup does not report drivers: both calls are refused with 409.
+	_, err := c.UnusedVehicles(ctx, "alpha", 30)
+	var e *apiclient.Error
+	require.ErrorAs(t, err, &e)
+	require.Equal(t, 409, e.Status)
+	_, err = c.CleanupVehicles(ctx, "alpha", 30, []string{"v"})
+	require.ErrorAs(t, err, &e)
+	require.Equal(t, 409, e.Status)
+
+	hub.Sync(admin.SyncRequest{Proto: 1, Hello: true, Features: []string{admin.FeatureDriver}, Vehicles: []admin.Vehicle{{ID: "v"}}})
+	u, err := c.UnusedVehicles(ctx, "alpha", 30)
+	require.NoError(t, err)
+	require.Equal(t, 30, u.Days)
+	require.Empty(t, u.Vehicles) // no records without a database: nothing is known to be unused
+	r, err := c.CleanupVehicles(ctx, "alpha", 30, []string{"v", "gone"})
+	require.NoError(t, err)
+	require.Empty(t, r.Deleted)
+	require.Len(t, r.Skipped, 2)
+}

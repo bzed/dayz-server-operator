@@ -5,6 +5,8 @@ package admin
 
 import (
 	"context"
+	"encoding/json"
+	"math"
 	"strings"
 	"testing"
 	"time"
@@ -23,6 +25,49 @@ func testHub() (*Hub, *clock) {
 	h := NewHub("alpha")
 	h.now = c.now
 	return h, c
+}
+
+func TestSyncSetsDrivenAt(t *testing.T) {
+	h, c := testHub()
+	h.Sync(SyncRequest{Proto: 1, Hello: true, Vehicles: []Vehicle{{ID: "v1", Driver: "76561198000000001", DriverName: "Ann", DrivenAgo: 90}}})
+	got := h.Vehicles()
+	require.Len(t, got, 1)
+	require.Equal(t, c.now().Add(-90*time.Second), got[0].DrivenAt)
+	require.Equal(t, "76561198000000001", got[0].Driver)
+	require.Equal(t, "Ann", got[0].DriverName)
+}
+
+func TestSyncIgnoresBadDrives(t *testing.T) {
+	h, _ := testHub()
+	for _, v := range []Vehicle{
+		{ID: "a", Driver: "76561198000000001", DriverName: "n", DrivenAgo: -1},
+		{ID: "b", Driver: "76561198000000001", DriverName: "n", DrivenAgo: math.NaN()},
+		{ID: "c", Driver: "76561198000000001", DriverName: "n", DrivenAgo: math.Inf(1)},
+		{ID: "d", Driver: "76561198000000001", DriverName: "n", DrivenAgo: 401 * 24 * 3600},
+		{ID: "e", Driver: "not-a-steam-id", DriverName: "n", DrivenAgo: 10},
+	} {
+		h.Sync(SyncRequest{Proto: 1, Hello: true, Vehicles: []Vehicle{v}})
+		got := h.Vehicles()
+		require.Len(t, got, 1, v.ID)
+		require.True(t, got[0].DrivenAt.IsZero(), v.ID)
+		require.Empty(t, got[0].Driver, v.ID)
+		require.Empty(t, got[0].DriverName, v.ID)
+		require.Zero(t, got[0].DrivenAgo, v.ID)
+	}
+}
+
+func TestSyncClipsTheDriverName(t *testing.T) {
+	h, _ := testHub()
+	h.Sync(SyncRequest{Proto: 1, Hello: true, Vehicles: []Vehicle{{ID: "v", Driver: "76561198000000001", DriverName: strings.Repeat("ä", 500), DrivenAgo: 1}}})
+	require.Len(t, []rune(h.Vehicles()[0].DriverName), 65)
+}
+
+func TestVehicleJSONHidesDrivenAt(t *testing.T) {
+	b, err := json.Marshal(Vehicle{ID: "v", DrivenAt: time.Now()})
+	require.NoError(t, err)
+	require.NotContains(t, string(b), "DrivenAt")
+	require.NotContains(t, string(b), "driven")
+	require.NotContains(t, string(b), "driver")
 }
 
 func hello(h *Hub) {
@@ -105,7 +150,8 @@ func TestCommandRoundTrip(t *testing.T) {
 	r := <-done
 	require.True(t, bool(r.OK))
 	require.Equal(t, cmd.ID, r.ID)
-	r, ok := h.Result(cmd.ID)
+	r, ok, err := h.Result(cmd.ID)
+	require.NoError(t, err)
 	require.True(t, ok, "Result lookup")
 	require.True(t, bool(r.OK))
 	sr := h.Sync(SyncRequest{Proto: 1})
@@ -128,12 +174,41 @@ func TestResendAndTimeout(t *testing.T) {
 	c.advance(commandTimeout)
 	got = h.Sync(SyncRequest{Proto: 1}).Commands
 	require.Empty(t, got, "expired command still sent")
-	r, ok := h.Result(id)
+	r, ok, err := h.Result(id)
+	require.NoError(t, err)
 	require.True(t, ok)
 	require.False(t, bool(r.OK))
 	require.Equal(t, ErrTimeout.Error(), r.Message)
-	_, ok = h.Result("nope")
+	_, ok, err = h.Result("nope")
 	require.False(t, ok)
+	require.ErrorIs(t, err, ErrUnknownCommand)
+}
+
+func TestFinishedCommandsAreForgotten(t *testing.T) {
+	h, c := testHub()
+	hello(h)
+	done, err := h.Enqueue(Command{Kind: KindVehicleDelete, Vehicle: "a"})
+	require.NoError(t, err)
+	open, err := h.Enqueue(Command{Kind: KindVehicleDelete, Vehicle: "b"})
+	require.NoError(t, err)
+	h.Sync(SyncRequest{Proto: 1, Results: []Result{{ID: done, OK: true}}})
+
+	c.advance(resultKeep - time.Second)
+	h.Sync(SyncRequest{Proto: 1})
+	_, ok, err := h.Result(done)
+	require.NoError(t, err, "a result is kept for resultKeep")
+	require.True(t, ok)
+
+	c.advance(2 * time.Second)
+	h.Sync(SyncRequest{Proto: 1})
+	_, _, err = h.Result(done)
+	require.ErrorIs(t, err, ErrUnknownCommand, "a result older than resultKeep is dropped")
+	r, ok, err := h.Result(open)
+	require.NoError(t, err, "a command that timed out keeps its result for resultKeep too")
+	require.True(t, ok)
+	require.Equal(t, ErrTimeout.Error(), r.Message)
+	_, err = h.Wait(t.Context(), done)
+	require.Error(t, err)
 }
 
 func TestSubmitContextTimeout(t *testing.T) {
@@ -506,4 +581,42 @@ func TestHubKeepsFlagMarkers(t *testing.T) {
 	require.Len(t, got, 2)
 	require.Equal(t, "operator", got[0].Visibility)
 	require.Equal(t, "operator", got[1].Visibility)
+}
+
+func TestWaitReturnsTheEnqueuedResult(t *testing.T) {
+	h, _ := testHub()
+	hello(h)
+	id, err := h.Enqueue(Command{Kind: KindVehicleDelete, Vehicle: "v"})
+	require.NoError(t, err)
+	h.Sync(SyncRequest{Proto: 1, Results: []Result{{ID: id, OK: true, Message: "gone"}}})
+	r, err := h.Wait(t.Context(), id)
+	require.NoError(t, err)
+	require.True(t, bool(r.OK))
+	require.Equal(t, "gone", r.Message)
+
+	id, err = h.Enqueue(Command{Kind: KindVehicleDelete, Vehicle: "w"})
+	require.NoError(t, err)
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	r, err = h.Wait(ctx, id)
+	require.ErrorIs(t, err, ErrTimeout)
+	require.Equal(t, id, r.ID)
+
+	_, err = h.Wait(t.Context(), "nope")
+	require.Error(t, err)
+}
+
+func TestBoatsCannotBeFlipped(t *testing.T) {
+	h, _ := testHub()
+	hello(h)
+	h.Kinds = map[string][]string{"boat": {"ModBoat"}}
+	h.Sync(SyncRequest{Proto: 1, Vehicles: []Vehicle{{ID: "b1", Kind: "boat", Type: "Boat_01_Orange"}, {ID: "b2", Kind: "car", Type: "ModBoat"}, {ID: "c1", Kind: "car", Type: "Sedan_02"}}})
+	for _, id := range []string{"b1", "b2"} {
+		_, err := h.Enqueue(Command{Kind: KindVehicleFlip, Vehicle: id})
+		require.EqualError(t, err, "admin: boats cannot be flipped", id)
+	}
+	_, err := h.Enqueue(Command{Kind: KindVehicleFlip, Vehicle: "c1"})
+	require.NoError(t, err)
+	_, err = h.Enqueue(Command{Kind: KindVehicleRepair, Vehicle: "b1", Scope: "all"})
+	require.NoError(t, err, "a boat can still be repaired")
 }

@@ -291,6 +291,8 @@ func TestAsyncAndCommandLookup(t *testing.T) {
 	require.Equal(t, 200, c, "done lookup: %d %s", c, b)
 	require.True(t, r.OK, "done lookup: %d %s", c, b)
 	require.False(t, r.Pending, "done lookup: %d %s", c, b)
+	c, _ = e.do("GET", "/api/v1/instances/alpha/commands/nope", op, "")
+	require.Equal(t, http.StatusNotFound, c, "an unknown or forgotten command id")
 }
 
 func TestRateLimit(t *testing.T) {
