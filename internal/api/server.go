@@ -147,6 +147,7 @@ type Info struct {
 type UserInfo struct {
 	SteamID      string          `json:"steam_id"`
 	Name         string          `json:"name"`
+	Username     string          `json:"username,omitempty"`
 	Roles        map[string]Role `json:"roles"`
 	Installation []string        `json:"installation"`
 }
@@ -369,7 +370,7 @@ func (s *Server) loadUser(ctx context.Context, who Principal, sessionHash string
 	case person.Disabled:
 		return nil, http.StatusForbidden, "this account is disabled"
 	}
-	who.User = &User{SteamID: person.SteamID, Name: person.Name, Grants: person.Grants}
+	who.User = &User{SteamID: person.SteamID, Name: person.Name, Username: person.Username, Grants: person.Grants}
 	if len(who.Instances(s.Hubs.Names())) == 0 {
 		return nil, http.StatusForbidden, "no access: this account has no role on any instance"
 	}
@@ -399,7 +400,7 @@ func (s *Server) info(w http.ResponseWriter, _ *http.Request, c *call) {
 	}
 	info := Info{Installation: s.Installation, Version: s.Version, APIVersion: APIVersion, Principal: name, Role: c.who.TopRole()}
 	if u := c.who.User; u != nil {
-		info.User = &UserInfo{SteamID: u.SteamID, Name: u.Name, Roles: map[string]Role{}, Installation: []string{}}
+		info.User = &UserInfo{SteamID: u.SteamID, Name: u.Name, Username: u.Username, Roles: map[string]Role{}, Installation: []string{}}
 		for _, n := range s.Hubs.Names() {
 			if r := c.who.RoleOn(n); r != "" {
 				info.User.Roles[n] = r

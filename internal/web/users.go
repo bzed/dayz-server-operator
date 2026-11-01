@@ -102,11 +102,12 @@ func (s *Server) usersPut(w http.ResponseWriter, r *http.Request) {
 		s.usersPage(w, r, "", err.Error())
 		return
 	}
-	body := api.UserBody{Name: strings.TrimSpace(r.PostFormValue("name")), Disabled: r.PostFormValue("disabled") != "", Grants: grants}
+	body := api.UserBody{Username: strings.TrimSpace(r.PostFormValue("username")), Disabled: r.PostFormValue("disabled") != "", Grants: grants}
 	if _, err := s.client(s.backends[0], r).PutUser(r.Context(), id, body); err != nil {
 		s.usersPage(w, r, "", err.Error())
 		return
 	}
+	s.refreshInfo(r)
 	s.usersPage(w, r, "Saved "+id+".", "")
 }
 

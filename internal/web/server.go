@@ -13,6 +13,7 @@
 package web
 
 import (
+	"cmp"
 	"crypto/subtle"
 	"embed"
 	"fmt"
@@ -246,10 +247,7 @@ func (s *Server) page(r *http.Request, title, backend, instance, section string,
 	pg := page{Home: home, Title: title, CSRF: csrf, Backends: s.backends, Backend: backend, Version: s.opts.Version, Data: data,
 		Now: s.now(), Nav: s.navFor(r), Instance: instance, Section: section, HasPlayers: true}
 	if u := infoOf(r).User; u != nil {
-		pg.UserName = u.Name
-		if pg.UserName == "" {
-			pg.UserName = u.SteamID
-		}
+		pg.UserName = cmp.Or(u.Username, u.Name, u.SteamID)
 	}
 	pg.CanUsers = holds(r, api.PermUsersManage)
 	return pg

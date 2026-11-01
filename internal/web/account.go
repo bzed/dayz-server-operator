@@ -58,6 +58,19 @@ func (s *Server) accountPage(w http.ResponseWriter, r *http.Request, note, errMs
 
 // act runs an account action and shows the page again with its result. Account forms are plain forms: they send
 // the token of the session as a field.
+// refreshInfo asks the API again who the session is: the header shows the username, which a change may have
+// made a different one.
+func (s *Server) refreshInfo(r *http.Request) {
+	d := sessionFrom(r.Context())
+	if d == nil {
+		return
+	}
+	s.forgetInfo(d.secret)
+	if info, err := s.sessionInfo(r, d.secret); err == nil {
+		d.info = info
+	}
+}
+
 func (s *Server) accountAction(do func(c *apiclient.Client, r *http.Request) (note string, codes []string, err error)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !s.csrfOK(r) {
@@ -69,6 +82,7 @@ func (s *Server) accountAction(do func(c *apiclient.Client, r *http.Request) (no
 			s.accountPage(w, r, "", err.Error(), nil, nil)
 			return
 		}
+		s.refreshInfo(r)
 		s.accountPage(w, r, note, "", nil, codes)
 	}
 }
@@ -156,8 +170,8 @@ func (s *Server) accountPasskeyFinish(w http.ResponseWriter, r *http.Request) {
 func (s *Server) accountRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /account", s.accountGet)
 	mux.HandleFunc("POST /account/password", s.accountAction(func(c *apiclient.Client, r *http.Request) (string, []string, error) {
-		err := c.SetPassword(r.Context(), r.PostFormValue("username"), r.PostFormValue("current"), r.PostFormValue("new"))
-		return "Username and password saved.", nil, err
+		err := c.SetPassword(r.Context(), r.PostFormValue("current"), r.PostFormValue("new"))
+		return "Password saved.", nil, err
 	}))
 	mux.HandleFunc("POST /account/password/delete", s.accountAction(func(c *apiclient.Client, r *http.Request) (string, []string, error) {
 		return "The password was removed; you sign in through Steam.", nil, c.RemovePassword(r.Context())

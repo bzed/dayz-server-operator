@@ -6,7 +6,6 @@ package api
 import (
 	"cmp"
 	"encoding/base32"
-	"errors"
 	"net/http"
 	"regexp"
 	"strings"
@@ -162,9 +161,8 @@ func (s *Server) account(w http.ResponseWriter, r *http.Request, c *call) {
 }
 
 type passwordChange struct {
-	Username string `json:"username"`
-	Current  string `json:"current"`
-	New      string `json:"new"`
+	Current string `json:"current"`
+	New     string `json:"new"`
 }
 
 func (s *Server) setPassword(w http.ResponseWriter, r *http.Request, c *call) {
@@ -191,13 +189,8 @@ func (s *Server) setPassword(w http.ResponseWriter, r *http.Request, c *call) {
 			return
 		}
 	}
-	username := strings.ToLower(strings.TrimSpace(body.Username))
-	switch {
-	case username == "" && person.Username == "":
-		fail(w, http.StatusBadRequest, "a username is needed")
-		return
-	case username != "" && !usernameRE.MatchString(username):
-		fail(w, http.StatusBadRequest, "a username has 3 to 32 characters: letters, digits, dot, dash and underscore")
+	if person.Username == "" {
+		fail(w, http.StatusConflict, "you have no username yet: ask an administrator to give you one")
 		return
 	}
 	hash, err := auth.HashPassword(body.New)
@@ -205,11 +198,7 @@ func (s *Server) setPassword(w http.ResponseWriter, r *http.Request, c *call) {
 		fail(w, http.StatusBadRequest, "%v", err)
 		return
 	}
-	switch err := s.Accounts.SetPassword(ctx, id, username, hash); {
-	case errors.Is(err, moderation.ErrUsernameTaken):
-		fail(w, http.StatusConflict, "that username is taken")
-		return
-	case err != nil:
+	if err := s.Accounts.SetPassword(ctx, id, "", hash); err != nil {
 		fail(w, http.StatusInternalServerError, "database error")
 		return
 	}

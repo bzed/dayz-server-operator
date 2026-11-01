@@ -95,8 +95,9 @@ Account and people pages
 
 The **account page** (your name in the header) is for everybody:
 
-* username and password, so that you can sign in without Steam (the second step stays); changing a password
-  asks for the current one, and a wrong one counts like a failed login;
+* your username (the header shows it; only an administrator gives and changes it) and a password, so that you
+  can sign in without Steam (the second step stays); changing a password asks for the current one, and a wrong
+  one counts like a failed login. Without a username there is no password login: an administrator gives you one;
 * the authenticator app: set up a new one with a QR code and prove it with a first code, which replaces the
   old one;
 * passkeys: register more, see when each was used, remove one;
@@ -106,9 +107,11 @@ The **account page** (your name in the header) is for everybody:
 The last second factor cannot be removed. Logging out is in the header.
 
 The **people page** (``People`` in the header) is shown to admins on every instance only. It lists everybody
-with a grant and lets you add a person by Steam ID, change their name and grants (``alpha=operator,
-*=viewer``: a role per instance, ``*`` for all of them), disable them, reset them (password, username, second
-factors and sessions are removed; they sign in through Steam and set up a second factor again) or delete
+with a grant and lets you add a person by Steam ID and **username** (required: it is the login name and what
+people see, 3 to 32 of ``a-z 0-9 . _ -``, unique, not case-sensitive; real names are not asked for), change
+their username and grants (``alpha=operator,
+*=viewer``: a role per instance, ``*`` for all of them), disable them, reset them (password, second
+factors and sessions are removed, the username stays; they sign in through Steam and set up a second factor again) or delete
 them. Your own row has no controls: nobody can change their own access in the web interface or the API;
 another admin, or ``dzo user`` on the serve host, does that. Changes are in the audit log.
 
@@ -127,7 +130,7 @@ On the host of ``dzo serve``:
 3. Make the first admin, with your own Steam64 ID (the 17-digit number from your Steam profile address, or
    from a site like steamid.io)::
 
-      dzo user grant 76561198000000001 --role admin --name Ann
+      dzo user grant 76561198000000001 --role admin --username ann
 
 4. Open ``serve.web_url``, choose **Sign in through Steam**, then set up your second factor (authenticator app
    or passkey) and keep the recovery codes. Add everybody else on the people page (:ref:`web-account`).
@@ -135,9 +138,9 @@ On the host of ``dzo serve``:
 **If Steam sign-in does not work (yet)**, give the admin a password on the host instead of step 4's Steam
 sign-in::
 
-   dzo user password 76561198000000001 --username ann      # asks twice, no echo
+   dzo user password ann      # or the Steam ID; asks twice, no echo
 
-(a password is 12 to 256 bytes; piped in, one line is read). Then log in with that username and password. It
+(a password is 12 to 256 bytes; piped in, one line is read). Then log in with the username from step 3 and that password. It
 is only the first factor: the page asks for the second factor to be set up (authenticator app or passkey) and
 shows the recovery codes, and every later login needs the password and that factor. Until it is set up,
 whoever knows the password can set it up, so hand the password over safely; ``dzo user password`` again
@@ -169,8 +172,8 @@ the sessions and decides every permission; the web interface keeps just a cookie
 role. That person opens the web interface and signs in through Steam. A Steam ID without a grant gets "no
 access", and nothing is stored for it. Because there is no second factor yet, the person is asked to set one
 up: scan a QR code with an authenticator app, or register a passkey. Then they see their recovery codes, once.
-Afterwards they may set a username and a password on the account page, so that they can also log in without
-Steam; the second step stays.
+Afterwards they may set a password on the account page (their username is the one the administrator gave
+them), so that they can also log in without Steam; the second step stays.
 
 **Sessions.** A session ends after ``serve.login.session_idle_hours`` (default 12) without a request, and
 after ``serve.login.session_max_days`` (default 7) at the latest. Logging out, ``dzo user reset``, disabling a
@@ -206,8 +209,8 @@ where nothing else is needed:
 
 .. code-block:: sh
 
-   dzo user grant 76561198000000001 --role admin --name Ann          # every instance
-   dzo user grant 76561198000000002 --role operator --instance chernarus --instance livonia
+   dzo user grant 76561198000000001 --role admin --username ann          # every instance
+   dzo user grant 76561198000000002 --role operator --username bob --instance chernarus --instance livonia
    dzo user list
 
 ``dzo user`` also revokes, disables, deletes and resets (:doc:`cli`); an admin on ``*`` does the same through

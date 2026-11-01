@@ -458,7 +458,7 @@ chmod 600 "$work/api.token"
 # For the web UI tests: a web token and an admin, whose session the Go test makes in the database.
 "$work/dzo" token create web --role admin --web --config "$work/config.yaml" >"$work/web.token"
 chmod 600 "$work/web.token"
-"$work/dzo" user grant 76561198000000077 --role admin --name "live test" --config "$work/config.yaml" >/dev/null
+"$work/dzo" user grant 76561198000000077 --role admin --username livetest --name "live test" --config "$work/config.yaml" >/dev/null
 dzo() { "$work/dzo" "$@" --config "$work/config.yaml" --token-file "$work/api.token"; }
 
 start_serve() {

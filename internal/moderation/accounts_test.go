@@ -127,7 +127,7 @@ func TestResetCredentials(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, Credentials{}, c)
 	_, err = s.PersonByUsername(ctx, "ann")
-	require.ErrorIs(t, err, ErrNotFound)
+	require.NoError(t, err, "the username is who the person is: it stays")
 	_, err = s.Session(ctx, "h1", t0, time.Hour, time.Hour)
 	require.ErrorIs(t, err, ErrNotFound)
 	_, err = s.Pending(ctx, "p1", t0)
@@ -423,6 +423,30 @@ func TestClearPassword(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, c.PasswordHash)
 	_, err = s.PersonByUsername(ctx, "ann")
-	require.ErrorIs(t, err, ErrNotFound, "the name is free again")
+	require.NoError(t, err, "the username stays")
 	require.ErrorIs(t, s.ClearPassword(ctx, steamB), ErrNotFound)
+}
+
+func TestPutPersonSetsTheUsername(t *testing.T) {
+	s, _ := newStore(t)
+	ctx := t.Context()
+	require.NoError(t, s.PutPerson(ctx, Person{SteamID: steamA, Username: " Ann ", Grants: []Grant{{"*", "admin"}}}, t0))
+	p, err := s.PersonByUsername(ctx, "ANN")
+	require.NoError(t, err)
+	assert.Equal(t, steamA, p.SteamID)
+	assert.Equal(t, "ann", p.Username, "stored in lower case")
+
+	// an empty username keeps the one there is
+	require.NoError(t, s.PutPerson(ctx, Person{SteamID: steamA, Grants: []Grant{{"alpha", "viewer"}}}, t0))
+	p, _ = s.Person(ctx, steamA)
+	assert.Equal(t, "ann", p.Username)
+	require.NoError(t, s.PutPerson(ctx, Person{SteamID: steamA, Username: "ann.admin", Grants: []Grant{{"alpha", "viewer"}}}, t0))
+	p, _ = s.Person(ctx, steamA)
+	assert.Equal(t, "ann.admin", p.Username, "an admin renames")
+
+	// a name another person has: nothing is stored
+	err = s.PutPerson(ctx, Person{SteamID: steamB, Username: "ANN.admin", Grants: []Grant{{"*", "viewer"}}}, t0)
+	require.ErrorIs(t, err, ErrUsernameTaken)
+	_, err = s.Person(ctx, steamB)
+	require.ErrorIs(t, err, ErrNotFound, "the person was not created either")
 }

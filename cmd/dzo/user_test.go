@@ -60,7 +60,7 @@ func (e *userEnv) person(id string) moderation.Person {
 
 func TestUserGrantCreatesPerson(t *testing.T) {
 	e := newUserEnv(t)
-	out, err := e.run("grant", userSteamA, "--role", "operator", "--instance", "alpha", "--name", "Ann")
+	out, err := e.run("grant", userSteamA, "--username", "ann", "--role", "operator", "--instance", "alpha", "--name", "Ann")
 	require.NoError(t, err, out)
 	assert.Contains(t, out, userSteamA)
 	assert.Contains(t, out, "alpha")
@@ -70,7 +70,7 @@ func TestUserGrantCreatesPerson(t *testing.T) {
 	assert.Equal(t, []moderation.Grant{{Instance: "alpha", Role: "operator"}}, p.Grants)
 
 	// grant again: adds another instance, replaces the role on a listed one, keeps the rest
-	out, err = e.run("grant", userSteamA, "--role", "viewer", "--instance", "alpha", "--instance", "beta")
+	out, err = e.run("grant", userSteamA, "--username", "ann", "--role", "viewer", "--instance", "alpha", "--instance", "beta")
 	require.NoError(t, err, out)
 	p = e.person(userSteamA)
 	assert.Equal(t, "Ann", p.Name, "the name stays when --name is not given")
@@ -79,7 +79,7 @@ func TestUserGrantCreatesPerson(t *testing.T) {
 
 func TestUserGrantStarDefault(t *testing.T) {
 	e := newUserEnv(t)
-	out, err := e.run("grant", userSteamA, "--role", "admin")
+	out, err := e.run("grant", userSteamA, "--username", "ann", "--role", "admin")
 	require.NoError(t, err, out)
 	assert.Contains(t, out, "*", "every instance")
 	assert.Equal(t, []moderation.Grant{{Instance: "*", Role: "admin"}}, e.person(userSteamA).Grants)
@@ -89,11 +89,11 @@ func TestUserGrantRefusals(t *testing.T) {
 	e := newUserEnv(t)
 	_, err := e.run("grant", userSteamA)
 	require.Error(t, err, "--role is required")
-	_, err = e.run("grant", userSteamA, "--role", "root")
+	_, err = e.run("grant", userSteamA, "--username", "ann", "--role", "root")
 	require.ErrorContains(t, err, "role")
-	_, err = e.run("grant", userSteamA, "--role", "detector")
+	_, err = e.run("grant", userSteamA, "--username", "ann", "--role", "detector")
 	require.Error(t, err, "a role no person has")
-	_, err = e.run("grant", userSteamA, "--role", "admin", "--instance", "a b")
+	_, err = e.run("grant", userSteamA, "--username", "ann", "--role", "admin", "--instance", "a b")
 	require.Error(t, err)
 }
 
@@ -111,7 +111,7 @@ func TestUserBadSteamID(t *testing.T) {
 
 func TestUserRevokeOneInstance(t *testing.T) {
 	e := newUserEnv(t)
-	_, err := e.run("grant", userSteamA, "--role", "moderator", "--instance", "alpha", "--instance", "beta")
+	_, err := e.run("grant", userSteamA, "--username", "ann", "--role", "moderator", "--instance", "alpha", "--instance", "beta")
 	require.NoError(t, err)
 	out, err := e.run("revoke", userSteamA, "--instance", "alpha")
 	require.NoError(t, err, out)
@@ -128,7 +128,7 @@ func TestUserRevokeOneInstance(t *testing.T) {
 
 func TestUserRevokeEndsSessions(t *testing.T) {
 	e := newUserEnv(t)
-	_, err := e.run("grant", userSteamA, "--role", "admin")
+	_, err := e.run("grant", userSteamA, "--username", "ann", "--role", "admin")
 	require.NoError(t, err)
 	st := e.store()
 	require.NoError(t, st.CreateSession(t.Context(), "h", userSteamA, "", time.Now()))
@@ -140,7 +140,7 @@ func TestUserRevokeEndsSessions(t *testing.T) {
 
 func TestUserDisableEnableDelete(t *testing.T) {
 	e := newUserEnv(t)
-	_, err := e.run("grant", userSteamA, "--role", "admin", "--instance", "alpha")
+	_, err := e.run("grant", userSteamA, "--username", "ann", "--role", "admin", "--instance", "alpha")
 	require.NoError(t, err)
 	out, err := e.run("disable", userSteamA)
 	require.NoError(t, err, out)
@@ -162,7 +162,7 @@ func TestUserDisableEnableDelete(t *testing.T) {
 
 func TestUserResetByUsername(t *testing.T) {
 	e := newUserEnv(t)
-	_, err := e.run("grant", userSteamA, "--role", "admin")
+	_, err := e.run("grant", userSteamA, "--username", "ann", "--role", "admin")
 	require.NoError(t, err)
 	st := e.store()
 	require.NoError(t, st.SetPassword(t.Context(), userSteamA, "ann", "hash"))
@@ -174,14 +174,14 @@ func TestUserResetByUsername(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, moderation.Credentials{}, c)
 	_, err = st.PersonByUsername(t.Context(), "ann")
-	require.ErrorIs(t, err, moderation.ErrNotFound)
+	require.NoError(t, err, "the username stays")
 	assert.Len(t, e.person(userSteamA).Grants, 1, "person and grants stay")
 
 	require.NoError(t, st.SetPassword(t.Context(), userSteamA, "ann", "hash"))
 	out, err = e.run("reset", userSteamA)
 	require.NoError(t, err, out)
 	_, err = st.PersonByUsername(t.Context(), "ann")
-	require.ErrorIs(t, err, moderation.ErrNotFound, "by Steam ID too")
+	require.NoError(t, err, "by Steam ID too")
 	_, err = e.run("reset", "nobody")
 	require.Error(t, err)
 }
@@ -191,9 +191,9 @@ func TestUserListFormat(t *testing.T) {
 	out, err := e.run("list")
 	require.NoError(t, err)
 	assert.Contains(t, out, "no people", "an empty list says so")
-	_, err = e.run("grant", userSteamA, "--role", "admin", "--name", "Ann")
+	_, err = e.run("grant", userSteamA, "--username", "ann", "--role", "admin", "--name", "Ann")
 	require.NoError(t, err)
-	_, err = e.run("grant", userSteamB, "--role", "viewer", "--instance", "alpha", "--instance", "beta")
+	_, err = e.run("grant", userSteamB, "--username", "bob", "--role", "viewer", "--instance", "alpha", "--instance", "beta")
 	require.NoError(t, err)
 	_, err = e.run("disable", userSteamB)
 	require.NoError(t, err)
@@ -207,7 +207,7 @@ func TestUserListFormat(t *testing.T) {
 
 func TestUserChangesAreAudited(t *testing.T) {
 	e := newUserEnv(t)
-	_, err := e.run("grant", userSteamA, "--role", "admin")
+	_, err := e.run("grant", userSteamA, "--username", "ann", "--role", "admin")
 	require.NoError(t, err)
 	_, err = e.run("reset", userSteamA)
 	require.NoError(t, err)
@@ -230,24 +230,44 @@ func (e *userEnv) runWithStdin(stdin string, args ...string) (string, error) {
 	return runCmdWithStdin(e.t, stdin, append(append([]string{"user"}, args...), "--config", e.cfg)...)
 }
 
+func TestUserGrantNeedsAUsernameForANewPerson(t *testing.T) {
+	e := newUserEnv(t)
+	_, err := e.run("grant", userSteamA, "--role", "admin")
+	require.ErrorContains(t, err, "--username", "a new person needs one")
+	_, err = e.run("grant", userSteamA, "--role", "admin", "--username", "ab")
+	require.ErrorContains(t, err, "3 to 32")
+	out, err := e.run("grant", userSteamA, "--role", "admin", "--username", "Ann.Admin")
+	require.NoError(t, err, out)
+	assert.Contains(t, out, "ann.admin")
+	p, err := e.store().PersonByUsername(t.Context(), "ANN.admin")
+	require.NoError(t, err)
+	assert.Equal(t, userSteamA, p.SteamID)
+
+	_, err = e.run("grant", userSteamB, "--role", "viewer", "--username", "ann.ADMIN")
+	require.ErrorContains(t, err, "taken")
+	_, err = e.run("grant", userSteamA, "--role", "viewer", "--instance", "alpha")
+	require.NoError(t, err, "an existing person keeps their username")
+	assert.Equal(t, "ann.admin", e.person(userSteamA).Username)
+	_, err = e.run("grant", userSteamA, "--role", "viewer", "--instance", "alpha", "--username", "ann")
+	require.NoError(t, err, "and an administrator renames them")
+	assert.Equal(t, "ann", e.person(userSteamA).Username)
+}
+
 func TestUserPasswordSetsALogin(t *testing.T) {
 	e := newUserEnv(t)
-	_, err := e.run("grant", userSteamA, "--role", "admin", "--name", "Ann")
+	_, err := e.run("grant", userSteamA, "--username", "Ann.Admin", "--role", "admin", "--name", "Ann")
 	require.NoError(t, err)
-	out, err := e.runWithStdin("correct horse battery\n", "password", userSteamA, "--username", "Ann.Admin")
+	out, err := e.runWithStdin("correct horse battery\n", "password", userSteamA)
 	require.NoError(t, err, out)
 	assert.Contains(t, out, "ann.admin")
 	assert.NotContains(t, out, "correct horse battery", "the password is never printed")
 	st := e.store()
-	p, err := st.PersonByUsername(t.Context(), "ANN.admin")
-	require.NoError(t, err)
-	assert.Equal(t, userSteamA, p.SteamID)
 	c, err := st.Credentials(t.Context(), userSteamA)
 	require.NoError(t, err)
 	assert.True(t, auth.CheckPassword(c.PasswordHash, "correct horse battery"))
 
-	// by username, keeping it; a new password replaces the old one
-	out, err = e.runWithStdin("another horse battery\n", "password", "ann.admin")
+	// by username; a new password replaces the old one
+	out, err = e.runWithStdin("another horse battery\n", "password", "ANN.admin")
 	require.NoError(t, err, out)
 	c, _ = st.Credentials(t.Context(), userSteamA)
 	assert.True(t, auth.CheckPassword(c.PasswordHash, "another horse battery"))
@@ -256,38 +276,30 @@ func TestUserPasswordSetsALogin(t *testing.T) {
 
 func TestUserPasswordRefusals(t *testing.T) {
 	e := newUserEnv(t)
-	_, err := e.runWithStdin("correct horse battery\n", "password", userSteamA, "--username", "ann")
+	_, err := e.runWithStdin("correct horse battery\n", "password", userSteamA)
 	require.ErrorContains(t, err, "grant", "the person needs a role first")
-	_, err = e.run("grant", userSteamA, "--role", "admin")
-	require.NoError(t, err)
+	require.NoError(t, e.store().PutPerson(t.Context(), moderation.Person{SteamID: userSteamA, Grants: []moderation.Grant{{Instance: "*", Role: "admin"}}}, time.Now()))
 	_, err = e.runWithStdin("correct horse battery\n", "password", userSteamA)
-	require.ErrorContains(t, err, "--username", "a first password needs a username")
-	for _, bad := range []string{"ab", "has space", "a/b", "ünï"} {
-		_, err = e.runWithStdin("correct horse battery\n", "password", userSteamA, "--username", bad)
-		require.Error(t, err, bad)
-	}
-	_, err = e.runWithStdin("short\n", "password", userSteamA, "--username", "ann")
+	require.ErrorContains(t, err, "--username", "a person without a username has to get one first")
+	_, err = e.run("grant", userSteamA, "--username", "ann", "--role", "admin")
+	require.NoError(t, err)
+	_, err = e.runWithStdin("correct horse battery\n", "password", userSteamA, "--username", "other")
+	require.Error(t, err, "the username is not set here")
+	_, err = e.runWithStdin("short\n", "password", userSteamA)
 	require.ErrorContains(t, err, "12 to 256")
-	_, err = e.runWithStdin("\n", "password", userSteamA, "--username", "ann")
+	_, err = e.runWithStdin("\n", "password", userSteamA)
 	require.Error(t, err, "an empty password")
 	c, _ := e.store().Credentials(t.Context(), userSteamA)
 	assert.Empty(t, c.PasswordHash, "nothing was stored")
-
-	_, err = e.run("grant", userSteamB, "--role", "viewer")
-	require.NoError(t, err)
-	_, err = e.runWithStdin("correct horse battery\n", "password", userSteamB, "--username", "ann")
-	require.NoError(t, err)
-	_, err = e.runWithStdin("correct horse battery\n", "password", userSteamA, "--username", "ANN")
-	require.ErrorContains(t, err, "taken")
 	_, err = e.runWithStdin("correct horse battery\n", "password", "nobody")
 	require.Error(t, err)
 }
 
 func TestUserPasswordIsAudited(t *testing.T) {
 	e := newUserEnv(t)
-	_, err := e.run("grant", userSteamA, "--role", "admin")
+	_, err := e.run("grant", userSteamA, "--username", "ann", "--role", "admin")
 	require.NoError(t, err)
-	_, err = e.runWithStdin("correct horse battery\n", "password", userSteamA, "--username", "ann")
+	_, err = e.runWithStdin("correct horse battery\n", "password", userSteamA)
 	require.NoError(t, err)
 	entries, err := admin.NewAudit(serve.AuditLog(e.conf)).Tail("", 1)
 	require.NoError(t, err)
@@ -299,11 +311,11 @@ func TestUserPasswordIsAudited(t *testing.T) {
 
 func TestUserPasswordEndsSessions(t *testing.T) {
 	e := newUserEnv(t)
-	_, err := e.run("grant", userSteamA, "--role", "admin", "--name", "Ann")
+	_, err := e.run("grant", userSteamA, "--username", "ann", "--role", "admin", "--name", "Ann")
 	require.NoError(t, err)
 	st := e.store()
 	require.NoError(t, st.CreateSession(t.Context(), "hash", userSteamA, "", time.Now()))
-	_, err = e.runWithStdin("correct horse battery\n", "password", userSteamA, "--username", "ann")
+	_, err = e.runWithStdin("correct horse battery\n", "password", userSteamA)
 	require.NoError(t, err)
 	_, err = st.Session(t.Context(), "hash", time.Now(), time.Hour, time.Hour)
 	assert.ErrorIs(t, err, moderation.ErrNotFound, "whoever held a session is out")

@@ -9,7 +9,7 @@ dayz-server-operator (0.1.0-1) UNRELEASED; urgency=medium
     refused (one web interface serves one installation, web.api reaches
     another host); the web interface needs serve.web_url, a token made with
     `dzo token create web --role admin --web` (the old delegate token no
-    longer gives it anything) and a first admin from `dzo user grant`.
+    longer gives it anything) and a first admin from `dzo user grant --username <name>`.
     People are identified by Steam ID, log in with a password or Steam plus
     a second factor (TOTP, passkey or recovery code) and have a role per
     instance; dzo serve enforces it per instance, the audit log names the

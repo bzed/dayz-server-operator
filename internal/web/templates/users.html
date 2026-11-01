@@ -8,15 +8,14 @@
 {{if .Note}}<p class="flash ok" role="status">{{.Note}}</p>{{end}}
 {{if .Error}}<p class="flash err" role="alert">{{.Error}}</p>{{end}}
 <div class="scroll"><table class="rows">
-<thead><tr><th>Steam ID</th><th>Name</th><th>Username</th><th>Grants</th><th>State</th><th></th></tr></thead>
+<thead><tr><th>Steam ID</th><th>Username</th><th>Grants</th><th>State</th><th></th></tr></thead>
 <tbody>
 {{range .People}}<tr>
-{{if .Self}}<td>{{.SteamID}} <span class="mute">(you)</span></td><td>{{.Name}}</td><td>{{.Username}}</td><td>{{.GrantsText}}</td><td>{{if .Disabled}}disabled{{end}}</td><td></td>
+{{if .Self}}<td>{{.SteamID}} <span class="mute">(you)</span></td><td>{{.Username}}</td><td>{{.GrantsText}}</td><td>{{if .Disabled}}disabled{{end}}</td><td></td>
 {{else}}<td>{{.SteamID}}</td>
-<td colspan="5"><form method="post" action="/users/{{.SteamID}}" class="inline">
+<td colspan="4"><form method="post" action="/users/{{.SteamID}}" class="inline">
   <input type="hidden" name="csrf" value="{{$csrf}}">
-  <input name="name" value="{{.Name}}" placeholder="Name" maxlength="64" size="14" aria-label="Name">
-  <span class="mute">{{.Username}}</span>
+  <input name="username" value="{{.Username}}" placeholder="Username" minlength="3" maxlength="32" pattern="[A-Za-z0-9._-]+" size="14" aria-label="Username"{{if not .Username}} required{{end}}>
   <input name="grants" value="{{.GrantsText}}" placeholder="alpha=operator, *=viewer" size="30" aria-label="Grants">
   <label><input type="checkbox" name="disabled" value="1"{{if .Disabled}} checked{{end}}> disabled</label>
   <button><i class="fa fa-save" aria-hidden="true"></i>Save</button>
@@ -24,18 +23,18 @@
 <form method="post" action="/users/{{.SteamID}}/reset" class="inline" data-confirm="Remove the password, second factors and sessions of {{.SteamID}}?"><input type="hidden" name="csrf" value="{{$csrf}}"><button>Reset</button></form>
 <form method="post" action="/users/{{.SteamID}}/delete" class="inline" data-confirm="Delete {{.SteamID}}?"><input type="hidden" name="csrf" value="{{$csrf}}"><button class="danger">Delete</button></form></td>
 {{end}}</tr>
-{{else}}<tr><td colspan="6">Nobody yet.</td></tr>{{end}}
+{{else}}<tr><td colspan="5">Nobody yet.</td></tr>{{end}}
 </tbody></table></div>
 
 <section><h2>Add a person</h2>
 <form method="post" action="/users" class="stack">
   <input type="hidden" name="csrf" value="{{$csrf}}">
   <label>Steam ID <input name="steam_id" pattern="7656119[0-9]{10}" required size="20"></label>
-  <label>Name <input name="name" maxlength="64"></label>
+  <label>Username <input name="username" required minlength="3" maxlength="32" pattern="[A-Za-z0-9._-]+" autocomplete="off"></label>
   <label>Grants <input name="grants" placeholder="alpha=operator, *=viewer" size="30"></label>
   <button><i class="fa fa-plus" aria-hidden="true"></i>Add</button>
 </form>
-<p class="mute">They then sign in through Steam and set up a second factor.</p>
+<p class="mute">The username is who they are here; only an administrator changes it. They then sign in through Steam, or with a password you set (<code>dzo user password</code>), and set up a second factor.</p>
 </section>
 {{end}}
 {{template "foot" .}}{{end}}

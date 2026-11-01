@@ -104,7 +104,7 @@ one installation. After the upgrade:
    Create the new one on the installation: ``dzo token create web --role admin --web >
    <paths.secrets>/web.token`` (its role and instances cap what any person can do through it). Delegate tokens
    keep working for scripts and tools.
-4. **Make the first admin.** ``dzo user grant <Steam64 ID> --role admin`` on the host of ``dzo serve`` (and
+4. **Make the first admin.** ``dzo user grant <Steam64 ID> --role admin --username <name>`` on the host of ``dzo serve`` (and
    more people, per instance, with ``--instance``). They open the web interface, sign in through Steam and set
    up a second factor. Everything else is done on the people page.
 5. **Run ``dzo units sync``** (``dzo-web.service`` gained ``ExecReload``) and, for HTTPS, set ``serve.tls`` and

@@ -131,12 +131,12 @@ func (c *Client) Account(ctx context.Context) (out api.Account, err error) {
 	return out, c.get(ctx, "/api/v1/account", &out)
 }
 
-// SetPassword sets the username and password; current is needed when there is a password.
-func (c *Client) SetPassword(ctx context.Context, username, current, newPassword string) error {
-	return c.call(ctx, http.MethodPut, "/api/v1/account/password", map[string]string{"username": username, "current": current, "new": newPassword}, http.StatusNoContent, nil)
+// SetPassword sets the password; the username is given by an administrator. current is needed when there is a password.
+func (c *Client) SetPassword(ctx context.Context, current, newPassword string) error {
+	return c.call(ctx, http.MethodPut, "/api/v1/account/password", map[string]string{"current": current, "new": newPassword}, http.StatusNoContent, nil)
 }
 
-// RemovePassword removes the password and username.
+// RemovePassword removes the password.
 func (c *Client) RemovePassword(ctx context.Context) error {
 	return c.call(ctx, http.MethodDelete, "/api/v1/account/password", nil, http.StatusNoContent, nil)
 }

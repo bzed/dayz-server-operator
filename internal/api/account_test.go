@@ -271,7 +271,7 @@ func TestAccountPasswordNeedsCurrent(t *testing.T) {
 	l.ann(g("alpha", RoleModerator))
 	session := l.loggedIn()
 	body := func(cur, nw string) string {
-		b, _ := json.Marshal(map[string]string{"username": "ann", "current": cur, "new": nw})
+		b, _ := json.Marshal(map[string]string{"current": cur, "new": nw})
 		return string(b)
 	}
 	const newPW = "another horse battery"
@@ -293,35 +293,12 @@ func TestAccountSetsFirstPasswordWithoutCurrent(t *testing.T) {
 	l := newLoginEnv(t)
 	pending := l.steamEnrol()
 	session, _, _ := l.enrolTOTP(pending)
-	b, _ := json.Marshal(map[string]string{"username": "Ann.Smith", "new": password})
+	require.NoError(t, l.m.st.PutPerson(t.Context(), moderation.Person{SteamID: steamA, Username: "Ann.Smith", Name: "Ann", Grants: []moderation.Grant{g("alpha", RoleModerator)}}, banNow))
+	b, _ := json.Marshal(map[string]string{"new": password})
 	code, out := l.call("PUT", "/api/v1/account/password", session, string(b))
 	require.Equal(t, 204, code, "%v", out)
 	code, _, _ = l.passwordStep("ann.smith", password)
 	assert.Equal(t, 200, code)
-	b, _ = json.Marshal(map[string]string{"new": password})
-	l2 := l
-	require.NoError(t, l2.m.st.ClearPassword(t.Context(), steamA))
-	code, _ = l.call("PUT", "/api/v1/account/password", session, string(b))
-	assert.Equal(t, 400, code, "a first password needs a username")
-	for _, bad := range []string{"ab", "has space", "a/b/c", strings.Repeat("x", 33), "ünï"} {
-		b, _ = json.Marshal(map[string]string{"username": bad, "new": password})
-		code, _ = l.call("PUT", "/api/v1/account/password", session, string(b))
-		assert.Equal(t, 400, code, bad)
-	}
-}
-
-func TestUsernameTaken409(t *testing.T) {
-	l := newLoginEnv(t)
-	l.ann(g("alpha", RoleModerator))
-	require.NoError(t, l.m.st.PutPerson(t.Context(), moderation.Person{SteamID: steamB, Name: "Bob", Grants: []moderation.Grant{g("alpha", RoleViewer)}}, banNow))
-	h, err := auth.HashPassword(password)
-	require.NoError(t, err)
-	require.NoError(t, l.m.st.SetPassword(t.Context(), steamB, "bob", h))
-	require.NoError(t, l.m.st.SetTOTP(t.Context(), steamB, totpSecret))
-	session := l.loggedIn()
-	b, _ := json.Marshal(map[string]string{"username": "BOB", "current": password, "new": "yet another horse"})
-	code, _ := l.call("PUT", "/api/v1/account/password", session, string(b))
-	assert.Equal(t, 409, code)
 }
 
 func TestAccountRemovePassword(t *testing.T) {
@@ -455,7 +432,7 @@ func TestPasswordChangeEndsOtherSessions(t *testing.T) {
 	l := newLoginEnv(t)
 	l.ann(g("alpha", RoleModerator))
 	other, current := l.otherSession(l.loggedIn())
-	b, _ := json.Marshal(map[string]string{"username": "ann", "current": password, "new": "another horse battery"})
+	b, _ := json.Marshal(map[string]string{"current": password, "new": "another horse battery"})
 	code, out := l.call("PUT", "/api/v1/account/password", current, string(b))
 	require.Equal(t, 204, code, "%v", out)
 	l.assertOnlyCurrent(other, current)
@@ -490,4 +467,14 @@ func TestSecondFactorRemovalEndsOtherSessions(t *testing.T) {
 	code, _ = l.call("DELETE", "/api/v1/account/totp", current, "")
 	require.Equal(t, 204, code, "a passkey is left")
 	l.assertOnlyCurrent(other, current)
+}
+
+func TestInfoHasTheUsername(t *testing.T) {
+	l := newLoginEnv(t)
+	l.ann(g("alpha", RoleModerator))
+	session := l.loggedIn()
+	code, out := l.call("GET", "/api/v1", session, "")
+	require.Equal(t, 200, code)
+	user := out["user"].(map[string]any)
+	assert.Equal(t, "ann", user["username"], "the header shows the login name")
 }

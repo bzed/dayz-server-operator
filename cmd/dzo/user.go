@@ -127,10 +127,10 @@ func newUserCmd() *cobra.Command {
 		}),
 	}
 
-	var role, name string
+	var role, name, username string
 	var instances []string
 	grant := &cobra.Command{
-		Use:   "grant <steamid> --role <role> [--instance <name>…] [--name <text>]",
+		Use:   "grant <steamid> --role <role> --username <name> [--instance <name>…] [--name <text>]",
 		Short: "Give a role on instances (default: all, *); creates the person, replaces the role on listed instances",
 		Args:  cobra.ExactArgs(1),
 		RunE: with(func(u *userTool, args []string) error {
@@ -148,6 +148,14 @@ func newUserCmd() *cobra.Command {
 			if name != "" {
 				p.Name = name
 			}
+			username = strings.ToLower(strings.TrimSpace(username))
+			switch {
+			case username == "" && p.Username == "":
+				return errors.New("a new person needs a username: --username <name>")
+			case username != "" && !api.ValidUsername(username):
+				return fmt.Errorf("a username has 3 to 32 characters: letters, digits, dot, dash and underscore (got %q)", username)
+			}
+			p.Username = username // empty keeps the one they have
 			p.SteamID = id
 			byInstance := map[string]string{}
 			for _, g := range p.Grants {
@@ -162,16 +170,20 @@ func newUserCmd() *cobra.Command {
 			}
 			sort.Slice(p.Grants, func(i, j int) bool { return p.Grants[i].Instance < p.Grants[j].Instance })
 			if err := u.store.PutPerson(u.cmd.Context(), p, time.Now()); err != nil {
+				if errors.Is(err, moderation.ErrUsernameTaken) {
+					return fmt.Errorf("the username %q is taken", username)
+				}
 				return err
 			}
 			u.log("users.grant", id, "grants: "+grantsText(p.Grants))
-			u.say("%s: %s on %s; now %s", id, role, strings.Join(instances, ", "), grantsText(p.Grants))
+			u.say("%s (%s): %s on %s; now %s", id, p.Username, role, strings.Join(instances, ", "), grantsText(p.Grants))
 			return nil
 		}),
 	}
 	grant.Flags().StringVar(&role, "role", "", "viewer, moderator, operator or admin (required)")
 	grant.Flags().StringSliceVar(&instances, "instance", nil, "instance name (repeatable; default: * = every instance)")
-	grant.Flags().StringVar(&name, "name", "", "display name")
+	grant.Flags().StringVar(&username, "username", "", "the login name and what people see: 3 to 32 of a-z 0-9 . _ - (needed for a new person; given here or changed only by an administrator)")
+	grant.Flags().StringVar(&name, "name", "", "display name (optional)")
 	_ = grant.MarkFlagRequired("role")
 
 	var revokeInstances []string
@@ -258,7 +270,7 @@ func newUserCmd() *cobra.Command {
 
 	reset := &cobra.Command{
 		Use:   "reset <steamid|username>",
-		Short: "Remove password, username, TOTP, passkeys, recovery codes and sessions; the person enrols again through Steam",
+		Short: "Remove password, TOTP, passkeys, recovery codes and sessions; the person enrols again (the username stays)",
 		Args:  cobra.ExactArgs(1),
 		RunE: with(func(u *userTool, args []string) error {
 			id := args[0]
@@ -278,11 +290,10 @@ func newUserCmd() *cobra.Command {
 		}),
 	}
 
-	var passwordUser string
 	password := &cobra.Command{
-		Use:   "password <steamid|username> [--username <name>]",
-		Short: "Set the password (and login name) of a person, for when signing in through Steam does not work yet",
-		Long: "Sets a username and password for a person who already has a role (dzo user grant). The password is read " +
+		Use:   "password <steamid|username>",
+		Short: "Set the password of a person, for when signing in through Steam does not work yet",
+		Long: "Sets the password of a person who already has a role and a username (dzo user grant). The password is read " +
 			"from the terminal without echo, twice; piped in, one line is read. It is the first factor only: the person " +
 			"still sets up an authenticator app or a passkey at the first login (they get recovery codes), and logs in " +
 			"with it every time after. Until they have, whoever knows the password can set up that second factor, so " +
@@ -303,12 +314,8 @@ func newUserCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			username := strings.ToLower(strings.TrimSpace(passwordUser))
-			switch {
-			case username == "" && p.Username == "":
-				return errors.New("a first password needs a login name: --username <name>")
-			case username != "" && !api.ValidUsername(username):
-				return fmt.Errorf("a username has 3 to 32 characters: letters, digits, dot, dash and underscore (got %q)", username)
+			if p.Username == "" {
+				return fmt.Errorf("%s has no username yet: dzo user grant %s --role <role> --username <name>", p.SteamID, p.SteamID)
 			}
 			pw, err := readNewPassword(u.cmd)
 			if err != nil {
@@ -318,24 +325,17 @@ func newUserCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if err := u.store.SetPassword(ctx, p.SteamID, username, hash); err != nil {
-				if errors.Is(err, moderation.ErrUsernameTaken) {
-					return fmt.Errorf("the username %q is taken", username)
-				}
+			if err := u.store.SetPassword(ctx, p.SteamID, "", hash); err != nil {
 				return err
 			}
 			if err := u.store.DeleteSessions(ctx, p.SteamID, ""); err != nil {
 				return err
 			}
-			if username == "" {
-				username = p.Username
-			}
 			u.log("users.password", p.SteamID, "set from the command line")
-			u.say("%s: password set, their sessions ended, login name %s; at the first login they set up a second factor", p.SteamID, username)
+			u.say("%s: password set, their sessions ended, login name %s; at the first login they set up a second factor", p.SteamID, p.Username)
 			return nil
 		}),
 	}
-	password.Flags().StringVar(&passwordUser, "username", "", "the login name (needed for a first password; 3 to 32 of a-z 0-9 . _ -)")
 
 	cmd.AddCommand(list, grant, revoke, password,
 		setDisabled("disable", "Block a person from logging in and end their sessions", true),

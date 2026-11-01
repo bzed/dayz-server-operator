@@ -148,20 +148,20 @@ func TestLoginAndAccountAgainstTheServer(t *testing.T) {
 	assert.True(t, acc.TOTP)
 
 	// users
-	_, err = u.PutUser(ctx, steamB, api.UserBody{Name: "Bob", Grants: []moderation.Grant{{Instance: "alpha", Role: "viewer"}}})
+	_, err = u.PutUser(ctx, steamB, api.UserBody{Username: "bob", Name: "Bob", Grants: []moderation.Grant{{Instance: "alpha", Role: "viewer"}}})
 	require.NoError(t, err)
 	people, err := u.Users(ctx)
 	require.NoError(t, err)
 	assert.Len(t, people, 2)
 	require.NoError(t, u.ResetUser(ctx, steamB))
 	require.NoError(t, u.DeleteUser(ctx, steamB))
-	_, err = u.PutUser(ctx, steamA, api.UserBody{Name: "Ann"})
+	_, err = u.PutUser(ctx, steamA, api.UserBody{Username: "ann", Name: "Ann"})
 	var apiErr *Error
 	require.ErrorAs(t, err, &apiErr)
 	assert.Equal(t, 409, apiErr.Status, "nobody changes their own access")
 
 	// account
-	require.NoError(t, u.SetPassword(ctx, "ann", secretPW, "another horse battery"))
+	require.NoError(t, u.SetPassword(ctx, secretPW, "another horse battery"))
 	require.NoError(t, u.RemovePassword(ctx))
 	codes, err := u.NewRecoveryCodes(ctx)
 	require.NoError(t, err)

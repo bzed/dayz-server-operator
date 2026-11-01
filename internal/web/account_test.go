@@ -90,7 +90,9 @@ func TestAccountPageShowsTheLogin(t *testing.T) {
 
 func TestAccountNeedsTheToken(t *testing.T) {
 	e := newEnv(t, api.RoleAdmin)
-	req := url.Values{"username": {"fix"}, "new": {"correct horse battery"}}
+	require.NoError(t, e.st.PutPerson(t.Context(), moderation.Person{SteamID: fixturePerson, Name: "Fixture", Username: "fix", Grants: []moderation.Grant{star("admin")}}, time.Now()))
+	e.srv.forgetInfo(e.session)
+	req := url.Values{"new": {"correct horse battery"}}
 	code, _ := e.postForm("/account/password", req, false)
 	assert.Equal(t, 403, code)
 	code, _ = e.postForm("/account/password", req, true)
@@ -99,22 +101,24 @@ func TestAccountNeedsTheToken(t *testing.T) {
 
 func TestAccountPasswordForm(t *testing.T) {
 	e := newEnv(t, api.RoleAdmin)
-	code, body := e.post("/account/password", url.Values{"username": {"fix"}, "new": {"short"}}, nil)
+	require.NoError(t, e.st.PutPerson(t.Context(), moderation.Person{SteamID: fixturePerson, Name: "Fixture", Username: "Fix.Admin", Grants: []moderation.Grant{star("admin")}}, time.Now()))
+	e.srv.forgetInfo(e.session)
+	code, body := e.post("/account/password", url.Values{"new": {"short"}}, nil)
 	assert.Equal(t, 422, code)
 	assert.Contains(t, body, "12 to 256")
-	code, body = e.post("/account/password", url.Values{"username": {"Fix.Admin"}, "new": {"correct horse battery"}}, nil)
+	code, body = e.post("/account/password", url.Values{"new": {"correct horse battery"}}, nil)
 	require.Equal(t, 200, code, body)
 	assert.Contains(t, body, "saved")
 	p, err := e.st.PersonByUsername(t.Context(), "fix.admin")
 	require.NoError(t, err)
 	assert.Equal(t, fixturePerson, p.SteamID)
-	code, body = e.post("/account/password", url.Values{"username": {"fix.admin"}, "current": {"wrong horse battery"}, "new": {"yet another horse"}}, nil)
+	code, body = e.post("/account/password", url.Values{"current": {"wrong horse battery"}, "new": {"yet another horse"}}, nil)
 	assert.Equal(t, 422, code)
 	assert.Contains(t, body, "current password is wrong")
 	code, body = e.post("/account/password/delete", url.Values{}, nil)
 	assert.Equal(t, 200, code, body)
 	_, err = e.st.PersonByUsername(t.Context(), "fix.admin")
-	require.ErrorIs(t, err, moderation.ErrNotFound)
+	require.NoError(t, err, "the username stays")
 }
 
 func TestAccountTOTPSetupShowsQR(t *testing.T) {
@@ -196,18 +200,22 @@ func TestUsersPageHiddenWithoutManage(t *testing.T) {
 func TestUsersPagePutsGrants(t *testing.T) {
 	e := newEnv(t, api.RoleAdmin)
 	const bob = "76561198000000002"
-	code, body := e.post("/users", url.Values{"steam_id": {bob}, "name": {"Bob"}, "grants": {"alpha=operator, *=viewer"}}, nil)
+	code, body := e.post("/users", url.Values{"steam_id": {bob}, "username": {"Bob"}, "grants": {"alpha=operator, *=viewer"}}, nil)
 	require.Equal(t, 200, code, body)
 	assert.Contains(t, body, "Saved "+bob)
 	assert.Contains(t, body, "*=viewer, alpha=operator")
 	p, err := e.st.Person(t.Context(), bob)
 	require.NoError(t, err)
+	assert.Equal(t, "bob", p.Username)
+	code, body = e.post("/users", url.Values{"steam_id": {"76561198000000003"}, "grants": {"alpha=viewer"}}, nil)
+	assert.Equal(t, 422, code, "a new person needs a username")
+	assert.Contains(t, body, "needs a username")
 	assert.Equal(t, []moderation.Grant{{Instance: "*", Role: "viewer"}, {Instance: "alpha", Role: "operator"}}, p.Grants)
 
-	code, body = e.post("/users/"+bob, url.Values{"name": {"Bobby"}, "grants": {"alpha=moderator"}, "disabled": {"1"}}, nil)
+	code, body = e.post("/users/"+bob, url.Values{"username": {"Bobby"}, "grants": {"alpha=moderator"}, "disabled": {"1"}}, nil)
 	require.Equal(t, 200, code, body)
 	p, _ = e.st.Person(t.Context(), bob)
-	assert.Equal(t, "Bobby", p.Name)
+	assert.Equal(t, "bobby", p.Username)
 	assert.True(t, p.Disabled)
 	assert.Equal(t, []moderation.Grant{{Instance: "alpha", Role: "moderator"}}, p.Grants)
 
@@ -218,11 +226,14 @@ func TestUsersPagePutsGrants(t *testing.T) {
 	assert.Equal(t, 422, code)
 	assert.Contains(t, body, "role")
 
-	require.NoError(t, e.st.SetPassword(t.Context(), bob, "bob", "h"))
+	require.NoError(t, e.st.SetPassword(t.Context(), bob, "", "h"))
 	code, body = e.post("/users/"+bob+"/reset", url.Values{}, nil)
 	require.Equal(t, 200, code, body)
-	_, err = e.st.PersonByUsername(t.Context(), "bob")
-	require.ErrorIs(t, err, moderation.ErrNotFound)
+	c, err := e.st.Credentials(t.Context(), bob)
+	require.NoError(t, err)
+	assert.Empty(t, c.PasswordHash)
+	_, err = e.st.PersonByUsername(t.Context(), "bobby")
+	require.NoError(t, err, "the username stays")
 	code, body = e.post("/users/"+bob+"/delete", url.Values{}, nil)
 	require.Equal(t, 200, code, body)
 	_, err = e.st.Person(t.Context(), bob)
@@ -240,4 +251,29 @@ func TestUsersPageDoesNotOfferChangesToOneself(t *testing.T) {
 	code, body = e.post("/users/"+fixturePerson+"/delete", url.Values{}, nil)
 	assert.Equal(t, 422, code)
 	assert.Contains(t, body, "you cannot change your own access")
+}
+
+func TestHeaderShowsTheUsername(t *testing.T) {
+	e := newEnv(t, api.RoleAdmin)
+	_, body, _ := e.get("/")
+	assert.Contains(t, body, "Fixture</a>", "no username: the name")
+	e.srv.forgetInfo(e.session)
+	code, body := e.post("/users/"+fixturePerson, url.Values{"username": {"Fix.Admin"}, "grants": {"*=admin"}}, nil)
+	require.Equal(t, 200, code, body)
+	assert.Contains(t, body, `aria-hidden="true"></i>fix.admin</a>`, "the username, as soon as there is one")
+	assert.NotContains(t, body, fixturePerson+"</a>")
+}
+
+func TestUsernameIsNotEditableByThePerson(t *testing.T) {
+	e := newEnv(t, api.RoleAdmin)
+	_, body, _ := e.get("/account")
+	assert.Contains(t, body, "no username yet", "no password login without one")
+	assert.NotContains(t, body, `name="username"`)
+	_, err := e.st.PersonByUsername(t.Context(), "fix")
+	require.ErrorIs(t, err, moderation.ErrNotFound)
+	require.NoError(t, e.st.PutPerson(t.Context(), moderation.Person{SteamID: fixturePerson, Name: "Fixture", Username: "fix", Grants: []moderation.Grant{star("admin")}}, time.Now()))
+	e.srv.forgetInfo(e.session)
+	_, body, _ = e.get("/account")
+	assert.Contains(t, body, "<strong>fix</strong>")
+	assert.NotContains(t, body, `name="username"`, "only an administrator changes it")
 }
