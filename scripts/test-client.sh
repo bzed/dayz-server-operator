@@ -72,7 +72,7 @@ web_tests() {
 
 # server_tests: needs the server, dzo serve and the probe, no client.
 server_tests() {
-# 1.30 only: Motorbike is not a Car, dzo-admin keeps a registry for it. 1.29 has no motorbikes.
+# Motorbike is not a Car, dzo-admin keeps a registry for it.
 # The world already has motorbikes of the economy: the probe's is the id that is new.
 vl() { "$work/dzo" vehicle list t1 --config "$work/config.yaml" --token-file "$work/api.token" "$@"; }
 vl | awk '$2 == "motorbike" {print $1}' | sort >"$work/bikes.before"

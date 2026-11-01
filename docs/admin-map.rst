@@ -57,8 +57,7 @@ other mods.
 Boats (vanilla ``Boat_01_*`` and the Expansion boats, whose Zodiac is a car to the game and Boat_01 a ``BoatScript``)
 are reported as kind ``boat`` by the mod itself, with a ship icon. A boat has fuel and parts but no wheels: ``wheels`` repairs
 nothing on it and ``fluids`` fills its tank. A spawned or moved boat is put on the surface of the water, not on the
-seabed (the height of the water above the ground is added where there is water). Boats need dzo-admin 0.7.0 and DayZ 1.30;
-1.29 does not report them. ``vehicle_kinds: {boat: [...]}`` adds the boat classes of other mods that are cars to the game.
+seabed (the height of the water above the ground is added where there is water). Boats need dzo-admin 0.7.0. ``vehicle_kinds: {boat: [...]}`` adds the boat classes of other mods that are cars to the game.
 
 Markers have no frame, so that the icon gets all the room, and are told apart by shape and edge: players are round dots
 in the colour of their health, with a white ring; vehicles are white icons with a dark edge; events and other markers are

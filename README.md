@@ -152,15 +152,15 @@ been checked yet.
 On a Debian 13 development host (rootless podman 5.4.2, a user systemd, btrfs)
 with a real Steam account, and on a workstation with the DayZ client:
 
-- **Servers.** DayZ 1.29 (stable) and 1.30 (experimental) run in the runtime
+- **Servers.** DayZ 1.30 (stable) and the experimental build run in the runtime
   image from the generated quadlets, side by side, with workshop mods (CF-Test
   on experimental) and `dzo-admin`; builds and mods come from steamcmd by `dzo`.
   `@<workshop id>` directories work as mod folders, the Steam login and the
   workshop path layout match what the code expects, and the process name the
   health check looks for is `enfMain`.
 - **BattlEye player events** from a real client with BattlEye (a signed test mod
-  sends chat lines): connect, GUID, chat, kick and disconnect, on 1.29.
-- **dzo-admin with a real client**, on both 1.29 and 1.30
+  sends chat lines): connect, GUID, chat, kick and disconnect.
+- **dzo-admin with a real client**, on 1.30
   (`scripts/test-client.sh`, a headless DayZ client against a local server and
   `dzo serve`): the player list, messages in all three styles, teleport (and its
   refusal in a vehicle), spawning an item into the inventory, the hands and the
@@ -230,7 +230,7 @@ Things that could not be checked yet, roughly in the order they would bite:
   `--config`, which broke it on any host with a non-default layout.
 - **`dzo test boot` in some modes**: `--container`, `cfggameplay.json` (the
   server only reads it with `enableCfgGameplayFile = 1`) and Windows. It has
-  passed on 1.29 and 1.30, on a good instance, and fails on a mission script
+  passed on 1.30, on a good instance, and fails on a mission script
   error, an XML file that does not parse and a missing `<ce folder>`.
 - **The web interface's buttons in a browser.** The pages, the map and the API
   actions behind the buttons work; the htmx forms were not clicked.
