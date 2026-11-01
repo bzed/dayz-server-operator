@@ -10,26 +10,20 @@
 <pre id="recovery-codes">{{range .Codes}}{{.}}
 {{end}}</pre></section>{{end}}
 {{$a := .Account}}
-<dl class="facts"><dt>Steam ID</dt><dd>{{$a.SteamID}}</dd><dt>Name</dt><dd>{{if $a.Name}}{{$a.Name}}{{else}}none{{end}}</dd><dt>Username</dt><dd>{{if $a.Username}}{{$a.Username}}{{else}}none{{end}}</dd></dl>
+<dl class="facts"><dt>Steam ID</dt><dd>{{$a.SteamID}}</dd><dt>Username</dt><dd>{{if $a.Username}}{{$a.Username}}{{else}}none{{end}}</dd></dl>
 
-<section><h2>Name</h2>
-<p>The name other people see in the people list and the audit log. The top bar shows your username, or this name until you have one.</p>
-<form method="post" action="/account/name" class="stack">
-  <input type="hidden" name="csrf" value="{{$csrf}}">
-  <label>Name <input name="name" value="{{$a.Name}}" maxlength="64" autocomplete="name"></label>
-  <button class="primary">Save the name</button>
-</form></section>
-
-<section><h2>Username and password</h2>
-<p>With a username and a password you can sign in without Steam. The second step stays.</p>
+<section><h2>Password</h2>
+{{if $a.Username}}<p>With your username <strong>{{$a.Username}}</strong> and a password you can sign in without Steam. The second step stays. An administrator gives and changes usernames.</p>
+{{else}}<p>You have no username yet, so no password login: ask an administrator to give you one.</p>{{end}}
+{{if $a.Username}}
 <form method="post" action="/account/password" class="stack">
   <input type="hidden" name="csrf" value="{{$csrf}}">
-  <label>Username <input name="username" value="{{$a.Username}}" autocomplete="username" minlength="3" maxlength="32" pattern="[A-Za-z0-9._-]+" {{if not $a.HasPassword}}required{{end}}></label>
   {{if $a.HasPassword}}<label>Current password <input name="current" type="password" autocomplete="current-password" required></label>{{end}}
   <label>New password (at least 12 characters) <input name="new" type="password" autocomplete="new-password" minlength="12" maxlength="256" required></label>
   <button><i class="fa fa-save" aria-hidden="true"></i>{{if $a.HasPassword}}Change{{else}}Set{{end}}</button>
 </form>
 {{if $a.HasPassword}}<form method="post" action="/account/password/delete"><input type="hidden" name="csrf" value="{{$csrf}}"><button class="danger">Remove the password</button></form>{{end}}
+{{end}}
 </section>
 
 <section><h2>Authenticator app</h2>

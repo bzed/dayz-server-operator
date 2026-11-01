@@ -19,7 +19,7 @@ import (
 )
 
 func putBody(name string, disabled bool, grants ...moderation.Grant) string {
-	b, _ := json.Marshal(map[string]any{"name": name, "disabled": disabled, "grants": grants})
+	b, _ := json.Marshal(map[string]any{"name": name, "username": "user-" + strings.ToLower(name), "disabled": disabled, "grants": grants})
 	return string(b)
 }
 
@@ -290,4 +290,60 @@ func TestStreamKeepsRunningWhileAllowed(t *testing.T) {
 			return false
 		}
 	}, 200*time.Millisecond, 10*time.Millisecond, "the stream closed although the person is still allowed")
+}
+
+func TestPutUserUsername(t *testing.T) {
+	w := newWebEnv(t)
+	tok := w.webToken(RoleAdmin)
+	star := w.login(steamC, g("*", RoleAdmin))
+	put := func(id, body string) (int, string) {
+		code, b := w.as("PUT", "/api/v1/users/"+id, tok, star, body)
+		return code, string(b)
+	}
+	body := func(username string) string {
+		b, _ := json.Marshal(map[string]any{"username": username, "grants": []moderation.Grant{g("alpha", RoleViewer)}})
+		return string(b)
+	}
+	code, out := put(steamA, body(""))
+	assert.Equal(t, 400, code, "a new person needs a username: %s", out)
+	assert.Contains(t, out, "username")
+	for _, bad := range []string{"ab", "has space", "a/b/c", strings.Repeat("x", 33), "\u00fcn\u00ef"} {
+		code, _ = put(steamA, body(bad))
+		assert.Equal(t, 400, code, bad)
+	}
+	code, out = put(steamA, body("Ann.Admin"))
+	require.Equal(t, 200, code, out)
+	var p moderation.Person
+	require.NoError(t, json.Unmarshal([]byte(out), &p))
+	assert.Equal(t, "ann.admin", p.Username)
+
+	code, _ = put(steamB, body("ANN.admin"))
+	assert.Equal(t, 409, code, "taken")
+	code, _ = put(steamA, body(""))
+	assert.Equal(t, 200, code, "an existing person keeps theirs")
+	got, _ := w.m.st.Person(t.Context(), steamA)
+	assert.Equal(t, "ann.admin", got.Username)
+	code, _ = put(steamA, body("ann"))
+	assert.Equal(t, 200, code, "an admin renames")
+	got, _ = w.m.st.Person(t.Context(), steamA)
+	assert.Equal(t, "ann", got.Username)
+}
+
+func TestSomeoneWithoutAUsernameCannotSetAPassword(t *testing.T) {
+	l := newLoginEnv(t)
+	pending := l.steamEnrol()
+	session, _, _ := l.enrolTOTP(pending)
+	b, _ := json.Marshal(map[string]string{"new": password})
+	code, out := l.call("PUT", "/api/v1/account/password", session, string(b))
+	assert.Equal(t, 409, code, "%v", out)
+	assert.Contains(t, out["error"], "administrator")
+	require.NoError(t, l.m.st.PutPerson(t.Context(), moderation.Person{SteamID: steamA, Username: "ann", Name: "Ann", Grants: []moderation.Grant{g("alpha", RoleModerator)}}, banNow))
+	code, out = l.call("PUT", "/api/v1/account/password", session, string(b))
+	require.Equal(t, 204, code, "%v", out)
+	code, _, _ = l.passwordStep("ann", password)
+	assert.Equal(t, 200, code)
+	// the login name is not the person's to change
+	b, _ = json.Marshal(map[string]string{"username": "mallory", "current": password, "new": password + "x"})
+	code, _ = l.call("PUT", "/api/v1/account/password", session, string(b))
+	assert.Equal(t, 400, code, "no such field")
 }

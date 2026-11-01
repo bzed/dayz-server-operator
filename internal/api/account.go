@@ -6,12 +6,10 @@ package api
 import (
 	"cmp"
 	"encoding/base32"
-	"errors"
 	"net/http"
 	"regexp"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/bzed/dayz-server-operator/internal/admin"
 	"github.com/bzed/dayz-server-operator/internal/auth"
@@ -163,29 +161,8 @@ func (s *Server) account(w http.ResponseWriter, r *http.Request, c *call) {
 }
 
 type passwordChange struct {
-	Username string `json:"username"`
-	Current  string `json:"current"`
-	New      string `json:"new"`
-}
-
-func (s *Server) setName(w http.ResponseWriter, r *http.Request, c *call) {
-	var body struct {
-		Name string `json:"name"`
-	}
-	if !decode(w, r, &body) {
-		return
-	}
-	name := cleanName(body.Name)
-	if utf8.RuneCountInString(name) > maxPersonName {
-		fail(w, http.StatusBadRequest, "the name is longer than %d characters", maxPersonName)
-		return
-	}
-	if err := s.Accounts.SetName(r.Context(), c.who.User.SteamID, name); err != nil {
-		fail(w, http.StatusInternalServerError, "database error")
-		return
-	}
-	s.accountAudit(c, "account.name", "changed")
-	w.WriteHeader(http.StatusNoContent)
+	Current string `json:"current"`
+	New     string `json:"new"`
 }
 
 func (s *Server) setPassword(w http.ResponseWriter, r *http.Request, c *call) {
@@ -212,13 +189,8 @@ func (s *Server) setPassword(w http.ResponseWriter, r *http.Request, c *call) {
 			return
 		}
 	}
-	username := strings.ToLower(strings.TrimSpace(body.Username))
-	switch {
-	case username == "" && person.Username == "":
-		fail(w, http.StatusBadRequest, "a username is needed")
-		return
-	case username != "" && !usernameRE.MatchString(username):
-		fail(w, http.StatusBadRequest, "a username has 3 to 32 characters: letters, digits, dot, dash and underscore")
+	if person.Username == "" {
+		fail(w, http.StatusConflict, "you have no username yet: ask an administrator to give you one")
 		return
 	}
 	hash, err := auth.HashPassword(body.New)
@@ -226,11 +198,7 @@ func (s *Server) setPassword(w http.ResponseWriter, r *http.Request, c *call) {
 		fail(w, http.StatusBadRequest, "%v", err)
 		return
 	}
-	switch err := s.Accounts.SetPassword(ctx, id, username, hash); {
-	case errors.Is(err, moderation.ErrUsernameTaken):
-		fail(w, http.StatusConflict, "that username is taken")
-		return
-	case err != nil:
+	if err := s.Accounts.SetPassword(ctx, id, "", hash); err != nil {
 		fail(w, http.StatusInternalServerError, "database error")
 		return
 	}
@@ -474,7 +442,6 @@ func (s *Server) accountRoutes(route func(pattern, perm string, instance bool, h
 		h       handler
 	}{
 		{"GET " + base + "/account", s.account},
-		{"PUT " + base + "/account/name", s.setName},
 		{"PUT " + base + "/account/password", s.setPassword},
 		{"DELETE " + base + "/account/password", s.removePassword},
 		{"POST " + base + "/account/totp/begin", s.accountTOTPBegin},

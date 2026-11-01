@@ -22,6 +22,10 @@ const errOwnAccess = "you cannot change your own access; another admin or dzo us
 
 // UserBody is the body of PUT /users/{steamid}.
 type UserBody struct {
+	// Username is the login name and what people see: needed for a new person, kept when empty, changed by
+	// an administrator only.
+	Username string `json:"username"`
+	// Name is an optional display name; kept when empty.
 	Name     string             `json:"name"`
 	Disabled bool               `json:"disabled"`
 	Grants   []moderation.Grant `json:"grants"`
@@ -86,20 +90,38 @@ func (s *Server) putUser(w http.ResponseWriter, r *http.Request, c *call) {
 		fail(w, http.StatusBadRequest, "%q is not a Steam ID", id)
 		return
 	}
-	if isSelf(c, id) {
-		old, err := s.Accounts.Person(r.Context(), id)
-		if err != nil {
-			fail(w, http.StatusInternalServerError, "database error")
+	username := strings.ToLower(strings.TrimSpace(body.Username))
+	old, err := s.Accounts.Person(r.Context(), id)
+	switch {
+	case errors.Is(err, moderation.ErrNotFound):
+		if username == "" {
+			fail(w, http.StatusBadRequest, "a new person needs a username")
 			return
 		}
+	case err != nil:
+		fail(w, http.StatusInternalServerError, "database error")
+		return
+	}
+	if username != "" && !ValidUsername(username) {
+		fail(w, http.StatusBadRequest, "a username has 3 to 32 characters: letters, digits, dot, dash and underscore")
+		return
+	}
+	if isSelf(c, id) {
 		if body.Disabled != old.Disabled || !maps.Equal(grantMap(body.Grants), grantMap(old.Grants)) {
 			fail(w, http.StatusConflict, errOwnAccess)
 			return
 		}
 	}
-	p := moderation.Person{SteamID: id, Name: name, Disabled: body.Disabled, Grants: body.Grants}
+	if name == "" {
+		name = old.Name // a form that has no name field leaves it alone
+	}
+	p := moderation.Person{SteamID: id, Username: username, Name: name, Disabled: body.Disabled, Grants: body.Grants}
 	if err := s.Accounts.PutPerson(r.Context(), p, s.now()); err != nil {
 		var inv *moderation.InvalidError
+		if errors.Is(err, moderation.ErrUsernameTaken) {
+			fail(w, http.StatusConflict, "that username is taken")
+			return
+		}
 		if errors.As(err, &inv) {
 			fail(w, http.StatusBadRequest, "%s", inv.Msg)
 			return

@@ -73,7 +73,6 @@ type Accounts interface {
 	CreateSession(ctx context.Context, hash, steamID, client string, now time.Time) error
 	DeleteSession(ctx context.Context, hash string) error
 	DeleteSessions(ctx context.Context, steamID, keepHash string) error
-	SetName(ctx context.Context, steamID, name string) error
 	SetPassword(ctx context.Context, steamID, username, hash string) error
 	ClearPassword(ctx context.Context, steamID string) error
 	SetTOTP(ctx context.Context, steamID string, secret []byte) error

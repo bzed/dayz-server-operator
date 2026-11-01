@@ -100,9 +100,9 @@ func (s *Store) SetPassword(ctx context.Context, steamID, username, hash string)
 	return wrap("set password", err)
 }
 
-// ClearPassword removes the password and the login name of a person; the name is free again.
+// ClearPassword removes the password of a person. The username stays: an administrator gave it.
 func (s *Store) ClearPassword(ctx context.Context, steamID string) error {
-	return s.changeOne(ctx, "clear password", `UPDATE people SET password_hash = '', username = NULL WHERE steam_id = ?`, steamID)
+	return s.changeOne(ctx, "clear password", `UPDATE people SET password_hash = '' WHERE steam_id = ?`, steamID)
 }
 
 // SetTOTP stores a new TOTP secret and forgets the steps used with the old one.

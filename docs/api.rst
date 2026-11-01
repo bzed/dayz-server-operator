@@ -186,15 +186,13 @@ being logged in; every change is audited (``account.*``) without secrets.
      - Answer
    * - ``GET /account``
      - ``{"steam_id","name","username","has_password","totp":bool,"passkeys":[{"id","name","created","last_used"}],"recovery_left":n}``
-   * - ``PUT /account/name`` ``{"name"}``
-     - ``204``. The display name, at most 64 characters, control characters removed; it may be empty
-   * - ``PUT /account/password`` ``{"username","current","new"}``
+   * - ``PUT /account/password`` ``{"current","new"}``
      - ``204``. ``current`` is needed when a password exists (``403`` if wrong, counted like a failed
-       login). The username is 3 to 32 characters of ``a-z 0-9 . _ -`` (case-insensitive, stored in lower
-       case), unique (``409``), and needed with the first password; the password is 12 to 256 bytes
-       (``400``). The person's other sessions end
+       login). The password is 12 to 256 bytes (``400``). A person without a username cannot have a
+       password (``409``): an administrator gives the username, a person never changes it. The person's
+       other sessions end
    * - ``DELETE /account/password``
-     - ``204``; the username is free again, the other sessions end
+     - ``204``; the other sessions end (the username stays)
    * - ``POST /account/totp/begin``
      - ``{"pending","secret","uri"}``; ``POST /account/totp/finish`` ``{"pending","code"}`` → ``204``
        once the code of the new secret is right; the old secret is replaced
@@ -225,8 +223,11 @@ Steam ID and the grants.
      - Answer
    * - ``GET /users``
      - the people: ``steam_id``, ``name``, ``username``, ``disabled``, ``created``, ``grants``; no secret
-   * - ``PUT /users/<steamid>`` ``{"name","disabled","grants":[{"instance","role"}]}``
-     - creates the person or replaces their name, disabled flag and grants, and answers the person. A role
+   * - ``PUT /users/<steamid>`` ``{"username","name","disabled","grants":[{"instance","role"}]}``
+     - creates the person or replaces their username, name, disabled flag and grants, and answers the person.
+       ``username`` is the login name and what people see: 3 to 32 characters of ``a-z 0-9 . _ -``
+       (case-insensitive, stored in lower case, unique: ``409``), required for a new person (``400``), kept
+       when empty; only this call (an administrator) changes it. ``name`` is optional and kept when empty. A role
        is ``viewer``, ``moderator``, ``operator`` or ``admin``; an instance is a name (letters, digits,
        ``_ . -``, at most 64) or ``*`` for every instance, also later ones; it need not exist yet. Anything
        else is ``400``. Credentials are not touched. Disabling a person, or leaving them without a grant,
@@ -234,7 +235,7 @@ Steam ID and the grants.
    * - ``DELETE /users/<steamid>``
      - ``204``; the person and everything of theirs is gone
    * - ``POST /users/<steamid>/reset``
-     - ``204``; password, username, TOTP, passkeys, recovery codes and sessions are removed, the person
+     - ``204``; password, TOTP, passkeys, recovery codes and sessions are removed (the username stays), the person
        and their grants stay. The person enrols again through Steam
 
 Nobody can change their own access through the API: a ``PUT`` for oneself that changes the grants (up or

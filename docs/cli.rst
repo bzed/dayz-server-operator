@@ -191,17 +191,17 @@ Web interface and API
    * - ``dzo token list`` / ``dzo token revoke <id>``
      - list or delete tokens
    * - ``dzo user list``
-     - the people who may use the web interface, with their grants (Steam ID, name, username, ``instance=role``, state)
-   * - ``dzo user grant <steamid> --role <role> [--instance <name>…] [--name <text>]``
-     - give a role (``viewer``, ``moderator``, ``operator``, ``admin``) on the listed instances, or on ``*`` (every instance, also later ones) without ``--instance``. Creates the person and replaces the role on instances they already have. This is how the first admin is made
+     - the people who may use the web interface, with their grants (Steam ID, username, name, ``instance=role``, state)
+   * - ``dzo user grant <steamid> --role <role> --username <name> [--instance <name>…] [--name <text>]``
+     - give a role (``viewer``, ``moderator``, ``operator``, ``admin``) on the listed instances, or on ``*`` (every instance, also later ones) without ``--instance``. Creates the person and replaces the role on instances they already have. ``--username`` (3 to 32 of ``a-z 0-9 . _ -``, unique, not case-sensitive) is the login name and what people see; a new person needs it, for an existing one it is kept unless given, and only an administrator changes it (here or on the people page). ``--name`` is an optional display name. This is how the first admin is made
    * - ``dzo user revoke <steamid> [--instance <name>…]``
      - take the roles on the listed instances away, or every grant without ``--instance``. A person left without a grant is logged out
-   * - ``dzo user password <steamid|username> [--username <name>]``
-     - set the login name and password of a person who has a role, reading the password from the terminal (twice, no echo) or one line from a pipe. For when Steam sign-in does not work: the first login with it sets up a second factor. A first password needs ``--username``. All sessions of the person end
+   * - ``dzo user password <steamid|username>``
+     - set the password of a person who has a role and a username, reading the password from the terminal (twice, no echo) or one line from a pipe. For when Steam sign-in does not work: the first login with it sets up a second factor. All sessions of the person end
    * - ``dzo user disable <steamid>`` / ``enable`` / ``delete``
      - block a person from logging in (their sessions end, grants stay) / allow it again / delete the person with grants, credentials and sessions
    * - ``dzo user reset <steamid|username>``
-     - remove password, username, TOTP, passkeys, recovery codes and sessions; the person signs in through Steam and sets up a second factor again
+     - remove password, TOTP, passkeys, recovery codes and sessions (the username stays); the person signs in through Steam and sets up a second factor again
 
 ``dzo user`` runs on the host of ``dzo serve`` and writes its database (``<paths.db>/dzo.sqlite``) directly,
 which is safe while ``dzo serve`` runs, like ``dzo token`` with the token file. So it works when nobody can

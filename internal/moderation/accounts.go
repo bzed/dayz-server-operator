@@ -140,8 +140,9 @@ func (s *Store) PersonByUsername(ctx context.Context, username string) (Person, 
 	return s.person(ctx, `username = ?`, normUsername(username))
 }
 
-// PutPerson creates a person or updates their name and disabled flag, and replaces their grants. Credentials
-// are left alone. Disabling a person, or removing their last grant, ends their sessions.
+// PutPerson creates a person or updates their name, username and disabled flag, and replaces their grants.
+// An empty username keeps the one the person has; a name another person has gives ErrUsernameTaken and stores
+// nothing. Credentials are left alone. Disabling a person, or removing their last grant, ends their sessions.
 func (s *Store) PutPerson(ctx context.Context, p Person, now time.Time) error {
 	if err := checkPerson(p); err != nil {
 		return err
@@ -159,6 +160,14 @@ func (s *Store) PutPerson(ctx context.Context, p Person, now time.Time) error {
 		if _, err := tx.ExecContext(ctx, `DELETE FROM grants WHERE steam_id = ?`, p.SteamID); err != nil {
 			return err
 		}
+		if name := normUsername(p.Username); name != "" {
+			if _, err := tx.ExecContext(ctx, `UPDATE people SET username = ? WHERE steam_id = ?`, name, p.SteamID); err != nil {
+				if isUnique(err) {
+					return ErrUsernameTaken
+				}
+				return err
+			}
+		}
 		grants := append([]Grant(nil), p.Grants...)
 		sort.Slice(grants, func(i, j int) bool { return grants[i].Instance < grants[j].Instance })
 		for _, g := range grants {
@@ -175,18 +184,6 @@ func (s *Store) PutPerson(ctx context.Context, p Person, now time.Time) error {
 	return wrap("put person", err)
 }
 
-// SetName changes the display name of a person and nothing else.
-func (s *Store) SetName(ctx context.Context, steamID, name string) error {
-	res, err := s.db.ExecContext(ctx, `UPDATE people SET name = ? WHERE steam_id = ?`, name, steamID)
-	if err != nil {
-		return wrap("set name", err)
-	}
-	if n, _ := res.RowsAffected(); n == 0 { //nolint:errcheck // sqlite reports it
-		return ErrNotFound
-	}
-	return nil
-}
-
 // DeletePerson removes a person with everything that belongs to them.
 func (s *Store) DeletePerson(ctx context.Context, steamID string) error {
 	res, err := s.db.ExecContext(ctx, `DELETE FROM people WHERE steam_id = ?`, steamID)
@@ -199,11 +196,11 @@ func (s *Store) DeletePerson(ctx context.Context, steamID string) error {
 	return nil
 }
 
-// ResetCredentials removes the password, username, TOTP, passkeys, recovery codes, sessions and pending
+// ResetCredentials removes the password, TOTP, passkeys, recovery codes, sessions and pending
 // logins of a person; the person and their grants stay, and they enrol again through Steam.
 func (s *Store) ResetCredentials(ctx context.Context, steamID string) error {
 	err := s.tx(ctx, func(tx *sql.Tx) error {
-		res, err := tx.ExecContext(ctx, `UPDATE people SET username = NULL, password_hash = '', totp_secret = NULL, totp_last_step = 0 WHERE steam_id = ?`, steamID)
+		res, err := tx.ExecContext(ctx, `UPDATE people SET password_hash = '', totp_secret = NULL, totp_last_step = 0 WHERE steam_id = ?`, steamID)
 		if err != nil {
 			return err
 		}

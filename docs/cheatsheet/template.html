@@ -296,8 +296,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
     <div class="task">
       <h2>People and the first admin</h2>
       <ul class="rows one">
-        <li class="c"><span class="cmd">dzo user grant &lt;steam64&gt; --role admin</span><span class="what">first admin; <code>--instance &lt;n&gt;</code> limits it</span></li>
-        <li><span class="cmd">dzo user password &lt;steam64&gt; --username ann</span><span class="what">password login if Steam sign-in fails; 2nd factor at first login</span></li>
+        <li class="c"><span class="cmd">dzo user grant &lt;steam64&gt; --role admin --username ann</span><span class="what">first admin; <code>--instance &lt;n&gt;</code> limits it</span></li>
+        <li><span class="cmd">dzo user password ann</span><span class="what">password login if Steam sign-in fails; 2nd factor at first login</span></li>
         <li class="c"><span class="cmd">dzo user disable &lt;steam64&gt;</span><span class="what">block the login; also <code>list</code>, <code>revoke</code>, <code>delete</code>, <code>reset</code> (lost second factor)</span></li>
       </ul>
     </div>
