@@ -552,3 +552,26 @@ func TestHubKeepsFlagMarkers(t *testing.T) {
 	require.Equal(t, "operator", got[0].Visibility)
 	require.Equal(t, "operator", got[1].Visibility)
 }
+
+func TestWaitReturnsTheEnqueuedResult(t *testing.T) {
+	h, _ := testHub()
+	hello(h)
+	id, err := h.Enqueue(Command{Kind: KindVehicleDelete, Vehicle: "v"})
+	require.NoError(t, err)
+	h.Sync(SyncRequest{Proto: 1, Results: []Result{{ID: id, OK: true, Message: "gone"}}})
+	r, err := h.Wait(t.Context(), id)
+	require.NoError(t, err)
+	require.True(t, bool(r.OK))
+	require.Equal(t, "gone", r.Message)
+
+	id, err = h.Enqueue(Command{Kind: KindVehicleDelete, Vehicle: "w"})
+	require.NoError(t, err)
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	r, err = h.Wait(ctx, id)
+	require.ErrorIs(t, err, ErrTimeout)
+	require.Equal(t, id, r.ID)
+
+	_, err = h.Wait(t.Context(), "nope")
+	require.Error(t, err)
+}

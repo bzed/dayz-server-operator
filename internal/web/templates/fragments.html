@@ -67,7 +67,7 @@
 {{/* The cleanup step of the vehicle list: the threshold choice and, with .Days, the preview of what a cleanup would delete. */}}
 {{define "cleanup"}}
 <div class="panel">
-  <h3><i class="fa fa-broom" aria-hidden="true"></i>Clean up unused vehicles</h3>
+  <h3><i class="fa fa-eraser" aria-hidden="true"></i>Clean up unused vehicles</h3>
   <p>Vehicles nobody has driven for at least:</p>
   <form hx-get="/b/{{.Backend}}/i/{{.Instance}}/vehicles/cleanup" hx-target="#cleanup">
     <button name="days" value="14">2 weeks</button>

@@ -4,8 +4,11 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"slices"
 	"testing"
 	"time"
 
@@ -38,6 +41,35 @@ func cleanupEnv(t *testing.T, features ...string) *env {
 		"covered": {ID: "covered", FirstSeen: daysAgo(40)},
 	}}
 	return e
+}
+
+// modDeletes answers the vehicle_delete commands of alpha like the mod: refuse maps a vehicle id to the reason
+// the mod refuses it with, silent ones get no answer, all others are deleted.
+func modDeletes(e *env, refuse map[string]string, silent ...string) {
+	ctx, cancel := context.WithCancel(e.t.Context())
+	e.t.Cleanup(cancel)
+	go func() {
+		tick := time.NewTicker(2 * time.Millisecond)
+		defer tick.Stop()
+		for {
+			var res []admin.Result
+			for _, c := range e.alpha.Sync(admin.SyncRequest{Proto: 1}).Commands {
+				if slices.Contains(silent, c.Vehicle) {
+					continue
+				}
+				reason := refuse[c.Vehicle]
+				res = append(res, admin.Result{ID: c.ID, OK: reason == "", Message: reason})
+			}
+			if len(res) > 0 {
+				e.alpha.Sync(admin.SyncRequest{Proto: 1, Results: res})
+			}
+			select {
+			case <-ctx.Done():
+				return
+			case <-tick.C:
+			}
+		}
+	}()
 }
 
 func ids(vs []admin.Vehicle) []string {
@@ -83,6 +115,7 @@ func TestUnusedRefusesAnOldMod(t *testing.T) {
 
 func TestCleanupDeletesAndSkips(t *testing.T) {
 	e := cleanupEnv(t, admin.FeatureDriver)
+	modDeletes(e, nil)
 	// crewed: boarded since the preview; recent: driven since; ghost: gone.
 	c, b := e.do("POST", "/api/v1/instances/alpha/vehicles/cleanup", e.token(RoleOperator, nil, false),
 		`{"days":30,"ids":["old","crewed","recent","ghost","covered"]}`)
@@ -97,6 +130,14 @@ func TestCleanupDeletesAndSkips(t *testing.T) {
 	require.Equal(t, map[string]string{
 		"crewed": "crew inside", "recent": "used since the preview", "ghost": "not on the map", "covered": "covered by Expansion",
 	}, reasons)
+}
+
+func TestCleanupSendsOnlyUnforcedDeletes(t *testing.T) {
+	e := cleanupEnv(t, admin.FeatureDriver)
+	e.srv.cleanupWait = 50 * time.Millisecond
+	c, b := e.do("POST", "/api/v1/instances/alpha/vehicles/cleanup", e.token(RoleOperator, nil, false),
+		`{"days":30,"ids":["old","crewed"]}`)
+	require.Equal(t, 200, c, "%s", b)
 	cmds := e.alpha.Sync(admin.SyncRequest{Proto: 1}).Commands
 	require.Len(t, cmds, 1)
 	require.Equal(t, admin.KindVehicleDelete, cmds[0].Kind)
@@ -104,8 +145,70 @@ func TestCleanupDeletesAndSkips(t *testing.T) {
 	require.False(t, cmds[0].Force)
 }
 
+func TestCleanupReportsTheModsAnswer(t *testing.T) {
+	e := cleanupEnv(t, admin.FeatureDriver)
+	e.srv.cleanupWait = 300 * time.Millisecond
+	modDeletes(e, map[string]string{"never": "vehicle is in use"}, "silent")
+	e.alpha.Sync(admin.SyncRequest{Proto: 1, Vehicles: []admin.Vehicle{{ID: "old", Type: "Sedan_02"}, {ID: "never", Type: "Sedan_02"}, {ID: "silent", Type: "Sedan_02"}}})
+	e.srv.Vehicles = fakeRecords{recs: map[string]moderation.VehicleRecord{
+		"old": {ID: "old", DrivenAt: daysAgo(40), FirstSeen: daysAgo(90)}, "never": {ID: "never", FirstSeen: daysAgo(41)},
+		"silent": {ID: "silent", FirstSeen: daysAgo(41)},
+	}}
+	c, b := e.do("POST", "/api/v1/instances/alpha/vehicles/cleanup", e.token(RoleOperator, nil, false),
+		`{"days":30,"ids":["old","never","silent"]}`)
+	require.Equal(t, 200, c, "%s", b)
+	var got CleanupResult
+	require.NoError(t, json.Unmarshal(b, &got))
+	require.Equal(t, []string{"old"}, got.Deleted)
+	require.ElementsMatch(t, []CleanupSkipped{{ID: "never", Reason: "vehicle is in use"}, {ID: "silent", Reason: "no answer from the mod"}}, got.Skipped)
+	entries, err := e.srv.Audit.Tail("alpha", 10)
+	require.NoError(t, err)
+	require.Len(t, entries, 3)
+	by := map[string]admin.AuditEntry{}
+	for _, en := range entries {
+		by[en.Target] = en
+	}
+	require.True(t, by["old"].OK)
+	require.Equal(t, "cleanup: not driven for 30 days", by["old"].Detail)
+	require.False(t, by["never"].OK)
+	require.Equal(t, "vehicle is in use", by["never"].Result)
+	require.Equal(t, "cleanup: not driven for 30 days", by["never"].Detail)
+	require.False(t, by["silent"].OK)
+	require.Equal(t, "no answer from the mod", by["silent"].Result)
+}
+
+func TestCleanupRateLimitIsAudited(t *testing.T) {
+	e := cleanupEnv(t, admin.FeatureDriver)
+	e.srv.actions = admin.NewLimiter(1, time.Minute)
+	e.srv.cleanupWait = 50 * time.Millisecond
+	op := e.token(RoleOperator, nil, false)
+	c, _ := e.do("POST", "/api/v1/instances/alpha/vehicles/cleanup", op, `{"days":30,"ids":["old"]}`)
+	require.Equal(t, 200, c)
+	c, b := e.do("POST", "/api/v1/instances/alpha/vehicles/cleanup", op, `{"days":30,"ids":["old","never"]}`)
+	require.Equal(t, 429, c, "%s", b)
+	entries, err := e.srv.Audit.Tail("alpha", 10)
+	require.NoError(t, err)
+	last := entries[len(entries)-1]
+	if entries[0].Result == "rate limit reached, try again in a minute" {
+		last = entries[0]
+	}
+	require.Equal(t, "vehicle_delete", last.Action)
+	require.False(t, last.OK)
+	require.Equal(t, "rate limit reached, try again in a minute", last.Result)
+	require.Equal(t, "cleanup: not driven for 30 days", last.Detail)
+}
+
+func TestCleanupFailedRecordsReadIs500(t *testing.T) {
+	e := cleanupEnv(t, admin.FeatureDriver)
+	e.srv.Vehicles = fakeRecords{err: errors.New("db down")}
+	c, b := e.do("POST", "/api/v1/instances/alpha/vehicles/cleanup", e.token(RoleOperator, nil, false), `{"days":30,"ids":["old"]}`)
+	require.Equal(t, 500, c, "%s", b)
+	require.Contains(t, string(b), "the vehicle records could not be read")
+}
+
 func TestCleanupAudit(t *testing.T) {
 	e := cleanupEnv(t, admin.FeatureDriver)
+	modDeletes(e, nil)
 	c, b := e.do("POST", "/api/v1/instances/alpha/vehicles/cleanup", e.token(RoleOperator, nil, false),
 		`{"days":30,"ids":["old","crewed"]}`)
 	require.Equal(t, 200, c, "%s", b)

@@ -525,6 +525,23 @@ func (h *Hub) enqueue(cmd Command) (*pending, error) {
 	return p, nil
 }
 
+// Wait waits for the result of a command that Enqueue returned, until ctx is done (ErrTimeout, with the id in
+// the result). An unknown id is an error.
+func (h *Hub) Wait(ctx context.Context, id string) (Result, error) {
+	h.mu.Lock()
+	p := h.byID[id]
+	h.mu.Unlock()
+	if p == nil {
+		return Result{ID: id}, fmt.Errorf("admin: unknown command %s", id)
+	}
+	select {
+	case <-p.done:
+		return *p.result, nil
+	case <-ctx.Done():
+		return Result{ID: id}, ErrTimeout
+	}
+}
+
 // Result returns the result of a command id, and whether it has arrived.
 func (h *Hub) Result(id string) (Result, bool) {
 	h.mu.Lock()

@@ -4,6 +4,7 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -13,6 +14,8 @@ import (
 
 	"github.com/bzed/dayz-server-operator/internal/admin"
 )
+
+const noAnswer = "no answer from the mod"
 
 const (
 	maxCleanupDays = 3650
@@ -32,7 +35,7 @@ type CleanupRequest struct {
 	IDs  []string `json:"ids"`
 }
 
-// CleanupResult says what the cleanup queued for deletion and what it left alone, with the reason.
+// CleanupResult says what the mod deleted and what was left alone, with the reason (ours or the mod's).
 type CleanupResult struct {
 	Deleted []string         `json:"deleted"`
 	Skipped []CleanupSkipped `json:"skipped"`
@@ -141,7 +144,11 @@ func (s *Server) cleanupVehicles(w http.ResponseWriter, r *http.Request, c *call
 		return
 	}
 	if !s.actions.Allow(c.who.Key()) {
-		fail(w, http.StatusTooManyRequests, "rate limit reached, try again in a minute")
+		const msg = "rate limit reached, try again in a minute"
+		_ = s.Audit.Log(admin.AuditEntry{Actor: c.actor, Source: c.src, Client: c.client, Instance: c.hub.Name,
+			Action: "vehicle_delete", Target: fmt.Sprintf("%d vehicles", len(req.IDs)),
+			Detail: fmt.Sprintf("cleanup: not driven for %d days", req.Days), Result: msg})
+		fail(w, http.StatusTooManyRequests, msg)
 		return
 	}
 	list, err := s.vehiclesWithRecords(r.Context(), c.hub)
@@ -158,6 +165,11 @@ func (s *Server) cleanupVehicles(w http.ResponseWriter, r *http.Request, c *call
 		unused[v.ID] = true
 	}
 	res := CleanupResult{Deleted: []string{}, Skipped: []CleanupSkipped{}}
+	type queued struct {
+		id, cmdID string
+		entry     admin.AuditEntry
+	}
+	var sent []queued
 	seen := map[string]bool{}
 	for _, id := range req.IDs {
 		if seen[id] {
@@ -187,9 +199,30 @@ func (s *Server) cleanupVehicles(w http.ResponseWriter, r *http.Request, c *call
 				skip(err.Error())
 				continue
 			}
-			entry.OK, entry.Result = true, "queued "+cmdID
-			_ = s.Audit.Log(entry)
-			res.Deleted = append(res.Deleted, id)
+			sent = append(sent, queued{id, cmdID, entry})
+		}
+	}
+	// All commands are queued; one deadline covers the wait for every answer.
+	wait := s.cleanupWait
+	if wait <= 0 {
+		wait = maxWait
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), wait)
+	defer cancel()
+	for _, q := range sent {
+		ans, err := c.hub.Wait(ctx, q.cmdID)
+		switch {
+		case err != nil || (!bool(ans.OK) && ans.Message == admin.ErrTimeout.Error()):
+			ans = admin.Result{Message: noAnswer}
+		case !bool(ans.OK) && ans.Message == "":
+			ans.Message = "the mod refused"
+		}
+		q.entry.OK, q.entry.Result = bool(ans.OK), ans.Message
+		_ = s.Audit.Log(q.entry)
+		if ans.OK {
+			res.Deleted = append(res.Deleted, q.id)
+		} else {
+			res.Skipped = append(res.Skipped, CleanupSkipped{ID: q.id, Reason: ans.Message})
 		}
 	}
 	writeJSON(w, http.StatusOK, res)

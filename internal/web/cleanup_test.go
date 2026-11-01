@@ -4,6 +4,8 @@
 package web
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"net/url"
 	"strings"
@@ -107,18 +109,49 @@ func TestCleanupBadDays(t *testing.T) {
 
 func TestCleanupConfirm(t *testing.T) {
 	e := cleanupFixture(t, api.RoleAdmin, admin.FeatureDriver)
+	stop := e.answerCommands(true, "")
+	defer stop()
 	code, body := e.post("/b/main/i/alpha/vehicles/cleanup", url.Values{"days": {"30"}, "id": {"o1", "o2", "c1"}}, nil)
 	require.Equal(t, 200, code)
 	require.Contains(t, body, "Deleted 2 vehicles; skipped 1:")
 	require.Contains(t, body, "c1")
 	require.Contains(t, body, "crew inside")
-	n := 0
-	for _, c := range e.hub.Sync(admin.SyncRequest{Proto: 1}).Commands {
-		if c.Kind == admin.KindVehicleDelete {
-			n++
-		}
+	require.Equal(t, 2, e.commandsOf(admin.KindVehicleDelete))
+}
+
+func TestCleanupConfirmShowsTheModsRefusal(t *testing.T) {
+	e := cleanupFixture(t, api.RoleAdmin, admin.FeatureDriver)
+	stop := e.answerCommands(false, "vehicle is in use")
+	defer stop()
+	code, body := e.post("/b/main/i/alpha/vehicles/cleanup", url.Values{"days": {"30"}, "id": {"o1", "o2"}}, nil)
+	require.Equal(t, 200, code)
+	require.Contains(t, body, "Deleted 0 vehicles; skipped 2:")
+	require.Contains(t, body, "o1: vehicle is in use")
+	require.Contains(t, body, "o2: vehicle is in use")
+}
+
+type failingRecords struct{}
+
+func (failingRecords) VehicleRecords(context.Context, string) (map[string]moderation.VehicleRecord, error) {
+	return nil, errors.New("db down")
+}
+
+func TestCleanupConfirmShowsAFailedRecordsRead(t *testing.T) {
+	e := cleanupFixture(t, api.RoleAdmin, admin.FeatureDriver)
+	e.api.Vehicles = failingRecords{}
+	code, body := e.post("/b/main/i/alpha/vehicles/cleanup", url.Values{"days": {"30"}, "id": {"o1"}}, nil)
+	require.Equal(t, 200, code)
+	require.Contains(t, body, "flash err")
+	require.Contains(t, body, "the vehicle records could not be read")
+	require.NotContains(t, body, "Deleted")
+}
+
+func TestCleanupIconExists(t *testing.T) {
+	for _, f := range []string{"templates/fragments.html", "templates/instance.html"} {
+		b, err := templateFS.ReadFile(f)
+		require.NoError(t, err)
+		require.NotContains(t, string(b), "fa-broom", "%s: Fork Awesome has no fa-broom (use fa-eraser)", f)
 	}
-	require.Equal(t, 2, n)
 }
 
 func TestCleanupConfirmRefusesBadInput(t *testing.T) {

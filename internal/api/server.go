@@ -63,10 +63,12 @@ type Server struct {
 	// Logf receives the login log lines (one per step, never a secret); nil logs nothing.
 	Logf func(format string, args ...any)
 
-	now     func() time.Time
-	login   *auth.Backoff
-	actions *admin.Limiter
-	targets *admin.Limiter
+	now func() time.Time
+	// cleanupWait is how long a cleanup waits for the answers of the mod (default maxWait); tests shorten it.
+	cleanupWait time.Duration
+	login       *auth.Backoff
+	actions     *admin.Limiter
+	targets     *admin.Limiter
 }
 
 // Accounts is what the API needs of the people and their sessions (moderation.Store).
