@@ -185,7 +185,8 @@ In the `vehicles` fragment:
   hover; sortable by the underlying time. A vehicle without a drive shows
   "not since <first_seen date>" and sorts by `first_seen`.
 - The **Position** cell becomes a link to
-  `/map?x=<x>&z=<z>&label=<type> (<last driver>)`, using the existing
+  `/map?x=<x>&z=<z>&label=<type> (owner <owner>, last driver <last driver>)`
+  (each part only when known; owner and last driver are different things), using the existing
   `focusFromLink`. It points where the vehicle was at the last snapshot,
   which is enough for parked vehicles. No "follow this vehicle" mode.
 

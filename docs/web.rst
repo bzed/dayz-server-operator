@@ -275,7 +275,8 @@ Instance
    seat counts, passengers do not. A vehicle nobody has been seen driving since dzo first saw it reads "not since" and that date
    (the day dzo first saw the vehicle); this needs a ``dzo-admin`` that reports drivers, and the column is empty without a
    record database. The "Last driven" column sorts by that time. The position links to the map, which opens zoomed in on the vehicle
-   with its class and owner as the label.
+   with the class as the label, followed by the owner (the Expansion keychain) and the last driver when they are known, for example
+   ``Offroad_02 (owner Bob, last driver Dora)``. Owner and last driver are named apart, also when they are the same person.
 
    **Clean up** (above the vehicle list, for people who may delete vehicles; a viewer sees no button and the two routes answer
    ``403``) deletes the vehicles nobody has driven for a chosen time, in two steps. First you choose the threshold: 2 weeks

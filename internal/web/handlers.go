@@ -108,9 +108,20 @@ func (s *Server) playersFragment(w http.ResponseWriter, r *http.Request) {
 // mapLink is the link that opens the map on a vehicle: whole metres and a label of the class and the owner.
 // The query is built here so that every value is escaped.
 func mapLink(backend, instance string, v admin.Vehicle) string {
-	label := v.Type
+	// Owner (the Expansion keychain) and last driver are different things, even when they are the same person.
+	var who []string
 	if v.Owner != "" {
-		label += " (" + v.Owner + ")"
+		who = append(who, "owner "+v.Owner)
+	}
+	switch {
+	case v.LastDriverName != "":
+		who = append(who, "last driver "+v.LastDriverName)
+	case v.LastDriver != "":
+		who = append(who, "last driver "+v.LastDriver)
+	}
+	label := v.Type
+	if len(who) > 0 {
+		label += " (" + strings.Join(who, ", ") + ")"
 	}
 	q := url.Values{"x": {strconv.Itoa(int(math.Round(v.X)))}, "z": {strconv.Itoa(int(math.Round(v.Z)))}, "label": {label}}
 	return "/b/" + url.PathEscape(backend) + "/i/" + url.PathEscape(instance) + "/map?" + q.Encode()

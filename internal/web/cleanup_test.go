@@ -71,7 +71,7 @@ func TestCleanupPreview(t *testing.T) {
 	e := cleanupFixture(t, api.RoleAdmin, admin.FeatureDriver)
 	code, body, _ := e.get("/b/main/i/alpha/vehicles/cleanup?days=30")
 	require.Equal(t, 200, code)
-	require.Contains(t, body, `<a href="/b/main/i/alpha/map?label=Offroad_02&#43;%28Bob%29&amp;x=7500&amp;z=7600">7500 / 7600</a>`)
+	require.Contains(t, body, `<a href="/b/main/i/alpha/map?label=Offroad_02&#43;%28owner&#43;Bob%2C&#43;last&#43;driver&#43;Dora%29&amp;x=7500&amp;z=7600">7500 / 7600</a>`)
 	require.Contains(t, body, `<input type="hidden" name="id" value="o1">`)
 	require.Contains(t, body, `<input type="hidden" name="id" value="o2">`)
 	require.NotContains(t, body, `value="r1"`, "a vehicle driven 3 days ago is not listed")

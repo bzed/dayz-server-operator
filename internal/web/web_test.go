@@ -675,5 +675,20 @@ func TestVehicleFragmentLinksToTheMap(t *testing.T) {
 	e := newEnv(t, api.RoleAdmin)
 	e.hub.Sync(admin.SyncRequest{Proto: 1, Vehicles: []admin.Vehicle{{ID: "o1", Kind: "car", Type: "Offroad_02", Owner: "Bob", X: 7500.4, Z: 7599.6}}})
 	_, body, _ := e.get("/b/main/i/alpha/vehicles")
-	require.Contains(t, body, `<a href="/b/main/i/alpha/map?label=Offroad_02&#43;%28Bob%29&amp;x=7500&amp;z=7600">7500 / 7600</a>`)
+	require.Contains(t, body, `<a href="/b/main/i/alpha/map?label=Offroad_02&#43;%28owner&#43;Bob%29&amp;x=7500&amp;z=7600">7500 / 7600</a>`)
+}
+
+func TestMapLinkLabel(t *testing.T) {
+	label := func(v admin.Vehicle) string {
+		u, err := url.Parse(mapLink("main", "alpha", v))
+		require.NoError(t, err)
+		return u.Query().Get("label")
+	}
+	require.Equal(t, "Sedan_02", label(admin.Vehicle{Type: "Sedan_02"}))
+	require.Equal(t, "Sedan_02 (owner Bob)", label(admin.Vehicle{Type: "Sedan_02", Owner: "Bob"}))
+	require.Equal(t, "Sedan_02 (last driver Dora)", label(admin.Vehicle{Type: "Sedan_02", LastDriver: "76561198000000001", LastDriverName: "Dora"}))
+	require.Equal(t, "Sedan_02 (last driver 76561198000000001)", label(admin.Vehicle{Type: "Sedan_02", LastDriver: "76561198000000001"}),
+		"a driver without a known name is named by the Steam ID")
+	require.Equal(t, "Sedan_02 (owner Bob, last driver Bob)", label(admin.Vehicle{Type: "Sedan_02", Owner: "Bob", LastDriver: "76561198000000001", LastDriverName: "Bob"}),
+		"owner and last driver are different things, even when they are the same person")
 }
