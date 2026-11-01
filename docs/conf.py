@@ -20,4 +20,5 @@ html_theme_options = {
     "fixed_sidebar": True,
     "show_relbars": True,
 }
+html_favicon = "../internal/web/static/favicon.svg"
 html_show_sourcelink = False
