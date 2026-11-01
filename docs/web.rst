@@ -270,7 +270,12 @@ Instance
    actions per player (message, teleport to coordinates or to another player, heal, fix gear, kick with a reason, kill after a confirmation,
    give item with a search over the server's item classes), and the vehicle list
    with repair (everything, or only body, parts, wheels, fuel or missing parts), flip and delete (moving a vehicle is on the map). The
-   actions open directly under the player or vehicle they apply to. Banning is a link
+   actions open directly under the player or vehicle they apply to. The vehicle list also shows who drove each vehicle last (the name links to
+   that player, the Steam ID is in the tooltip) and when, as "3d 0h ago" with the exact time (UTC) in the tooltip. Only the driver's
+   seat counts, passengers do not. A vehicle nobody has been seen driving since dzo first saw it reads "not since" and that date
+   (the day dzo first saw the vehicle); this needs a ``dzo-admin`` that reports drivers, and the column is empty without a
+   record database. The "Last driven" column sorts by that time. The position links to the map, which opens zoomed in on the vehicle
+   with its class and owner as the label. Banning is a link
    in the panel to the ban form with the player filled in. Hovering over a player's name (or tapping its
    ``i`` button on a phone) shows the Steam ID, the ping and, with the ``player.ip`` permission
    (operators and admins), the address the player is connected from now. The history of addresses is not

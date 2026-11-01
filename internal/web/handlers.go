@@ -7,7 +7,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -86,6 +88,7 @@ type listView[T any] struct {
 	Items             []T
 	Err               string
 	Flagged           map[string]string // Steam ID -> why the player is flagged, for the player list
+	Now               time.Time         // for "3 d ago"
 }
 
 func (s *Server) playersFragment(w http.ResponseWriter, r *http.Request) {
@@ -102,12 +105,23 @@ func (s *Server) playersFragment(w http.ResponseWriter, r *http.Request) {
 	s.render(w, "players", v)
 }
 
+// mapLink is the link that opens the map on a vehicle: whole metres and a label of the class and the owner.
+// The query is built here so that every value is escaped.
+func mapLink(backend, instance string, v admin.Vehicle) string {
+	label := v.Type
+	if v.Owner != "" {
+		label += " (" + v.Owner + ")"
+	}
+	q := url.Values{"x": {strconv.Itoa(int(math.Round(v.X)))}, "z": {strconv.Itoa(int(math.Round(v.Z)))}, "label": {label}}
+	return "/b/" + url.PathEscape(backend) + "/i/" + url.PathEscape(instance) + "/map?" + q.Encode()
+}
+
 func (s *Server) vehiclesFragment(w http.ResponseWriter, r *http.Request) {
 	b, c, inst, ok := s.target(w, r)
 	if !ok {
 		return
 	}
-	v := listView[admin.Vehicle]{Backend: b.Name, Instance: inst}
+	v := listView[admin.Vehicle]{Backend: b.Name, Instance: inst, Now: s.now()}
 	var err error
 	if v.Items, err = c.Vehicles(r.Context(), inst); err != nil {
 		v.Err = err.Error()

@@ -136,3 +136,13 @@ func TestE2ESandstormDrawsAQuietArea(t *testing.T) {
 	b.run(t, chromedp.Evaluate(`document.querySelector('.mi-wrap .storm-dir').style.transform`, &tr))
 	require.Equal(t, "rotate(47deg)", tr, "the arrow points the way the storm moves")
 }
+
+func TestE2EVehicleLinkOpensTheMap(t *testing.T) {
+	e := newEnv(t, api.RoleAdmin)
+	useRealAssets(t, e.assets)
+	e.hub.Sync(admin.SyncRequest{Proto: 1, Vehicles: []admin.Vehicle{{ID: "o1", Kind: "car", Type: "Offroad_02", Owner: "Bob", X: 7500, Z: 7600}}})
+	b := newBrowser(t)
+	b.run(t, chromedp.Navigate(e.url("/b/main/i/alpha")), chromedp.WaitVisible(`a[href*="/map?"]`), chromedp.Click(`a[href*="/map?"]`), chromedp.WaitVisible(`.leaflet-container`))
+	require.Eventually(t, func() bool { return b.count(".focus") == 1 && b.focusNearCentre() }, 10*time.Second, 100*time.Millisecond, "the vehicle is marked and in the middle")
+	require.Contains(t, b.textOf(".leaflet-tooltip"), "Offroad_02 (Bob)")
+}

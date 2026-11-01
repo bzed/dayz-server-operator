@@ -43,16 +43,18 @@
 {{define "vehicles"}}
 {{if .Err}}<p class="flash err">{{.Err}}</p>{{else if not .Items}}<p>No vehicles reported.</p>{{else}}
 <div class="scroll"><table data-sort-default="5,0">
-  <thead><tr><th data-sort="text">Class</th><th data-sort="text">Kind</th><th data-sort="num">Position</th><th data-sort="num">Health</th><th data-sort="num">Fuel</th><th data-sort="text">Owner</th><th data-sort="num">Crew</th><th></th></tr></thead>
+  <thead><tr><th data-sort="text">Class</th><th data-sort="text">Kind</th><th data-sort="num">Position</th><th data-sort="num">Health</th><th data-sort="num">Fuel</th><th data-sort="text">Owner</th><th data-sort="text">Last driver</th><th data-sort="num">Last driven</th><th data-sort="num">Crew</th><th></th></tr></thead>
   <tbody>
   {{range .Items}}
     <tr>
       <td>{{.Type}}{{if .Ruined}} <em>(ruined)</em>{{end}}{{if .Covered}} <em>(covered)</em>{{end}}</td>
       <td>{{if eq .Kind "motorbike"}}<i class="fa fa-motorcycle" aria-hidden="true"></i>{{else if eq .Kind "bicycle"}}<i class="fa fa-bicycle" aria-hidden="true"></i>{{else if eq .Kind "boat"}}<i class="fa fa-ship" aria-hidden="true"></i>{{else if eq .Kind "helicopter"}}<i class="fa fa-helicopter" aria-hidden="true"></i>{{else}}<i class="fa fa-car" aria-hidden="true"></i>{{end}}{{.Kind}}</td>
-      <td>{{printf "%.0f / %.0f" .X .Z}}</td>
+      <td><a href="{{mapLink $.Backend $.Instance .}}">{{printf "%.0f / %.0f" .X .Z}}</a></td>
       <td>{{if .Covered}}-{{else}}{{pct .Health}}{{end}}</td>
       <td>{{if .Covered}}-{{else}}{{pct .Fuel}}{{end}}</td>
       <td>{{.Owner}}</td>
+      <td>{{if .LastDriver}}<a href="/b/{{$.Backend}}/players/{{.LastDriver}}" title="{{.LastDriver}}">{{if .LastDriverName}}{{.LastDriverName}}{{else}}{{.LastDriver}}{{end}}</a>{{else}}-{{end}}</td>
+      {{with .LastDriven}}<td data-sort="{{.Unix}}" title="{{stamp .}}">{{ago $.Now .}}</td>{{else}}{{with .FirstSeen}}<td data-sort="{{.Unix}}" title="{{stamp .}}">not since {{day .}}</td>{{else}}<td data-sort="0">-</td>{{end}}{{end}}
       <td>{{len .Occupants}}</td>
       <td>{{if not .Covered}}<button hx-get="/b/{{$.Backend}}/i/{{$.Instance}}/vehicles/{{.ID}}/panel" hx-target="closest tr" hx-swap="afterend" data-rowpanel><i class="fa fa-cog" aria-hidden="true"></i>Actions</button>{{end}}</td>
     </tr>
