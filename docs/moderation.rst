@@ -146,7 +146,7 @@ Changes outside dzo
 
 A new or rebuilt server
    The database is the source of truth, not ``bans.txt``. Copy ``dzo.sqlite`` (and the ``evidence``
-   directory next to it) to the new installation, and every start of an instance renders ``bans.txt`` from it,
+   directory next to it, or the newest copy from ``<paths.db>/backup``, see :doc:`backups`) to the new installation, and every start of an instance renders ``bans.txt`` from it,
    so the new server knows all active bans before the first player connects. Nothing needs to be exported from
    the old server's ``bans.txt``.
 
@@ -216,5 +216,6 @@ Where the data lives
 --------------------
 
 The database is ``<paths.db>/dzo.sqlite`` and the screenshots are in ``<paths.db>/evidence/``. Back both
-up with the rest of ``paths.db`` (see :doc:`backups`). The database is SQLite in the pure-Go
+up with the rest of ``paths.db`` (see :doc:`backups`); ``dzo serve`` also writes regular copies of the
+database to ``<paths.db>/backup`` (``serve.db_backup_hours``, ``serve.db_backup_keep``). The database is SQLite in the pure-Go
 ``modernc.org/sqlite`` driver, so dzo needs no extra system package.

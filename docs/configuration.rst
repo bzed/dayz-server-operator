@@ -71,6 +71,8 @@ built-in ones, and an entry of the same name replaces the built-in entry as a wh
      allow_insecure_http: false      # default
      ip_retention_days: 90           # default (unset = 90)
      vacuum_days: 7                  # default (unset = 7)
+     db_backup_hours: 24             # default (unset = 24); 0 = off
+     db_backup_keep: 7               # default (unset = 7)
      session_retention_days: 365     # default (unset = 365)
      audit_ip_retention_days: 90     # default (unset = 90)
      geoip_dir: /var/lib/GeoIP       # default
@@ -238,6 +240,18 @@ and print what is wrong. A key dzo does not know is ignored.
       ``0``: for ever. Negative values are refused.
    ``vacuum_days``
       How often, in days, the ban database file is rebuilt. Unset: 7. ``0``: never.
+   ``db_backup_hours``, ``db_backup_keep``
+      ``dzo serve`` writes a consistent copy of ``dzo.sqlite`` (SQLite ``VACUUM INTO``, so it is valid
+      while the server runs and needs no stop) to ``<paths.db>/backup/dzo-<UTC time>.sqlite``, mode
+      ``0600`` in a ``0750`` directory. ``db_backup_hours`` (unset: 24) is the interval in whole hours;
+      ``0`` turns the copies off, a negative value is refused with ``serve.db_backup_hours: must be 0
+      (off) or a number of hours``. ``db_backup_keep`` (unset: 7) is how many copies stay; older ones
+      are deleted after each new copy. It must be at least 1, otherwise ``serve.db_backup_keep: must be
+      at least 1`` is reported when the configuration loads. The time of the last copy is kept in the
+      database, so a restart does not copy again early. A failed copy is logged and tried again at the
+      next minute's upkeep. Both are read when ``dzo serve`` starts; a change takes effect after a
+      restart. The newest copy is passed to ``post_backup`` hooks as ``extra.db_backup``, see
+      :doc:`backups`.
    ``session_retention_days``
       How many days the sessions of the player history (who was on which instance, from when to when) are
       kept. Unset: 365. ``0``: for ever. Negative values are refused. Only the sessions go: the players, the

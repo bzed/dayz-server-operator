@@ -21,6 +21,7 @@ import (
 
 	"github.com/bzed/dayz-server-operator/internal/admin"
 	"github.com/bzed/dayz-server-operator/internal/api"
+	"github.com/bzed/dayz-server-operator/internal/backup"
 	"github.com/bzed/dayz-server-operator/internal/config"
 	"github.com/bzed/dayz-server-operator/internal/geoip"
 	"github.com/bzed/dayz-server-operator/internal/killfeed"
@@ -52,6 +53,9 @@ func FeedLogPath(cfg *config.Config, instance string) string {
 
 // BanDB is the moderation database (bans, evidence, sightings).
 func BanDB(cfg *config.Config) string { return filepath.Join(cfg.Paths.DB, "dzo.sqlite") }
+
+// DBBackupDir is where the regular copies of the database are written: <paths.db>/backup.
+func DBBackupDir(cfg *config.Config) string { return backup.DBBackupDir(cfg) }
 
 // TilesDir is where the built map tile sets live.
 func TilesDir(cfg *config.Config) string { return filepath.Join(cfg.Paths.Cache, "maptiles") }
@@ -250,6 +254,7 @@ func Run(ctx context.Context, cfg *config.Config, o Options) error {
 	svc.AddressRetention, svc.VacuumEvery, svc.SessionRetention = cfg.Serve.IPRetention(), cfg.Serve.VacuumEvery(), cfg.Serve.SessionRetention()
 	svc.SessionIdle, svc.SessionMax = cfg.Serve.SessionIdle(), cfg.Serve.SessionMax()
 	svc.AuditClientRetention = cfg.Serve.AuditIPRetention()
+	svc.BackupDir, svc.BackupEvery, svc.BackupKeep = DBBackupDir(cfg), cfg.Serve.DBBackupEvery(), cfg.Serve.DBBackupCount()
 	svc.OnEvent = feedFromRCon(reg)
 	audit.OnLog = feedFromAudit(reg)
 	svc.Start(mctx)

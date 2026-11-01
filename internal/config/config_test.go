@@ -330,6 +330,24 @@ func TestBinaryDefaultAndValidation(t *testing.T) {
 	assert.Error(t, err, "a relative binary must be rejected")
 }
 
+func TestServeDBBackup(t *testing.T) {
+	c, err := Parse([]byte("{}\n"))
+	require.NoError(t, err)
+	require.Equal(t, 24*time.Hour, c.Serve.DBBackupEvery(), "default")
+	require.Equal(t, 7, c.Serve.DBBackupCount(), "default")
+	c, err = Parse([]byte("serve: {db_backup_hours: 6, db_backup_keep: 3}\n"))
+	require.NoError(t, err)
+	require.Equal(t, 6*time.Hour, c.Serve.DBBackupEvery())
+	require.Equal(t, 3, c.Serve.DBBackupCount())
+	c, err = Parse([]byte("serve: {db_backup_hours: 0}\n"))
+	require.NoError(t, err)
+	require.Zero(t, c.Serve.DBBackupEvery(), "0 turns the copies off")
+	_, err = Parse([]byte("serve: {db_backup_hours: -1}\n"))
+	require.ErrorContains(t, err, "serve.db_backup_hours: must be 0 (off) or a number of hours")
+	_, err = Parse([]byte("serve: {db_backup_keep: 0}\n"))
+	require.ErrorContains(t, err, "serve.db_backup_keep: must be at least 1")
+}
+
 func TestServeBanUpkeep(t *testing.T) {
 	c, err := Parse([]byte("{}\n"))
 	require.NoError(t, err)

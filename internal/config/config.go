@@ -112,6 +112,10 @@ type Serve struct {
 	// 90; 0: for ever). VacuumDays is how often the ban database file is rebuilt (unset: 7; 0: never).
 	IPRetentionDays *int `yaml:"ip_retention_days"`
 	VacuumDays      *int `yaml:"vacuum_days"`
+	// DBBackupHours is how often dzo serve writes a consistent copy of dzo.sqlite to <paths.db>/backup
+	// (unset: 24; 0: never). DBBackupKeep is how many copies stay (unset: 7, at least 1).
+	DBBackupHours *int `yaml:"db_backup_hours"`
+	DBBackupKeep  *int `yaml:"db_backup_keep"`
 	// SessionRetentionDays is how long the sessions of the player history (who was on which instance
 	// when) are kept (unset: 365; 0: for ever). The players, their names and first-seen times stay.
 	SessionRetentionDays *int `yaml:"session_retention_days"`
@@ -147,6 +151,22 @@ func days(v *int, def int) time.Duration {
 		return -1
 	}
 	return time.Duration(*v) * day
+}
+
+// DBBackupEvery is how often the database is copied; 0 means never.
+func (s Serve) DBBackupEvery() time.Duration {
+	if s.DBBackupHours == nil {
+		return 24 * time.Hour
+	}
+	return time.Duration(*s.DBBackupHours) * time.Hour
+}
+
+// DBBackupCount is how many copies of the database are kept.
+func (s Serve) DBBackupCount() int {
+	if s.DBBackupKeep == nil {
+		return 7
+	}
+	return *s.DBBackupKeep
 }
 
 // IPRetention is how long a sighting keeps its address; negative means for ever.
@@ -407,6 +427,12 @@ func (c *Config) Validate() error {
 		if v != nil && *v < 0 {
 			errs = append(errs, fmt.Sprintf("%s: must be 0 (off) or a number of days", name))
 		}
+	}
+	if v := c.Serve.DBBackupHours; v != nil && *v < 0 {
+		errs = append(errs, "serve.db_backup_hours: must be 0 (off) or a number of hours")
+	}
+	if v := c.Serve.DBBackupKeep; v != nil && *v < 1 {
+		errs = append(errs, "serve.db_backup_keep: must be at least 1")
 	}
 	for _, l := range []struct {
 		name, addr string
