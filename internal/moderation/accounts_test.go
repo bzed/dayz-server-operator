@@ -407,7 +407,7 @@ func TestMigration0004FromV3(t *testing.T) {
 	assert.Equal(t, "x", b.Reason, "old rows are intact")
 	var v int
 	require.NoError(t, s.db.QueryRow(`SELECT MAX(version) FROM schema_version`).Scan(&v))
-	assert.Equal(t, 4, v)
+	assert.Equal(t, 5, v)
 	people, err := s.People(t.Context())
 	require.NoError(t, err)
 	assert.Empty(t, people)
