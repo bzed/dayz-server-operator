@@ -64,6 +64,57 @@
 {{end}}
 {{end}}
 
+{{/* The cleanup step of the vehicle list: the threshold choice and, with .Days, the preview of what a cleanup would delete. */}}
+{{define "cleanup"}}
+<div class="panel">
+  <h3><i class="fa fa-broom" aria-hidden="true"></i>Clean up unused vehicles</h3>
+  <p>Vehicles nobody has driven for at least:</p>
+  <form hx-get="/b/{{.Backend}}/i/{{.Instance}}/vehicles/cleanup" hx-target="#cleanup">
+    <button name="days" value="14">2 weeks</button>
+    <button name="days" value="30">1 month</button>
+    <button name="days" value="60">2 months</button>
+  </form>
+  <form hx-get="/b/{{.Backend}}/i/{{.Instance}}/vehicles/cleanup" hx-target="#cleanup">
+    <input name="days" type="number" min="1" max="3650" size="5" placeholder="days" aria-label="Days" required> days <button>Preview</button>
+  </form>
+  {{if .Err}}<p class="flash err">{{.Err}}</p>
+  {{else if .Days}}
+    {{if .Young}}<p>dzo has been tracking vehicles on this instance only since {{day .Since}}; no vehicle can be older than that yet.</p>{{end}}
+    {{if .Items}}
+    <form hx-post="/b/{{.Backend}}/i/{{.Instance}}/vehicles/cleanup" hx-target="#cleanup" hx-confirm="Delete {{len .Items}} vehicles? This cannot be undone.">
+      <input type="hidden" name="days" value="{{.Days}}">
+      {{range .Items}}<input type="hidden" name="id" value="{{.ID}}">{{end}}
+      <div class="scroll"><table>
+        <thead><tr><th>Class</th><th>Kind</th><th>Position</th><th>Last driver</th><th>Last driven</th><th>Health</th></tr></thead>
+        <tbody>
+        {{range .Items}}
+          <tr>
+            <td>{{.Type}}{{if .Ruined}} <em>(ruined)</em>{{end}}</td>
+            <td>{{.Kind}}</td>
+            <td><a href="{{mapLink $.Backend $.Instance .}}">{{printf "%.0f / %.0f" .X .Z}}</a></td>
+            <td>{{if .LastDriver}}<a href="/b/{{$.Backend}}/players/{{.LastDriver}}" title="{{.LastDriver}}">{{if .LastDriverName}}{{.LastDriverName}}{{else}}{{.LastDriver}}{{end}}</a>{{else}}-{{end}}</td>
+            {{with .LastDriven}}<td title="{{stamp .}}">{{ago $.Now .}}</td>{{else}}{{with .FirstSeen}}<td title="{{stamp .}}">not since {{day .}}</td>{{else}}<td>-</td>{{end}}{{end}}
+            <td>{{pct .Health}}</td>
+          </tr>
+        {{end}}
+        </tbody>
+      </table></div>
+      <p><button class="danger"><i class="fa fa-trash" aria-hidden="true"></i>Delete {{len .Items}} vehicles</button></p>
+    </form>
+    {{else}}<p>No vehicle has gone unused for {{.Days}} days.</p>{{end}}
+  {{end}}
+</div>
+{{end}}
+
+{{define "cleanupResult"}}
+<div class="panel">
+{{if .Err}}<p class="flash err">{{.Err}}</p>{{else}}
+  <p class="flash ok">Deleted {{.Deleted}} vehicles; skipped {{len .Skipped}}{{if .Skipped}}:{{end}}</p>
+  {{if .Skipped}}<ul>{{range .Skipped}}<li>{{.ID}}: {{.Reason}}</li>{{end}}</ul>{{end}}
+{{end}}
+</div>
+{{end}}
+
 {{/* The way a message reaches the players: expects .Expansion (the mod reports Expansion) and .Rcon (the form is for everyone). */}}
 {{define "msgfields"}}
     <select name="style" data-msgstyle><option value="chat">chat (yellow)</option><option value="important">important (red)</option><option value="friendly">friendly (green)</option><option value="notification">on screen (notification)</option>{{if .Rcon}}<option value="rcon">RCon say</option>{{end}}{{if .Expansion}}<option value="expansion">Expansion notification</option>{{end}}</select>

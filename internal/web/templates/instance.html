@@ -26,6 +26,8 @@
 
 <section>
   <h2><i class="fa fa-car" aria-hidden="true"></i>Vehicles</h2>
+  {{if .Can.Delete}}<p><button class="quiet" hx-get="/b/{{.Backend}}/i/{{.Instance}}/vehicles/cleanup" hx-target="#cleanup"><i class="fa fa-broom" aria-hidden="true"></i>Clean up</button></p>
+  <div id="cleanup"></div>{{end}}
   <div hx-get="/b/{{.Backend}}/i/{{.Instance}}/vehicles" hx-trigger="load, every 15s" data-poll></div>
 </section>
 {{end}}

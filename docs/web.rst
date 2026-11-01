@@ -275,7 +275,24 @@ Instance
    seat counts, passengers do not. A vehicle nobody has been seen driving since dzo first saw it reads "not since" and that date
    (the day dzo first saw the vehicle); this needs a ``dzo-admin`` that reports drivers, and the column is empty without a
    record database. The "Last driven" column sorts by that time. The position links to the map, which opens zoomed in on the vehicle
-   with its class and owner as the label. Banning is a link
+   with its class and owner as the label.
+
+   **Clean up** (above the vehicle list, for people who may delete vehicles; a viewer sees no button and the two routes answer
+   ``403``) deletes the vehicles nobody has driven for a chosen time, in two steps. First you choose the threshold: 2 weeks
+   (14 days), 1 month (30), 2 months (60) or a number of days from 1 to 3650 (anything else shows
+   ``days must be a whole number from 1 to 3650``). The preview then lists, oldest first, the vehicles with no one inside that
+   were last driven longer ago than that (class, kind, position with the map link, last driver, last driven, health); a vehicle
+   never seen driven counts from the day dzo first saw it. Vehicles with crew inside and covered Expansion vehicles are never
+   listed and never deleted. With no match the page says ``No vehicle has gone unused for N days.``; when dzo has tracked the
+   instance for less than N days it adds ``dzo has been tracking vehicles on this instance only since <date>; no vehicle can be
+   older than that yet.`` Second, ``Delete N vehicles`` asks once more in a browser dialog (``This cannot be undone.``) and
+   sends exactly the previewed vehicles (at most 500 per cleanup). The API checks every one again at that moment: a vehicle
+   driven or boarded since the preview is skipped, the others are deleted, and the result reads ``Deleted N vehicles; skipped M:``
+   followed by each skipped vehicle with its reason. Deletions never use ``force``. Every vehicle writes an audit entry
+   (``vehicle_delete``, detail ``cleanup: not driven for N days``; see :doc:`api`). The step needs a ``dzo-admin`` that reports drivers (0.8.0);
+   with an older mod it shows the API's refusal instead of a list, because every vehicle would look unused.
+
+   Banning is a link
    in the panel to the ban form with the player filled in. Hovering over a player's name (or tapping its
    ``i`` button on a phone) shows the Steam ID, the ping and, with the ``player.ip`` permission
    (operators and admins), the address the player is connected from now. The history of addresses is not
