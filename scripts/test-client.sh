@@ -641,7 +641,7 @@ dzo player msg t1 all "notification with a title" --style notification --title R
 verdict "message (notification with title and seconds)" $s
 if [ "$expansion" = 1 ]; then
 	s=1
-	grep -q 'DZOAdmin.*features: expansion' "$script" && s=0
+	grep -q 'DZOAdmin.*features:.*expansion' "$script" && s=0
 	verdict "dzo-admin reports expansion" $s
 	shots=${DZO_SHOTS_DIR:-$work/shots}
 	mkdir -p "$shots"
