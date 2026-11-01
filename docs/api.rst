@@ -271,7 +271,7 @@ All paths start with ``/api/v1``. Responses are JSON.
    * - ``GET /instances/<i>/players``
      - online players: Steam ID, name, position, health, ping, vehicle
    * - ``GET /instances/<i>/vehicles``
-     - persistent vehicles: id, kind (``car``, ``motorbike``, ``boat``, ``bicycle`` or ``helicopter``), class, position, health, fuel, crew, and with DayZ Expansion ``owner`` and ``covered``
+     - persistent vehicles: id, kind (``car``, ``motorbike``, ``boat``, ``bicycle`` or ``helicopter``), class, position, health, fuel, crew, and with DayZ Expansion ``owner`` and ``covered``. Four more fields come from dzo's own vehicle records in ``dzo.sqlite``, not from the mod's snapshot: ``last_driver`` (Steam ID) and ``last_driver_name`` of the last player to take the driver's seat, ``last_driven`` (RFC 3339 time of that drive) and ``first_seen`` (when dzo first saw the vehicle). The three driver fields are left out of a vehicle that was never seen driven (``first_seen`` then dates it), and all four are left out when dzo has no record yet or runs without the database. Passengers do not count as drivers. The ``vehicles`` stream event does not carry these fields. A failing database read answers 500
    * - ``GET /instances/<i>/events``
      - active events (effect areas, markers from mods)
    * - ``GET /instances/<i>/layers``

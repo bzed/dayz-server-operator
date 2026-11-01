@@ -45,6 +45,8 @@ type Server struct {
 	TilesDir string
 	// Moderation serves the ban and evidence routes; nil answers them 503.
 	Moderation Moderation
+	// Vehicles holds the last driver of each vehicle (the vehicle records); nil lists the vehicles as the mod reports them.
+	Vehicles VehicleRecords
 	// Lookups asks BattlEye and Steam about one player on request (the Check now button); nil answers 503.
 	Lookups Lookups
 	// GeoIP locates the players' addresses (flags and the connection info); nil shows none.
@@ -176,6 +178,49 @@ func fail(w http.ResponseWriter, code int, format string, a ...any) {
 	writeJSON(w, code, apiError{Error: fmt.Sprintf(format, a...)})
 }
 
+// VehicleRecords reads dzo's record of each vehicle (the last driver and first sighting).
+type VehicleRecords interface {
+	VehicleRecords(ctx context.Context, instance string) (map[string]moderation.VehicleRecord, error)
+}
+
+// vehiclesWithRecords is the hub's vehicle list with the last driver, last drive and first sighting of each
+// live vehicle filled in from the records. Without a database it is the hub's list unchanged.
+func (s *Server) vehiclesWithRecords(ctx context.Context, hub *admin.Hub) ([]admin.Vehicle, error) {
+	list := hub.Vehicles()
+	if s.Vehicles == nil {
+		return list, nil
+	}
+	recs, err := s.Vehicles.VehicleRecords(ctx, hub.Name)
+	if err != nil {
+		return nil, fmt.Errorf("vehicle records: %w", err)
+	}
+	for i := range list {
+		rec, ok := recs[list[i].ID]
+		if !ok {
+			continue
+		}
+		if !rec.FirstSeen.IsZero() {
+			t := rec.FirstSeen
+			list[i].FirstSeen = &t
+		}
+		if !rec.DrivenAt.IsZero() {
+			t := rec.DrivenAt
+			list[i].LastDriven = &t
+			list[i].LastDriver, list[i].LastDriverName = rec.Driver, rec.DriverName
+		}
+	}
+	return list, nil
+}
+
+func (s *Server) vehicles(w http.ResponseWriter, r *http.Request, c *call) {
+	list, err := s.vehiclesWithRecords(r.Context(), c.hub)
+	if err != nil {
+		fail(w, http.StatusInternalServerError, "the vehicle records could not be read")
+		return
+	}
+	writeJSON(w, 200, list)
+}
+
 // handler is a route handler with the caller and instance resolved.
 type handler func(w http.ResponseWriter, r *http.Request, c *call)
 
@@ -216,7 +261,7 @@ func (s *Server) Handler() http.Handler {
 	route("GET "+base+"/tiles/{map}/{rest...}", PermView, false, s.tile)
 	route("GET "+base+"/instances/{instance}", PermView, true, func(w http.ResponseWriter, _ *http.Request, c *call) { writeJSON(w, 200, c.hub.Status()) })
 	route("GET "+base+"/instances/{instance}/players", PermView, true, s.players)
-	route("GET "+base+"/instances/{instance}/vehicles", PermView, true, func(w http.ResponseWriter, _ *http.Request, c *call) { writeJSON(w, 200, c.hub.Vehicles()) })
+	route("GET "+base+"/instances/{instance}/vehicles", PermView, true, s.vehicles)
 	route("GET "+base+"/instances/{instance}/events", PermView, true, func(w http.ResponseWriter, _ *http.Request, c *call) { writeJSON(w, 200, c.hub.Events()) })
 	route("GET "+base+"/instances/{instance}/layers", PermView, true, func(w http.ResponseWriter, _ *http.Request, c *call) {
 		writeJSON(w, 200, filterLayers(c.hub.Layers(), c.role()))

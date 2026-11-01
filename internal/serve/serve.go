@@ -284,6 +284,7 @@ func Run(ctx context.Context, cfg *config.Config, o Options) error {
 	rec.Set(pctx, presence.FromRegistry(reg), reg.Names())
 	apiSrv := api.New(cfg.Serve.Installation, o.Version, reg, api.NewTokenStore(APITokens(cfg)), audit)
 	apiSrv.Moderation = svc
+	apiSrv.Vehicles = store
 	apiSrv.Logf = logf
 	if cfg.Serve.WebURL != "" { // user logins need to know where the web interface lives
 		apiSrv.Accounts = store
