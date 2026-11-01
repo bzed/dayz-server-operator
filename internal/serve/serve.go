@@ -127,13 +127,16 @@ func WriteModConfig(cfg *config.Config, inst *resolve.Instance) error {
 }
 
 // AddHubs registers a hub for every instance of the site. It can run again
-// after a site change: existing hubs keep their state.
+// after a site change: existing hubs keep their state, and the hubs of
+// instances no longer in the site are dropped.
 func AddHubs(reg *admin.Registry, cfg *config.Config, tree *site.Tree) error {
 	all, err := resolve.ResolveAll(cfg, tree)
 	if err != nil {
 		return err
 	}
+	names := make([]string, 0, len(all))
 	for _, inst := range all {
+		names = append(names, inst.Name)
 		h := admin.NewHub(inst.Name)
 		h.Allow, h.Deny, h.Kinds, h.MarkerDir = inst.Admin.AllowClasses, inst.Admin.DenyClasses, vehicleKinds(inst), admin.MarkerDir(inst.Paths.Profiles)
 		if sched := inst.Restarts.Schedule; len(sched) > 0 {
@@ -148,6 +151,7 @@ func AddHubs(reg *admin.Registry, cfg *config.Config, tree *site.Tree) error {
 			return fmt.Errorf("instance %s: %w", inst.Name, err)
 		}
 	}
+	reg.Retain(names)
 	return nil
 }
 

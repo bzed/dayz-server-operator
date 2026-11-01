@@ -23,7 +23,8 @@ API and on ``serve.mod_listen`` (default ``127.0.0.1:2400``) for the
 :doc:`dzo-admin mods <admin-map>`. Both refuse non-local addresses unless
 ``serve.allow_insecure_http`` is set: put a reverse proxy with HTTPS in front
 of the API. Send ``SIGHUP`` after changing the site repository; new instances
-appear and the live state of the others is kept.
+appear, the live state of the others is kept, and an instance removed from the site is gone: its routes
+answer ``404``, its mod is turned away and its vehicle records are forgotten after 7 days.
 
 Tokens
 ------

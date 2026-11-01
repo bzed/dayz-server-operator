@@ -456,3 +456,13 @@ func TestRunRecordsPlayerHistory(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, p.Online, "stopping dzo serve ends the session")
 }
+
+func TestAddHubsDropsRemovedInstances(t *testing.T) {
+	cfg, tree := fixture(t)
+	reg := admin.NewRegistry(TokenDir(cfg))
+	require.NoError(t, AddHubs(reg, cfg, tree))
+	require.Equal(t, []string{"alpha", "beta"}, reg.Names())
+	delete(tree.Instances, "beta")
+	require.NoError(t, AddHubs(reg, cfg, tree))
+	require.Equal(t, []string{"alpha"}, reg.Names(), "a reload without beta drops its hub")
+}
