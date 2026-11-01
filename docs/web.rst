@@ -289,8 +289,9 @@ Instance
    sends exactly the previewed vehicles (at most 500 per cleanup: when more match, the preview lists the 500 longest unused,
    says how many match in all, and the cleanup is run again afterwards for the rest). The API checks every one again at that moment: a vehicle
    driven or boarded since the preview is skipped, the others are sent to the game and the page waits for the mod's answer (up to 25 seconds). The result reads ``Deleted N vehicles; skipped M:``
-   followed by each skipped vehicle with its reason: N counts the vehicles the mod confirmed, a vehicle the mod refused is listed with the mod's message,
-   and one that did not answer in time with ``no answer from the mod``. Deletions never use ``force``. Every vehicle writes an audit entry
+   followed by each skipped vehicle with its reason: N counts the vehicles the mod confirmed, and a vehicle the mod refused is listed with the mod's message.
+   Vehicles the mod did not answer for in time are listed apart, under ``No answer yet for K, the mod may still delete them; reload
+   the vehicle list to see:``: their deletes stay queued, so the vehicle list shows later whether they are gone. Deletions never use ``force``. Every vehicle writes an audit entry
    (``vehicle_delete``, detail ``cleanup: not driven for N days``; see :doc:`api`). The step needs a ``dzo-admin`` that reports drivers (0.8.0);
    with an older mod it shows the API's refusal instead of a list, because every vehicle would look unused.
 

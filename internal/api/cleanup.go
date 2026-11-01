@@ -15,7 +15,9 @@ import (
 	"github.com/bzed/dayz-server-operator/internal/admin"
 )
 
-const noAnswer = "no answer from the mod"
+// noAnswer is the audit result of a delete the mod did not answer in time: it stays queued and may
+// still be carried out.
+const noAnswer = "no answer yet, the mod may still delete it (command %s)"
 
 const (
 	maxCleanupDays = 3650
@@ -35,10 +37,19 @@ type CleanupRequest struct {
 	IDs  []string `json:"ids"`
 }
 
-// CleanupResult says what the mod deleted and what was left alone, with the reason (ours or the mod's).
+// CleanupResult says what the mod deleted, what was left alone, with the reason (ours or the mod's), and
+// what the mod has not answered yet.
 type CleanupResult struct {
 	Deleted []string         `json:"deleted"`
 	Skipped []CleanupSkipped `json:"skipped"`
+	Pending []CleanupPending `json:"pending"`
+}
+
+// CleanupPending is a delete the mod did not answer in time. It stays queued and may still be carried
+// out; Command is its id for GET /instances/<i>/commands/<id>.
+type CleanupPending struct {
+	ID      string `json:"id"`
+	Command string `json:"command"`
 }
 
 // CleanupSkipped is a vehicle the cleanup did not delete.
@@ -164,7 +175,7 @@ func (s *Server) cleanupVehicles(w http.ResponseWriter, r *http.Request, c *call
 	for _, v := range unusedOf(list, req.Days, s.now()) {
 		unused[v.ID] = true
 	}
-	res := CleanupResult{Deleted: []string{}, Skipped: []CleanupSkipped{}}
+	res := CleanupResult{Deleted: []string{}, Skipped: []CleanupSkipped{}, Pending: []CleanupPending{}}
 	type queued struct {
 		id, cmdID string
 		entry     admin.AuditEntry
@@ -212,8 +223,11 @@ func (s *Server) cleanupVehicles(w http.ResponseWriter, r *http.Request, c *call
 	for _, q := range sent {
 		ans, err := c.hub.Wait(ctx, q.cmdID)
 		switch {
-		case err != nil || (!bool(ans.OK) && ans.Message == admin.ErrTimeout.Error()):
-			ans = admin.Result{Message: noAnswer}
+		case err != nil:
+			q.entry.Result = fmt.Sprintf(noAnswer, q.cmdID)
+			_ = s.Audit.Log(q.entry)
+			res.Pending = append(res.Pending, CleanupPending{ID: q.id, Command: q.cmdID})
+			continue
 		case !bool(ans.OK) && ans.Message == "":
 			ans.Message = "the mod refused"
 		}

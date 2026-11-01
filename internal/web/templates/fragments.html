@@ -112,6 +112,8 @@
 {{if .Err}}<p class="flash err">{{.Err}}</p>{{else}}
   <p class="flash ok">Deleted {{.Deleted}} vehicles; skipped {{len .Skipped}}{{if .Skipped}}:{{end}}</p>
   {{if .Skipped}}<ul>{{range .Skipped}}<li>{{.ID}}: {{.Reason}}</li>{{end}}</ul>{{end}}
+  {{if .Pending}}<p class="flash err">No answer yet for {{len .Pending}}, the mod may still delete them; reload the vehicle list to see:</p>
+  <ul>{{range .Pending}}<li>{{.ID}}</li>{{end}}</ul>{{end}}
 {{end}}
 </div>
 {{end}}

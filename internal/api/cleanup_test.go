@@ -160,7 +160,13 @@ func TestCleanupReportsTheModsAnswer(t *testing.T) {
 	var got CleanupResult
 	require.NoError(t, json.Unmarshal(b, &got))
 	require.Equal(t, []string{"old"}, got.Deleted)
-	require.ElementsMatch(t, []CleanupSkipped{{ID: "never", Reason: "vehicle is in use"}, {ID: "silent", Reason: "no answer from the mod"}}, got.Skipped)
+	require.Equal(t, []CleanupSkipped{{ID: "never", Reason: "vehicle is in use"}}, got.Skipped)
+	require.Len(t, got.Pending, 1, "a vehicle without an answer is neither deleted nor skipped")
+	require.Equal(t, "silent", got.Pending[0].ID)
+	require.NotEmpty(t, got.Pending[0].Command)
+	_, done, err := e.alpha.Result(got.Pending[0].Command)
+	require.NoError(t, err, "the command can still be looked up")
+	require.False(t, done)
 	entries, err := e.srv.Audit.Tail("alpha", 10)
 	require.NoError(t, err)
 	require.Len(t, entries, 3)
@@ -174,7 +180,7 @@ func TestCleanupReportsTheModsAnswer(t *testing.T) {
 	require.Equal(t, "vehicle is in use", by["never"].Result)
 	require.Equal(t, "cleanup: not driven for 30 days", by["never"].Detail)
 	require.False(t, by["silent"].OK)
-	require.Equal(t, "no answer from the mod", by["silent"].Result)
+	require.Equal(t, "no answer yet, the mod may still delete it (command "+got.Pending[0].Command+")", by["silent"].Result)
 }
 
 func TestCleanupRateLimitIsAudited(t *testing.T) {

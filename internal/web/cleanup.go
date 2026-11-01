@@ -35,6 +35,7 @@ type cleanupResultView struct {
 	Backend, Instance string
 	Deleted           int
 	Skipped           []api.CleanupSkipped
+	Pending           []api.CleanupPending // deletes the mod did not answer in time; they may still happen
 	Err               string
 }
 
@@ -112,7 +113,7 @@ func (s *Server) cleanupConfirm(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			v.Err = err.Error()
 		} else {
-			v.Deleted, v.Skipped = len(res.Deleted), res.Skipped
+			v.Deleted, v.Skipped, v.Pending = len(res.Deleted), res.Skipped, res.Pending
 		}
 	}
 	s.render(w, "cleanupResult", v)

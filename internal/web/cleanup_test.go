@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
@@ -194,4 +195,15 @@ func TestCleanupPreviewListsOnlyTheOldest500(t *testing.T) {
 	require.NotContains(t, body, `value="v000"`, "the newest is left for the next round")
 	require.Contains(t, body, "Delete 500 vehicles")
 	require.Contains(t, body, "501 vehicles have gone unused for 30 days; the 500 longest unused are listed. Delete them, then run the cleanup again for the rest.")
+}
+
+func TestCleanupResultListsTheUnanswered(t *testing.T) {
+	e := newEnv(t, api.RoleAdmin)
+	rec := httptest.NewRecorder()
+	e.srv.render(rec, "cleanupResult", cleanupResultView{Deleted: 1, Skipped: []api.CleanupSkipped{{ID: "c1", Reason: "crew inside"}},
+		Pending: []api.CleanupPending{{ID: "o2", Command: "abc"}}})
+	body := rec.Body.String()
+	require.Contains(t, body, "Deleted 1 vehicles; skipped 1:")
+	require.Contains(t, body, "No answer yet for 1, the mod may still delete them; reload the vehicle list to see:")
+	require.Contains(t, body, "<li>o2</li>")
 }
