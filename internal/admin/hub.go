@@ -24,13 +24,17 @@ import (
 const (
 	resendAfter    = 3 * time.Second
 	commandTimeout = 30 * time.Second
-	onlineWindow   = 10 * time.Second
+	// resultKeep is how long the result of a finished command can still be read by its id.
+	resultKeep   = 10 * time.Minute
+	onlineWindow = 10 * time.Second
 )
 
 // Errors returned to callers of Submit.
 var (
 	ErrOffline = errors.New("admin: dzo-admin is not connected for this instance")
 	ErrTimeout = errors.New("admin: the mod did not answer in time")
+	// ErrUnknownCommand is a command id the hub never gave out, or whose result is older than resultKeep.
+	ErrUnknownCommand = errors.New("admin: unknown command")
 )
 
 // StreamEvent is something that changed in the world state, for the stream.
@@ -40,11 +44,12 @@ type StreamEvent struct {
 }
 
 type pending struct {
-	cmd    Command
-	sentAt time.Time // zero while still queued
-	queued time.Time
-	result *Result
-	done   chan struct{}
+	cmd      Command
+	sentAt   time.Time // zero while still queued
+	queued   time.Time
+	result   *Result
+	finished time.Time
+	done     chan struct{}
 }
 
 // Hello is what the mod announced about itself.
@@ -239,6 +244,11 @@ func (h *Hub) Sync(req SyncRequest) SyncReply {
 		live = append(live, p)
 	}
 	h.queue = live
+	for id, p := range h.byID {
+		if p.result != nil && now.Sub(p.finished) > resultKeep {
+			delete(h.byID, id)
+		}
+	}
 	return reply
 }
 
@@ -292,6 +302,7 @@ func (h *Hub) finishLocked(r Result) {
 		return
 	}
 	p.result = &r
+	p.finished = h.now()
 	close(p.done)
 	h.emit("result", r)
 }
@@ -532,7 +543,7 @@ func (h *Hub) Wait(ctx context.Context, id string) (Result, error) {
 	p := h.byID[id]
 	h.mu.Unlock()
 	if p == nil {
-		return Result{ID: id}, fmt.Errorf("admin: unknown command %s", id)
+		return Result{ID: id}, fmt.Errorf("%w %s", ErrUnknownCommand, id)
 	}
 	select {
 	case <-p.done:
@@ -542,15 +553,19 @@ func (h *Hub) Wait(ctx context.Context, id string) (Result, error) {
 	}
 }
 
-// Result returns the result of a command id, and whether it has arrived.
-func (h *Hub) Result(id string) (Result, bool) {
+// Result returns the result of a command id, and whether it has arrived. An id that was never given
+// out, or whose result is older than resultKeep, is ErrUnknownCommand.
+func (h *Hub) Result(id string) (Result, bool, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	p := h.byID[id]
-	if p == nil || p.result == nil {
-		return Result{ID: id}, false
+	switch {
+	case p == nil:
+		return Result{ID: id}, false, ErrUnknownCommand
+	case p.result == nil:
+		return Result{ID: id}, false, nil
 	}
-	return *p.result, true
+	return *p.result, true, nil
 }
 
 // validate checks a command's required fields and the spawn allow/deny

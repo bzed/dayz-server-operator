@@ -384,7 +384,9 @@ Actions are carried out by the game server, so the call waits for its answer:
   target).
 * ``?wait=<seconds>`` changes how long to wait (default 10, at most 25).
   ``?wait=0`` returns ``202`` with a command ``id`` at once; poll
-  ``GET /instances/<i>/commands/<id>`` (``202`` while pending).
+  ``GET /instances/<i>/commands/<id>`` (``202`` while pending). A result can be read for 10 minutes
+  after the mod answered (or the command timed out after 30 seconds); after that, and for an id that was
+  never given out, the answer is ``404`` ``unknown command (results are kept for 10 minutes)``.
 
 Every action, including refused and rate-limited ones, is written to the audit
 log (``${paths.db}/audit.jsonl``) with the actor, the source, the target and the

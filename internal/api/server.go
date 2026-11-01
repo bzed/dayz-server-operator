@@ -637,7 +637,11 @@ func (s *Server) stillAllowed(ctx context.Context, c *call) bool {
 }
 
 func (s *Server) command(w http.ResponseWriter, r *http.Request, c *call) {
-	res, done := c.hub.Result(r.PathValue("id"))
+	res, done, err := c.hub.Result(r.PathValue("id"))
+	if err != nil {
+		fail(w, http.StatusNotFound, "unknown command (results are kept for 10 minutes)")
+		return
+	}
 	if !done {
 		writeJSON(w, http.StatusAccepted, ActionResult{ID: res.ID, Pending: true})
 		return

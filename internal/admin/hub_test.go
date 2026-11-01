@@ -150,7 +150,8 @@ func TestCommandRoundTrip(t *testing.T) {
 	r := <-done
 	require.True(t, bool(r.OK))
 	require.Equal(t, cmd.ID, r.ID)
-	r, ok := h.Result(cmd.ID)
+	r, ok, err := h.Result(cmd.ID)
+	require.NoError(t, err)
 	require.True(t, ok, "Result lookup")
 	require.True(t, bool(r.OK))
 	sr := h.Sync(SyncRequest{Proto: 1})
@@ -173,12 +174,41 @@ func TestResendAndTimeout(t *testing.T) {
 	c.advance(commandTimeout)
 	got = h.Sync(SyncRequest{Proto: 1}).Commands
 	require.Empty(t, got, "expired command still sent")
-	r, ok := h.Result(id)
+	r, ok, err := h.Result(id)
+	require.NoError(t, err)
 	require.True(t, ok)
 	require.False(t, bool(r.OK))
 	require.Equal(t, ErrTimeout.Error(), r.Message)
-	_, ok = h.Result("nope")
+	_, ok, err = h.Result("nope")
 	require.False(t, ok)
+	require.ErrorIs(t, err, ErrUnknownCommand)
+}
+
+func TestFinishedCommandsAreForgotten(t *testing.T) {
+	h, c := testHub()
+	hello(h)
+	done, err := h.Enqueue(Command{Kind: KindVehicleDelete, Vehicle: "a"})
+	require.NoError(t, err)
+	open, err := h.Enqueue(Command{Kind: KindVehicleDelete, Vehicle: "b"})
+	require.NoError(t, err)
+	h.Sync(SyncRequest{Proto: 1, Results: []Result{{ID: done, OK: true}}})
+
+	c.advance(resultKeep - time.Second)
+	h.Sync(SyncRequest{Proto: 1})
+	_, ok, err := h.Result(done)
+	require.NoError(t, err, "a result is kept for resultKeep")
+	require.True(t, ok)
+
+	c.advance(2 * time.Second)
+	h.Sync(SyncRequest{Proto: 1})
+	_, _, err = h.Result(done)
+	require.ErrorIs(t, err, ErrUnknownCommand, "a result older than resultKeep is dropped")
+	r, ok, err := h.Result(open)
+	require.NoError(t, err, "a command that timed out keeps its result for resultKeep too")
+	require.True(t, ok)
+	require.Equal(t, ErrTimeout.Error(), r.Message)
+	_, err = h.Wait(t.Context(), done)
+	require.Error(t, err)
 }
 
 func TestSubmitContextTimeout(t *testing.T) {
