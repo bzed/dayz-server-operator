@@ -161,6 +161,7 @@ func TestLoginAndAccountAgainstTheServer(t *testing.T) {
 	assert.Equal(t, 409, apiErr.Status, "nobody changes their own access")
 
 	// account
+	require.NoError(t, u.SetName(ctx, "Ann Admin"))
 	require.NoError(t, u.SetPassword(ctx, "ann", secretPW, "another horse battery"))
 	require.NoError(t, u.RemovePassword(ctx))
 	codes, err := u.NewRecoveryCodes(ctx)

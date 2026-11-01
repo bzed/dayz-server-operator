@@ -491,3 +491,33 @@ func TestSecondFactorRemovalEndsOtherSessions(t *testing.T) {
 	require.Equal(t, 204, code, "a passkey is left")
 	l.assertOnlyCurrent(other, current)
 }
+
+func TestAccountName(t *testing.T) {
+	l := newLoginEnv(t)
+	l.ann(g("alpha", RoleModerator))
+	session := l.loggedIn()
+	code, out := l.call("PUT", "/api/v1/account/name", session, `{"name":"  Ann\u0007 Admin "}`)
+	require.Equal(t, 204, code, "%v", out)
+	code, out = l.call("GET", "/api/v1/account", session, "")
+	require.Equal(t, 200, code)
+	assert.Equal(t, "Ann Admin", out["name"], "trimmed, no control characters")
+	code, out = l.call("GET", "/api/v1", session, "")
+	require.Equal(t, 200, code)
+	user := out["user"].(map[string]any)
+	assert.Equal(t, "Ann Admin", user["name"])
+	assert.Equal(t, "ann", user["username"], "the header shows the login name")
+
+	code, _ = l.call("PUT", "/api/v1/account/name", session, `{"name":"`+strings.Repeat("x", 65)+`"}`)
+	assert.Equal(t, 400, code, "too long")
+	code, _ = l.call("PUT", "/api/v1/account/name", "", `{"name":"x"}`)
+	assert.Equal(t, 403, code, "needs a session")
+	code, _ = l.call("PUT", "/api/v1/account/name", session, `{"name":""}`)
+	assert.Equal(t, 204, code, "the name may be empty")
+	entries, err := l.srv.Audit.Tail("", 20)
+	require.NoError(t, err)
+	var seen bool
+	for _, e := range entries {
+		seen = seen || e.Action == "account.name"
+	}
+	assert.True(t, seen, "the change is audited")
+}

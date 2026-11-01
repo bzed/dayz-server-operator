@@ -69,6 +69,12 @@ func (s *Server) accountAction(do func(c *apiclient.Client, r *http.Request) (no
 			s.accountPage(w, r, "", err.Error(), nil, nil)
 			return
 		}
+		if d := sessionFrom(r.Context()); d != nil {
+			s.forgetInfo(d.secret) // the header shows the name or the username: read it again
+			if info, err := s.sessionInfo(r, d.secret); err == nil {
+				d.info = info
+			}
+		}
 		s.accountPage(w, r, note, "", nil, codes)
 	}
 }
@@ -155,6 +161,9 @@ func (s *Server) accountPasskeyFinish(w http.ResponseWriter, r *http.Request) {
 // accountRoutes registers the account pages (inside the login check).
 func (s *Server) accountRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /account", s.accountGet)
+	mux.HandleFunc("POST /account/name", s.accountAction(func(c *apiclient.Client, r *http.Request) (string, []string, error) {
+		return "Your name was saved.", nil, c.SetName(r.Context(), r.PostFormValue("name"))
+	}))
 	mux.HandleFunc("POST /account/password", s.accountAction(func(c *apiclient.Client, r *http.Request) (string, []string, error) {
 		err := c.SetPassword(r.Context(), r.PostFormValue("username"), r.PostFormValue("current"), r.PostFormValue("new"))
 		return "Username and password saved.", nil, err

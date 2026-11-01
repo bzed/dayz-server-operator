@@ -95,6 +95,8 @@ Account and people pages
 
 The **account page** (your name in the header) is for everybody:
 
+* your name, the one other people see in the people list and the audit log (the header shows your username,
+  or this name while you have none, or your Steam ID if neither is set);
 * username and password, so that you can sign in without Steam (the second step stays); changing a password
   asks for the current one, and a wrong one counts like a failed login;
 * the authenticator app: set up a new one with a QR code and prove it with a first code, which replaces the

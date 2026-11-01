@@ -75,7 +75,7 @@ func TestE2EPasswordTOTPLogin(t *testing.T) {
 	b.waitPath(t, "/b/main/bans") // the page it was going to
 	var who string
 	b.run(t, chromedp.Text(`a.account`, &who))
-	assert.Contains(t, who, "Ann")
+	assert.Contains(t, who, "ann", "the header shows the username, not the name")
 }
 
 func TestE2ESteamLogin(t *testing.T) {

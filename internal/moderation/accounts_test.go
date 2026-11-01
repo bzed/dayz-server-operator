@@ -426,3 +426,16 @@ func TestClearPassword(t *testing.T) {
 	require.ErrorIs(t, err, ErrNotFound, "the name is free again")
 	require.ErrorIs(t, s.ClearPassword(ctx, steamB), ErrNotFound)
 }
+
+func TestSetNameKeepsTheRest(t *testing.T) {
+	s, _ := newStore(t)
+	putAnn(t, s, Grant{"*", "admin"})
+	require.NoError(t, s.SetPassword(t.Context(), steamA, "ann", "hash"))
+	require.NoError(t, s.SetName(t.Context(), steamA, "Ann Admin"))
+	p, err := s.Person(t.Context(), steamA)
+	require.NoError(t, err)
+	assert.Equal(t, "Ann Admin", p.Name)
+	assert.Equal(t, "ann", p.Username)
+	assert.Equal(t, []Grant{{"*", "admin"}}, p.Grants)
+	require.ErrorIs(t, s.SetName(t.Context(), steamB, "x"), ErrNotFound)
+}

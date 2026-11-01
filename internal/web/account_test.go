@@ -7,6 +7,7 @@ import (
 	"encoding/base32"
 	"net/url"
 	"regexp"
+	"strings"
 	"testing"
 	"time"
 
@@ -240,4 +241,30 @@ func TestUsersPageDoesNotOfferChangesToOneself(t *testing.T) {
 	code, body = e.post("/users/"+fixturePerson+"/delete", url.Values{}, nil)
 	assert.Equal(t, 422, code)
 	assert.Contains(t, body, "you cannot change your own access")
+}
+
+func TestAccountNameForm(t *testing.T) {
+	e := newEnv(t, api.RoleAdmin)
+	_, body, _ := e.get("/account")
+	assert.Contains(t, body, `name="name" value="Fixture"`, "the name can be edited")
+	code, body := e.post("/account/name", url.Values{"name": {"Fix Admin"}}, nil)
+	require.Equal(t, 200, code, body)
+	assert.Contains(t, body, "name was saved")
+	assert.Contains(t, body, "Fix Admin</a>", "the header follows at once")
+	p, err := e.st.Person(t.Context(), fixturePerson)
+	require.NoError(t, err)
+	assert.Equal(t, "Fix Admin", p.Name)
+	code, body = e.post("/account/name", url.Values{"name": {strings.Repeat("x", 65)}}, nil)
+	assert.Equal(t, 422, code)
+	assert.Contains(t, body, "longer than")
+}
+
+func TestHeaderShowsTheUsername(t *testing.T) {
+	e := newEnv(t, api.RoleAdmin)
+	_, body, _ := e.get("/")
+	assert.Contains(t, body, "Fixture</a>", "no username: the name")
+	code, body := e.post("/account/password", url.Values{"username": {"fix"}, "new": {"correct horse battery"}}, nil)
+	require.Equal(t, 200, code, body)
+	assert.Contains(t, body, `aria-hidden="true"></i>fix</a>`, "the login name, as soon as there is one")
+	assert.NotContains(t, body, fixturePerson+"</a>")
 }

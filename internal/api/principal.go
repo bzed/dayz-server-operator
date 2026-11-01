@@ -26,7 +26,9 @@ func installationWide(perm string) bool {
 type User struct {
 	SteamID string
 	Name    string
-	Grants  []moderation.Grant
+	// Username is the login name, empty without a password.
+	Username string
+	Grants   []moderation.Grant
 }
 
 // Principal is an authenticated caller: a token, and for a web token with a session the person it acts for.

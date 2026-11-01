@@ -186,6 +186,8 @@ being logged in; every change is audited (``account.*``) without secrets.
      - Answer
    * - ``GET /account``
      - ``{"steam_id","name","username","has_password","totp":bool,"passkeys":[{"id","name","created","last_used"}],"recovery_left":n}``
+   * - ``PUT /account/name`` ``{"name"}``
+     - ``204``. The display name, at most 64 characters, control characters removed; it may be empty
    * - ``PUT /account/password`` ``{"username","current","new"}``
      - ``204``. ``current`` is needed when a password exists (``403`` if wrong, counted like a failed
        login). The username is 3 to 32 characters of ``a-z 0-9 . _ -`` (case-insensitive, stored in lower
@@ -240,7 +242,7 @@ down) or the disabled flag, and a ``DELETE`` or ``reset`` for oneself, answer ``
 own access; another admin or dzo user on the serve host can``. Changing only the display name is fine. The
 rule also holds if ``users.manage`` is ever given to a lower role.
 
-``GET /`` of a request that acts for a person has a ``user`` part: ``{"steam_id","name","roles":{"<instance>":"<role>"},
+``GET /`` of a request that acts for a person has a ``user`` part: ``{"steam_id","name","username"(when set),"roles":{"<instance>":"<role>"},
 "installation":["audit.view",…]}``. ``roles`` is the effective role on each existing instance the person has
 one on (the web interface shows controls from it; the API checks every action regardless), ``installation``
 the installation-wide permissions they hold. ``role`` stays the highest role anywhere.

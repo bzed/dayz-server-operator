@@ -175,6 +175,18 @@ func (s *Store) PutPerson(ctx context.Context, p Person, now time.Time) error {
 	return wrap("put person", err)
 }
 
+// SetName changes the display name of a person and nothing else.
+func (s *Store) SetName(ctx context.Context, steamID, name string) error {
+	res, err := s.db.ExecContext(ctx, `UPDATE people SET name = ? WHERE steam_id = ?`, name, steamID)
+	if err != nil {
+		return wrap("set name", err)
+	}
+	if n, _ := res.RowsAffected(); n == 0 { //nolint:errcheck // sqlite reports it
+		return ErrNotFound
+	}
+	return nil
+}
+
 // DeletePerson removes a person with everything that belongs to them.
 func (s *Store) DeletePerson(ctx context.Context, steamID string) error {
 	res, err := s.db.ExecContext(ctx, `DELETE FROM people WHERE steam_id = ?`, steamID)

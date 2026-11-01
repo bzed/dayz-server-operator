@@ -10,7 +10,15 @@
 <pre id="recovery-codes">{{range .Codes}}{{.}}
 {{end}}</pre></section>{{end}}
 {{$a := .Account}}
-<dl class="facts"><dt>Steam ID</dt><dd>{{$a.SteamID}}</dd><dt>Name</dt><dd>{{$a.Name}}</dd><dt>Username</dt><dd>{{if $a.Username}}{{$a.Username}}{{else}}none{{end}}</dd></dl>
+<dl class="facts"><dt>Steam ID</dt><dd>{{$a.SteamID}}</dd><dt>Name</dt><dd>{{if $a.Name}}{{$a.Name}}{{else}}none{{end}}</dd><dt>Username</dt><dd>{{if $a.Username}}{{$a.Username}}{{else}}none{{end}}</dd></dl>
+
+<section><h2>Name</h2>
+<p>The name other people see in the people list and the audit log. The top bar shows your username, or this name until you have one.</p>
+<form method="post" action="/account/name" class="stack">
+  <input type="hidden" name="csrf" value="{{$csrf}}">
+  <label>Name <input name="name" value="{{$a.Name}}" maxlength="64" autocomplete="name"></label>
+  <button class="primary">Save the name</button>
+</form></section>
 
 <section><h2>Username and password</h2>
 <p>With a username and a password you can sign in without Steam. The second step stays.</p>

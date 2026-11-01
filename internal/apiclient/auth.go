@@ -136,6 +136,11 @@ func (c *Client) SetPassword(ctx context.Context, username, current, newPassword
 	return c.call(ctx, http.MethodPut, "/api/v1/account/password", map[string]string{"username": username, "current": current, "new": newPassword}, http.StatusNoContent, nil)
 }
 
+// SetName changes the display name of the person.
+func (c *Client) SetName(ctx context.Context, name string) error {
+	return c.call(ctx, http.MethodPut, "/api/v1/account/name", map[string]string{"name": name}, http.StatusNoContent, nil)
+}
+
 // RemovePassword removes the password and username.
 func (c *Client) RemovePassword(ctx context.Context) error {
 	return c.call(ctx, http.MethodDelete, "/api/v1/account/password", nil, http.StatusNoContent, nil)

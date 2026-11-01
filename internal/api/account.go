@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/bzed/dayz-server-operator/internal/admin"
 	"github.com/bzed/dayz-server-operator/internal/auth"
@@ -165,6 +166,26 @@ type passwordChange struct {
 	Username string `json:"username"`
 	Current  string `json:"current"`
 	New      string `json:"new"`
+}
+
+func (s *Server) setName(w http.ResponseWriter, r *http.Request, c *call) {
+	var body struct {
+		Name string `json:"name"`
+	}
+	if !decode(w, r, &body) {
+		return
+	}
+	name := cleanName(body.Name)
+	if utf8.RuneCountInString(name) > maxPersonName {
+		fail(w, http.StatusBadRequest, "the name is longer than %d characters", maxPersonName)
+		return
+	}
+	if err := s.Accounts.SetName(r.Context(), c.who.User.SteamID, name); err != nil {
+		fail(w, http.StatusInternalServerError, "database error")
+		return
+	}
+	s.accountAudit(c, "account.name", "changed")
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (s *Server) setPassword(w http.ResponseWriter, r *http.Request, c *call) {
@@ -453,6 +474,7 @@ func (s *Server) accountRoutes(route func(pattern, perm string, instance bool, h
 		h       handler
 	}{
 		{"GET " + base + "/account", s.account},
+		{"PUT " + base + "/account/name", s.setName},
 		{"PUT " + base + "/account/password", s.setPassword},
 		{"DELETE " + base + "/account/password", s.removePassword},
 		{"POST " + base + "/account/totp/begin", s.accountTOTPBegin},
