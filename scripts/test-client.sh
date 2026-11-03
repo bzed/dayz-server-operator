@@ -100,12 +100,13 @@ s=0
 waitfor 30 "! '$work/dzo' vehicle list t1 --config '$work/config.yaml' --token-file '$work/api.token' | grep -q '^$bike '" || s=1
 verdict "motorbike: delete" $s
 
-# Boats (1.30): BoatScript is not a Car either. Spawned in the sea south of Chernarus, they must be listed as kind
-# boat, floating at the water (not on the seabed), and be repaired, flipped, moved and deleted like a car.
+# Boats (1.30): BoatScript is not a Car either. Spawned in the water off the coast west of Chernogorsk (far out at
+# sea, at z 300, the server removed them within seconds), they must be listed as kind
+# boat, floating at the water (not on the seabed), and be repaired, moved and deleted like a car; a flip is refused.
 # yof reads the height a boat is reported at.
 vjson() { curl -s -H "Authorization: Bearer $(cat "$work/api.token")" "http://127.0.0.1:$api/api/v1/instances/t1/vehicles"; }
 boat_checks() {
-	local class=$1 label=$2 x=$3 z=$4 id= y
+	local class=$1 label=$2 x=$3 z=$4 id= y out
 	s=0
 	"$work/dzo" vehicle spawn t1 "$class" --x "$x" --z "$z" --config "$work/config.yaml" --token-file "$work/api.token" | grep -q ok || s=1
 	for _ in $(seq 20); do
@@ -124,8 +125,9 @@ boat_checks() {
 	"$work/dzo" vehicle repair t1 "$id" --config "$work/config.yaml" --token-file "$work/api.token" >/dev/null || s=1
 	"$work/dzo" vehicle repair t1 "$id" --scope missing --config "$work/config.yaml" --token-file "$work/api.token" >/dev/null || s=1
 	verdict "$label: repair" $s
-	s=0
-	"$work/dzo" vehicle flip t1 "$id" --config "$work/config.yaml" --token-file "$work/api.token" 2>&1 | grep -q 'boats cannot be flipped' || s=1
+	s=1 # the refused flip exits 1, so its output is matched outside a pipe (pipefail)
+	out=$("$work/dzo" vehicle flip t1 "$id" --config "$work/config.yaml" --token-file "$work/api.token" 2>&1) || true
+	case $out in *'boats cannot be flipped'*) s=0 ;; esac
 	verdict "$label: flip is refused" $s
 	s=0
 	"$work/dzo" vehicle move t1 "$id" --x "$((x + 150))" --z "$z" --config "$work/config.yaml" --token-file "$work/api.token" | grep -q ok || s=1
@@ -140,9 +142,9 @@ boat_checks() {
 	waitfor 30 "! '$work/dzo' vehicle list t1 --config '$work/config.yaml' --token-file '$work/api.token' | grep -q '^$id '" || s=1
 	verdict "$label: delete" $s
 }
-boat_checks Boat_01_Orange "boat (vanilla Boat_01)" 7000 300
+boat_checks Boat_01_Orange "boat (vanilla Boat_01)" 4298 1811
 if [ "$expansion" = 1 ]; then
-	boat_checks ExpansionZodiacBoat_Orange "boat (Expansion Zodiac)" 7000 500
+	boat_checks ExpansionZodiacBoat_Orange "boat (Expansion Zodiac)" 4298 1811
 fi
 
 # Missing parts: bare cars (as the economy leaves them) get their parts, the headlights in both slots and the battery.
