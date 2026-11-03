@@ -606,17 +606,11 @@ func TestWaitReturnsTheEnqueuedResult(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestBoatsCannotBeFlipped(t *testing.T) {
+func TestBoatsAreFlipped(t *testing.T) {
 	h, _ := testHub()
 	hello(h)
-	h.Kinds = map[string][]string{"boat": {"ModBoat"}}
-	h.Sync(SyncRequest{Proto: 1, Vehicles: []Vehicle{{ID: "b1", Kind: "boat", Type: "Boat_01_Orange"}, {ID: "b2", Kind: "car", Type: "ModBoat"}, {ID: "c1", Kind: "car", Type: "Sedan_02"}}})
-	for _, id := range []string{"b1", "b2"} {
-		_, err := h.Enqueue(Command{Kind: KindVehicleFlip, Vehicle: id})
-		require.EqualError(t, err, "admin: boats cannot be flipped", id)
-	}
-	_, err := h.Enqueue(Command{Kind: KindVehicleFlip, Vehicle: "c1"})
+	h.Sync(SyncRequest{Proto: 1, Vehicles: []Vehicle{{ID: "b1", Kind: "boat", Type: "Boat_01_Orange"}}})
+	id, err := h.Enqueue(Command{Kind: KindVehicleFlip, Vehicle: "b1"})
 	require.NoError(t, err)
-	_, err = h.Enqueue(Command{Kind: KindVehicleRepair, Vehicle: "b1", Scope: "all"})
-	require.NoError(t, err, "a boat can still be repaired")
+	require.NotEmpty(t, id)
 }

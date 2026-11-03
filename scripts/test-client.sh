@@ -102,11 +102,11 @@ verdict "motorbike: delete" $s
 
 # Boats (1.30): BoatScript is not a Car either. Spawned in the water off the coast west of Chernogorsk (far out at
 # sea, at z 300, the server removed them within seconds), they must be listed as kind
-# boat, floating at the water (not on the seabed), and be repaired, moved and deleted like a car; a flip is refused.
+# boat, floating at the water (not on the seabed), and be repaired, flipped, moved and deleted like a car.
 # yof reads the height a boat is reported at.
 vjson() { curl -s -H "Authorization: Bearer $(cat "$work/api.token")" "http://127.0.0.1:$api/api/v1/instances/t1/vehicles"; }
 boat_checks() {
-	local class=$1 label=$2 x=$3 z=$4 id= y out
+	local class=$1 label=$2 x=$3 z=$4 id= y
 	s=0
 	"$work/dzo" vehicle spawn t1 "$class" --x "$x" --z "$z" --config "$work/config.yaml" --token-file "$work/api.token" | grep -q ok || s=1
 	for _ in $(seq 20); do
@@ -125,10 +125,14 @@ boat_checks() {
 	"$work/dzo" vehicle repair t1 "$id" --config "$work/config.yaml" --token-file "$work/api.token" >/dev/null || s=1
 	"$work/dzo" vehicle repair t1 "$id" --scope missing --config "$work/config.yaml" --token-file "$work/api.token" >/dev/null || s=1
 	verdict "$label: repair" $s
-	s=1 # the refused flip exits 1, so its output is matched outside a pipe (pipefail)
-	out=$("$work/dzo" vehicle flip t1 "$id" --config "$work/config.yaml" --token-file "$work/api.token" 2>&1) || true
-	case $out in *'boats cannot be flipped'*) s=0 ;; esac
-	verdict "$label: flip is refused" $s
+	s=0
+	"$work/dzo" vehicle flip t1 "$id" --config "$work/config.yaml" --token-file "$work/api.token" >/dev/null || s=1
+	verdict "$label: flip" $s
+	sleep 5 # the flip lifts it by a metre: let it settle on the water
+	y=$(vjson | jq -r --arg id "$id" '.[] | select(.id == $id) | .y')
+	s=1
+	awk -v y="$y" 'BEGIN{exit !(y > -3 && y < 3)}' && s=0
+	verdict "$label: after the flip it floats on the water (y $y)" $s
 	s=0
 	"$work/dzo" vehicle move t1 "$id" --x "$((x + 150))" --z "$z" --config "$work/config.yaml" --token-file "$work/api.token" | grep -q ok || s=1
 	waitfor 30 "curl -s -H 'Authorization: Bearer $(cat "$work/api.token")' http://127.0.0.1:$api/api/v1/instances/t1/vehicles | jq -e --arg id '$id' '.[] | select(.id == \$id and .x > $x + 140)' >/dev/null" || s=1
