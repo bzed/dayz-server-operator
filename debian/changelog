@@ -1,4 +1,4 @@
-dayz-server-operator (0.1.0-1) UNRELEASED; urgency=medium
+dayz-server-operator (0.8.0-1) trixie; urgency=medium
 
   * Initial packaging: dzo binary, config.yaml conffile, dayz system
     user via sysusers.d/tmpfiles.d, subuid/subgid + linger setup in
@@ -88,5 +88,23 @@ dayz-server-operator (0.1.0-1) UNRELEASED; urgency=medium
   * Boats (vanilla and DayZ Expansion) are listed on the map and in the vehicle
     list as kind boat and can be spawned on the water, repaired, flipped, moved
     and deleted like cars; dzo-admin 0.7.0.
+  * Last driver of vehicles: dzo-admin 0.8.0 reports who last took the
+    driver's seat of each car, motorbike and boat (hello feature driver),
+    and dzo serve keeps one record per vehicle in dzo.sqlite (forgotten
+    admin.vehicle_forget_days after it is gone, new option, default 7). The
+    vehicle list in the web interface and the API shows the last driver and
+    the last drive, and each vehicle links to its place on the map.
+  * Cleanup of unused vehicles: a previewed bulk delete of the vehicles nobody
+    has driven for a number of days (web interface and API); occupied and
+    covered vehicles are skipped, each delete is audited and the deletes the
+    mod has not answered yet are listed as pending.
+  * Database backup: serve.db_backup_hours and serve.db_backup_keep (new
+    options) make regular consistent copies of dzo.sqlite, passed to the
+    post_backup hooks as extra.db_backup.
+  * A reload drops the hubs of instances removed from the site, and the hub
+    forgets finished commands after 10 minutes (GET of an older command id
+    answers 404).
+  * BREAKING: dzo-admin 0.8.0 needs DayZ 1.30; servers still on DayZ 1.29
+    have to stay on dzo-admin 0.7.x.
 
- -- Bernd Zeimetz <bernd@bzed.de>  Sat, 26 Sep 2026 15:00:00 +0000
+ -- Bernd Zeimetz <bernd@bzed.de>  Wed, 04 Nov 2026 20:48:35 +0100
