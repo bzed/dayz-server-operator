@@ -17,6 +17,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -291,6 +292,25 @@ func (c *Client) DeleteVehicle(ctx context.Context, name, vehicle string, force 
 		path += "?force=1"
 	}
 	return c.action(ctx, http.MethodDelete, path, nil)
+}
+
+// UnusedVehicles lists the vehicles nobody has driven for days days (the preview of a cleanup).
+func (c *Client) UnusedVehicles(ctx context.Context, name string, days int) (out api.UnusedVehicles, err error) {
+	return out, c.get(ctx, inst(name)+"/vehicles/unused?days="+strconv.Itoa(days), &out)
+}
+
+// CleanupVehicles deletes the vehicles of a confirmed preview that are still unused; the result says
+// which were queued for deletion and which were skipped, and why.
+func (c *Client) CleanupVehicles(ctx context.Context, name string, days int, ids []string) (api.CleanupResult, error) {
+	status, b, err := c.do(ctx, http.MethodPost, inst(name)+"/vehicles/cleanup", api.CleanupRequest{Days: days, IDs: ids})
+	if err != nil {
+		return api.CleanupResult{}, err
+	}
+	if status != http.StatusOK {
+		return api.CleanupResult{}, apiErr(status, b)
+	}
+	var out api.CleanupResult
+	return out, json.Unmarshal(b, &out)
 }
 
 // Stream calls fn for every server-sent event of an instance until ctx ends

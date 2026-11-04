@@ -389,6 +389,38 @@ func TestRunKillfeedPosts(t *testing.T) {
 	require.NoError(t, <-done)
 }
 
+func TestRunRecordsVehicles(t *testing.T) {
+	cfg, tree := fixture(t)
+	insts, _ := resolve.ResolveAll(cfg, tree)
+	require.NoError(t, WriteModConfig(cfg, insts[0]))
+	tokenB, _ := os.ReadFile(filepath.Join(TokenDir(cfg), "alpha.token"))
+	ready := make(chan [2]string, 1)
+	ctx, cancel := context.WithCancel(t.Context())
+	done := make(chan error, 1)
+	go func() {
+		done <- Run(ctx, cfg, Options{Version: "test", Load: func() (*site.Tree, error) { return tree, nil },
+			Ready: func(a, m string) { ready <- [2]string{a, m} }, Logf: t.Logf})
+	}()
+	addrs := <-ready
+	body := `{"token":"` + strings.TrimSpace(string(tokenB)) + `","protocol":1,"hello":true,"features":["driver"],"has":["vehicles"],` +
+		`"vehicles":[{"id":"v1","type":"Offroad_02","driver":"76561198000000001","driver_name":"Alice","driven_ago":60}]}`
+	resp, err := http.Post("http://"+addrs[1]+"/mod/v1/sync", "application/json", strings.NewReader(body))
+	require.NoError(t, err)
+	_ = resp.Body.Close()
+	require.Eventually(t, func() bool {
+		st, err := moderation.OpenReadOnly(t.Context(), BanDB(cfg))
+		if err != nil {
+			return false
+		}
+		defer func() { _ = st.Close() }()
+		recs, err := st.VehicleRecords(t.Context(), "alpha")
+		r, ok := recs["v1"]
+		return err == nil && ok && r.Driver == "76561198000000001" && r.DriverName == "Alice" && !r.DrivenAt.IsZero()
+	}, 5*time.Second, 20*time.Millisecond, "the vehicle is recorded with its last driver")
+	cancel()
+	require.NoError(t, <-done)
+}
+
 func TestRunRecordsPlayerHistory(t *testing.T) {
 	cfg, tree := fixture(t)
 	insts, _ := resolve.ResolveAll(cfg, tree)
@@ -423,4 +455,14 @@ func TestRunRecordsPlayerHistory(t *testing.T) {
 	p, err := st.Player(t.Context(), "76561198000000001")
 	require.NoError(t, err)
 	require.False(t, p.Online, "stopping dzo serve ends the session")
+}
+
+func TestAddHubsDropsRemovedInstances(t *testing.T) {
+	cfg, tree := fixture(t)
+	reg := admin.NewRegistry(TokenDir(cfg))
+	require.NoError(t, AddHubs(reg, cfg, tree))
+	require.Equal(t, []string{"alpha", "beta"}, reg.Names())
+	delete(tree.Instances, "beta")
+	require.NoError(t, AddHubs(reg, cfg, tree))
+	require.Equal(t, []string{"alpha"}, reg.Names(), "a reload without beta drops its hub")
 }

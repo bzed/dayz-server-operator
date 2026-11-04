@@ -75,7 +75,7 @@ func New(b *Backend, opts Options) (*Server, error) {
 	if b == nil {
 		return nil, fmt.Errorf("web: no backend configured")
 	}
-	t, err := template.New("").Funcs(template.FuncMap{"pct": pct, "deref": func(f *float64) float64 { return *f }, "join": strings.Join, "expiry": moderation.FormatExpiry, "facts": factsOf, "day": func(t time.Time) string { return t.UTC().Format("2006-01-02") }, "stamp": func(t time.Time) string { return t.UTC().Format("2006-01-02 15:04") }, "ago": ago, "hours": hours}).ParseFS(templateFS, "templates/*.html")
+	t, err := template.New("").Funcs(template.FuncMap{"pct": pct, "deref": func(f *float64) float64 { return *f }, "join": strings.Join, "expiry": moderation.FormatExpiry, "facts": factsOf, "day": func(t time.Time) string { return t.UTC().Format("2006-01-02") }, "stamp": func(t time.Time) string { return t.UTC().Format("2006-01-02 15:04") }, "ago": ago, "mapLink": mapLink, "hours": hours}).ParseFS(templateFS, "templates/*.html")
 	if err != nil {
 		return nil, err
 	}
@@ -147,6 +147,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET "+inst, s.instance)
 	mux.HandleFunc("GET "+inst+"/players", s.playersFragment)
 	mux.HandleFunc("GET "+inst+"/vehicles", s.vehiclesFragment)
+	mux.HandleFunc("GET "+inst+"/vehicles/cleanup", s.cleanupStep)
+	mux.HandleFunc("POST "+inst+"/vehicles/cleanup", s.cleanupConfirm)
 	mux.HandleFunc("GET "+inst+"/players/{steamid}/panel", s.playerPanel)
 	mux.HandleFunc("GET "+inst+"/players/{steamid}/info", s.playerInfo)
 	mux.HandleFunc("GET "+inst+"/vehicles/{id}/panel", s.vehiclePanel)

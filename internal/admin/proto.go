@@ -15,6 +15,7 @@ import (
 	"math"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // ProtocolVersion is the dzo <-> dzo-admin protocol version; the mod sends
@@ -80,7 +81,23 @@ type Vehicle struct {
 	Occupants []string `json:"occupants"`
 	Owner     string   `json:"owner,omitempty"`   // DayZ Expansion: the name on the key chain
 	Covered   Flag     `json:"covered,omitempty"` // DayZ Expansion: stored under a cover; only class and place are known
+
+	// Driver, DriverName and DrivenAgo come from the mod (feature "driver"): the last player to take the
+	// driver's seat and the seconds since. The hub drops all three when the drive is not plausible.
+	Driver     string  `json:"driver,omitempty"`
+	DriverName string  `json:"driver_name,omitempty"`
+	DrivenAgo  float64 `json:"driven_ago,omitempty"`
+	// DrivenAt is set by the hub from DrivenAgo (zero when there is no valid drive).
+	DrivenAt time.Time `json:"-"`
+	// LastDriver, LastDriverName, LastDriven and FirstSeen are filled by the API from the vehicle records.
+	LastDriver     string     `json:"last_driver,omitempty"`
+	LastDriverName string     `json:"last_driver_name,omitempty"`
+	LastDriven     *time.Time `json:"last_driven,omitempty"`
+	FirstSeen      *time.Time `json:"first_seen,omitempty"`
 }
+
+// FeatureDriver is the hello feature of a mod that reports the last driver of a vehicle.
+const FeatureDriver = "driver"
 
 // KV is one tooltip entry of a marker.
 type KV struct {

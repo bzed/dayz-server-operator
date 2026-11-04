@@ -58,6 +58,11 @@ type Service struct {
 	// AuditClientRetention is how long the audit log keeps the client address of an entry (default 90
 	// days; negative keeps them all). The sweep blanks older ones once a day.
 	AuditClientRetention time.Duration
+	// BackupDir, BackupEvery and BackupKeep control the regular copies of the database (BackupTo): the
+	// directory, how often (0 or negative: never) and how many to keep. Without a BackupDir there are none.
+	BackupDir   string
+	BackupEvery time.Duration
+	BackupKeep  int
 	// OnEvent, when set, sees every BattlEye event of an instance after the ban logic ran. It runs on
 	// the instance's event goroutine and must not block. Set it before Start.
 	OnEvent func(instance string, ev battleye.Event)
@@ -258,6 +263,7 @@ func (s *Service) maintain(ctx context.Context) {
 	if err := s.store.PruneLogins(ctx, now, cmp.Or(s.SessionIdle, DefaultSessionIdle), cmp.Or(s.SessionMax, DefaultSessionMax)); err != nil {
 		s.logf("logins: dropping expired sessions: %v", err)
 	}
+	s.backupIfDue(ctx, now)
 	every := cmp.Or(s.VacuumEvery, DefaultVacuumEvery)
 	if every < 0 {
 		return
@@ -271,6 +277,32 @@ func (s *Service) maintain(ctx context.Context) {
 			s.logf("bans: %v", err)
 		}
 	}
+}
+
+// backupIfDue writes a copy of the database when the last one is BackupEvery old. A failure is logged
+// and tried again at the next sweep; it never stops the service.
+func (s *Service) backupIfDue(ctx context.Context, now time.Time) {
+	if s.BackupDir == "" || s.BackupEvery <= 0 {
+		return
+	}
+	due, err := s.store.BackupDue(ctx, now, s.BackupEvery)
+	if err != nil {
+		s.logf("backup: %v", err)
+		return
+	}
+	if !due {
+		return
+	}
+	path, err := s.store.BackupTo(ctx, s.BackupDir, now, s.BackupKeep)
+	if err != nil {
+		s.logf("backup: %v", err)
+		return
+	}
+	if err := s.store.MarkBackedUp(ctx, now); err != nil {
+		s.logf("backup: %v", err)
+		return
+	}
+	s.logf("backup: copied the database to %s", path)
 }
 
 func (s *Service) sweep(ctx context.Context) {

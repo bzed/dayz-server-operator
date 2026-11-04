@@ -73,6 +73,24 @@ func (r *Registry) Add(h *Hub) *Hub {
 	return h
 }
 
+// Retain drops the hubs of the instances that are not in names: an instance removed from the site is
+// gone after a reload (its mod is turned away, its vehicle records are forgotten), the others keep their state.
+func (r *Registry) Retain(names []string) {
+	keep := map[string]bool{}
+	for _, n := range names {
+		keep[n] = true
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for n := range r.hubs {
+		if !keep[n] {
+			delete(r.hubs, n)
+			delete(r.tokens, n)
+			delete(r.online, n)
+		}
+	}
+}
+
 // Hub returns the hub of an instance.
 func (r *Registry) Hub(name string) (*Hub, bool) {
 	r.mu.Lock()
