@@ -1,3 +1,13 @@
+dayz-server-operator (0.8.1-1) trixie; urgency=medium
+
+  * dzo-admin 0.8.1, which changes the packaged PBO: a moved or spawned
+    vehicle goes on top of the highest surface at the point (road, rock or
+    roof) instead of at the terrain height, where it could end up inside
+    the object, be thrown out or fall through the world and be deleted.
+    Boats stay on the water.
+
+ -- Bernd Zeimetz <bernd@bzed.de>  Sat, 07 Nov 2026 10:40:29 +0100
+
 dayz-server-operator (0.8.0-1) trixie; urgency=medium
 
   * Initial packaging: dzo binary, config.yaml conffile, dayz system
