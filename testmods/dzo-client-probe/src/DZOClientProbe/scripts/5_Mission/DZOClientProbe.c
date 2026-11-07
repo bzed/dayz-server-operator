@@ -277,6 +277,9 @@ modded class MissionServer
 			pos[1] = GetGame().SurfaceY(pos[0], pos[2]);
 			Object car = GetGame().CreateObjectEx(types.Get(i), pos, ECE_PLACE_ON_SURFACE | ECE_CREATEPHYSICS);
 			Print("DZO-PROBE bare: " + types.Get(i) + " " + car);
+			// types.xml gives most of them 3 seconds: the economy would delete them while the test waits, no player is near
+			EntityAI.Cast(car).SetLifetimeMax(3600);
+			EntityAI.Cast(car).SetLifetime(3600);
 			// the position query below does not always find every one of them
 			if (!m_BareCars)
 				m_BareCars = new array<Object>;

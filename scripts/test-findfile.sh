@@ -28,7 +28,7 @@ if [ -z "$workshop" ]; then
 fi
 [ -d "$workshop/1625463737" ] || { echo "CF-Test (1625463737) not found: subscribe to it in the Steam client or pass --workshop" >&2; exit 2; }
 
-work=$(mktemp -d)
+work=$(mktemp -d /var/tmp/dzfindfile.XXXXXX) # not /tmp: it can be a tmpfs, and the logs and builds would take up RAM
 trap 'rm -rf "$work"' EXIT
 go build -o "$work/dzo" ./cmd/dzo
 "$work/dzo" servermods build --src testmods --out "$work/built" >/dev/null
