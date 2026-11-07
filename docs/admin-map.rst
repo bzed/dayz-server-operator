@@ -163,8 +163,12 @@ confirmation asks ``Move <class>?`` with the coordinates; as with players you ca
 the icon stays where you dropped it until the answer. The vehicle menu also has **Move to coordinates…**, and
 ``dzo vehicle move`` and ``POST /vehicles/<id>/move`` do the same (:doc:`api`).
 
-The mod puts the vehicle on the ground at the point (the terrain height plus one metre, so it settles on its
-wheels), upright, with its heading, and sets its speed and spin to zero. Nothing else about it changes. A vehicle with
+The mod puts the vehicle at the point, one metre above the highest surface there so it settles on its wheels: the
+ground, or a road, rock or roof on top of it, because a vehicle put inside an object is thrown out or falls through
+the world, where the game deletes it. A point on a building therefore puts the vehicle on its roof. A boat goes on
+the water instead, also under a bridge. A vehicle spawned at a point is placed the same way (half a metre above that
+surface). This needs dzo-admin 0.8.1; an older mod uses the terrain height alone. The vehicle stands upright, with its
+heading and with its speed and spin set to zero. Nothing else about it changes. A vehicle with
 **players inside** keeps them seated and moves them with it, under these rules:
 
 * the move may be at most ``admin.move_occupied_max`` metres (default 200, ground distance); a longer one is refused with

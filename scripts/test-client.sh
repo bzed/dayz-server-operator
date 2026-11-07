@@ -40,7 +40,7 @@ done
 [ -x "$dev/dayz-client-headless.sh" ] || { echo "dayz-dev scripts not found in $dev (DAYZ_DEV_SCRIPTS)" >&2; exit 2; }
 [ "$noclient" = 1 ] || "$dev/dayz-client-headless.sh" status >&2 || { echo "a DayZ client is running; one game at a time" >&2; exit 2; }
 
-work=$(mktemp -d /tmp/dzcl.XXXXXX)
+work=$(mktemp -d /var/tmp/dzcl.XXXXXX) # not /tmp: it can be a tmpfs, and the logs and builds would take up RAM
 tree=$work/tree
 pids=()
 cleanup() {
@@ -75,6 +75,7 @@ server_tests() {
 # Motorbike is not a Car, dzo-admin keeps a registry for it.
 # The world already has motorbikes of the economy: the probe's is the id that is new.
 vl() { "$work/dzo" vehicle list t1 --config "$work/config.yaml" --token-file "$work/api.token" "$@"; }
+waitfor 120 "[ -d '$tree/profiles/dzo_probe' ] && '$work/dzo' vehicle list t1 --config '$work/config.yaml' --token-file '$work/api.token' >/dev/null 2>&1" # the probe and the mod are up
 vl | awk '$2 == "motorbike" {print $1}' | sort >"$work/bikes.before"
 touch "$tree/profiles/dzo_probe/bike"
 s=0
@@ -92,6 +93,27 @@ verdict "motorbike: repair" $s
 s=0
 "$work/dzo" vehicle repair t1 "$bike" --scope missing --config "$work/config.yaml" --token-file "$work/api.token" >/dev/null || s=1
 verdict "motorbike: add missing parts" $s
+# A move puts it on the ground at the target and it stays there: as high as a bike spawned next to it, undamaged.
+# This is the server's view only; that a client sees the bike there needs a look in the game.
+bikeat() { curl -s -H "Authorization: Bearer $(cat "$work/api.token")" "http://127.0.0.1:$api/api/v1/instances/t1/vehicles" | jq -r --arg id "$1" ".[] | select(.id == \$id) | $2"; }
+s=0
+"$work/dzo" vehicle spawn t1 Motorbike_01_Blue --x 7583 --z 7500 --config "$work/config.yaml" --token-file "$work/api.token" | grep -q ok || s=1
+refbike=
+for _ in $(seq 20); do
+	refbike=$(curl -s -H "Authorization: Bearer $(cat "$work/api.token")" "http://127.0.0.1:$api/api/v1/instances/t1/vehicles" | jq -r '[.[] | select(.kind == "motorbike" and (.x - 7583 | fabs) < 5 and (.z - 7500 | fabs) < 5)][0].id // empty')
+	[ -n "$refbike" ] && break
+	sleep 3
+done
+[ -n "$refbike" ] || s=1
+"$work/dzo" vehicle move t1 "$bike" --x 7580 --z 7500 --config "$work/config.yaml" --token-file "$work/api.token" | grep -q ok || s=1
+waitfor 30 "[ \"\$(curl -s -H 'Authorization: Bearer $(cat "$work/api.token")' http://127.0.0.1:$api/api/v1/instances/t1/vehicles | jq -r --arg id '$bike' '.[] | select(.id == \$id and (.x - 7580 | fabs) < 2 and (.z - 7500 | fabs) < 2) | .id')\" = '$bike' ]" || s=1
+verdict "motorbike: move" $s
+sleep 20 # long enough to fall through the ground or be removed
+y=$(bikeat "$bike" .y) refy=$(bikeat "$refbike" .y) health=$(bikeat "$bike" .health)
+s=1
+awk -v y="$y" -v r="$refy" -v h="$health" 'BEGIN{d = y - r; if (d < 0) d = -d; exit !(y != "" && r != "" && d < 2 && h > 0.9)}' && s=0
+verdict "motorbike: after the move it stands on the ground (y $y, a spawned bike $refy, health $health)" $s
+"$work/dzo" vehicle delete t1 "$refbike" --config "$work/config.yaml" --token-file "$work/api.token" >/dev/null || true
 s=0
 "$work/dzo" vehicle flip t1 "$bike" --config "$work/config.yaml" --token-file "$work/api.token" >/dev/null || s=1
 verdict "motorbike: flip" $s
@@ -99,6 +121,23 @@ s=0
 "$work/dzo" vehicle delete t1 "$bike" --config "$work/config.yaml" --token-file "$work/api.token" >/dev/null || s=1
 waitfor 30 "! '$work/dzo' vehicle list t1 --config '$work/config.yaml' --token-file '$work/api.token' | grep -q '^$bike '" || s=1
 verdict "motorbike: delete" $s
+# On top of what stands there, not in it (Chernarus): at 6020/8500 a surface is 2 m above the terrain, a bike spawned at
+# the terrain height fell through the world; at 6000/7880 one is 3.8 m above it, a bike moved there ended up beneath.
+# Motorbike_01_Red: its lifetime in types.xml is hours, the economy deletes a Motorbike_01_Blue left alone within a minute.
+s=0
+"$work/dzo" vehicle spawn t1 Motorbike_01_Red --x 6020 --z 8500 --config "$work/config.yaml" --token-file "$work/api.token" | grep -q ok || s=1
+sleep 20
+y=$(curl -s -H "Authorization: Bearer $(cat "$work/api.token")" "http://127.0.0.1:$api/api/v1/instances/t1/vehicles" | jq -r '[.[] | select(.type == "Motorbike_01_Red")][0].y // empty')
+awk -v y="$y" 'BEGIN{exit !(y != "" && y > 325 && y < 327)}' || s=1
+verdict "motorbike: spawned on the object at the point (y $y, its top 325.96)" $s
+s=0
+bike=$(curl -s -H "Authorization: Bearer $(cat "$work/api.token")" "http://127.0.0.1:$api/api/v1/instances/t1/vehicles" | jq -r '[.[] | select(.type == "Motorbike_01_Red")][0].id // empty')
+"$work/dzo" vehicle move t1 "$bike" --x 6000 --z 7880 --config "$work/config.yaml" --token-file "$work/api.token" | grep -q ok || s=1
+sleep 20
+y=$(bikeat "$bike" .y)
+awk -v y="$y" 'BEGIN{exit !(y != "" && y > 304 && y < 306)}' || s=1
+verdict "motorbike: moved on top of the object at the point (y $y, its top 305.06)" $s
+"$work/dzo" vehicle delete t1 "$bike" --config "$work/config.yaml" --token-file "$work/api.token" >/dev/null || true
 
 # Boats (1.30): BoatScript is not a Car either. Spawned in the water off the coast west of Chernogorsk (far out at
 # sea, at z 300, the server removed them within seconds), they must be listed as kind
@@ -299,7 +338,7 @@ rb | grep -Eq '"k":"parts","v":"2/[0-9]+"' && rb | grep -Eq '"k":"weakest","v":"
 [ "$s" = 0 ] || rb >&2
 verdict "rebuilt: parts built, the weakest part and its decay floor" $s
 s=0
-rb | grep -Eq '"ttl":17[34][0-9][0-9]' || s=1
+rb | grep -Eq '"ttl":(17[34][0-9][0-9]|17500)' || s=1 # 17500 before the first tick of decay
 [ "$s" = 0 ] || rb >&2
 verdict "rebuilt: the ttl is the time until decay reaches the floor (70% of 25000 HP at 1 HP/s, a few ticks of decay in)" $s
 s=0
