@@ -24,7 +24,7 @@ ls "$debs"/*.deb >/dev/null
 
 rm -rf "$out"
 mkdir -p "$out"
-base=$(mktemp -d)
+base=$(mktemp -d /var/tmp/dzapt.XXXXXX) # not /tmp: it can be a tmpfs, and the packages would take up RAM
 trap 'rm -rf "$base"' EXIT
 cp -r "$here/apt/conf" "$base/conf"
 
