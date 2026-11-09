@@ -21,7 +21,7 @@ while [ $# -gt 0 ]; do
 	esac
 	shift
 done
-work=$(mktemp -d /tmp/dzspawn.XXXXXX)
+work=$(mktemp -d /var/tmp/dzspawn.XXXXXX) # not /tmp: it can be a tmpfs, and the logs and builds would take up RAM
 tree=$work/tree
 pid=
 cleanup() {
