@@ -31,8 +31,10 @@ func TestE2EPlayerNameIsText(t *testing.T) {
 	var bold int
 	b.run(t,
 		chromedp.Navigate(e.url("/b/main/i/alpha")),
-		chromedp.WaitVisible(`td.who`), // filled by the htmx "load" poll
-		chromedp.Text(`td.who`, &who),
+		// td.who is filled by the htmx "load" poll, and a later poll swaps the node again: wait and read in the
+		// page, since a node id taken by WaitVisible/Text can be gone by the time it is used.
+		chromedp.Poll(`document.querySelector("td.who") !== null && document.querySelector("td.who").textContent !== ""`, nil),
+		chromedp.Evaluate(`document.querySelector("td.who").textContent`, &who),
 		chromedp.Evaluate(`document.querySelectorAll("td.who b").length`, &bold),
 	)
 	require.Contains(t, who, "<b>alice</b>")
