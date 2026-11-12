@@ -88,7 +88,7 @@ func (b *browser) clickMenuItem(t *testing.T, text string) {
 	b.run(t, chromedp.Evaluate(`(function(){var it=document.querySelectorAll('.ctx [role=menuitem]');for(var i=0;i<it.length;i++){if(it[i].textContent.indexOf(`+jsString(text)+`)===0){it[i].click();return;}}throw new Error('no menu item: '+`+jsString(text)+`);})()`, nil))
 }
 
-// The map link of a stored vehicle (sv=<id>) draws one warehouse marker whose menu offers the two garage
+// The map link of a stored vehicle (sv=<id>) draws one archive marker whose menu offers the two garage
 // actions; both send the position through the same routes as the panel forms.
 func TestE2EMapShowsAStoredVehicle(t *testing.T) {
 	e := newEnv(t, api.RoleAdmin)
@@ -98,7 +98,7 @@ func TestE2EMapShowsAStoredVehicle(t *testing.T) {
 	b := newBrowser(t)
 	b.run(t, chromedp.Navigate(e.url("/b/main/i/alpha/map?x=100&z=200&sv=g1.2.3.4&label=ExpansionOlga")), chromedp.WaitVisible(`.leaflet-container`))
 	require.Eventually(t, func() bool { return b.count(".focus") == 1 && b.focusNearCentre() }, 10*time.Second, 100*time.Millisecond, "the garage is marked and in the middle")
-	require.Equal(t, 1, b.count(".focus i.fa-warehouse"), "the marker is the warehouse of the garage")
+	require.Equal(t, 1, b.count(".focus i.fa-archive"), "the marker is the garage's archive icon")
 	require.Zero(t, b.count(".focus i.fa-crosshairs"), "not the crosshairs of a plain place link")
 	b.run(t, chromedp.Click(`.focus-wrap`))
 	require.Eventually(t, func() bool { return strings.Contains(b.menuText(), "Retrieve to coordinates…") }, 5*time.Second, 50*time.Millisecond, "the menu opens: %q", b.menuText())
@@ -130,8 +130,10 @@ func TestE2EMapSkipsStoredVehiclesInLayer(t *testing.T) {
 	}})
 	require.Eventually(t, func() bool { return b.count(".vm-wrap") == 1 }, 10*time.Second, 100*time.Millisecond, "only the vehicle in the world is drawn")
 	require.Equal(t, 1, b.count(".vm.car"), "the live car is drawn")
+	// The same vehicle stored while watched leaves the map: the layer removes the marker it had drawn,
+	// which a skip placed after seen[v.id] would not.
 	e.hub.Sync(admin.SyncRequest{Proto: 1, Vehicles: []admin.Vehicle{
-		{ID: "g1.2.3.4", Kind: "car", Type: "ExpansionOlga", Stored: true, X: 100, Z: 200},
+		{ID: "1.2.3.4", Kind: "car", Type: "OffroadHatchback", Stored: true, X: 7500, Z: 7600},
 	}})
 	require.Eventually(t, func() bool { return b.count(".vm-wrap") == 0 }, 10*time.Second, 100*time.Millisecond, "the vehicle that went into the garage leaves the map")
 }

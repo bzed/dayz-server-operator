@@ -973,9 +973,9 @@
   //
   // /map?x=<east>&z=<north>&label=<text> (the events page links here) marks that place and zooms to it. A
   // value that is not a plain number inside the world is ignored, and so is the whole link. With sv=<id>
-  // (the vehicle list's link to a stored vehicle) the marker is the warehouse of the garage, and its menu
-  // offers the two garage actions beside removing it. The marker is not driven by the stream: it stays
-  // until it is removed.
+  // (the vehicle list's link to a stored vehicle) the marker is the garage's archive icon instead of the
+  // crosshairs, and its menu offers the two garage actions beside removing it. The marker is not driven by
+  // the stream: it stays until it is removed.
   (function focusFromLink() {
     var q = new URLSearchParams(location.search);
     var num = /^-?\d+(\.\d+)?$/;
@@ -986,7 +986,7 @@
     var label = (q.get('label') || '').slice(0, 80) || 'Marked place';
     var sv = (q.get('sv') || '').slice(0, 80);
     var root = mk('div', 'focus');
-    root.appendChild(mk('i', 'fa fa-' + (sv ? 'warehouse' : 'crosshairs')));
+    root.appendChild(mk('i', 'fa fa-' + (sv ? 'archive' : 'crosshairs')));
     var at = { x: x, z: z };
     var m = L.marker(ll(at), { icon: elIcon('focus-wrap', root) }).addTo(map);
     named(m, function () { return label; });

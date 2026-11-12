@@ -190,7 +190,7 @@ and the map zooms to it. Click the marker for "Remove marker", zoom and copy. Th
 inside the world is ignored and the map opens as usual.
 
 The vehicle list links a stored vehicle this way too, with ``sv=<vehicle id>`` added: its marker is the
-warehouse of the garage instead of the crosshairs, and its menu offers the two garage actions of the vehicle
+garage's archive icon instead of the crosshairs, and its menu offers the two garage actions of the vehicle
 panel (**Retrieve to coordinates…** and **Move spawn point to coordinates…**, for people who may teleport
 players) beside "Remove marker". The marker is not moved by the vehicle stream: it stays until it is
 removed.
