@@ -359,6 +359,15 @@ Acting
        stay seated and move with it, but only up to ``admin.move_occupied_max`` metres (default 200; 0 refuses those moves), with
        their damage and the vehicle's switched off for about 3 seconds. Refused: a position outside the world, a covered
        Expansion vehicle, a vehicle that is not there. Needs dzo-admin 0.7.0.
+   * - ``POST /instances/<i>/vehicles/<id>/retrieve`` ``{"x", "z"}``
+     - ``operator`` (``player.teleport``)
+     - take a vehicle stored in the Expansion virtual garage out of it and place it on the ground at ``x``/``z``. Answers ``409``
+       ``the dzo-admin mod of this instance does not report the garage; update it`` when the mod's hello lacks the ``garage``
+       feature, so an old mod is never sent a command it cannot run; ``503`` when the mod is not connected
+   * - ``POST /instances/<i>/vehicles/<id>/spawnmove`` ``{"x", "z"}``
+     - ``operator`` (``player.teleport``)
+     - move the garage spawn point of a stored vehicle to ``x``/``z``: it stays stored and comes back there when its owner
+       retrieves it. Same ``409`` and ``503`` as ``retrieve``
    * - ``POST /instances/<i>/flags/<id>/raise``
      - ``operator``
      - raise a territory flag to the top of its pole and fill its timer (the 40 days a freshly raised flag has); ``<id>`` is the id of its marker on the ``Flags`` layer

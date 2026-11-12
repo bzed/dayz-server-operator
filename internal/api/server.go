@@ -292,6 +292,8 @@ func (s *Server) Handler() http.Handler {
 	route("POST "+base+"/instances/{instance}/vehicles/{id}/repair", PermRepair, true, s.repair)
 	route("POST "+base+"/instances/{instance}/vehicles/{id}/flip", PermRepair, true, s.flip)
 	route("POST "+base+"/instances/{instance}/vehicles/{id}/move", PermTeleport, true, s.moveVehicle)
+	route("POST "+base+"/instances/{instance}/vehicles/{id}/retrieve", PermTeleport, true, s.retrieveStoredVehicle)
+	route("POST "+base+"/instances/{instance}/vehicles/{id}/spawnmove", PermTeleport, true, s.moveStoredVehicle)
 	route("POST "+base+"/instances/{instance}/flags/{id}/raise", PermRaise, true, s.raiseFlag)
 	route("GET "+base+"/instances/{instance}/vehicles/unused", PermDelete, true, s.unusedVehicles)
 	route("POST "+base+"/instances/{instance}/vehicles/cleanup", PermDelete, true, s.cleanupVehicles)
@@ -923,6 +925,54 @@ func (s *Server) moveVehicle(w http.ResponseWriter, r *http.Request, c *call) {
 	}
 	cmd := admin.Command{Kind: admin.KindVehicleMove, Vehicle: r.PathValue("id"), X: b.X, Z: b.Z}
 	s.run(w, r, c, cmd, "vehicle_move", cmd.Vehicle)
+}
+
+// storedVehicleReady refuses a garage action on an instance that cannot carry it out: the mod offline,
+// or one that does not report the vehicles stored in the Expansion virtual garage.
+func storedVehicleReady(w http.ResponseWriter, c *call) bool {
+	st := c.hub.Status()
+	if !st.Connected {
+		fail(w, statusFor(admin.ErrOffline), "%v", admin.ErrOffline)
+		return false
+	}
+	if !st.Hello.Has(admin.FeatureGarage) {
+		fail(w, http.StatusConflict, "the dzo-admin mod of this instance does not report the garage; update it")
+		return false
+	}
+	return true
+}
+
+type storedVehicleBody struct {
+	X float64 `json:"x"`
+	Z float64 `json:"z"`
+}
+
+// retrieveStoredVehicle takes a vehicle out of the Expansion virtual garage and places it on the ground
+// at a position.
+func (s *Server) retrieveStoredVehicle(w http.ResponseWriter, r *http.Request, c *call) {
+	var b storedVehicleBody
+	if !decode(w, r, &b) {
+		return
+	}
+	if !storedVehicleReady(w, c) {
+		return
+	}
+	cmd := admin.Command{Kind: admin.KindStoredVehicleRetrieve, Vehicle: r.PathValue("id"), X: b.X, Z: b.Z}
+	s.run(w, r, c, cmd, "storedvehicle_retrieve", fmt.Sprintf("%s to %.0f/%.0f", cmd.Vehicle, b.X, b.Z))
+}
+
+// moveStoredVehicle puts the spawn point of a stored vehicle at a position, so it comes back there when
+// its owner retrieves it.
+func (s *Server) moveStoredVehicle(w http.ResponseWriter, r *http.Request, c *call) {
+	var b storedVehicleBody
+	if !decode(w, r, &b) {
+		return
+	}
+	if !storedVehicleReady(w, c) {
+		return
+	}
+	cmd := admin.Command{Kind: admin.KindStoredVehicleMove, Vehicle: r.PathValue("id"), X: b.X, Z: b.Z}
+	s.run(w, r, c, cmd, "storedvehicle_move", fmt.Sprintf("%s to %.0f/%.0f", cmd.Vehicle, b.X, b.Z))
 }
 
 // raiseFlag raises a territory flag to the top of its pole and fills its refresher time.
