@@ -221,6 +221,7 @@ func TestVehicleListMarksStored(t *testing.T) {
 		{ID: "g1.1", Type: "Olga", Stored: true, StoredBy: "76561198000000001", Owners: []string{"76561198000000001"}},
 		{ID: "g1.2", Type: "Olga", Stored: true, TerritoryID: 7},
 		{ID: "g1.3", Type: "Olga", Stored: true, StoredBy: "76561198000000002", Broken: true},
+		{ID: "g1.4", Type: "Olga", Stored: true},
 	}})
 
 	out, err := runCmd(t, "vehicle", "list", "alpha", "--api", ts.URL, "--token-file", tokenFile)
@@ -228,7 +229,8 @@ func TestVehicleListMarksStored(t *testing.T) {
 	require.Contains(t, out, "(stored in the garage by 76561198000000001)", "stored in a player's garage")
 	require.Contains(t, out, "(stored in a territory #7 garage)", "stored in a territory garage")
 	require.Contains(t, out, "(stored in the garage by 76561198000000002, no storage file)", "broken stored vehicle")
-	require.Equal(t, 3, strings.Count(out, "(stored"), "only the stored vehicles are marked:\n%s", out)
+	require.Contains(t, out, "(stored)", "stored without an owner or a territory")
+	require.Equal(t, 4, strings.Count(out, "(stored"), "only the stored vehicles are marked:\n%s", out)
 }
 
 func TestRenderWritesAdminConfig(t *testing.T) {

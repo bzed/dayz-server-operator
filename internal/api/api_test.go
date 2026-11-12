@@ -231,6 +231,10 @@ func TestActionFailures(t *testing.T) {
 	// Mod not connected.
 	c, _ := e.do("POST", "/api/v1/instances/alpha/message", op, `{"text":"x"}`)
 	require.Equal(t, http.StatusServiceUnavailable, c)
+	c, _ = e.do("POST", "/api/v1/instances/alpha/vehicles/g1.2.3.4/retrieve", op, `{"x":1,"z":2}`)
+	require.Equal(t, http.StatusServiceUnavailable, c)
+	c, _ = e.do("POST", "/api/v1/instances/alpha/vehicles/g1.2.3.4/spawnmove", op, `{"x":1,"z":2}`)
+	require.Equal(t, http.StatusServiceUnavailable, c)
 	stop := e.modAnswers("player not online")
 	defer stop()
 	c, b := e.do("POST", "/api/v1/instances/alpha/players/1/teleport", op, `{"x":1,"z":1}`)
@@ -246,6 +250,8 @@ func TestActionFailures(t *testing.T) {
 		{"/api/v1/instances/alpha/spawn", `{"type":"AKM"}`, 400},
 		{"/api/v1/instances/alpha/spawn-vehicle", `{"x":1,"z":2}`, 400},
 		{"/api/v1/instances/alpha/message?wait=abc", `{"text":"x"}`, 400},
+		{"/api/v1/instances/alpha/vehicles/g1.2.3.4/retrieve", `{"x":"a"}`, 400},
+		{"/api/v1/instances/alpha/vehicles/g1.2.3.4/spawnmove", `{"x":"a"}`, 400},
 	} {
 		c, _ := e.do("POST", tc.path, op, tc.body)
 		require.Equal(t, tc.want, c)
