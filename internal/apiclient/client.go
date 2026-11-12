@@ -280,6 +280,17 @@ func (c *Client) MoveVehicle(ctx context.Context, name, vehicle string, x, z flo
 	return c.action(ctx, http.MethodPost, inst(name)+"/vehicles/"+url.PathEscape(vehicle)+"/move", map[string]float64{"x": x, "z": z})
 }
 
+// Retrieve takes a stored vehicle out of the Expansion garage and places it on the ground at a position.
+func (c *Client) Retrieve(ctx context.Context, name, vehicle string, x, z float64) (api.ActionResult, error) {
+	return c.action(ctx, http.MethodPost, inst(name)+"/vehicles/"+url.PathEscape(vehicle)+"/retrieve", map[string]float64{"x": x, "z": z})
+}
+
+// SpawnMove puts the spawn point of a stored vehicle at a position, so it comes back there when its owner
+// retrieves it.
+func (c *Client) SpawnMove(ctx context.Context, name, vehicle string, x, z float64) (api.ActionResult, error) {
+	return c.action(ctx, http.MethodPost, inst(name)+"/vehicles/"+url.PathEscape(vehicle)+"/spawnmove", map[string]float64{"x": x, "z": z})
+}
+
 // RaiseFlag raises a territory flag and fills its refresher time.
 func (c *Client) RaiseFlag(ctx context.Context, name, flag string) (api.ActionResult, error) {
 	return c.action(ctx, http.MethodPost, inst(name)+"/flags/"+url.PathEscape(flag)+"/raise", nil)

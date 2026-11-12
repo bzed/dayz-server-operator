@@ -118,6 +118,37 @@ func TestVehiclesPanelGarageActionsNeedTheTeleportPermission(t *testing.T) {
 	require.Contains(t, body, "no actions", "the panel says why there is nothing to do: %s", body)
 }
 
+// The panel forms and the map menu post to the same two routes: they reach the mod as
+// storedvehicle_retrieve and storedvehicle_move.
+func TestVehicleGarageActionsReachTheAPI(t *testing.T) {
+	e := newEnv(t, api.RoleAdmin)
+	e.hub.Sync(admin.SyncRequest{Proto: 1, Hello: true, Features: []string{admin.FeatureGarage}})
+	defer e.answerCommands(true, "done")()
+	for _, path := range []string{
+		"/b/main/i/alpha/vehicles/g1.2.3.4/retrieve",
+		"/b/main/i/alpha/vehicles/g1.2.3.4/spawnmove",
+	} {
+		code, body := e.post(path, url.Values{"x": {"100"}, "z": {"200"}}, nil)
+		require.Equal(t, 200, code, "%s: %s", path, body)
+		require.Contains(t, body, "flash ok", path)
+	}
+	require.Equal(t, 1, e.commandsOf("storedvehicle_retrieve"), "the retrieve reached the mod")
+	require.Equal(t, 1, e.commandsOf("storedvehicle_move"), "the spawn move reached the mod")
+}
+
+func TestVehicleGarageActionsNeedTheTeleportPermission(t *testing.T) {
+	e := newEnv(t, api.RoleViewer)
+	e.hub.Sync(admin.SyncRequest{Proto: 1, Hello: true, Features: []string{admin.FeatureGarage}})
+	for _, path := range []string{
+		"/b/main/i/alpha/vehicles/g1.2.3.4/retrieve",
+		"/b/main/i/alpha/vehicles/g1.2.3.4/spawnmove",
+	} {
+		_, body := e.post(path, url.Values{"x": {"100"}, "z": {"200"}}, nil)
+		require.Contains(t, body, "flash err", path)
+		require.Contains(t, body, "lacks", path)
+	}
+}
+
 func TestVehiclesMapLinkForStoredVehicles(t *testing.T) {
 	query := func(v admin.Vehicle) url.Values {
 		u, err := url.Parse(mapLink("main", "alpha", v))

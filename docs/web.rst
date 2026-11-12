@@ -287,9 +287,13 @@ Instance
    come back; its note says ``no storage file``. The **Actions** button opens the vehicle panel, which for a
    stored vehicle offers two forms to people who may teleport players: **Retrieve** takes the vehicle out of
    the garage and places it at an x/z position (the owners who are online are told in-game), and **Move spawn
-   point** changes where it comes back when an owner retrieves it; the vehicle stays in the garage. Both need
-   a ``dzo-admin`` that reports the Expansion garage (the ``garage`` feature); with an older one the API
-   refuses with ``the dzo-admin mod of this instance does not report the garage; update it`` (see :doc:`api`).
+   point** changes where it comes back when an owner retrieves it; the vehicle stays in the garage. The map
+   marker of the position link offers the same two actions in its menu (**Retrieve to coordinates…** and
+   **Move spawn point to coordinates…** beside **Remove marker**): the panel forms and the map menu call the
+   same two actions, so both need the teleport permission, and a viewer sees only **Remove marker** there.
+   Both actions need a ``dzo-admin`` that reports the Expansion garage (the ``garage`` feature); with an
+   older one the API refuses with ``the dzo-admin mod of this instance does not report the garage; update
+   it`` (see :doc:`api`).
 
    **Clean up** (above the vehicle list, for people who may delete vehicles; a viewer sees no button and the two routes answer
    ``403``) deletes the vehicles nobody has driven for a chosen time, in two steps. First you choose the threshold: 2 weeks

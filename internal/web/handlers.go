@@ -551,6 +551,15 @@ func actMoveVehicle(r *http.Request, c *apiclient.Client, inst string) (api.Acti
 	return c.MoveVehicle(r.Context(), inst, r.PathValue("id"), num(r, "x"), num(r, "z"))
 }
 
+// The garage actions of a stored vehicle: the panel forms and the map menu post to both.
+func actRetrieveStored(r *http.Request, c *apiclient.Client, inst string) (api.ActionResult, error) {
+	return c.Retrieve(r.Context(), inst, r.PathValue("id"), num(r, "x"), num(r, "z"))
+}
+
+func actSpawnMoveStored(r *http.Request, c *apiclient.Client, inst string) (api.ActionResult, error) {
+	return c.SpawnMove(r.Context(), inst, r.PathValue("id"), num(r, "x"), num(r, "z"))
+}
+
 func actRaise(r *http.Request, c *apiclient.Client, inst string) (api.ActionResult, error) {
 	return c.RaiseFlag(r.Context(), inst, r.PathValue("id"))
 }

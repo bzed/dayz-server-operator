@@ -138,6 +138,23 @@ func TestActionRefused(t *testing.T) {
 	require.Equal(t, "refused", r.Message)
 }
 
+// The garage actions of the vehicle panel and the map: both post the position to the retrieve and
+// spawnmove routes of a mod that reports the garage.
+func TestStoredVehicleActions(t *testing.T) {
+	c, hub, _ := setup(t)
+	hub.Sync(admin.SyncRequest{Proto: 1, Hello: true, Features: []string{admin.FeatureGarage}})
+	defer answer(t, hub, true)()
+	ctx := t.Context()
+	for name, f := range map[string]func() (api.ActionResult, error){
+		"retrieve":  func() (api.ActionResult, error) { return c.Retrieve(ctx, "alpha", "v", 10, 20) },
+		"spawnmove": func() (api.ActionResult, error) { return c.SpawnMove(ctx, "alpha", "v", 10, 20) },
+	} {
+		r, err := f()
+		require.NoError(t, err, name)
+		assert.True(t, r.OK, "%s: %+v", name, r)
+	}
+}
+
 func TestStream(t *testing.T) {
 	c, hub, _ := setup(t)
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
