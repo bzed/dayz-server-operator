@@ -204,6 +204,33 @@ func TestPlayerAndVehicleCommands(t *testing.T) {
 	_ = http.StatusOK
 }
 
+// The vehicle list marks the vehicles stored in the Expansion virtual garage, so an admin can tell
+// them apart from abandoned world vehicles (their health and fuel read as 0).
+func TestVehicleListMarksStored(t *testing.T) {
+	dir := t.TempDir()
+	hubs := admin.NewRegistry(dir)
+	hub := hubs.Add(admin.NewHub("alpha"))
+	srv := api.New("s", "v", hubs, api.NewTokenStore(filepath.Join(dir, "t.json")), admin.NewAudit(filepath.Join(dir, "a.jsonl")))
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
+	secret, _, _ := srv.Tokens.Create("cli", api.RoleOperator, nil, true, false, time.Hour)
+	tokenFile := filepath.Join(dir, "token")
+	writeFile(t, tokenFile, secret+"\n")
+	hub.Sync(admin.SyncRequest{Proto: 1, Hello: true, Vehicles: []admin.Vehicle{
+		{ID: "v1", Type: "Truck"},
+		{ID: "g1.1", Type: "Olga", Stored: true, StoredBy: "76561198000000001", Owners: []string{"76561198000000001"}},
+		{ID: "g1.2", Type: "Olga", Stored: true, TerritoryID: 7},
+		{ID: "g1.3", Type: "Olga", Stored: true, StoredBy: "76561198000000002", Broken: true},
+	}})
+
+	out, err := runCmd(t, "vehicle", "list", "alpha", "--api", ts.URL, "--token-file", tokenFile)
+	require.NoError(t, err, "vehicle list: %s", out)
+	require.Contains(t, out, "(stored in the garage by 76561198000000001)", "stored in a player's garage")
+	require.Contains(t, out, "(stored in a territory #7 garage)", "stored in a territory garage")
+	require.Contains(t, out, "(stored in the garage by 76561198000000002, no storage file)", "broken stored vehicle")
+	require.Equal(t, 3, strings.Count(out, "(stored"), "only the stored vehicles are marked:\n%s", out)
+}
+
 func TestRenderWritesAdminConfig(t *testing.T) {
 	cfg, root, _ := renderSetup(t)
 	data := filepath.Dir(cfg)

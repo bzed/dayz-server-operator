@@ -241,7 +241,7 @@ func newVehicleCmd() *cobra.Command {
 	cmd := &cobra.Command{Use: "vehicle", Short: "List, spawn, repair, flip, move and delete vehicles through dzo-admin (needs `dzo serve`)"}
 	t.flags(cmd)
 	cmd.AddCommand(&cobra.Command{
-		Use: "list <instance>", Short: "List vehicles", Args: cobra.ExactArgs(1),
+		Use: "list <instance>", Short: "List vehicles (garage-stored ones marked as stored)", Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			c, err := t.client()
 			if err != nil {
@@ -364,7 +364,7 @@ func newFlagCmd() *cobra.Command {
 	return cmd
 }
 
-// vehicleNote is the owner and cover state a DayZ Expansion server adds to a vehicle line.
+// vehicleNote is the owner, cover and garage state a DayZ Expansion server adds to a vehicle line.
 func vehicleNote(v admin.Vehicle) string {
 	s := ""
 	if v.Owner != "" {
@@ -372,6 +372,24 @@ func vehicleNote(v admin.Vehicle) string {
 	}
 	if v.Covered {
 		s += "  (covered)"
+	}
+	note := ""
+	switch {
+	case v.StoredBy != "":
+		note = "stored in the garage by " + v.StoredBy
+	case v.TerritoryID > 0:
+		note = fmt.Sprintf("stored in a territory #%d garage", v.TerritoryID)
+	case bool(v.Stored):
+		note = "stored"
+	}
+	if bool(v.Broken) {
+		if note != "" {
+			note += ", "
+		}
+		note += "no storage file"
+	}
+	if note != "" {
+		s += "  (" + note + ")"
 	}
 	return s
 }
