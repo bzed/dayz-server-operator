@@ -283,8 +283,8 @@ Instance
    (14 days), 1 month (30), 2 months (60) or a number of days from 1 to 3650 (anything else shows
    ``days must be a whole number from 1 to 3650``). The preview then lists, oldest first, the vehicles with no one inside that
    were last driven longer ago than that (class, kind, position with the map link, last driver, last driven, health); a vehicle
-   never seen driven counts from the day dzo first saw it. Vehicles with crew inside and covered Expansion vehicles are never
-   listed and never deleted. With no match the page says ``No vehicle has gone unused for N days.``; when dzo has tracked the
+   never seen driven counts from the day dzo first saw it. Vehicles with crew inside, covered and garage-stored Expansion
+   vehicles are never listed and never deleted. With no match the page says ``No vehicle has gone unused for N days.``; when dzo has tracked the
    instance for less than N days it adds ``dzo has been tracking vehicles on this instance only since <date>; no vehicle can be
    older than that yet.`` Second, ``Delete N vehicles`` asks once more in a browser dialog (``This cannot be undone.``) and
    sends exactly the previewed vehicles (at most 500 per cleanup: when more match, the preview lists the 500 longest unused,
