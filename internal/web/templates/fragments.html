@@ -41,8 +41,9 @@
 {{end}}
 
 {{define "vehicles"}}
-{{if .Err}}<p class="flash err">{{.Err}}</p>{{else if not .Items}}<p>No vehicles reported.</p>{{else}}
-<div class="scroll"><table data-sort-default="5,0">
+{{if .Err}}<p class="flash err">{{.Err}}</p>{{else}}
+{{if not .Items}}{{if not .Stored}}<p>No vehicles reported.</p>{{end}}{{end}}
+{{if .Items}}<div class="scroll"><table data-sort-default="5,0">
   <thead><tr><th data-sort="text">Class</th><th data-sort="text">Kind</th><th data-sort="num">Position</th><th data-sort="num">Health</th><th data-sort="num">Fuel</th><th data-sort="text">Owner</th><th data-sort="text">Last driver</th><th data-sort="num">Last driven</th><th data-sort="num">Crew</th><th></th></tr></thead>
   <tbody>
   {{range .Items}}
@@ -60,7 +61,23 @@
     </tr>
   {{end}}
   </tbody>
-</table></div>
+</table></div>{{end}}
+{{if .Stored}}<h3><i class="fa fa-archive" aria-hidden="true"></i>Stored in the Expansion garage</h3>
+<div class="scroll"><table>
+  <thead><tr><th>Class</th><th>Position</th><th>Stored by</th><th>Owners</th><th>Note</th><th></th></tr></thead>
+  <tbody>
+  {{range .Stored}}
+    <tr>
+      <td>{{.Type}}</td>
+      <td><a href="{{mapLink $.Backend $.Instance .}}">{{printf "%.0f / %.0f" .X .Z}}</a></td>
+      <td>{{if .StoredBy}}<a href="/b/{{$.Backend}}/players/{{.StoredBy}}" title="{{.StoredBy}}">{{.StoredBy}}</a>{{end}}{{if gt .TerritoryID 0}}{{if .StoredBy}}, {{end}}territory #{{.TerritoryID}}{{end}}{{if not (or .StoredBy (gt .TerritoryID 0))}}-{{end}}</td>
+      <td>{{if .Owners}}{{range $i, $o := .Owners}}{{if $i}}, {{end}}<a href="/b/{{$.Backend}}/players/{{$o}}" title="{{$o}}">{{$o}}</a>{{end}}{{else}}-{{end}}</td>
+      <td>{{if .Broken}}<em>no storage file</em>{{else}}-{{end}}</td>
+      <td><button hx-get="/b/{{$.Backend}}/i/{{$.Instance}}/vehicles/{{.ID}}/panel" hx-target="closest tr" hx-swap="afterend" data-rowpanel><i class="fa fa-cog" aria-hidden="true"></i>Actions</button></td>
+    </tr>
+  {{end}}
+  </tbody>
+</table></div>{{end}}
 {{end}}
 {{end}}
 
@@ -197,6 +214,20 @@
   <h3><i class="fa fa-wrench" aria-hidden="true"></i>{{.Vehicle.Type}} <small>{{.Vehicle.ID}}</small> <button class="quiet" data-close><i class="fa fa-times" aria-hidden="true"></i>Close</button></h3>
   <div id="panel-flash"></div>
   {{if not .Can.Any}}<p class="mute">Your role has no actions on this instance.</p>{{end}}
+  {{if .Vehicle.Stored}}
+  {{if .Can.Teleport}}<p><strong>Garage:</strong></p>
+  <form hx-post="{{$base}}/retrieve" hx-target="#panel-flash">
+    <input name="x" type="number" step="any" placeholder="x (east)" size="8">
+    <input name="z" type="number" step="any" placeholder="z (north)" size="8">
+    <button title="Take it out of the garage and place it at this position"><i class="fa fa-archive" aria-hidden="true"></i>Retrieve</button>
+  </form>
+  <form hx-post="{{$base}}/spawnmove" hx-target="#panel-flash">
+    <input name="x" type="number" step="any" placeholder="x (east)" size="8">
+    <input name="z" type="number" step="any" placeholder="z (north)" size="8">
+    <button title="Choose where it comes back when an owner retrieves it"><i class="fa fa-location-arrow" aria-hidden="true"></i>Move spawn point</button>
+  </form>
+  {{end}}
+  {{else}}
   {{if .Can.Repair}}<p>
     <strong>Repair:</strong>
     <button hx-post="{{$base}}/repair" hx-target="#panel-flash" hx-vals='{"scope": "all"}' title="Repair every part, refuel and add the parts that are missing"><i class="fa fa-wrench" aria-hidden="true"></i>Everything</button>
@@ -210,6 +241,7 @@
     {{if .Can.Repair}}<button hx-post="{{$base}}/flip" hx-target="#panel-flash" title="Stand it upright on its wheels"><i class="fa fa-refresh" aria-hidden="true"></i>Flip upright</button>{{end}}
     {{if .Can.Delete}}<button class="danger" hx-post="{{$base}}/delete" hx-target="#panel-flash" {{if .Vehicle.Occupants}}hx-vals='{"force": "1"}' {{end}}hx-confirm="Delete this {{.Vehicle.Type}}{{if .Vehicle.Occupants}} with {{len .Vehicle.Occupants}} inside{{end}}?"><i class="fa fa-trash" aria-hidden="true"></i>Delete</button>{{end}}
   </p>
+  {{end}}
 </div>
 {{end}}
 </td></tr>
