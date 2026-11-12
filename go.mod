@@ -3,7 +3,7 @@
 
 module github.com/bzed/dayz-server-operator
 
-go 1.27.3
+go 1.27.4
 
 require (
 	github.com/beevik/etree v1.8.1
@@ -26,6 +26,7 @@ require (
 	golang.org/x/term v0.47.0
 	gopkg.in/yaml.v3 v3.0.1
 	modernc.org/sqlite v1.60.1
+	rsc.io/qr v0.2.0
 )
 
 require (
@@ -59,5 +60,4 @@ require (
 	modernc.org/libc v1.77.1 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.12.1 // indirect
-	rsc.io/qr v0.2.0 // indirect
 )
