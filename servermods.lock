@@ -5,6 +5,6 @@
 # CI refuses a build that differs. Update it with `make servermods-lock` after a servermod changed.
 servermods:
     dzo-admin:
-        commit: 29509873ef675c8dc0aa83ea3de40382ecec0d70
+        commit: 109863a5f9cea115ca02747ee6d8af4116d845b9
         pbos:
-            addons/dzoadmin.pbo: 562fb28eb5519ff70d2600998f70eeb1fbe0da663cd55272e6cf64f0fdeae2b2
+            addons/dzoadmin.pbo: ca6b35f5473cd7078e58afd279bbc6235462fbf1e4311db2c8e43599bb8e2620
