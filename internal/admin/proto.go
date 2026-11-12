@@ -67,20 +67,25 @@ type Player struct {
 
 // Vehicle is one persistent vehicle.
 type Vehicle struct {
-	ID        string   `json:"id"`
-	Kind      string   `json:"kind"` // car, motorbike, boat, bicycle or helicopter (the last two the hub's); an older mod sends none and is taken as car
-	Type      string   `json:"type"`
-	X         float64  `json:"x"`
-	Y         float64  `json:"y"`
-	Z         float64  `json:"z"`
-	Yaw       float64  `json:"yaw"`
-	Health    float64  `json:"health"`
-	Fuel      float64  `json:"fuel"`
-	Ruined    Flag     `json:"ruined"`
-	Engine    Flag     `json:"engine"`
-	Occupants []string `json:"occupants"`
-	Owner     string   `json:"owner,omitempty"`   // DayZ Expansion: the name on the key chain
-	Covered   Flag     `json:"covered,omitempty"` // DayZ Expansion: stored under a cover; only class and place are known
+	ID          string   `json:"id"`
+	Kind        string   `json:"kind"` // car, motorbike, boat, bicycle or helicopter (the last two the hub's); an older mod sends none and is taken as car
+	Type        string   `json:"type"`
+	X           float64  `json:"x"`
+	Y           float64  `json:"y"`
+	Z           float64  `json:"z"`
+	Yaw         float64  `json:"yaw"`
+	Health      float64  `json:"health"`
+	Fuel        float64  `json:"fuel"`
+	Ruined      Flag     `json:"ruined"`
+	Engine      Flag     `json:"engine"`
+	Occupants   []string `json:"occupants"`
+	Owner       string   `json:"owner,omitempty"`        // DayZ Expansion: the name on the key chain
+	Covered     Flag     `json:"covered,omitempty"`      // DayZ Expansion: stored under a cover; only class and place are known
+	Stored      Flag     `json:"stored,omitempty"`       // DayZ Expansion: stored in the virtual garage, not in the world
+	StoredBy    string   `json:"stored_by,omitempty"`    // DayZ Expansion: the Steam ID of the player whose garage holds it
+	TerritoryID int      `json:"territory_id,omitempty"` // DayZ Expansion: the territory of the garage (0 = none)
+	Owners      []string `json:"owners,omitempty"`       // DayZ Expansion: the Steam IDs that may retrieve it
+	Broken      Flag     `json:"broken,omitempty"`       // DayZ Expansion: a missing entity-storage file (it can never come back)
 
 	// Driver, DriverName and DrivenAgo come from the mod (feature "driver"): the last player to take the
 	// driver's seat and the seconds since. The hub drops all three when the drive is not plausible.
@@ -98,6 +103,9 @@ type Vehicle struct {
 
 // FeatureDriver is the hello feature of a mod that reports the last driver of a vehicle.
 const FeatureDriver = "driver"
+
+// FeatureGarage is the hello feature of a mod that reports the vehicles stored in the Expansion virtual garage.
+const FeatureGarage = "garage"
 
 // KV is one tooltip entry of a marker.
 type KV struct {
@@ -189,18 +197,20 @@ func ParseQuantity(s string) (float64, error) {
 
 // Command kinds.
 const (
-	KindMessage       = "message"
-	KindTeleport      = "teleport"
-	KindPlayerKill    = "player_kill"
-	KindPlayerHeal    = "player_heal"
-	KindPlayerFixGear = "player_fixgear"
-	KindSpawnItem     = "spawn_item"
-	KindSpawnVehicle  = "spawn_vehicle"
-	KindVehicleRepair = "vehicle_repair"
-	KindVehicleFlip   = "vehicle_flip"
-	KindVehicleMove   = "vehicle_move"
-	KindVehicleDelete = "vehicle_delete"
-	KindFlagRaise     = "flag_raise"
+	KindMessage               = "message"
+	KindTeleport              = "teleport"
+	KindPlayerKill            = "player_kill"
+	KindPlayerHeal            = "player_heal"
+	KindPlayerFixGear         = "player_fixgear"
+	KindSpawnItem             = "spawn_item"
+	KindSpawnVehicle          = "spawn_vehicle"
+	KindVehicleRepair         = "vehicle_repair"
+	KindVehicleFlip           = "vehicle_flip"
+	KindVehicleMove           = "vehicle_move"
+	KindVehicleDelete         = "vehicle_delete"
+	KindStoredVehicleRetrieve = "storedvehicle_retrieve"
+	KindStoredVehicleMove     = "storedvehicle_move"
+	KindFlagRaise             = "flag_raise"
 )
 
 // Command is one action for the mod. All fields are always serialised (the
