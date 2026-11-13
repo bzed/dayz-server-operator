@@ -278,13 +278,30 @@ Instance
    with the class as the label, followed by the owner (the Expansion keychain) and the last driver when they are known, for example
    ``Offroad_02 (owner Bob, last driver Dora)``. Owner and last driver are named apart, also when they are the same person.
 
+   Vehicles stored in the virtual garage of DayZ Expansion are not in the world, so the list shows them apart,
+   under **Stored in the Expansion garage**: class, position with the map link, stored by, owners and a note.
+   "Stored by" and the owners link to the player's page (the Steam ID is in the tooltip); the garage of a
+   territory shows ``territory #<id>`` instead of a player. The position link opens the map on the stored
+   position with ``<class> (stored by <Steam ID>)`` as the label and that one vehicle as a marker (stored
+   vehicles are not drawn on the map otherwise). A vehicle whose entity-storage file is missing can never
+   come back; its note says ``no storage file``. The **Actions** button opens the vehicle panel, which for a
+   stored vehicle offers two forms to people who may teleport players: **Retrieve** takes the vehicle out of
+   the garage and places it at an x/z position (the owners who are online are told in-game), and **Move spawn
+   point** changes where it comes back when an owner retrieves it; the vehicle stays in the garage. The map
+   marker of the position link offers the same two actions in its menu (**Retrieve to coordinates…** and
+   **Move spawn point to coordinates…** beside **Remove marker**): the panel forms and the map menu call the
+   same two actions, so both need the teleport permission, and a viewer sees only **Remove marker** there.
+   Both actions need a ``dzo-admin`` that reports the Expansion garage (the ``garage`` feature); with an
+   older one the API refuses with ``the dzo-admin mod of this instance does not report the garage; update
+   it`` (see :doc:`api`).
+
    **Clean up** (above the vehicle list, for people who may delete vehicles; a viewer sees no button and the two routes answer
    ``403``) deletes the vehicles nobody has driven for a chosen time, in two steps. First you choose the threshold: 2 weeks
    (14 days), 1 month (30), 2 months (60) or a number of days from 1 to 3650 (anything else shows
    ``days must be a whole number from 1 to 3650``). The preview then lists, oldest first, the vehicles with no one inside that
    were last driven longer ago than that (class, kind, position with the map link, last driver, last driven, health); a vehicle
-   never seen driven counts from the day dzo first saw it. Vehicles with crew inside and covered Expansion vehicles are never
-   listed and never deleted. With no match the page says ``No vehicle has gone unused for N days.``; when dzo has tracked the
+   never seen driven counts from the day dzo first saw it. Vehicles with crew inside, covered and garage-stored Expansion
+   vehicles are never listed and never deleted. With no match the page says ``No vehicle has gone unused for N days.``; when dzo has tracked the
    instance for less than N days it adds ``dzo has been tracking vehicles on this instance only since <date>; no vehicle can be
    older than that yet.`` Second, ``Delete N vehicles`` asks once more in a browser dialog (``This cannot be undone.``) and
    sends exactly the previewed vehicles (at most 500 per cleanup: when more match, the preview lists the 500 longest unused,

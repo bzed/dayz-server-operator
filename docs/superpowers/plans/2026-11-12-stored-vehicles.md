@@ -1,3 +1,8 @@
+<!--
+SPDX-FileCopyrightText: 2026 Bernd Zeimetz <bernd@bzed.de>
+SPDX-License-Identifier: AGPL-3.0-or-later
+-->
+
 # Stored-Vehicle Actions (Expansion Virtual Garage) Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
@@ -15,7 +20,7 @@
 - `make check` must pass: fmt, vet, golangci-lint v2.14.0, reuse, licences, vulncheck, `test-race`, fuzz, e2e (needs Chrome and the JS assets of docs/development.rst), coverage at or above 85%.
 - Every new file gets an SPDX header (`SPDX-FileCopyrightText: 2026 Bernd Zeimetz <bernd@bzed.de>` + `SPDX-License-Identifier: AGPL-3.0-or-later`), like its neighbours.
 - No new configuration options; no new dependencies; no protocol version bump (the changes are additive; the `garage` hello feature gates the new commands).
-- Any commit touching `servermods/`, `internal/admin`, or the vehicle actions in `internal/api`/`internal/web` runs the mod boot check (steps below) and the final task runs `make test-client` plus `make test-client ARGS=--exp`; their commit messages say that it passed.
+- Any commit touching `servermods/`, `internal/admin`, or the vehicle actions in `internal/api`/`internal/web` runs the mod boot check (steps below) and the final task runs `make test-client`; the experimental variant (`make test-client ARGS=--exp`) runs only on request, never by default. Their commit messages say that it passed.
 - Enforce Script: only the Expansion APIs named in this plan, all verified against the source tree above; null-check every accessor; no C# syntax.
 - Tests write only under `t.TempDir()`; no `time.Sleep` waits; one logical change per commit with the area prefixes of `git log` (`admin:`, `web:`, `api:`, `docs:`).
 - Behaviour changes document their user-visible side in the same commit (`docs/api.rst`, `docs/web.rst`, the mod's README).
@@ -372,8 +377,8 @@ Use the dayz-dev skill's `make-server-tree.sh` + `free-ports.sh` flow (`scripts/
 
 - [ ] **Step 5: Run the required gates**
 
-Run: `make test-client && make test-client ARGS=--exp`
-Expected: PASS (note it in the commit message of the final fix commit, if any).
+Run: `make test-client`
+Expected: PASS (note it in the commit message of the final fix commit, if any). The experimental variant (`make test-client ARGS=--exp`) runs only on request.
 
 Run: `make check`
 Expected: PASS, coverage at or above 85%.
@@ -383,6 +388,6 @@ Expected: PASS, coverage at or above 85%.
 ```bash
 git commit -m "admin: fix <what the end-to-end run found>
 
-test-client, test-client --exp and an end-to-end run against a local
+test-client and an end-to-end run against a local
 Expansion server with real garage data passed."
 ```

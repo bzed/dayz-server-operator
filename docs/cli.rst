@@ -256,7 +256,9 @@ installation (default: the local ``serve.listen``). They need the
    * - ``dzo player spawn <instance> <class> --x <x> --z <z> [--qty <n>|default|max] [--health <0..1>] [--attachments]``
      - spawn an item on the ground at a position; a quantity above the stack size makes more stacks
    * - ``dzo vehicle list <instance>``
-     - persistent vehicles
+     - persistent vehicles, the ones stored in the Expansion virtual garage included and marked as
+       stored (with the garage's owner or territory; one whose entity-storage file is lost is marked
+       as having no storage file)
    * - ``dzo vehicle spawn <instance> <class> --x <x> --z <z>``
      - spawn a vehicle with its parts and fuel on the ground at a position
    * - ``dzo vehicle repair <instance> <id> [--scope all|engine|parts|wheels|fluids|missing]``

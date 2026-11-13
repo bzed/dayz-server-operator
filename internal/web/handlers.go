@@ -106,25 +106,43 @@ func (s *Server) playersFragment(w http.ResponseWriter, r *http.Request) {
 }
 
 // mapLink is the link that opens the map on a vehicle: whole metres and a label of the class and the owner.
-// The query is built here so that every value is escaped.
+// The query is built here so that every value is escaped. For a stored vehicle it carries sv=<id>, so the
+// map draws the one vehicle of the garage (they are not on the map by default), and the label names the
+// garage instead of the owner and the last driver.
 func mapLink(backend, instance string, v admin.Vehicle) string {
 	// Owner (the Expansion keychain) and last driver are different things, even when they are the same person.
 	var who []string
-	if v.Owner != "" {
-		who = append(who, "owner "+v.Owner)
-	}
-	switch {
-	case v.LastDriverName != "":
-		who = append(who, "last driver "+v.LastDriverName)
-	case v.LastDriver != "":
-		who = append(who, "last driver "+v.LastDriver)
+	if v.Stored {
+		if v.StoredBy != "" {
+			who = append(who, "stored by "+v.StoredBy)
+		}
+	} else {
+		if v.Owner != "" {
+			who = append(who, "owner "+v.Owner)
+		}
+		switch {
+		case v.LastDriverName != "":
+			who = append(who, "last driver "+v.LastDriverName)
+		case v.LastDriver != "":
+			who = append(who, "last driver "+v.LastDriver)
+		}
 	}
 	label := v.Type
 	if len(who) > 0 {
 		label += " (" + strings.Join(who, ", ") + ")"
 	}
 	q := url.Values{"x": {strconv.Itoa(int(math.Round(v.X)))}, "z": {strconv.Itoa(int(math.Round(v.Z)))}, "label": {label}}
+	if v.Stored {
+		q.Set("sv", v.ID)
+	}
 	return "/b/" + url.PathEscape(backend) + "/i/" + url.PathEscape(instance) + "/map?" + q.Encode()
+}
+
+// vehiclesView is the vehicle list: the vehicles in the world, and the ones the Expansion mod keeps
+// in its virtual garage (they are not in the world, so they are listed apart).
+type vehiclesView struct {
+	listView[admin.Vehicle]
+	Stored []admin.Vehicle
 }
 
 func (s *Server) vehiclesFragment(w http.ResponseWriter, r *http.Request) {
@@ -132,10 +150,17 @@ func (s *Server) vehiclesFragment(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	v := listView[admin.Vehicle]{Backend: b.Name, Instance: inst, Now: s.now()}
-	var err error
-	if v.Items, err = c.Vehicles(r.Context(), inst); err != nil {
+	v := vehiclesView{listView: listView[admin.Vehicle]{Backend: b.Name, Instance: inst, Now: s.now()}}
+	all, err := c.Vehicles(r.Context(), inst)
+	if err != nil {
 		v.Err = err.Error()
+	}
+	for _, x := range all {
+		if x.Stored {
+			v.Stored = append(v.Stored, x)
+		} else {
+			v.Items = append(v.Items, x)
+		}
 	}
 	s.render(w, "vehicles", v)
 }
@@ -524,6 +549,15 @@ func actFlip(r *http.Request, c *apiclient.Client, inst string) (api.ActionResul
 
 func actMoveVehicle(r *http.Request, c *apiclient.Client, inst string) (api.ActionResult, error) {
 	return c.MoveVehicle(r.Context(), inst, r.PathValue("id"), num(r, "x"), num(r, "z"))
+}
+
+// The garage actions of a stored vehicle: the panel forms and the map menu post to both.
+func actRetrieveStored(r *http.Request, c *apiclient.Client, inst string) (api.ActionResult, error) {
+	return c.Retrieve(r.Context(), inst, r.PathValue("id"), num(r, "x"), num(r, "z"))
+}
+
+func actSpawnMoveStored(r *http.Request, c *apiclient.Client, inst string) (api.ActionResult, error) {
+	return c.SpawnMove(r.Context(), inst, r.PathValue("id"), num(r, "x"), num(r, "z"))
 }
 
 func actRaise(r *http.Request, c *apiclient.Client, inst string) (api.ActionResult, error) {

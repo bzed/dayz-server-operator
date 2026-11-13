@@ -82,6 +82,62 @@ func TestE2EMapIgnoresABadLink(t *testing.T) {
 	}
 }
 
+// clickMenuItem clicks the item of the open menu whose label starts with text.
+func (b *browser) clickMenuItem(t *testing.T, text string) {
+	t.Helper()
+	b.run(t, chromedp.Evaluate(`(function(){var it=document.querySelectorAll('.ctx [role=menuitem]');for(var i=0;i<it.length;i++){if(it[i].textContent.indexOf(`+jsString(text)+`)===0){it[i].click();return;}}throw new Error('no menu item: '+`+jsString(text)+`);})()`, nil))
+}
+
+// The map link of a stored vehicle (sv=<id>) draws one archive marker whose menu offers the two garage
+// actions; both send the position through the same routes as the panel forms.
+func TestE2EMapShowsAStoredVehicle(t *testing.T) {
+	e := newEnv(t, api.RoleAdmin)
+	useRealAssets(t, e.assets)
+	e.hub.Sync(admin.SyncRequest{Proto: 1, Hello: true, Features: []string{admin.FeatureGarage}})
+	defer e.answerCommands(true, "done")()
+	b := newBrowser(t)
+	b.run(t, chromedp.Navigate(e.url("/b/main/i/alpha/map?x=100&z=200&sv=g1.2.3.4&label=ExpansionOlga")), chromedp.WaitVisible(`.leaflet-container`))
+	require.Eventually(t, func() bool { return b.count(".focus") == 1 && b.focusNearCentre() }, 10*time.Second, 100*time.Millisecond, "the garage is marked and in the middle")
+	require.Equal(t, 1, b.count(".focus i.fa-archive"), "the marker is the garage's archive icon")
+	require.Zero(t, b.count(".focus i.fa-crosshairs"), "not the crosshairs of a plain place link")
+	b.run(t, chromedp.Click(`.focus-wrap`))
+	require.Eventually(t, func() bool { return strings.Contains(b.menuText(), "Retrieve to coordinates…") }, 5*time.Second, 50*time.Millisecond, "the menu opens: %q", b.menuText())
+	require.Contains(t, b.menuText(), "Move spawn point to coordinates…")
+	require.Contains(t, b.menuText(), "Remove marker")
+	for item, kind := range map[string]string{"Retrieve to coordinates": "storedvehicle_retrieve", "Move spawn point": "storedvehicle_move"} {
+		b.run(t, chromedp.Click(`.focus-wrap`))
+		b.clickMenuItem(t, item)
+		b.run(t,
+			chromedp.WaitVisible(`.ctx form input[name=x]`),
+			chromedp.SetValue(`.ctx form input[name=x]`, "150", chromedp.ByQuery),
+			chromedp.SetValue(`.ctx form input[name=z]`, "250", chromedp.ByQuery),
+			chromedp.Click(`.ctx form button:not([type=button])`),
+		)
+		require.Eventually(t, func() bool { return e.commandsOf(kind) == 1 }, 10*time.Second, 50*time.Millisecond, "%s reached the mod", kind)
+	}
+}
+
+// The Vehicles layer draws the vehicles in the world only: a vehicle in the Expansion garage is not in
+// the world, and one that is stored while watched leaves the map.
+func TestE2EMapSkipsStoredVehiclesInLayer(t *testing.T) {
+	e := newEnv(t, api.RoleAdmin)
+	useRealAssets(t, e.assets)
+	b := newBrowser(t)
+	b.run(t, chromedp.Navigate(e.url("/b/main/i/alpha/map")), chromedp.WaitVisible(`.leaflet-container`))
+	e.hub.Sync(admin.SyncRequest{Proto: 1, Vehicles: []admin.Vehicle{
+		{ID: "1.2.3.4", Kind: "car", Type: "OffroadHatchback", X: 7500, Z: 7600},
+		{ID: "g1.2.3.4", Kind: "car", Type: "ExpansionOlga", Stored: true, StoredBy: "76561198000000001", X: 100, Z: 200},
+	}})
+	require.Eventually(t, func() bool { return b.count(".vm-wrap") == 1 }, 10*time.Second, 100*time.Millisecond, "only the vehicle in the world is drawn")
+	require.Equal(t, 1, b.count(".vm.car"), "the live car is drawn")
+	// The same vehicle stored while watched leaves the map: the layer removes the marker it had drawn,
+	// which a skip placed after seen[v.id] would not.
+	e.hub.Sync(admin.SyncRequest{Proto: 1, Vehicles: []admin.Vehicle{
+		{ID: "1.2.3.4", Kind: "car", Type: "OffroadHatchback", Stored: true, X: 7500, Z: 7600},
+	}})
+	require.Eventually(t, func() bool { return b.count(".vm-wrap") == 0 }, 10*time.Second, 100*time.Millisecond, "the vehicle that went into the garage leaves the map")
+}
+
 // hover moves the pointer over the first element that matches sel.
 func (b *browser) hover(t *testing.T, sel string) {
 	t.Helper()

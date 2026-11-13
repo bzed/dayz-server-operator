@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/http"
 	"testing"
 	"time"
 
@@ -78,4 +79,80 @@ func TestVehicleListRecordError(t *testing.T) {
 	e.srv.Vehicles = fakeRecords{err: errors.New("disk")}
 	c, _ := e.do("GET", "/api/v1/instances/alpha/vehicles", e.token(RoleViewer, nil, false), "")
 	require.Equal(t, 500, c)
+}
+
+// syncGarage plays a mod that reports the garage feature (Expansion virtual garage).
+func syncGarage(e *env) {
+	e.alpha.Sync(admin.SyncRequest{Proto: 1, Hello: true, ModVersion: "0.1.0", World: "chernarusplus",
+		Features: []string{admin.FeatureGarage}})
+}
+
+func TestStoredVehicleRetrieve(t *testing.T) {
+	e := newEnv(t)
+	defer e.modAnswers("")()
+	syncGarage(e)
+	op := e.token(RoleOperator, nil, false)
+	c, b := e.do("POST", "/api/v1/instances/alpha/vehicles/g1.2.3.4/retrieve", op, `{"x":100,"z":200}`)
+	var r ActionResult
+	require.NoError(t, json.Unmarshal(b, &r), "%d %s", c, b)
+	require.Equal(t, 200, c, "%d %s", c, b)
+	require.True(t, r.OK, "%d %s", c, b)
+	entries, err := e.srv.Audit.Tail("alpha", 100)
+	require.NoError(t, err)
+	require.NotEmpty(t, entries)
+	last := entries[len(entries)-1]
+	require.Equal(t, "storedvehicle_retrieve", last.Action)
+	require.Equal(t, "g1.2.3.4 to 100/200", last.Target)
+	require.True(t, last.OK, "audit = %+v", last)
+	// The hub refuses a command without a position, as it does for vehicle_move.
+	c, b = e.do("POST", "/api/v1/instances/alpha/vehicles/g1.2.3.4/retrieve", op, `{"x":0,"z":0}`)
+	require.Equal(t, 400, c, "%d %s", c, b)
+	require.Contains(t, string(b), "storedvehicle_retrieve needs a position", "%d %s", c, b)
+}
+
+func TestStoredVehicleSpawnMove(t *testing.T) {
+	e := newEnv(t)
+	defer e.modAnswers("")()
+	syncGarage(e)
+	op := e.token(RoleOperator, nil, false)
+	c, b := e.do("POST", "/api/v1/instances/alpha/vehicles/g1.2.3.4/spawnmove", op, `{"x":100,"z":200}`)
+	var r ActionResult
+	require.NoError(t, json.Unmarshal(b, &r), "%d %s", c, b)
+	require.Equal(t, 200, c, "%d %s", c, b)
+	require.True(t, r.OK, "%d %s", c, b)
+	entries, err := e.srv.Audit.Tail("alpha", 100)
+	require.NoError(t, err)
+	require.NotEmpty(t, entries)
+	last := entries[len(entries)-1]
+	require.Equal(t, "storedvehicle_move", last.Action)
+	require.Equal(t, "g1.2.3.4 to 100/200", last.Target)
+	require.True(t, last.OK, "audit = %+v", last)
+}
+
+func TestStoredVehicleActionsNeedGarageFeature(t *testing.T) {
+	e := newEnv(t)
+	e.alpha.Sync(admin.SyncRequest{Proto: 1, Hello: true}) // connected, but no garage feature
+	op := e.token(RoleOperator, nil, false)
+	for _, path := range []string{
+		"/api/v1/instances/alpha/vehicles/g1.2.3.4/retrieve",
+		"/api/v1/instances/alpha/vehicles/g1.2.3.4/spawnmove",
+	} {
+		c, b := e.do("POST", path, op, `{"x":100,"z":200}`)
+		require.Equal(t, http.StatusConflict, c, "%s: %s", path, b)
+		require.Contains(t, string(b), "the dzo-admin mod of this instance does not report the garage; update it", "%s: %s", path, b)
+	}
+}
+
+func TestStoredVehicleActionsAreTeleportPerm(t *testing.T) {
+	e := newEnv(t)
+	defer e.modAnswers("")()
+	syncGarage(e)
+	view := e.token(RoleViewer, nil, false)
+	for _, path := range []string{
+		"/api/v1/instances/alpha/vehicles/g1.2.3.4/retrieve",
+		"/api/v1/instances/alpha/vehicles/g1.2.3.4/spawnmove",
+	} {
+		c, _ := e.do("POST", path, view, `{"x":100,"z":200}`)
+		require.Equal(t, http.StatusForbidden, c, path)
+	}
 }

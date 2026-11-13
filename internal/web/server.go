@@ -172,6 +172,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST "+inst+"/vehicles/{id}/repair", s.act(actRepair))
 	mux.HandleFunc("POST "+inst+"/vehicles/{id}/flip", s.act(actFlip))
 	mux.HandleFunc("POST "+inst+"/vehicles/{id}/move", s.act(actMoveVehicle))
+	mux.HandleFunc("POST "+inst+"/vehicles/{id}/retrieve", s.act(actRetrieveStored))
+	mux.HandleFunc("POST "+inst+"/vehicles/{id}/spawnmove", s.act(actSpawnMoveStored))
 	mux.HandleFunc("POST "+inst+"/flags/{id}/raise", s.act(actRaise))
 	mux.HandleFunc("POST "+inst+"/vehicles/{id}/delete", s.act(actDelete))
 	return secure(root)

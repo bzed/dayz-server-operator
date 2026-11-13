@@ -270,3 +270,35 @@ func TestUnusedOf(t *testing.T) {
 	require.Equal(t, []string{"a"}, ids(unusedOf(vs, 30, cleanupNow)))
 	require.Empty(t, unusedOf(vs, 40, cleanupNow), "exactly 40 days is not more than 40")
 }
+
+func TestUnusedVehiclesSkipsStored(t *testing.T) {
+	first := daysAgo(365)
+	vs := []admin.Vehicle{
+		{ID: "garage", FirstSeen: &first, Stored: true},
+		{ID: "live", FirstSeen: &first},
+	}
+	require.Equal(t, []string{"live"}, ids(unusedOf(vs, 30, cleanupNow)),
+		"only the stored flag matters: both vehicles are equally old")
+}
+
+func TestCleanupSkipsStoredVehicles(t *testing.T) {
+	e := cleanupEnv(t, admin.FeatureDriver)
+	e.srv.cleanupWait = 50 * time.Millisecond
+	e.alpha.Sync(admin.SyncRequest{Proto: 1, Vehicles: []admin.Vehicle{{ID: "garage", Type: "Sedan_02", Stored: true}}})
+	e.srv.Vehicles = fakeRecords{recs: map[string]moderation.VehicleRecord{
+		"garage": {ID: "garage", FirstSeen: daysAgo(365)},
+	}}
+	op := e.token(RoleOperator, nil, false)
+	c, b := e.do("GET", "/api/v1/instances/alpha/vehicles/unused?days=1", op, "")
+	require.Equal(t, 200, c, "%s", b)
+	var unused UnusedVehicles
+	require.NoError(t, json.Unmarshal(b, &unused))
+	require.Empty(t, ids(unused.Vehicles), "a stored vehicle is not in the world, so it is never unused")
+	c, b = e.do("POST", "/api/v1/instances/alpha/vehicles/cleanup", op, `{"days":1,"ids":["garage"]}`)
+	require.Equal(t, 200, c, "%s", b)
+	var got CleanupResult
+	require.NoError(t, json.Unmarshal(b, &got))
+	require.Empty(t, got.Deleted)
+	require.Equal(t, []CleanupSkipped{{ID: "garage", Reason: "stored in the Expansion garage"}}, got.Skipped)
+	require.Empty(t, e.alpha.Sync(admin.SyncRequest{Proto: 1}).Commands, "nothing may be enqueued for a stored vehicle")
+}

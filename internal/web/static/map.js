@@ -768,6 +768,9 @@
   function onVehicles(list) {
     var seen = {};
     list.forEach(function (v) {
+      // A vehicle in the Expansion garage is not in the world: the layer does not draw it (the vehicle
+      // list links to the map with sv=<id> to mark the one vehicle of a garage).
+      if (v.stored) { return; }
       seen[v.id] = true;
       var e = vm[v.id];
       if (!e) {
@@ -969,7 +972,10 @@
   // ---- a place from a link ----
   //
   // /map?x=<east>&z=<north>&label=<text> (the events page links here) marks that place and zooms to it. A
-  // value that is not a plain number inside the world is ignored, and so is the whole link.
+  // value that is not a plain number inside the world is ignored, and so is the whole link. With sv=<id>
+  // (the vehicle list's link to a stored vehicle) the marker is the garage's archive icon instead of the
+  // crosshairs, and its menu offers the two garage actions beside removing it. The marker is not driven by
+  // the stream: it stays until it is removed.
   (function focusFromLink() {
     var q = new URLSearchParams(location.search);
     var num = /^-?\d+(\.\d+)?$/;
@@ -978,8 +984,9 @@
     var x = parseFloat(xs), z = parseFloat(zs);
     if (x < 0 || z < 0 || x > size || z > size) { return; }
     var label = (q.get('label') || '').slice(0, 80) || 'Marked place';
+    var sv = (q.get('sv') || '').slice(0, 80);
     var root = mk('div', 'focus');
-    root.appendChild(mk('i', 'fa fa-crosshairs'));
+    root.appendChild(mk('i', 'fa fa-' + (sv ? 'archive' : 'crosshairs')));
     var at = { x: x, z: z };
     var m = L.marker(ll(at), { icon: elIcon('focus-wrap', root) }).addTo(map);
     named(m, function () { return label; });
@@ -987,6 +994,24 @@
     onMenu(m, function () {
       var spec = plainSpec(label, [posText(at)], at, 0);
       spec.items.unshift({ label: 'Remove marker', run: function () { map.removeLayer(m); } });
+      if (sv) {
+        var id = encodeURIComponent(sv);
+        spec.items.unshift(
+          { label: 'Retrieve to coordinates…', min: 'operator', view: function () {
+            return { title: 'Retrieve ' + label, submit: 'Retrieve', fields: [
+              { name: 'x', label: 'x (east)', type: 'number', step: 'any', required: true, value: r1(at.x), pair: true },
+              { name: 'z', label: 'z (north)', type: 'number', step: 'any', required: true, value: r1(at.z), pair: true }
+            ], run: function (f) { act('/vehicles/' + id + '/retrieve', { x: f.x, z: f.z }); } };
+          } },
+          { label: 'Move spawn point to coordinates…', min: 'operator', view: function () {
+            return { title: 'Move the spawn point of ' + label, submit: 'Move', fields: [
+              { name: 'x', label: 'x (east)', type: 'number', step: 'any', required: true, value: r1(at.x), pair: true },
+              { name: 'z', label: 'z (north)', type: 'number', step: 'any', required: true, value: r1(at.z), pair: true }
+            ], run: function (f) { act('/vehicles/' + id + '/spawnmove', { x: f.x, z: f.z }); } };
+          } },
+          '-'
+        );
+      }
       return spec;
     });
     map.setView(ll(at), Math.max(map.getZoom(), Math.log2(2 / a)), { animate: false });

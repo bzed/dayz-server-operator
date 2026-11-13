@@ -71,13 +71,13 @@ func lastUse(v admin.Vehicle) (time.Time, bool) {
 	return time.Time{}, false
 }
 
-// unusedOf returns the vehicles without occupants, not covered, whose last use is more than days days
+// unusedOf returns the vehicles without occupants, not covered or stored, whose last use is more than days days
 // before now, oldest first. A vehicle without any known time is never unused.
 func unusedOf(vs []admin.Vehicle, days int, now time.Time) []admin.Vehicle {
 	cutoff := now.Add(-time.Duration(days) * 24 * time.Hour)
 	out := []admin.Vehicle{}
 	for _, v := range vs {
-		if len(v.Occupants) > 0 || bool(v.Covered) {
+		if len(v.Occupants) > 0 || bool(v.Covered) || bool(v.Stored) {
 			continue
 		}
 		if t, ok := lastUse(v); ok && t.Before(cutoff) {
@@ -198,6 +198,8 @@ func (s *Server) cleanupVehicles(w http.ResponseWriter, r *http.Request, c *call
 		switch {
 		case !ok:
 			skip("not on the map")
+		case bool(v.Stored):
+			skip("stored in the Expansion garage")
 		case len(v.Occupants) > 0:
 			skip("crew inside")
 		case bool(v.Covered):
