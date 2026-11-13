@@ -18,14 +18,18 @@
 # --expansion runs the server and the client with DayZ Expansion (CF, Dabs Framework, Expansion Licensed and Bundle
 # from the Steam workshop) and checks the Expansion notification types of dzo-admin, with a screenshot of each in
 # $DZO_SHOTS_DIR (default: the work directory, kept); it stops after those checks (the player is still choosing a
-# spawn point).
+# spawn point). It also runs the Expansion virtual garage checks of server_tests (the probe testmods/dzo-garage-probe
+# makes the stored vehicles of a garage JSON this run writes into the mission storage).
+# --bike-view loads the probe testmods/dzo-client-view on the client and checks, through its DZO-VIEW lines in the
+# client's own script log, that a client sees a moved vehicle at the new place and on the ground: the server's
+# vehicle list only says where the server has it.
 # --old-mod runs the dzo-admin that main pins (before the message ways) with this dzo, as on a host whose
 # instances were not restarted yet, and checks that the notification the restart countdown sends still arrives.
-# Usage: scripts/test-client.sh [--exp] [--keep] [--no-client] [--bans] [--expansion] [--old-mod]
+# Usage: scripts/test-client.sh [--exp] [--keep] [--no-client] [--bans] [--expansion] [--bike-view] [--old-mod]
 set -euo pipefail
 cd "$(dirname "$0")/.."
 dev=${DAYZ_DEV_SCRIPTS:-$HOME/.claude/skills/dayz-dev/scripts}
-exp=() keep=0 noclient=0 bans=0 expansion=0 oldmod=0 product=stable
+exp=() keep=0 noclient=0 bans=0 expansion=0 bikeview=0 oldmod=0 product=stable
 for a in "$@"; do
 	case $a in
 	--exp) exp=(-e) product=experimental ;;
@@ -33,8 +37,9 @@ for a in "$@"; do
 	--no-client) noclient=1 ;;
 	--bans) bans=1 ;;
 	--expansion) expansion=1 ;;
+	--bike-view) bikeview=1 ;;
 	--old-mod) oldmod=1 ;;
-	*) echo "usage: $0 [--exp] [--keep] [--no-client] [--bans] [--expansion] [--old-mod]" >&2; exit 2 ;;
+	*) echo "usage: $0 [--exp] [--keep] [--no-client] [--bans] [--expansion] [--bike-view] [--old-mod]" >&2; exit 2 ;;
 	esac
 done
 [ -x "$dev/dayz-client-headless.sh" ] || { echo "dayz-dev scripts not found in $dev (DAYZ_DEV_SCRIPTS)" >&2; exit 2; }
@@ -45,6 +50,7 @@ tree=$work/tree
 pids=()
 cleanup() {
 	"$dev/dayz-client-headless.sh" "${exp[@]}" stop "$work/client" >/dev/null 2>&1 || true
+	if [ "$bikeview" = 1 ]; then rm -f "${sroot:-$HOME/.steam/debian-installation}/steamapps/common/DayZ/@dzo-client-view" "${sroot:-$HOME/.steam/debian-installation}/steamapps/common/DayZ Exp/@dzo-client-view"; fi
 	for p in "${pids[@]}"; do kill "$p" 2>/dev/null || true; done
 	sleep 5
 	for p in "${pids[@]}"; do kill -9 "$p" 2>/dev/null || true; done
@@ -68,6 +74,90 @@ web_tests() {
 		go test -tags 'e2e live' -count=1 -run '^TestLive' ./internal/web/ >"$work/web.log" 2>&1 || s=$?
 	[ "$s" = 0 ] || cat "$work/web.log" >&2
 	verdict "web UI against the real server" $s
+}
+
+# garage_tests: the Expansion virtual garage (needs --expansion; the run wrote a garage JSON into the
+# mission storage and the probe testmods/dzo-garage-probe made the stored vehicles at mission start).
+# What the actions must do: a retrieved vehicle stands on the ground at its new place, and a moved
+# spawn point is at the ground - the garage restores a vehicle exactly at the height its entry keeps,
+# without snapping it to the surface, so a metre above the ground there comes back a metre in the air.
+# vat <class> <x>: the y of the world vehicle of that class within 5 m of x ("" when there is none).
+garage_tests() {
+	local guid=eefYhIqC5ndgKAdRbn734m97dKO9vzwH9fjYnqr5DXU=
+	local done=$tree/profiles/dzo_garage_probe/done
+	local surface ref refy y s
+	vat() { vjson | jq -r --arg t "$1" --argjson x "$2" '[.[] | select(.type == $t and .stored != true and ((.x - $x) | fabs) < 5)][0].y // ""'; }
+	export work api # the waitfor subshells run the exported functions, which need both
+	export -f vjson vat bikeat
+	s=0
+	waitfor 120 "[ -f '$done' ]" || s=1
+	verdict "garage: the probe made the stored vehicles" $s
+	[ -s "$done" ] || { unset -f vjson vat; return 0; }
+	s=0
+	vl | grep -q "^g1\\.2\\.3\\.4 .*stored in the garage by $guid" || s=1
+	vl | grep -q "^g5\\.6\\.7\\.8 .*stored in the garage by $guid" || s=1
+	verdict "garage: the stored vehicles are listed with their owner" $s
+	# The spawn point moves to the sedan's own stored place, where the probe measured the height of
+	# the ground (surface), so the entry's y can be compared with it exactly.
+	surface=$(sed -n 's/^DZO-GARAGEPROBE CivilianSedan [0-9a-f]* saved .* surface=\([0-9.]*\) .*/\1/p' "$done" | tail -1)
+	# The height a car of the same class stands at near there: a spawned reference, for the retrieved
+	# cars (their origin settles a model zero point above the ground, which the tolerance absorbs).
+	s=0
+	dzo vehicle spawn t1 CivilianSedan --x 7615 --z 7500 | grep -q ok || s=1
+	ref=
+	for _ in $(seq 20); do
+		ref=$(vjson | jq -r '[.[] | select(.type == "CivilianSedan" and .stored != true and (.x - 7615 | fabs) < 5)][0].id // empty')
+		[ -n "$ref" ] && break
+		sleep 3
+	done
+	[ -n "$ref" ] || s=1
+	verdict "garage: a reference car stands near the targets" $s
+	if [ -n "$ref" ]; then
+		sleep 20 # let it settle on the ground
+		refy=$(bikeat "$ref" .y)
+	fi
+	echo "garage: the ground at the spawnmove target is $surface, the reference car stands at $refy" >&2
+	# Retrieve: the stored car comes back into the world at the target, on the ground and whole.
+	s=0
+	curl -sf -X POST -H "Authorization: Bearer $(cat "$work/api.token")" -d '{"x":7605,"z":7500}' "http://127.0.0.1:$api/api/v1/instances/t1/vehicles/g1.2.3.4/retrieve" >/dev/null || s=1
+	verdict "garage: retrieve to coordinates is carried out" $s
+	s=1
+	y=
+	if waitfor 60 "[ -n \"\$(vat OffroadHatchback_Blue 7605)\" ]"; then
+		sleep 20 # long enough to fall through the world or be removed
+		y=$(vat OffroadHatchback_Blue 7605)
+		awk -v y="$y" -v r="$refy" 'BEGIN{d = y - r; if (d < 0) d = -d; exit !(y != "" && r != "" && d < 2)}' && s=0
+	fi
+	verdict "garage: the retrieved car stands on the ground (y $y, the reference $refy)" $s
+	# The spawn point move (to the sedan's own stored place, where the ground is known): the entry
+	# keeps the new place at the height of the ground there, not a metre above it. The surface is
+	# measured at that very place, so the height is exact; the wait also covers the next syncs (the
+	# vehicles part comes every few seconds), a vehicle restored at the height of the unsettled drop
+	# (a metre minus the model zero point) is the bug this catches.
+	s=0
+	curl -sf -X POST -H "Authorization: Bearer $(cat "$work/api.token")" -d '{"x":7595,"z":7505}' "http://127.0.0.1:$api/api/v1/instances/t1/vehicles/g5.6.7.8/spawnmove" >/dev/null || s=1
+	verdict "garage: the spawn point move is carried out" $s
+	s=1
+	waitfor 30 "awk -v y=\"\$(bikeat g5.6.7.8 .y)\" -v g=\"$surface\" 'BEGIN{d = y - g; if (d < 0) d = -d; exit !(y != \"\" && g != \"\" && d < 0.15)}'" && s=0
+	verdict "garage: the moved spawn point is at the ground (y $(bikeat g5.6.7.8 .y), the ground there $surface)" $s
+	# And the whole point of it: a vehicle restored at the moved place stands on the ground, as high
+	# as the reference next to it (the terrain slopes west of there, so the target is east of it).
+	s=0
+	curl -sf -X POST -H "Authorization: Bearer $(cat "$work/api.token")" -d '{"x":7620,"z":7500}' "http://127.0.0.1:$api/api/v1/instances/t1/vehicles/g5.6.7.8/retrieve" >/dev/null || s=1
+	verdict "garage: retrieve from the moved spawn point is carried out" $s
+	s=1
+	y=
+	if waitfor 60 "[ -n \"\$(vat CivilianSedan 7620)\" ]"; then
+		sleep 20
+		y=$(vat CivilianSedan 7620)
+		awk -v y="$y" -v r="$refy" 'BEGIN{d = y - r; if (d < 0) d = -d; exit !(y != "" && r != "" && d < 2)}' && s=0
+	fi
+	verdict "garage: the car restored at the moved place stands on the ground (y $y, the reference $refy)" $s
+	# Leftovers: the retrieved cars and the reference go, the garage is empty again.
+	for id in $(vjson | jq -r --argjson x 7600 --argjson z 7502 '[.[] | select(.stored != true and (.x - $x | fabs) < 25 and (.z - $z | fabs) < 25) | .id] | .[]'); do
+		dzo vehicle delete t1 "$id" >/dev/null 2>&1 || true
+	done
+	unset -f vjson vat
 }
 
 # server_tests: needs the server, dzo serve and the probe, no client.
@@ -430,6 +520,9 @@ if [ "$expansion" = 1 ]; then
 	[ "$s" = 0 ] || grep '"target_ai"' "$work/events.jsonl" >&2
 	verdict "event feed: an Expansion AI victim is named, AI \"Name\" (Faction), without a raw string key" $s
 fi
+if [ "$expansion" = 1 ]; then
+	garage_tests
+fi
 # Stashes are not driven here: a dig action run by hand does not move the item, only a player's does.
 web_tests
 }
@@ -444,7 +537,10 @@ if [ "$oldmod" = 1 ]; then
 else
 	"$work/dzo" servermods build --src servermods --out "$work/built" >/dev/null
 fi
-mkdir "$work/tsrc" && cp -r testmods/dzo-client-probe "$work/tsrc/" && git -C "$work/tsrc/dzo-client-probe" init -q && git -C "$work/tsrc/dzo-client-probe" add -A && git -C "$work/tsrc/dzo-client-probe" -c user.name=t -c user.email=t@t commit -qm probe # dzo-be-test is built with armake2, not by dzo
+mkdir "$work/tsrc" && cp -r testmods/dzo-client-probe testmods/dzo-garage-probe testmods/dzo-client-view "$work/tsrc/"
+for p in dzo-client-probe dzo-garage-probe dzo-client-view; do
+	git -C "$work/tsrc/$p" init -q && git -C "$work/tsrc/$p" add -A && git -C "$work/tsrc/$p" -c user.name=t -c user.email=t@t commit -qm probe
+done # dzo-be-test is built with armake2, not by dzo; the garage probe is inert without Expansion and its make flag
 "$work/dzo" servermods build --src "$work/tsrc" --out "$work/tbuilt" >/dev/null
 
 srv=$("$dev/find-dayzserver.sh" "${exp[@]}")
@@ -456,6 +552,10 @@ grep -q '^steamQueryPort' "$cfg" || sed -i '1i steamQueryPort = 0;' "$cfg"
 sed -i "s/^steamQueryPort = .*/steamQueryPort = $query;/" "$cfg"
 grep -q '^BattlEye' "$cfg" || sed -i '1i BattlEye = 0;' "$cfg" # the headless client has no BattlEye
 sed -i 's/^BattlEye = .*/BattlEye = 0;/; s/^password = .*/password = "";/' "$cfg"
+# The client-view probe is an unsigned locally built client mod (--bike-view); a local test verifies
+# nothing. (The workshop mods of --expansion are signed, so they pass either way.)
+grep -q '^verifySignatures' "$cfg" || sed -i '1i verifySignatures = 0;' "$cfg"
+sed -i 's/^verifySignatures = .*/verifySignatures = 0;/' "$cfg"
 rcon=$((query + 1))
 if [ "$bans" = 1 ]; then
 	# The ban checks need BattlEye: RCon on localhost, an absolute -BEpath, and a client that runs
@@ -519,6 +619,7 @@ feed_has() { grep -Eq "\"kind\":\"$1\".*\"$2\":\"$3\"${4:+.*\"$4\":\"$5\"}" "$wo
 [ "$bans" = 1 ] || start_serve
 ln -sfn "$work/built/dzo-admin" "$tree/@dzo-admin"
 ln -sfn "$work/tbuilt/dzo-client-probe" "$tree/@dzo-client-probe"
+ln -sfn "$work/tbuilt/dzo-garage-probe" "$tree/@dzo-garage-probe"
 modargs=() clientmods=() smods= cmods=
 if [ "$expansion" = 1 ]; then
 	# server folder -> workshop id, and the folder the client knows the same mod by
@@ -532,11 +633,56 @@ if [ "$expansion" = 1 ]; then
 	done
 	modargs=("-mod=${smods%;}")
 	clientmods=("-mod=${cmods%;}")
+	# The Expansion virtual garage: two stored vehicles of a garage whose owner never connected (a BI
+	# GUID, the only ID the garage knows a player by). The probe makes their entity-storage files at
+	# mission start (the make flag); garage_tests below acts on them through the API. The positions
+	# are near the motorbike checks' 7500/7500: flat, no objects on top.
+	garagedir=$tree/mpmissions/dayzOffline.chernarusplus/storage_1/expansion/garage
+	mkdir -p "$garagedir" "$tree/profiles/dzo_garage_probe"
+	touch "$tree/profiles/dzo_garage_probe/make"
+	cat >"$garagedir/eefYhIqC5ndgKAdRbn734m97dKO9vzwH9fjYnqr5DXU=.json" <<J
+{
+	"m_Version": 3,
+	"m_TerritoryID": -1,
+	"m_OwnerUID": "eefYhIqC5ndgKAdRbn734m97dKO9vzwH9fjYnqr5DXU=",
+	"m_Vehicles": [
+		{
+			"m_OwnerUIDs": ["eefYhIqC5ndgKAdRbn734m97dKO9vzwH9fjYnqr5DXU="],
+			"m_ClassName": "OffroadHatchback_Blue",
+			"m_Position": [7590, 220, 7500],
+			"m_Orientation": [90, 0, 0],
+			"m_GlobalID": [1, 2, 3, 4],
+			"m_SkinName": ""
+		},
+		{
+			"m_OwnerUIDs": ["eefYhIqC5ndgKAdRbn734m97dKO9vzwH9fjYnqr5DXU="],
+			"m_ClassName": "CivilianSedan",
+			"m_Position": [7595, 220, 7505],
+			"m_Orientation": [90, 0, 0],
+			"m_GlobalID": [5, 6, 7, 8],
+			"m_SkinName": ""
+		}
+	]
+}
+J
+fi
+if [ "$bikeview" = 1 ]; then
+	# The client-view probe is a client mod: clients load @folders from their DayZ install only, so
+	# the built probe is linked there and named in -mod (appended to Expansion's -mod when both are
+	# on: DayZ takes one -mod). Removed again at the end of the run.
+	sroot=${STEAM_ROOT:-$HOME/.steam/debian-installation}
+	cdir=DayZ capp=221100; [ "$product" = experimental ] && { cdir="DayZ Exp"; capp=1024020; }
+	ln -sfn "$work/tbuilt/dzo-client-view" "$sroot/steamapps/common/$cdir/@dzo-client-view"
+	if [ "${#clientmods[@]}" -gt 0 ]; then
+		clientmods=("${clientmods[0]};@dzo-client-view")
+	else
+		clientmods+=("-mod=@dzo-client-view")
+	fi
 fi
 beargs=()
 [ "$bans" = 1 ] && beargs=("-BEpath=$tree/profiles/battleye")
 (cd "$tree" && ulimit -c 0 && exec ./DayZServer -config=serverDZ.cfg -profiles=profiles \
-	"${modargs[@]}" "-servermod=@dzo-admin;@dzo-client-probe" -port="$game" -nosplash -nopause -dologs -adminlog "${beargs[@]}") >"$work/server.log" 2>&1 &
+	"${modargs[@]}" "-servermod=@dzo-admin;@dzo-client-probe;@dzo-garage-probe" -port="$game" -nosplash -nopause -dologs -adminlog "${beargs[@]}") >"$work/server.log" 2>&1 &
 server=$!
 pids+=("$server")
 echo "== $product server $srv, game port $game, work dir $work"
@@ -729,6 +875,46 @@ if dzo player tp t1 "$id" --x 7500 --z 7500 | grep -q ok; then
 	dzo player list t1 | grep -Eq 'dzotester +750[0-9] +7500' && s=0
 fi
 verdict "teleport" $s
+
+# --bike-view: what the client sees. The client-view probe (testmods/dzo-client-view) logs a DZO-VIEW
+# line per vehicle around the player every 2 s into the client's own script log: the server's vehicle
+# list says where the server has a vehicle, only this says where a client sees it. A moved vehicle
+# must appear at the new place and on the ground there: the simulation of a vehicle nobody sits in
+# does not run, so the move reaches the clients only when it is synchronized.
+if [ "$bikeview" = 1 ]; then
+	# The client's own script log, the newest one (the glob sorts by name, and the names carry the
+	# date; no pipe: ls | head would die of SIGPIPE under pipefail).
+	for clog in "$sroot/steamapps/compatdata/$capp/pfx/drive_c/users/steamuser/AppData/Local/$cdir/script_"*.log; do :; done
+	vline() { grep -h 'DZO-VIEW Motorbike_01_Red ' "$clog" | tail -1; }
+	s=0
+	dzo vehicle spawn t1 Motorbike_01_Red --x 7530 --z 7500 | grep -q ok || s=1
+	verdict "client view: the bike is spawned" $s
+	bike=
+	for _ in $(seq 30); do
+		bike=$(curl -s -H "Authorization: Bearer $(cat "$work/api.token")" "http://127.0.0.1:$api/api/v1/instances/t1/vehicles" | jq -r '[.[] | select(.type == "Motorbike_01_Red" and (.x - 7530 | fabs) < 5)][0].id // empty')
+		[ -n "$bike" ] && break
+		sleep 2
+	done
+	s=1
+	[ -n "$bike" ] && for _ in $(seq 30); do [ -n "$(vline)" ] && { s=0; break; }; sleep 2; done
+	verdict "client view: the client sees the spawned bike ($(vline))" $s
+	s=0
+	dzo vehicle move t1 "$bike" --x 7560 --z 7500 | grep -q ok || s=1
+	verdict "client view: the bike is moved on the server" $s
+	s=1
+	for _ in $(seq 30); do
+		x=$(vline | sed -n 's/.* x=\([0-9.]*\).*/\1/p')
+		awk -v x="$x" 'BEGIN{exit !(x > 7555 && x < 7565)}' && { s=0; break; }
+		sleep 2
+	done
+	verdict "client view: the client sees the moved bike at the new place ($(vline))" $s
+	s=1
+	y=$(vline | sed -n 's/.* y=\([0-9.-]*\).*/\1/p')
+	g=$(vline | sed -n 's/.* ground=\([0-9.-]*\).*/\1/p')
+	awk -v y="$y" -v g="$g" 'BEGIN{d = y - g; if (d < 0) d = -d; exit !(y != "" && g != "" && d < 2)}' && s=0
+	verdict "client view: the client sees the bike on the ground (y $y, the ground $g)" $s
+	dzo vehicle delete t1 "$bike" >/dev/null || true
+fi
 
 chemlights() { probe | sed -n 's/.*chemlight=\([0-9]*\).*/\1/p'; }
 before=$(chemlights)

@@ -123,6 +123,19 @@ marker file, seats the player in a new car; it is a test aid and never part of a
 the Steam DayZ Server tool and the client of the same build, a logged-in Steam and one game at a
 time; on a machine that runs dzo instances, run it elsewhere.
 
+``--expansion`` loads DayZ Expansion (CF, Dabs Framework, Expansion Licensed and the bundle) on the
+server and the client and checks the Expansion notification types of dzo-admin. It also runs the
+Expansion virtual garage checks of the server part: the run writes a garage JSON (a BI GUID owner,
+two vehicles) into the mission storage and the probe servermod ``testmods/dzo-garage-probe`` makes
+their entity-storage files at mission start, so without a player the whole flow runs - the stored
+vehicles are listed, a retrieve places the car standing on the ground at its new place, and a spawn
+point move keeps the height of the ground there (a restore spawns a vehicle exactly at that height,
+without snapping it to the surface). ``--bike-view`` loads the client mod
+``testmods/dzo-client-view`` instead, which logs where the *client* sees every vehicle around the
+player (``DZO-VIEW`` lines in the client's own script log): the server's vehicle list only says
+where the server has a vehicle, so the check that a moved bike appears at the new place and on the
+ground, in the client's view, is the only one that catches a move that never reaches the players.
+
 The BattlEye event patterns of ``internal/battleye`` come from a real capture (see :doc:`faq`). To repeat it you need a client that runs BattlEye: the headless client of the
 ``dayz-dev`` skill starts ``DayZ_x64.exe`` without it, so set
 ``PROTON_BATTLEYE_RUNTIME="$STEAM_ROOT/steamapps/common/Proton BattlEye Runtime"`` in its launch
