@@ -290,11 +290,13 @@ Instance
    vehicles are not drawn on the map otherwise). A vehicle whose entity-storage file is missing can never
    come back; its note says ``no storage file``. The **Actions** button opens the vehicle panel, which for a
    stored vehicle offers two forms to people who may teleport players: **Retrieve** takes the vehicle out of
-   the garage and places it at an x/z position (the owners who are online are told in-game), and **Move spawn
-   point** changes where it comes back when an owner retrieves it; the vehicle stays in the garage. The map
-   marker of the position link offers the same two actions in its menu (**Retrieve to coordinates…** and
-   **Move spawn point to coordinates…** beside **Remove marker**): the panel forms and the map menu call the
-   same two actions, so both need the teleport permission, and a viewer sees only **Remove marker** there.
+   the garage and places it at an x/z position, standing on the ground there (the owners who are online are
+   told in-game), and **Move spawn point** changes where it comes back when an owner retrieves it; the
+   vehicle stays in the garage, and its entry keeps the height of the ground, so it comes back standing on
+   it, not in the air. The map marker of the position link offers the same two actions in its menu
+   (**Retrieve to coordinates…** and **Move spawn point to coordinates…** beside **Remove marker**), and can
+   be dragged to move the spawn point (see the Map page): the panel forms, the map menu and the drag call
+   the same two actions, so all need the teleport permission, and a viewer sees only **Remove marker** there.
    Both actions need a ``dzo-admin`` that reports the Expansion garage (the ``garage`` feature); with an
    older one the API refuses with ``the dzo-admin mod of this instance does not report the garage; update
    it`` (see :doc:`api`).
@@ -353,7 +355,9 @@ Live map
    pixels per metre; ``Fit`` shows the whole world again. Icons sit exactly on
    their position. **Drag a player's icon** and drop it to teleport the player
    there (the icon stays under the pointer and at the drop point until you answer, see :doc:`admin-map`); the crosshair and the coordinate readout show where it will land, and
-   you confirm before anything happens. **Right-click** (or click, or press the
+   you confirm before anything happens. **Drag a vehicle's icon** to move it the same way, and **the marker of a
+   stored vehicle** (the position link of the vehicle list opens the map with it) to move its spawn point: where it
+   comes back when an owner retrieves it from the garage; the marker snaps back when the answer says no. **Right-click** (or click, or press the
    menu key on a focused icon) for the actions on a player, vehicle, event or
    marker; right-click empty ground to teleport a player there, spawn an item there (as many stacks as the quantity needs) or spawn a vehicle there. Menu entries
    you lack the role for are not shown. See :doc:`admin-map`.

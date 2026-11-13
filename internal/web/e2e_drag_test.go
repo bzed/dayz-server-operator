@@ -200,3 +200,47 @@ func TestE2EDragAVehicleMovesIt(t *testing.T) {
 	b.run(t, chromedp.Click(`.ctx form button:not([type=button])`, chromedp.ByQuery))
 	require.Eventually(t, func() bool { return e.commandsOf("vehicle_move") == 1 }, 10*time.Second, 50*time.Millisecond)
 }
+
+// storedEnv opens the map on the marker of one stored vehicle (the vehicle list's position link):
+// the middle of the map, the marker of sv=<id> there, and a mod that reports the Expansion garage,
+// without which the API refuses the spawn point move.
+func storedEnv(t *testing.T, role api.Role) (*env, *browser) {
+	t.Helper()
+	e := newEnv(t, role)
+	useRealAssets(t, e.assets)
+	b := newBrowser(t)
+	b.run(t, chromedp.EmulateViewport(1280, 800), chromedp.Navigate(e.url("/b/main/i/alpha/map")), chromedp.WaitVisible(`.leaflet-container`))
+	require.Eventually(t, func() bool { return b.count(".pm-wrap") == 1 }, 10*time.Second, 100*time.Millisecond)
+	px, pz := b.atPx(t, 0, 0)
+	// The stored-vehicle actions need a mod that reports the Expansion garage; the marker itself is
+	// only a link parameter. Alice stays in her corner, away from the dragged marker.
+	e.hub.Sync(admin.SyncRequest{Proto: 1, Hello: true, ModVersion: "0.1.0", World: "enoch", Features: []string{admin.FeatureGarage},
+		Players: []admin.Player{{SteamID: "7656", Name: "alice", Alive: true, X: 1, Z: 2}}})
+	b.run(t, chromedp.Navigate(e.url(fmt.Sprintf("/b/main/i/alpha/map?x=%.1f&z=%.1f&sv=g1.2.3.4&label=ExpansionOlga", px, pz))), chromedp.WaitVisible(`.focus-wrap`))
+	return e, b
+}
+
+// Dragging the marker of a stored vehicle asks to move its spawn point (where the vehicle comes back
+// when an owner retrieves it); confirming sends storedvehicle_move.
+func TestE2EDragAStoredVehicleMovesItsSpawnPoint(t *testing.T) {
+	e, b := storedEnv(t, api.RoleAdmin)
+	defer e.answerCommands(true, "moved")()
+	x, z := b.atPx(t, 0, 150)
+	b.drag(t, ".focus-wrap", [][2]float64{{0, 150}}, 20)
+	require.Eventually(t, func() bool { return strings.Contains(b.menuText(), "Move the spawn point of ExpansionOlga?") }, 5*time.Second, 50*time.Millisecond, "the confirmation opens")
+	var xs, zs float64
+	_, _ = fmt.Sscanf(strings.SplitN(b.menuText(), "To ", 2)[1], "%f / %f", &xs, &zs)
+	x1, _ := b.atPx(t, 1.5, 0)
+	x0, _ := b.atPx(t, 0, 0)
+	require.InDelta(t, x, xs, x1-x0, "menu: %q", b.menuText())
+	require.InDelta(t, z, zs, x1-x0, "menu: %q", b.menuText())
+	b.run(t, chromedp.Click(`.ctx form button:not([type=button])`, chromedp.ByQuery))
+	require.Eventually(t, func() bool { return e.commandsOf("storedvehicle_move") == 1 }, 10*time.Second, 50*time.Millisecond)
+}
+
+// A viewer sees the marker of a stored vehicle but cannot drag it (the spawn point move needs the
+// teleport permission, like the menu items).
+func TestE2EViewerCannotDragAStoredVehicleMarker(t *testing.T) {
+	_, b := storedEnv(t, api.RoleViewer)
+	require.Zero(t, b.count(".leaflet-marker-draggable"))
+}

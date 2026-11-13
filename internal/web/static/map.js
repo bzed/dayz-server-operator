@@ -975,7 +975,9 @@
   // value that is not a plain number inside the world is ignored, and so is the whole link. With sv=<id>
   // (the vehicle list's link to a stored vehicle) the marker is the garage's archive icon instead of the
   // crosshairs, and its menu offers the two garage actions beside removing it. The marker is not driven by
-  // the stream: it stays until it is removed.
+  // the stream: it stays until it is removed. Operators can drag it to move the spawn point of the stored
+  // vehicle (where it comes back when an owner retrieves it), with the same confirmation as moving a
+  // vehicle of the world; it snaps back when the answer says no.
   (function focusFromLink() {
     var q = new URLSearchParams(location.search);
     var num = /^-?\d+(\.\d+)?$/;
@@ -988,7 +990,7 @@
     var root = mk('div', 'focus');
     root.appendChild(mk('i', 'fa fa-' + (sv ? 'archive' : 'crosshairs')));
     var at = { x: x, z: z };
-    var m = L.marker(ll(at), { icon: elIcon('focus-wrap', root) }).addTo(map);
+    var m = L.marker(ll(at), { icon: elIcon('focus-wrap', root), draggable: !!sv && can('operator'), autoPan: true }).addTo(map);
     named(m, function () { return label; });
     bindTip(m, label, [posText(at)]);
     onMenu(m, function () {
@@ -1014,6 +1016,33 @@
       }
       return spec;
     });
+    if (sv && can('operator')) {
+      var home = [at.z, at.x];
+      var vid = encodeURIComponent(sv);
+      m.on('dragstart', function () { closeMenu(); m.closeTooltip(); });
+      m.on('drag', function () {
+        if (lastPointer) { m.setLatLng(map.mouseEventToLatLng(lastPointer)); }
+        showPos(label, m.getLatLng());
+      });
+      m.on('dragend', function () {
+        var drop = lastPointer ? map.mouseEventToLatLng(lastPointer) : m.getLatLng();
+        var to = { x: Math.max(0, Math.min(size, r1(drop.lng))), z: Math.max(0, Math.min(size, r1(drop.lat))) };
+        m.setLatLng([to.z, to.x]);
+        var sent = false;
+        droppedAt = Date.now(); // the click that ends the drag must not cancel the confirmation
+        openMenu(map.latLngToContainerPoint(m.getLatLng()).add([20, -10]), {
+          title: 'Move the spawn point of ' + label + '?', text: 'To ' + to.x + ' / ' + to.z, submit: 'Move',
+          run: function () {
+            sent = true;
+            act('/vehicles/' + vid + '/spawnmove', to).then(function (ok) {
+              if (ok) { at.x = to.x; at.z = to.z; bindTip(m, label, [posText(at)]); return; }
+              m.setLatLng(home);
+            });
+          },
+          dismiss: function () { if (!sent) { m.setLatLng(home); } }
+        });
+      });
+    }
     map.setView(ll(at), Math.max(map.getZoom(), Math.log2(2 / a)), { animate: false });
     m.openTooltip();
   })();
