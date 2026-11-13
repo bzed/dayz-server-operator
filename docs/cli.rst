@@ -77,8 +77,8 @@ Instances
      - ask the server to shut down over RCon and wait (the unit's ``ExecStop``)
    * - ``dzo instance ack-failure <name>``
      - allow starts again after a failed render or crash loop
-   * - ``dzo start <name>``
-     - start
+   * - ``dzo start <name> | --all``
+     - start one instance, or every instance one after another
    * - ``dzo stop <name> [--graceful | --minutes N --lock N --kick N --text T] [--cancel]``
      - stop and stay stopped; with a countdown option, announce, lock and kick the players first (:ref:`graceful-stop`)
    * - ``dzo restart <name> [--minutes N --lock N --kick N --text T] [--now] [--cancel]``

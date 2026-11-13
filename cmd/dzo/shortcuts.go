@@ -20,8 +20,43 @@ import (
 
 // newStartCmd and newStopCmd are the short forms the documentation uses.
 func newStartCmd() *cobra.Command {
+	var configPath string
+	var all bool
 	c := newInstanceStartCmd()
-	c.Short = "Start an instance (same as dzo instance start)"
+	plain := c.RunE
+	c.Use = "start [<name> | --all]"
+	c.Short = "Start an instance, or every instance one after another (--all)"
+	c.Long = "Without --all the instance is started at once (dzo instance start). --all starts every instance " +
+		"of the site, one after another in name order: staggered starts are gentler on the disk and the I/O. " +
+		"An instance that fails to start does not stop the others; the command fails with the number of the " +
+		"instances that failed."
+	c.Args = cobra.MaximumNArgs(1)
+	c.RunE = func(cmd *cobra.Command, args []string) error {
+		if all == (len(args) == 1) {
+			return fmt.Errorf("give an instance name or --all")
+		}
+		if !all {
+			return plain(cmd, args)
+		}
+		_, tree, err := loadSite(configPath)
+		if err != nil {
+			return err
+		}
+		lc := lifecycleOf(cmd)
+		failed := 0
+		for _, n := range tree.InstanceNames() {
+			if err := lc.Start(cmd.Context(), n); err != nil {
+				failed++
+				_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "%s: %v\n", n, err)
+			}
+		}
+		if failed > 0 {
+			return fmt.Errorf("%d instance(s) failed", failed)
+		}
+		return nil
+	}
+	configFlag(c, &configPath)
+	c.Flags().BoolVar(&all, "all", false, "every instance")
 	return c
 }
 

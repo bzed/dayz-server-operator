@@ -114,3 +114,60 @@ func writeActiveSystemctlCmd(t testing.TB) string {
 	require.NoError(t, os.Chmod(path, 0o755)) //nolint:gosec // test fixture, needs to run
 	return path
 }
+
+// allSite is exporterSite with a second instance, y, for the --all commands.
+func allSite(t testing.TB) string {
+	t.Helper()
+	cfg := exporterSite(t, "")
+	writeFile(t, filepath.Join(filepath.Dir(cfg), "site", "instances", "y", "instance.yaml"), `name: y
+product: dayz-stable
+map: empty.m
+mission_source: {git: g, ref: r, path: p}
+ports: {game: 2402, rcon: 2406, query: 27116}
+network: host
+`)
+	return cfg
+}
+
+// writeRecordingSystemctlCmd writes a systemctl stub that appends its arguments to argsFile and succeeds.
+func writeRecordingSystemctlCmd(t testing.TB, argsFile string) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "fake-systemctl.sh")
+	writeFile(t, path, "#!/bin/sh\necho \"$@\" >> "+argsFile+"\nexit 0\n")
+	require.NoError(t, os.Chmod(path, 0o755)) //nolint:gosec // test fixture, needs to run
+	return path
+}
+
+func TestStartAll(t *testing.T) {
+	cfg := allSite(t)
+	args := filepath.Join(t.TempDir(), "systemctl-args")
+	script := writeRecordingSystemctlCmd(t, args)
+	out, err := runCmd(t, "start", "--all", "--config", cfg, "--command", script)
+	require.NoError(t, err, "start --all: %s", out)
+	b, err := os.ReadFile(args) //nolint:gosec // test fixture path under t.TempDir()
+	require.NoError(t, err, "read the recorded systemctl arguments")
+	assert.Contains(t, string(b), "--user start dzo-x.service", "x was started")
+	assert.Contains(t, string(b), "--user start dzo-y.service", "y was started")
+}
+
+func TestStartAllNeedsNameOrAll(t *testing.T) {
+	_, err := runCmd(t, "start")
+	assert.Error(t, err, "start without a name and without --all must fail")
+	_, err = runCmd(t, "start", "--all", "x")
+	assert.Error(t, err, "start --all together with a name must fail")
+}
+
+func TestStartAllContinuesAfterAFailure(t *testing.T) {
+	cfg := allSite(t)
+	dir := t.TempDir()
+	args := filepath.Join(dir, "systemctl-args")
+	script := filepath.Join(dir, "systemctl")
+	writeFile(t, script, "#!/bin/sh\necho \"$@\" >> "+args+"\nfor a in \"$@\"; do [ \"$a\" = \"dzo-y.service\" ] && exit 1; done\nexit 0\n")
+	require.NoError(t, os.Chmod(script, 0o755)) //nolint:gosec // test fixture, needs to run
+	_, err := runCmd(t, "start", "--all", "--config", cfg, "--command", script)
+	require.Error(t, err, "one failing instance must fail the run")
+	assert.Contains(t, err.Error(), "1 instance(s) failed")
+	b, rerr := os.ReadFile(args) //nolint:gosec // test fixture path under t.TempDir()
+	require.NoError(t, rerr, "read the recorded systemctl arguments")
+	assert.Contains(t, string(b), "--user start dzo-x.service", "x was started although y failed")
+}
