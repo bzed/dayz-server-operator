@@ -162,7 +162,7 @@ func TestStartAll(t *testing.T) {
 
 func TestStartAllNeedsNameOrAll(t *testing.T) {
 	_, err := runCmd(t, "start")
-	assert.Error(t, err, "start without a name and without --all must fail")
+	require.Error(t, err, "start without a name and without --all must fail")
 	_, err = runCmd(t, "start", "--all", "x")
 	assert.Error(t, err, "start --all together with a name must fail")
 }
@@ -196,7 +196,7 @@ func TestStopAll(t *testing.T) {
 
 func TestStopAllNeedsNameOrAll(t *testing.T) {
 	_, err := runCmd(t, "stop")
-	assert.Error(t, err, "stop without a name and without --all must fail")
+	require.Error(t, err, "stop without a name and without --all must fail")
 	_, err = runCmd(t, "stop", "--all", "x")
 	assert.Error(t, err, "stop --all together with a name must fail")
 }
