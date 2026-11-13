@@ -20,7 +20,7 @@ COVERAGE_MIN := 85
 GO           ?= go
 
 .PHONY: all cheatsheet docs build build-static test test-race cover coverage-check cover-html lint vet fmt fmt-check \
-        licenses reuse vulncheck fuzz e2e check deb clean tidy generate servermods servermods-check servermods-lock test-findfile test-client
+        licenses reuse vulncheck fuzz e2e e2e-container check deb clean tidy generate servermods servermods-check servermods-lock test-findfile test-client
 
 all: lint reuse test build
 
@@ -94,6 +94,23 @@ vulncheck:
 ## where they are (see docs/development.rst).
 e2e:
 	$(GO) test -tags e2e -count=1 -race -run '^TestE2E' ./internal/web/
+
+## e2e-container: make e2e (or DZO_E2E_TARGET) inside a debian:trixie podman container, for machines
+## that are not Debian trixie: the same Chromium, htmx, Leaflet and Fork Awesome the CI job uses
+## (images/e2e/Containerfile, docs/development.rst). DZO_E2E_SUITE (trixie), DZO_E2E_TARGET (e2e) and
+## DZO_E2E_PODMAN_OPTS (Chromium's sandbox options, those of CI) change the defaults.
+DZO_E2E_SUITE ?= trixie
+DZO_E2E_TARGET ?= e2e
+DZO_E2E_PODMAN_OPTS ?= --security-opt seccomp=unconfined --security-opt apparmor=unconfined --cap-add SYS_ADMIN
+e2e-container:
+	podman build --build-arg SUITE=$(DZO_E2E_SUITE) --build-arg UID=$(shell id -u) --build-arg GID=$(shell id -g) \
+		-t dzo-e2e:$(DZO_E2E_SUITE) -f images/e2e/Containerfile .
+	podman run --rm $(DZO_E2E_PODMAN_OPTS) \
+		-v "$(CURDIR)":/src -w /src \
+		-v dzo-e2e-home-$(DZO_E2E_SUITE):/home/tester \
+		--user $(shell id -u):$(shell id -g) \
+		-e GOFLAGS=-buildvcs=false \
+		dzo-e2e:$(DZO_E2E_SUITE) make $(DZO_E2E_TARGET)
 
 ## fuzz: run every fuzz target for FUZZTIME (default 10s) each; the seeds also run in `make test`.
 ## Go fuzzes one target per invocation. Fuzz longer with FUZZTIME=5m or one target by hand

@@ -1,0 +1,38 @@
+# SPDX-FileCopyrightText: 2026 Bernd Zeimetz <bernd@bzed.de>
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# dzo-e2e: the browser e2e suite (make e2e) on any machine, in the same Debian
+# a dzo installation serves its JavaScript from. CI runs the suite in this very
+# container (.github/workflows/ci.yml, job "e2e"); make e2e-container builds
+# and runs it locally (see docs/development.rst).
+#
+# Debian's golang-go is older than go.mod asks for; GOTOOLCHAIN=auto (the
+# default) downloads the go.mod version on first use, into the module cache of
+# the HOME volume, like actions/setup-go does in CI.
+#
+# There is deliberately no ENTRYPOINT or CMD: the make target's command line
+# is the whole command, like the runtime image's quadlet Exec=.
+
+ARG SUITE=trixie
+FROM debian:${SUITE}
+
+# The user the tests run as: the invoking user's own uid and gid (make
+# e2e-container passes them as build args), so the bind-mounted checkout is
+# writable without chowning it, and Chromium never runs as root: it refuses to
+# sandbox as root. Keep this layer last: it is the only one that changes with
+# the user, so the apt layer below stays cached.
+ARG UID=1000
+ARG GID=1000
+
+# What make e2e needs: git for the Makefile's version stamp, gcc and libc6-dev
+# for the race detector, Chromium with its sandbox (it stays on), and the
+# htmx, Leaflet and Fork Awesome a dzo installation serves.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        git ca-certificates make gcc libc6-dev golang-go \
+        chromium chromium-sandbox libjs-htmx libjs-leaflet fonts-fork-awesome \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN groupadd -g ${GID} tester && useradd -m -u ${UID} -g ${GID} -s /bin/sh tester
+ENV HOME=/home/tester
+WORKDIR /src

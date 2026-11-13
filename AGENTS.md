@@ -23,7 +23,7 @@ fails them is wasted:
 | vulnerabilities | `make vulncheck` | `govulncheck ./...` |
 | tests | `make test-race` | race detector; `make cover` is the quick variant |
 | fuzzing | `make fuzz` | 10 s per target; the seeds also run in `make test` |
-| browser e2e | `make e2e` | needs Chrome/Chromium and libjs-htmx, libjs-leaflet, fonts-fork-awesome locally (CI brings its own in a trixie container), see docs/development.rst |
+| browser e2e | `make e2e` | needs Chrome/Chromium and libjs-htmx, libjs-leaflet, fonts-fork-awesome locally; `make e2e-container` runs it in a debian:trixie podman container instead (CI brings its own), see docs/development.rst |
 | coverage | `make coverage-check` | **total coverage must stay at or above 85%** |
 
 Also, when the change touches them:

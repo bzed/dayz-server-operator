@@ -254,6 +254,18 @@ CI runs ``make e2e`` in a ``debian:trixie`` container with Debian's
 ``debian:forky`` is allowed to fail: it warns early about the next htmx (4.0
 beta).
 
+On a machine that is not Debian trixie, ``make e2e-container`` runs the same
+suite in a ``debian:trixie`` podman container, built from
+``images/e2e/Containerfile`` with the Chromium and the JavaScript packages of
+the CI job. The checkout is bind-mounted and the tests run as your own user
+(never as root, and without chowning your checkout); the Go caches persist in
+the ``dzo-e2e-home-<suite>`` volume, so the toolchain and module downloads
+happen once. ``DZO_E2E_SUITE`` builds from another Debian suite (``forky``
+reproduces CI's early-warning run), ``DZO_E2E_TARGET`` runs another make target
+in the container, and ``DZO_E2E_PODMAN_OPTS`` replaces the sandbox options (a
+host without AppArmor drops ``--security-opt apparmor=unconfined`` there). On
+an SELinux host, add ``:Z`` to the checkout bind mount.
+
 The browser against a real DayZ server
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
