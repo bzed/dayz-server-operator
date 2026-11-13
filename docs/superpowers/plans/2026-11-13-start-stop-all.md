@@ -53,7 +53,7 @@ The plumbing `--all` needs: the one-instance graceful-stop body becomes a reusab
   - `type stopOptions struct { counting bool; cancel bool; minutes, lock, kick int; minutesSet, lockSet, kickSet bool; text string }` — the countdown flags of `dzo stop`; `counting` is true when any of `--graceful`/`--minutes`/`--lock`/`--kick`/`--text` was given.
   - `func stopWithOptions(cmd *cobra.Command, cfg *config.Config, inst *resolve.Instance, lc instance.Lifecycle, o stopOptions) error` — cancel or count down and stop one resolved instance.
 
-- [ ] **Step 1: Write the failing tests** (append to `cmd/dzo/shortcuts_test.go`; both paths are proven by the existing `TestStopWithCountdownOptions`, only the messages change)
+- [x] **Step 1: Write the failing tests** (append to `cmd/dzo/shortcuts_test.go`; both paths are proven by the existing `TestStopWithCountdownOptions`, only the messages change)
 
 ```go
 func TestStopCancelNamesTheInstance(t *testing.T) {
@@ -73,28 +73,28 @@ func TestStopCountdownLogsNameTheInstance(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run them to verify they fail**
+- [x] **Step 2: Run them to verify they fail**
 
 Run: `go test ./cmd/dzo/ -run 'TestStopCancelNamesTheInstance|TestStopCountdownLogsNameTheInstance' -v`
 Expected: FAIL — the output has `cancelled` and `RCon unreachable` without the `x: ` prefix.
 
-- [ ] **Step 3: Prefix the graceful-stop messages with the instance name**
+- [x] **Step 3: Prefix the graceful-stop messages with the instance name**
 
 In `cmd/dzo/updates.go`:
 
 - `rconRestarter` (lines 78–114): both `Log` closures — the battleye `Session`'s (line 95) and the `Restarter`'s (line 105) — become `func(f string, a ...any) { _, _ = fmt.Fprintf(cmd.ErrOrStderr(), inst.Name+": "+f+"\n", a...) }`.
 - `cancelCountdown` (line 413): `_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%s: cancelled\n", inst.Name)`.
 
-- [ ] **Step 4: Extract the one-instance stop into `stopWithOptions`**
+- [x] **Step 4: Extract the one-instance stop into `stopWithOptions`**
 
 In `cmd/dzo/shortcuts.go`: add `lifecycleOf`, `stopOptions` and `stopWithOptions` (Interfaces block above) next to `newStopCmd`. `stopWithOptions` is the moved body of `newStopCmd`'s counting/cancel branch: build `r := rconRestarter(cmd, cfg, inst, lc)`; `o.cancel` → `cancelCountdown`; otherwise `resolve.AnnouncementOf(inst.Restarts.Announce, o.text)` with the `minutesSet`/`lockSet`/`kickSet` overrides, then `r.Stop(cmd.Context(), inst.Name, a)`; `instance.ErrCancelled` prints `"%s: the stop was cancelled\n"` (with the name) to stdout and returns nil. Rewire `newStopCmd`'s `RunE` to build one `stopOptions` from its locals and `f.Changed(...)` and call `stopWithOptions(cmd, cfg, inst, lifecycleOf(cmd), o)`; the plain path (`!counting && !cancel` → `plain(cmd, args)`) is untouched.
 
-- [ ] **Step 5: Run the tests to verify they pass**
+- [x] **Step 5: Run the tests to verify they pass**
 
 Run: `go test ./cmd/dzo/ -v`
 Expected: PASS — the two new tests and every existing test (`TestStopWithCountdownOptions`, `TestStartAndStopShortForms`, …).
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add cmd/dzo/shortcuts.go cmd/dzo/updates.go cmd/dzo/shortcuts_test.go
@@ -116,7 +116,7 @@ git commit -m "cli: name the instance in dzo stop's countdown and cancel message
   - `func allSite(t testing.TB) string` — `exporterSite` plus a second, resolvable instance `y`.
   - `func writeRecordingSystemctlCmd(t testing.TB, argsFile string) string` — a systemctl stub that appends its arguments to `argsFile` and exits 0.
 
-- [ ] **Step 1: Write the failing tests and helpers** (append to `cmd/dzo/shortcuts_test.go`)
+- [x] **Step 1: Write the failing tests and helpers** (append to `cmd/dzo/shortcuts_test.go`)
 
 ```go
 // allSite is exporterSite with a second instance, y, for the --all commands.
@@ -177,21 +177,21 @@ func TestStartAllContinuesAfterAFailure(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run them to verify they fail**
+- [x] **Step 2: Run them to verify they fail**
 
 Run: `go test ./cmd/dzo/ -run 'TestStartAll' -v`
 Expected: FAIL — `unknown flag: --all` / wrong number of args errors.
 
-- [ ] **Step 3: Implement `--all` in `newStartCmd`**
+- [x] **Step 3: Implement `--all` in `newStartCmd`**
 
 Override the wrapped command like `newStopCmd` does: keep `plain := c.RunE`, then set `c.Use = "start [<name> | --all]"`, `c.Args = cobra.MaximumNArgs(1)`, a `Short`/`Long` that mention `--all`, and a `RunE` that: XOR-checks `all == (len(args) == 1)` → `fmt.Errorf("give an instance name or --all")`; `!all` → `plain(cmd, args)`; otherwise `loadSite(configPath)`, then **sequentially** over `tree.InstanceNames()` call `lifecycleOf(cmd).Start(cmd.Context(), n)`, printing each failure as `"%s: %v\n"` to `cmd.ErrOrStderr()` and counting it, and return `fmt.Errorf("%d instance(s) failed", failed)` if any failed. Register `configFlag(c, &configPath)` and `c.Flags().BoolVar(&all, "all", false, "every instance")`.
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `go test ./cmd/dzo/ -v`
 Expected: PASS.
 
-- [ ] **Step 5: Document the row**
+- [x] **Step 5: Document the row**
 
 In `docs/cli.rst` (lines 80–81) the row becomes:
 
@@ -200,12 +200,12 @@ In `docs/cli.rst` (lines 80–81) the row becomes:
   - start one instance, or every instance one after another
 ```
 
-- [ ] **Step 6: Verify the docs build**
+- [x] **Step 6: Verify the docs build**
 
 Run: `make docs`
 Expected: exits 0 (Sphinx, warnings are errors).
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add cmd/dzo/shortcuts.go cmd/dzo/shortcuts_test.go docs/cli.rst
@@ -228,11 +228,11 @@ git commit -m "cli: dzo start --all starts every instance"
   - `func stopAll(cmd *cobra.Command, cfg *config.Config, tree *site.Tree, lc instance.Lifecycle, o stopOptions) error`
   - `func stopOne(cmd *cobra.Command, cfg *config.Config, tree *site.Tree, name string, lc instance.Lifecycle, o stopOptions) error`
 
-- [ ] **Step 1: Make `runCmd` safe for concurrent writers**
+- [x] **Step 1: Make `runCmd` safe for concurrent writers**
 
 In `cmd/dzo/root_test.go`, `runCmd` writes into `var out syncBuf` (the mutex-guarded buffer from `admin_test.go:35`) instead of `bytes.Buffer`, because the `--all` goroutines write through the command's writers concurrently; drop the then-unused `bytes` import. No behaviour change for existing tests.
 
-- [ ] **Step 2: Write the failing tests** (append to `cmd/dzo/shortcuts_test.go`)
+- [x] **Step 2: Write the failing tests** (append to `cmd/dzo/shortcuts_test.go`)
 
 ```go
 func TestStopAll(t *testing.T) {
@@ -311,12 +311,12 @@ func TestStopAllWithNoInstances(t *testing.T) {
 }
 ```
 
-- [ ] **Step 3: Run them to verify they fail**
+- [x] **Step 3: Run them to verify they fail**
 
 Run: `go test ./cmd/dzo/ -run 'TestStopAll' -v`
 Expected: FAIL — `unknown flag: --all` / wrong number of args errors.
 
-- [ ] **Step 4: Implement `--all` in `newStopCmd`**
+- [x] **Step 4: Implement `--all` in `newStopCmd`**
 
 In `cmd/dzo/shortcuts.go`:
 
@@ -324,12 +324,12 @@ In `cmd/dzo/shortcuts.go`:
 - `stopAll`: one goroutine per name of `tree.InstanceNames()` (Go 1.22+ loop-variable semantics; capture `n` directly), each calling `stopOne`; failures append `"%s: %v\n"` to `cmd.ErrOrStderr()` and increment a `sync.Mutex`-guarded counter; `sync.WaitGroup` join, then `fmt.Errorf("%d instance(s) failed", failed)` if any. All goroutines share `cmd.Context()`, so one Ctrl-C cancels every countdown (and `Restarter.wait` unlocks each server on the way out).
 - `newStopCmd`: `c.Args = cobra.MaximumNArgs(1)`; `c.Use = "stop [<name> | --all] [--graceful | --minutes N --lock N --kick N --text T] [--cancel]"`; the `RunE` XOR-checks `all == (len(args) == 1)`, builds the `stopOptions` (as in Task 1), keeps the one-instance branch (`!all`: plain → `plain(cmd, args)`, else `loadInstance` + `stopWithOptions`) and adds: `loadSite(configPath)` then `stopAll(cmd, cfg, tree, lifecycleOf(cmd), o)`. Register `c.Flags().BoolVar(&all, "all", false, "every instance")` and extend `Long` with the `--all` semantics (concurrent stops, per-instance announce values, one failure does not stop the others).
 
-- [ ] **Step 5: Run the tests to verify they pass, also under the race detector**
+- [x] **Step 5: Run the tests to verify they pass, also under the race detector**
 
 Run: `go test ./cmd/dzo/ -v` then `go test -race ./cmd/dzo/ -run 'TestStopAll|TestStartAll' -v`
 Expected: PASS, race-clean (the goroutines are joined before the command returns, so goleak stays happy too).
 
-- [ ] **Step 6: Document the row and the prose**
+- [x] **Step 6: Document the row and the prose**
 
 In `docs/cli.rst` (lines 82–83) the row becomes:
 
@@ -351,12 +351,12 @@ does not stop the others; the command fails with ``N instance(s) failed``. ``dzo
 after another.
 ```
 
-- [ ] **Step 7: Verify the docs build**
+- [x] **Step 7: Verify the docs build**
 
 Run: `make docs`
 Expected: exits 0.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add cmd/dzo/shortcuts.go cmd/dzo/root_test.go cmd/dzo/shortcuts_test.go docs/cli.rst docs/operations.rst
@@ -369,21 +369,21 @@ git commit -m "cli: dzo stop --all stops every instance, the countdowns running 
 
 **Interfaces:** none.
 
-- [ ] **Step 1: Format and vet**
+- [x] **Step 1: Format and vet**
 
 Run: `make fmt vet`
 Expected: clean (or no changes from `make fmt`).
 
-- [ ] **Step 2: Run the whole gate**
+- [x] **Step 2: Run the whole gate**
 
 Run: `make check`
 Expected: passes — fmt-check, vet, lint (golangci-lint v2.14.0), reuse, licenses, vulncheck, `test-race`, fuzz, e2e (needs Chrome/Chromium and libjs-htmx, libjs-leaflet, fonts-fork-awesome, see docs/development.rst), coverage-check at or above 85%.
 
-- [ ] **Step 3: Fix anything it finds, in the owning task's files**
+- [x] **Step 3: Fix anything it finds, in the owning task's files**
 
 Each fix is its own `fix:` commit (or folded into the task's commit if the branch has not been pushed yet).
 
-- [ ] **Step 4: Commit any fixes**
+- [x] **Step 4: Commit any fixes**
 
 ```bash
 git add -A && git commit -m "fix: whatever the gate found"
