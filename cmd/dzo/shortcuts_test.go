@@ -138,6 +138,16 @@ func writeRecordingSystemctlCmd(t testing.TB, argsFile string) string {
 	return path
 }
 
+// writeActiveRecordingSystemctlCmd is writeRecordingSystemctlCmd whose is-active answers "active":
+// the units are running, so dzo stop counts down before stopping them.
+func writeActiveRecordingSystemctlCmd(t testing.TB, argsFile string) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "fake-systemctl.sh")
+	writeFile(t, path, "#!/bin/sh\necho \"$@\" >> "+argsFile+"\nfor a in \"$@\"; do [ \"$a\" = \"is-active\" ] && { echo active; exit 0; }; done\nexit 0\n")
+	require.NoError(t, os.Chmod(path, 0o755)) //nolint:gosec // test fixture, needs to run
+	return path
+}
+
 func TestStartAll(t *testing.T) {
 	cfg := allSite(t)
 	args := filepath.Join(t.TempDir(), "systemctl-args")
@@ -170,4 +180,79 @@ func TestStartAllContinuesAfterAFailure(t *testing.T) {
 	b, rerr := os.ReadFile(args) //nolint:gosec // test fixture path under t.TempDir()
 	require.NoError(t, rerr, "read the recorded systemctl arguments")
 	assert.Contains(t, string(b), "--user start dzo-x.service", "x was started although y failed")
+}
+
+func TestStopAll(t *testing.T) {
+	cfg := allSite(t)
+	args := filepath.Join(t.TempDir(), "systemctl-args")
+	script := writeRecordingSystemctlCmd(t, args)
+	out, err := runCmd(t, "stop", "--all", "--config", cfg, "--command", script)
+	require.NoError(t, err, "stop --all: %s", out)
+	b, err := os.ReadFile(args) //nolint:gosec // test fixture path under t.TempDir()
+	require.NoError(t, err, "read the recorded systemctl arguments")
+	assert.Contains(t, string(b), "--user stop dzo-x.service", "x was stopped")
+	assert.Contains(t, string(b), "--user stop dzo-y.service", "y was stopped")
+}
+
+func TestStopAllNeedsNameOrAll(t *testing.T) {
+	_, err := runCmd(t, "stop")
+	assert.Error(t, err, "stop without a name and without --all must fail")
+	_, err = runCmd(t, "stop", "--all", "x")
+	assert.Error(t, err, "stop --all together with a name must fail")
+}
+
+func TestStopAllGraceful(t *testing.T) {
+	cfg := allSite(t)
+	args := filepath.Join(t.TempDir(), "systemctl-args")
+	script := writeActiveRecordingSystemctlCmd(t, args) // both units are active, neither has a RCon password
+	out, err := runCmd(t, "stop", "--all", "--graceful", "--config", cfg, "--command", script)
+	require.NoError(t, err, "stop --all --graceful: %s", out)
+	assert.Contains(t, out, "x: RCon unreachable", "x was counted down")
+	assert.Contains(t, out, "y: RCon unreachable", "y was counted down")
+	b, err := os.ReadFile(args) //nolint:gosec // test fixture path under t.TempDir()
+	require.NoError(t, err, "read the recorded systemctl arguments")
+	assert.Contains(t, string(b), "--user stop dzo-x.service", "x was stopped")
+	assert.Contains(t, string(b), "--user stop dzo-y.service", "y was stopped")
+}
+
+func TestStopAllCancel(t *testing.T) {
+	cfg := allSite(t)
+	script := writeFakeSystemctlCmd(t, 0)
+	out, err := runCmd(t, "stop", "--all", "--cancel", "--config", cfg, "--command", script)
+	require.NoError(t, err, "stop --all --cancel: %s", out)
+	assert.Contains(t, out, "x: cancelled", "x's countdown was cancelled")
+	assert.Contains(t, out, "y: cancelled", "y's countdown was cancelled")
+	dir := filepath.Dir(cfg)
+	for _, n := range []string{"x", "y"} {
+		_, err := os.Stat(filepath.Join(dir, "instances", n, "runtime", "restart-cancel")) //nolint:gosec // test fixture path under t.TempDir()
+		assert.NoError(t, err, "the cancel file of %s exists", n)
+	}
+}
+
+func TestStopAllContinuesAfterAResolveFailure(t *testing.T) {
+	cfg := allSite(t)
+	writeFile(t, filepath.Join(filepath.Dir(cfg), "site", "instances", "y", "instance.yaml"), `name: y
+product: nonexistent
+map: empty.m
+mission_source: {git: g, ref: r, path: p}
+ports: {game: 2402, rcon: 2406, query: 27116}
+network: host
+`)
+	args := filepath.Join(t.TempDir(), "systemctl-args")
+	script := writeRecordingSystemctlCmd(t, args)
+	_, err := runCmd(t, "stop", "--all", "--graceful", "--config", cfg, "--command", script)
+	require.Error(t, err, "one instance failing to resolve must fail the run")
+	assert.Contains(t, err.Error(), "1 instance(s) failed")
+	b, rerr := os.ReadFile(args) //nolint:gosec // test fixture path under t.TempDir()
+	require.NoError(t, rerr, "read the recorded systemctl arguments")
+	assert.Contains(t, string(b), "--user stop dzo-x.service", "x was stopped although y does not resolve")
+}
+
+func TestStopAllWithNoInstances(t *testing.T) {
+	dir := t.TempDir()
+	cfg := filepath.Join(dir, "config.yaml")
+	writeFile(t, cfg, "paths:\n  data: "+dir+"\n")
+	script := writeFakeSystemctlCmd(t, 0)
+	out, err := runCmd(t, "stop", "--all", "--config", cfg, "--command", script)
+	require.NoError(t, err, "stop --all on an empty site: %s", out)
 }

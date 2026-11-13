@@ -145,6 +145,15 @@ The countdown runs in the command itself (only scheduled restarts run as a unit 
 it ends with your session. For a long one, run it inside ``tmux``, or as
 ``systemd-run --user dzo stop deerisle --graceful``.
 
+``dzo stop --all`` (and ``dzo start --all``) take every instance of the site. The stops run at
+the same time, so every server's graceful stop waits in parallel; with a countdown each instance
+counts down with its own ``restarts.announce`` numbers — the flags override them for every
+instance — and all servers stop together. The log lines and the cancel notice carry the
+instance's name. An instance that fails (its unit cannot be stopped, or it does not resolve)
+does not stop the others; the command fails with ``N instance(s) failed``. ``dzo stop --all
+--cancel`` ends the countdown of every instance. ``dzo start --all`` starts the instances one
+after another.
+
 Scheduled restarts
 ------------------
 

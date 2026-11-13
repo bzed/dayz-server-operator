@@ -79,8 +79,8 @@ Instances
      - allow starts again after a failed render or crash loop
    * - ``dzo start <name> | --all``
      - start one instance, or every instance one after another
-   * - ``dzo stop <name> [--graceful | --minutes N --lock N --kick N --text T] [--cancel]``
-     - stop and stay stopped; with a countdown option, announce, lock and kick the players first (:ref:`graceful-stop`)
+   * - ``dzo stop <name> | --all [--graceful | --minutes N --lock N --kick N --text T] [--cancel]``
+     - stop and stay stopped; with a countdown option, announce, lock and kick the players first (:ref:`graceful-stop`); ``--all`` takes every instance, their countdowns running together
    * - ``dzo restart <name> [--minutes N --lock N --kick N --text T] [--now] [--cancel]``
      - graceful restart
    * - ``dzo status [<name>] [--json] [--write <dir>]``

@@ -4,7 +4,6 @@
 package main
 
 import (
-	"bytes"
 	"os"
 	"path/filepath"
 	"testing"
@@ -19,7 +18,7 @@ import (
 func runCmd(t testing.TB, args ...string) (string, error) {
 	t.Helper()
 	cmd := newRootCmd()
-	var out bytes.Buffer
+	var out syncBuf // the --all commands write from several goroutines
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
 	cmd.SetArgs(args)

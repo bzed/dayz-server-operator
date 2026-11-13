@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os/exec"
 	"strconv"
+	"sync"
 
 	"github.com/spf13/cobra"
 
@@ -106,23 +107,71 @@ func stopWithOptions(cmd *cobra.Command, cfg *config.Config, inst *resolve.Insta
 	return err
 }
 
+// stopOne stops one instance: plainly without a countdown option (no resolution, a plain stop must
+// work even when the instance does not resolve), otherwise after cancelling or counting down.
+func stopOne(cmd *cobra.Command, cfg *config.Config, tree *site.Tree, name string, lc instance.Lifecycle, o stopOptions) error {
+	if !o.counting && !o.cancel {
+		return lc.Stop(cmd.Context(), name)
+	}
+	inst, err := resolve.Resolve(cfg, tree, name)
+	if err != nil {
+		return err
+	}
+	return stopWithOptions(cmd, cfg, inst, lc, o)
+}
+
+// stopAll stops every instance of the site at the same time: a systemctl stop blocks until the
+// server is down, and with a countdown every server counts down in parallel. One instance that
+// fails does not stop the others.
+func stopAll(cmd *cobra.Command, cfg *config.Config, tree *site.Tree, lc instance.Lifecycle, o stopOptions) error {
+	var (
+		mu     sync.Mutex
+		wg     sync.WaitGroup
+		failed int
+	)
+	for _, n := range tree.InstanceNames() {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if err := stopOne(cmd, cfg, tree, n, lc, o); err != nil {
+				mu.Lock()
+				defer mu.Unlock()
+				failed++
+				_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "%s: %v\n", n, err)
+			}
+		}()
+	}
+	wg.Wait()
+	if failed > 0 {
+		return fmt.Errorf("%d instance(s) failed", failed)
+	}
+	return nil
+}
+
 // newStopCmd stops an instance and keeps it stopped. Without options it is dzo instance stop; with
 // any of the countdown options it announces to the players first, like dzo restart.
 func newStopCmd() *cobra.Command {
 	var configPath, text string
 	var minutes, lock, kick int
-	var graceful, cancel bool
+	var graceful, cancel, all bool
 	c := newInstanceStopCmd()
 	plain := c.RunE
-	c.Use = "stop <name> [--graceful | --minutes N --lock N --kick N --text T] [--cancel]"
-	c.Short = "Stop an instance and keep it stopped; with a countdown option, announce, lock and kick the players first"
+	c.Use = "stop [<name> | --all] [--graceful | --minutes N --lock N --kick N --text T] [--cancel]"
+	c.Short = "Stop an instance (or every instance) and keep it stopped; with a countdown option, announce, lock and kick the players first"
 	c.Long = "Without options the server is stopped at once (dzo instance stop). --graceful, or any of --minutes, " +
 		"--lock, --kick and --text, counts down in game like dzo restart: announcements, the lock against new " +
 		"logins --lock minutes before the stop, the kick --kick minutes before it, then the stop. The values " +
 		"that are not given come from the instance's restarts.announce. --cancel ends a countdown that is " +
-		"running and unlocks the server."
+		"running and unlocks the server. --all takes every instance of the site: the stops run at the same " +
+		"time, so every server stops together, and each one counts down with its own restarts.announce values " +
+		"(the flags override them for every instance). An instance that fails does not stop the others; the " +
+		"command fails with the number of the instances that failed."
+	c.Args = cobra.MaximumNArgs(1)
 	c.RunE = func(cmd *cobra.Command, args []string) error {
 		f := cmd.Flags()
+		if all == (len(args) == 1) {
+			return fmt.Errorf("give an instance name or --all")
+		}
 		o := stopOptions{
 			counting:   graceful || f.Changed("minutes") || f.Changed("lock") || f.Changed("kick") || text != "",
 			cancel:     cancel,
@@ -134,16 +183,24 @@ func newStopCmd() *cobra.Command {
 			kickSet:    f.Changed("kick"),
 			text:       text,
 		}
-		if !o.counting && !o.cancel {
-			return plain(cmd, args)
+		if !all {
+			if !o.counting && !o.cancel {
+				return plain(cmd, args)
+			}
+			cfg, inst, err := loadInstance(configPath, args[0])
+			if err != nil {
+				return err
+			}
+			return stopWithOptions(cmd, cfg, inst, lifecycleOf(cmd), o)
 		}
-		cfg, inst, err := loadInstance(configPath, args[0])
+		cfg, tree, err := loadSite(configPath)
 		if err != nil {
 			return err
 		}
-		return stopWithOptions(cmd, cfg, inst, lifecycleOf(cmd), o)
+		return stopAll(cmd, cfg, tree, lifecycleOf(cmd), o)
 	}
 	configFlag(c, &configPath)
+	c.Flags().BoolVar(&all, "all", false, "every instance")
 	c.Flags().BoolVar(&graceful, "graceful", false, "count down with restarts.announce before stopping")
 	c.Flags().IntVar(&minutes, "minutes", 0, "start the countdown this many minutes before the stop (default: restarts.announce.minutes)")
 	c.Flags().IntVar(&lock, "lock", 0, "lock the server this many minutes before the stop")
