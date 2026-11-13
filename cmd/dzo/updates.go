@@ -92,7 +92,7 @@ func rconRestarter(cmd *cobra.Command, cfg *config.Config, inst *resolve.Instanc
 				Addr: inst.RConAddr(), Password: pw,
 				Options:    []battleye.Option{battleye.WithLoginTimeout(5 * time.Second)},
 				MinBackoff: time.Second, MaxBackoff: 10 * time.Second,
-				Log: func(f string, a ...any) { _, _ = fmt.Fprintf(cmd.ErrOrStderr(), f+"\n", a...) },
+				Log: func(f string, a ...any) { _, _ = fmt.Fprintf(cmd.ErrOrStderr(), inst.Name+": "+f+"\n", a...) },
 			}
 			first, cancel := context.WithTimeout(ctx, 8*time.Second)
 			defer cancel()
@@ -102,7 +102,7 @@ func rconRestarter(cmd *cobra.Command, cfg *config.Config, inst *resolve.Instanc
 			}
 			return s, nil
 		},
-		Log: func(f string, a ...any) { _, _ = fmt.Fprintf(cmd.ErrOrStderr(), f+"\n", a...) },
+		Log: func(f string, a ...any) { _, _ = fmt.Fprintf(cmd.ErrOrStderr(), inst.Name+": "+f+"\n", a...) },
 		Cancelled: func() bool {
 			if _, err := os.Stat(cancel); err != nil {
 				return false
@@ -410,7 +410,7 @@ func cancelCountdown(cmd *cobra.Command, inst *resolve.Instance, r instance.Rest
 			_ = cl.Close()
 		}
 	}
-	_, _ = fmt.Fprintln(cmd.OutOrStdout(), "cancelled")
+	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%s: cancelled\n", inst.Name)
 	return nil
 }
 

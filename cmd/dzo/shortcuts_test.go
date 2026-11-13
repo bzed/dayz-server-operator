@@ -88,3 +88,29 @@ func TestStopWithCountdownOptions(t *testing.T) {
 	_, err := runCmd(t, "stop", "nope", "--graceful", "--config", cfg, "--command", script)
 	assert.Error(t, err, "an unknown instance must fail")
 }
+
+func TestStopCancelNamesTheInstance(t *testing.T) {
+	cfg := exporterSite(t, "")
+	script := writeFakeSystemctlCmd(t, 0)
+	out, err := runCmd(t, "stop", "x", "--cancel", "--config", cfg, "--command", script)
+	require.NoError(t, err, "stop --cancel: %s", out)
+	assert.Contains(t, out, "x: cancelled", "the cancel message names the instance")
+}
+
+func TestStopCountdownLogsNameTheInstance(t *testing.T) {
+	cfg := exporterSite(t, "")
+	script := writeActiveSystemctlCmd(t) // is-active answers "active", but the fixture has no RCon password
+	out, err := runCmd(t, "stop", "x", "--graceful", "--config", cfg, "--command", script)
+	require.NoError(t, err, "stop --graceful: %s", out)
+	assert.Contains(t, out, "x: RCon unreachable", "the countdown log names the instance")
+}
+
+// writeActiveSystemctlCmd writes a systemctl stub whose is-active answers "active" and that
+// succeeds otherwise: the unit is running, so dzo stop counts down before stopping it.
+func writeActiveSystemctlCmd(t testing.TB) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "fake-systemctl.sh")
+	writeFile(t, path, "#!/bin/sh\nfor a in \"$@\"; do [ \"$a\" = \"is-active\" ] && { echo active; exit 0; }; done\nexit 0\n")
+	require.NoError(t, os.Chmod(path, 0o755)) //nolint:gosec // test fixture, needs to run
+	return path
+}

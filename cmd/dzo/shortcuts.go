@@ -25,6 +25,52 @@ func newStartCmd() *cobra.Command {
 	return c
 }
 
+// lifecycleOf builds the systemctl runner from the --command and --user flags.
+func lifecycleOf(cmd *cobra.Command) instance.Lifecycle {
+	lc := instance.Lifecycle{UserMode: true}
+	if u, err := cmd.Flags().GetBool("user"); err == nil {
+		lc.UserMode = u
+	}
+	if s, err := cmd.Flags().GetString("command"); err == nil {
+		lc.Command = s
+	}
+	return lc
+}
+
+// stopOptions are the countdown flags of dzo stop. counting is true when any of --graceful,
+// --minutes, --lock, --kick and --text was given.
+type stopOptions struct {
+	counting, cancel bool
+
+	minutes, lock, kick          int
+	minutesSet, lockSet, kickSet bool
+	text                         string
+}
+
+// stopWithOptions cancels a countdown, or counts down and stops one resolved instance.
+func stopWithOptions(cmd *cobra.Command, cfg *config.Config, inst *resolve.Instance, lc instance.Lifecycle, o stopOptions) error {
+	r := rconRestarter(cmd, cfg, inst, lc)
+	if o.cancel {
+		return cancelCountdown(cmd, inst, r)
+	}
+	a := resolve.AnnouncementOf(inst.Restarts.Announce, o.text)
+	if o.minutesSet {
+		a.Minutes = o.minutes
+	}
+	if o.lockSet {
+		a.Lock = o.lock
+	}
+	if o.kickSet {
+		a.Kick = o.kick
+	}
+	err := r.Stop(cmd.Context(), inst.Name, a)
+	if errors.Is(err, instance.ErrCancelled) {
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%s: the stop was cancelled\n", inst.Name)
+		return nil
+	}
+	return err
+}
+
 // newStopCmd stops an instance and keeps it stopped. Without options it is dzo instance stop; with
 // any of the countdown options it announces to the players first, like dzo restart.
 func newStopCmd() *cobra.Command {
@@ -42,41 +88,25 @@ func newStopCmd() *cobra.Command {
 		"running and unlocks the server."
 	c.RunE = func(cmd *cobra.Command, args []string) error {
 		f := cmd.Flags()
-		counting := graceful || f.Changed("minutes") || f.Changed("lock") || f.Changed("kick") || text != ""
-		if !counting && !cancel {
+		o := stopOptions{
+			counting:   graceful || f.Changed("minutes") || f.Changed("lock") || f.Changed("kick") || text != "",
+			cancel:     cancel,
+			minutes:    minutes,
+			lock:       lock,
+			kick:       kick,
+			minutesSet: f.Changed("minutes"),
+			lockSet:    f.Changed("lock"),
+			kickSet:    f.Changed("kick"),
+			text:       text,
+		}
+		if !o.counting && !o.cancel {
 			return plain(cmd, args)
 		}
 		cfg, inst, err := loadInstance(configPath, args[0])
 		if err != nil {
 			return err
 		}
-		lc := instance.Lifecycle{UserMode: true}
-		if u, err := f.GetBool("user"); err == nil {
-			lc.UserMode = u
-		}
-		if s, err := f.GetString("command"); err == nil {
-			lc.Command = s
-		}
-		r := rconRestarter(cmd, cfg, inst, lc)
-		if cancel {
-			return cancelCountdown(cmd, inst, r)
-		}
-		a := resolve.AnnouncementOf(inst.Restarts.Announce, text)
-		if f.Changed("minutes") {
-			a.Minutes = minutes
-		}
-		if f.Changed("lock") {
-			a.Lock = lock
-		}
-		if f.Changed("kick") {
-			a.Kick = kick
-		}
-		err = r.Stop(cmd.Context(), args[0], a)
-		if errors.Is(err, instance.ErrCancelled) {
-			_, _ = fmt.Fprintln(cmd.OutOrStdout(), "the stop was cancelled")
-			return nil
-		}
-		return err
+		return stopWithOptions(cmd, cfg, inst, lifecycleOf(cmd), o)
 	}
 	configFlag(c, &configPath)
 	c.Flags().BoolVar(&graceful, "graceful", false, "count down with restarts.announce before stopping")
