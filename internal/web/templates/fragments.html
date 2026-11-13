@@ -70,8 +70,8 @@
     <tr>
       <td>{{.Type}}</td>
       <td><a href="{{mapLink $.Backend $.Instance .}}">{{printf "%.0f / %.0f" .X .Z}}</a></td>
-      <td>{{if .StoredBy}}<a href="/b/{{$.Backend}}/players/{{.StoredBy}}" title="{{.StoredBy}}">{{.StoredBy}}</a>{{end}}{{if gt .TerritoryID 0}}{{if .StoredBy}}, {{end}}territory #{{.TerritoryID}}{{end}}{{if not (or .StoredBy (gt .TerritoryID 0))}}-{{end}}</td>
-      <td>{{if .Owners}}{{range $i, $o := .Owners}}{{if $i}}, {{end}}<a href="/b/{{$.Backend}}/players/{{$o}}" title="{{$o}}">{{$o}}</a>{{end}}{{else}}-{{end}}</td>
+      <td>{{if .StoredBy}}{{if .StoredBySteamID}}<a href="/b/{{$.Backend}}/players/{{.StoredBySteamID}}" title="{{.StoredBy}}">{{.StoredByName}}</a>{{else}}<span class="mute" title="{{.StoredBy}}">unknown</span>{{end}}{{end}}{{if gt .TerritoryID 0}}{{if .StoredBy}}, {{end}}territory #{{.TerritoryID}}{{end}}{{if not (or .StoredBy (gt .TerritoryID 0))}}-{{end}}</td>
+      <td>{{if .ResolvedOwners}}{{range $i, $o := .ResolvedOwners}}{{if $i}}, {{end}}{{if .SteamID}}<a href="/b/{{$.Backend}}/players/{{$o.SteamID}}" title="{{$o.GUID}}">{{$o.Name}}</a>{{else}}<span class="mute" title="{{$o.GUID}}">unknown</span>{{end}}{{end}}{{else if .Owners}}{{range $i, $o := .Owners}}{{if $i}}, {{end}}<a href="/b/{{$.Backend}}/players/{{$o}}" title="{{$o}}">{{$o}}</a>{{end}}{{else}}-{{end}}</td>
       <td>{{if .Broken}}<em>no storage file</em>{{else}}-{{end}}</td>
       <td><button hx-get="/b/{{$.Backend}}/i/{{$.Instance}}/vehicles/{{.ID}}/panel" hx-target="closest tr" hx-swap="afterend" data-rowpanel><i class="fa fa-cog" aria-hidden="true"></i>Actions</button></td>
     </tr>

@@ -258,6 +258,10 @@ func Open(ctx context.Context, path string) (*Store, error) {
 		_ = db.Close()
 		return nil, err
 	}
+	if err := s.backfillBIGUIDs(ctx); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
 	return s, nil
 }
 
@@ -315,6 +319,43 @@ func (s *Store) migrate(ctx context.Context) error {
 		}
 	}
 	return nil
+}
+
+// backfillBIGUIDs fills the bi_guid column of the players written before it existed; the migration
+// cannot, because SQLite has no SHA-256. Rows with a filled column are left alone, so this is one
+// pass over the old rows on the first open and nothing on the ones after.
+func (s *Store) backfillBIGUIDs(ctx context.Context) error {
+	rows, err := s.db.QueryContext(ctx, `SELECT steam_id FROM players WHERE bi_guid = ''`)
+	if err != nil {
+		return fmt.Errorf("moderation: bi guid backfill: %w", err)
+	}
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			_ = rows.Close()
+			return fmt.Errorf("moderation: bi guid backfill: %w", err)
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Close(); err != nil {
+		return fmt.Errorf("moderation: bi guid backfill: %w", err)
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	return s.tx(ctx, func(tx *sql.Tx) error {
+		for _, id := range ids {
+			guid, err := DeriveBIGUID(id)
+			if err != nil {
+				return err // a row PlayerJoined wrote always has a valid Steam ID
+			}
+			if _, err := tx.ExecContext(ctx, `UPDATE players SET bi_guid = ? WHERE steam_id = ?`, guid, id); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
 // tx runs fn in a transaction, committing when it returns nil.

@@ -376,7 +376,7 @@ func vehicleNote(v admin.Vehicle) string {
 	note := ""
 	switch {
 	case v.StoredBy != "":
-		note = "stored in the garage by " + v.StoredBy
+		note = "stored in the garage by " + garageBy(v)
 	case v.TerritoryID > 0:
 		note = fmt.Sprintf("stored in a territory #%d garage", v.TerritoryID)
 	case bool(v.Stored):
@@ -392,4 +392,17 @@ func vehicleNote(v admin.Vehicle) string {
 		s += "  (" + note + ")"
 	}
 	return s
+}
+
+// garageBy is who stored a vehicle in the Expansion garage: the player the BI GUID resolved to, or
+// the GUID itself when nobody of it is known (a garage owner always connected to the server that
+// keeps the garage, so an unresolved one is a wiped or foreign database).
+func garageBy(v admin.Vehicle) string {
+	switch {
+	case v.StoredByName != "":
+		return v.StoredByName + " (" + v.StoredBySteamID + ")"
+	case v.StoredBySteamID != "":
+		return v.StoredBySteamID
+	}
+	return v.StoredBy
 }

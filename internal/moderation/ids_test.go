@@ -22,6 +22,24 @@ func TestDeriveGUIDMatchesTheLiveCapture(t *testing.T) {
 	require.Equal(t, f[1], got, "DeriveGUID(%s) = %q, %v; the server said %s", f[0], got, err, f[1])
 }
 
+func TestDeriveBIGUIDMatchesTheLiveCapture(t *testing.T) {
+	b, err := os.ReadFile("testdata/v2/bipair.txt")
+	require.NoError(t, err)
+	f := strings.Fields(string(b))
+	require.Len(t, f, 2)
+	got, err := DeriveBIGUID(f[0])
+	require.NoError(t, err, "DeriveBIGUID(%s) = %q, %v; the game said %s", f[0], got, err, f[1])
+	require.Equal(t, f[1], got, "DeriveBIGUID(%s) = %q, %v; the game said %s", f[0], got, err, f[1])
+	require.True(t, ValidBIGUID(got), "ValidBIGUID(%q)", got)
+}
+
+func TestDeriveBIGUIDRefusesBadIDs(t *testing.T) {
+	for _, id := range []string{"", "123", "76561198000000001x", "86561198000000001", "765611980000000011"} {
+		_, err := DeriveBIGUID(id)
+		require.Error(t, err, "DeriveBIGUID(%q) accepted", id)
+	}
+}
+
 func TestDeriveGUIDRefusesBadIDs(t *testing.T) {
 	for _, id := range []string{"", "123", "76561198000000001x", "86561198000000001", "765611980000000011"} {
 		_, err := DeriveGUID(id)
@@ -35,6 +53,10 @@ func TestValidators(t *testing.T) {
 	require.True(t, ValidGUID("907725ff524e1026154b5ac3cccb0258"), "ValidGUID: lowercase hex, 32 digits")
 	require.False(t, ValidGUID("907725FF524E1026154B5AC3CCCB0258"), "ValidGUID: lowercase hex, 32 digits")
 	assert.False(t, ValidGUID("907725ff"), "ValidGUID: lowercase hex, 32 digits")
+	require.True(t, ValidBIGUID("_PXsJO-pQpBM8D656BYQfp3fUpxpX3vA_F_Kq7ey2IM="), "ValidBIGUID: the live capture")
+	assert.False(t, ValidBIGUID("_PXsJO-pQpBM8D656BYQfp3fUpxpX3vA_F_Kq7ey2IM"), "ValidBIGUID: the padding is part of it")
+	assert.False(t, ValidBIGUID("+PXsJO+PQpBM8D656BYQfp3fUpxpX3vA+F+Kq7ey2IM="), "ValidBIGUID: URL-safe alphabet")
+	assert.False(t, ValidBIGUID("eefYhIqC5ndgKAdRbn734m97dKO9vzwH9fjYnqr5DXU"), "ValidBIGUID: without the padding")
 	for in, want := range map[string]string{"192.0.2.7": "192.0.2.7", " 10.0.0.1 ": "10.0.0.1", "::ffff:192.0.2.7": "192.0.2.7"} {
 		got, err := ParseIP(in)
 		require.NoError(t, err)

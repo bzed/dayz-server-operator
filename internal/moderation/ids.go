@@ -5,6 +5,8 @@ package moderation
 
 import (
 	"crypto/md5" //nolint:gosec // BattlEye defines the GUID as an MD5; nothing here relies on it for security
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
@@ -33,6 +35,16 @@ func ValidGUID(s string) bool {
 		}
 	}
 	return true
+}
+
+// ValidBIGUID reports whether s is a Bohemia Interactive GUID as the game reports it: 44 characters
+// of URL-safe base64 (the last one "=") that decode to the 32 bytes of a SHA-256 digest.
+func ValidBIGUID(s string) bool {
+	if len(s) != 44 || !strings.HasSuffix(s, "=") {
+		return false
+	}
+	raw, err := base64.RawURLEncoding.DecodeString(s[:43])
+	return err == nil && len(raw) == sha256.Size
 }
 
 // ParseIP returns the canonical text of an IPv4 address. BattlEye bans single addresses; ranges,
@@ -64,6 +76,17 @@ func DeriveGUID(steamID string) (string, error) {
 	binary.LittleEndian.PutUint64(b[2:], id)
 	sum := md5.Sum(b[:]) //nolint:gosec // see the import
 	return hex.EncodeToString(sum[:]), nil
+}
+
+// DeriveBIGUID returns the Bohemia Interactive GUID of a Steam ID: the URL-safe base64 (with "=")
+// of its SHA-256, the hashed ID PlayerIdentity.GetId() reports and DayZ Expansion knows players by
+// (its Expansion_PlainIdToId does the same), verified against a real server (testdata/v2).
+func DeriveBIGUID(steamID string) (string, error) {
+	if !ValidSteamID(steamID) {
+		return "", invalid("invalid Steam ID %q", steamID)
+	}
+	sum := sha256.Sum256([]byte(steamID))
+	return base64.URLEncoding.EncodeToString(sum[:]), nil
 }
 
 // InvalidError is a request the store refuses: the API answers 400 with its text.

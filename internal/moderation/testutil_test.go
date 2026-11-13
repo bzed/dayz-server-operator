@@ -31,6 +31,13 @@ func guidOf(t testing.TB, steam string) string {
 	return g
 }
 
+func biOf(t testing.TB, steam string) string {
+	t.Helper()
+	g, err := DeriveBIGUID(steam)
+	require.NoError(t, err)
+	return g
+}
+
 // eventually waits for cond to hold, for 5 s at most. It waits on a condition, not for a fixed time.
 func eventually(t testing.TB, what string, cond func() bool) {
 	t.Helper()

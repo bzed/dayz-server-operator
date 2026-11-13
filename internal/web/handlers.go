@@ -113,7 +113,10 @@ func mapLink(backend, instance string, v admin.Vehicle) string {
 	// Owner (the Expansion keychain) and last driver are different things, even when they are the same person.
 	var who []string
 	if v.Stored {
-		if v.StoredBy != "" {
+		switch {
+		case v.StoredByName != "":
+			who = append(who, "stored by "+v.StoredByName)
+		case v.StoredBy != "":
 			who = append(who, "stored by "+v.StoredBy)
 		}
 	} else {

@@ -126,7 +126,7 @@ func TestE2EMapSkipsStoredVehiclesInLayer(t *testing.T) {
 	b.run(t, chromedp.Navigate(e.url("/b/main/i/alpha/map")), chromedp.WaitVisible(`.leaflet-container`))
 	e.hub.Sync(admin.SyncRequest{Proto: 1, Vehicles: []admin.Vehicle{
 		{ID: "1.2.3.4", Kind: "car", Type: "OffroadHatchback", X: 7500, Z: 7600},
-		{ID: "g1.2.3.4", Kind: "car", Type: "ExpansionOlga", Stored: true, StoredBy: "76561198000000001", X: 100, Z: 200},
+		{ID: "g1.2.3.4", Kind: "car", Type: "ExpansionOlga", Stored: true, StoredBy: "F-bFI9I7fZCOna700tjPMHdAujllgWJwcr6VGoYrJvE=", X: 100, Z: 200},
 	}})
 	require.Eventually(t, func() bool { return b.count(".vm-wrap") == 1 }, 10*time.Second, 100*time.Millisecond, "only the vehicle in the world is drawn")
 	require.Equal(t, 1, b.count(".vm.car"), "the live car is drawn")

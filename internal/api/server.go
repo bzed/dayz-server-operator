@@ -186,29 +186,71 @@ type VehicleRecords interface {
 }
 
 // vehiclesWithRecords is the hub's vehicle list with the last driver, last drive and first sighting of each
-// live vehicle filled in from the records. Without a database it is the hub's list unchanged.
+// live vehicle filled in from the records, and the BI GUIDs of the garage vehicles resolved to players. Without
+// a database it is the hub's list unchanged.
 func (s *Server) vehiclesWithRecords(ctx context.Context, hub *admin.Hub) ([]admin.Vehicle, error) {
 	list := hub.Vehicles()
-	if s.Vehicles == nil {
+	if s.Vehicles != nil {
+		recs, err := s.Vehicles.VehicleRecords(ctx, hub.Name)
+		if err != nil {
+			return nil, fmt.Errorf("vehicle records: %w", err)
+		}
+		for i := range list {
+			rec, ok := recs[list[i].ID]
+			if !ok {
+				continue
+			}
+			if !rec.FirstSeen.IsZero() {
+				t := rec.FirstSeen
+				list[i].FirstSeen = &t
+			}
+			if !rec.DrivenAt.IsZero() {
+				t := rec.DrivenAt
+				list[i].LastDriven = &t
+				list[i].LastDriver, list[i].LastDriverName = rec.Driver, rec.DriverName
+			}
+		}
+	}
+	return s.resolveGarageOwners(ctx, list)
+}
+
+// resolveGarageOwners looks up the players behind the BI GUIDs of the stored vehicles (the garage holder
+// and the owners), so the interfaces can show names and link to player pages. Without the player database
+// the GUIDs stay as the mod reported them.
+func (s *Server) resolveGarageOwners(ctx context.Context, list []admin.Vehicle) ([]admin.Vehicle, error) {
+	if s.Moderation == nil {
 		return list, nil
 	}
-	recs, err := s.Vehicles.VehicleRecords(ctx, hub.Name)
-	if err != nil {
-		return nil, fmt.Errorf("vehicle records: %w", err)
-	}
+	var guids []string
 	for i := range list {
-		rec, ok := recs[list[i].ID]
-		if !ok {
+		if !list[i].Stored {
 			continue
 		}
-		if !rec.FirstSeen.IsZero() {
-			t := rec.FirstSeen
-			list[i].FirstSeen = &t
+		if list[i].StoredBy != "" {
+			guids = append(guids, list[i].StoredBy)
 		}
-		if !rec.DrivenAt.IsZero() {
-			t := rec.DrivenAt
-			list[i].LastDriven = &t
-			list[i].LastDriver, list[i].LastDriverName = rec.Driver, rec.DriverName
+		guids = append(guids, list[i].Owners...)
+	}
+	if len(guids) == 0 {
+		return list, nil
+	}
+	known, err := s.Moderation.Store().PlayersByBIGUIDs(ctx, guids)
+	if err != nil {
+		return nil, fmt.Errorf("garage owners: %w", err)
+	}
+	for i := range list {
+		if !list[i].Stored {
+			continue
+		}
+		if p, ok := known[list[i].StoredBy]; ok {
+			list[i].StoredBySteamID, list[i].StoredByName = p.SteamID, p.Name
+		}
+		for _, g := range list[i].Owners {
+			o := admin.GarageOwner{GUID: g}
+			if p, ok := known[g]; ok {
+				o.SteamID, o.Name = p.SteamID, p.Name
+			}
+			list[i].ResolvedOwners = append(list[i].ResolvedOwners, o)
 		}
 	}
 	return list, nil

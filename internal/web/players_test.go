@@ -203,6 +203,11 @@ func TestPlayerPageShowsTheVerdictsAndEscapes(t *testing.T) {
 	assert.NotContains(t, body, "<script>x</script>")
 	assert.NotContains(t, body, "<b>Fritz</b>")
 	assert.NotContains(t, body, "<i>fritz</i>")
+	// The header shows both ID types: the Steam ID and the BI GUID the game reports.
+	bi, err := moderation.DeriveBIGUID(webSteam)
+	require.NoError(t, err)
+	assert.Contains(t, body, `<code class="sid">`+webSteam+`</code>`)
+	assert.Contains(t, body, `<code class="sid" title="Bohemia Interactive GUID: the hashed Steam ID the game reports, what DayZ Expansion knows this player by">`+bi+`</code>`)
 	assert.Contains(t, body, "&lt;script&gt;x&lt;/script&gt; Global Ban #1")
 	assert.Contains(t, body, "DayZ: ")
 	assert.Equal(t, 3, strings.Count(body, `<section class="verdict`), "three cells")

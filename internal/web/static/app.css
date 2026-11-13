@@ -386,7 +386,7 @@ input, select, textarea { max-width: 100%; }
 .flagged { color: var(--flare); margin-left: .25rem; }
 .phead { display: flex; flex-wrap: wrap; align-items: baseline; gap: .2rem 1rem; height: auto; padding: 0; background: none; color: inherit; margin-bottom: .1rem; }
 .phead h1 { margin: 0; overflow-wrap: anywhere; }
-.sid { color: var(--muted); }
+.sid { color: var(--muted); overflow-wrap: anywhere; }
 .pstatus { margin: .1rem 0 .6rem; }
 .pactions { display: flex; flex-wrap: wrap; gap: .5rem; margin: .2rem 0 1rem; }
 .verdictrow { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border: 1px solid var(--ink); border-radius: var(--r); background: var(--surface); }

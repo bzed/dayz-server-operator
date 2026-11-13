@@ -272,7 +272,7 @@ All paths start with ``/api/v1``. Responses are JSON.
    * - ``GET /instances/<i>/players``
      - online players: Steam ID, name, position, health, ping, vehicle
    * - ``GET /instances/<i>/vehicles``
-     - persistent vehicles: id, kind (``car``, ``motorbike``, ``boat``, ``bicycle`` or ``helicopter``), class, position, health, fuel, crew, and with DayZ Expansion ``owner`` and ``covered``. Four more fields come from dzo's own vehicle records in ``dzo.sqlite``, not from the mod's snapshot: ``last_driver`` (Steam ID) and ``last_driver_name`` of the last player to take the driver's seat, ``last_driven`` (RFC 3339 time of that drive) and ``first_seen`` (when dzo first saw the vehicle). The three driver fields are left out of a vehicle that was never seen driven (``first_seen`` then dates it), and all four are left out when dzo has no record yet or runs without the database. Passengers do not count as drivers. The list and the ``vehicles`` stream event also carry the mod's raw fields ``driver`` (Steam ID of the driver now or last seen), ``driver_name`` and ``driven_ago`` (seconds since that driver was in the seat, ``0`` while somebody is seated; left out when the mod does not report drivers); dzo turns them into the ``last_*`` fields above. The ``vehicles`` stream event does not carry the four fields from the database. A failing database read answers 500
+     - persistent vehicles: id, kind (``car``, ``motorbike``, ``boat``, ``bicycle`` or ``helicopter``), class, position, health, fuel, crew, and with DayZ Expansion ``owner`` and ``covered``. Four more fields come from dzo's own vehicle records in ``dzo.sqlite``, not from the mod's snapshot: ``last_driver`` (Steam ID) and ``last_driver_name`` of the last player to take the driver's seat, ``last_driven`` (RFC 3339 time of that drive) and ``first_seen`` (when dzo first saw the vehicle). The three driver fields are left out of a vehicle that was never seen driven (``first_seen`` then dates it), and all four are left out when dzo has no record yet or runs without the database. Passengers do not count as drivers. The list and the ``vehicles`` stream event also carry the mod's raw fields ``driver`` (Steam ID of the driver now or last seen), ``driver_name`` and ``driven_ago`` (seconds since that driver was in the seat, ``0`` while somebody is seated; left out when the mod does not report drivers); dzo turns them into the ``last_*`` fields above. The ``vehicles`` stream event does not carry the four fields from the database. A vehicle stored in the Expansion virtual garage (``stored``) reports the garage as the mod sees it: ``stored_by`` (the BI GUID of the player whose garage holds it), ``territory_id``, ``owners`` (BI GUIDs) and ``broken``; the BI GUID is the hashed Steam ID ``PlayerIdentity.GetId()`` reports, not a plain Steam ID. With the player database three more fields resolve those GUIDs to players: ``stored_by_steam_id`` and ``stored_by_name`` of the garage holder, and ``resolved_owners`` (``guid``, ``steam_id`` and ``name`` per owner, in the order of ``owners``); an owner who never connected to these servers has only the ``guid``, and all three are left out without the database. A failing database read answers 500
    * - ``GET /instances/<i>/events``
      - active events (effect areas, markers from mods)
    * - ``GET /instances/<i>/layers``
@@ -506,7 +506,8 @@ These routes need the ban database of ``dzo serve`` (``503`` without it) and are
      - the GUIDs and IPs the player was seen with, per instance, and how many other Steam IDs share each IP
    * - ``GET /players?q=&instance=&flagged=&online=&sort=&dir=&limit=&offset=``
      - ``moderator`` (``player.history``)
-     - the player database: ``{"players": [...], "total": n}``, most recently seen first. ``q`` is a Steam ID, a GUID or a
+     - the player database: ``{"players": [...], "total": n}``, most recently seen first. ``q`` is a Steam ID, a BattlEye GUID, a
+       BI GUID (the hashed Steam ID the game reports, what DayZ Expansion knows players by) or a
        part of any name the player used; ``flagged=1`` keeps players with a BattlEye ban, a Steam ban or a ban of ours; ``online=1`` keeps the players who are on an
        instance now (with ``instance`` set, on that one);
        ``sort`` orders by ``name``, ``last`` (last seen), ``first`` (first seen), ``be`` (BattlEye ban), ``steam`` (Steam
@@ -516,7 +517,9 @@ These routes need the ban database of ``dzo serve`` (``503`` without it) and are
      - ``moderator`` (``player.history``)
      - one player: names, per-instance totals, the newest 50 sessions, BattlEye's answer per game (``be``), what Steam
        said, our bans that name the player (``bans``), where the player was seen (``identities``, addresses only with
-       ``ip.history``), the Steam friends who also played here (``friends_seen``, at most 10) and the Steam ``profile_url``
+       ``ip.history``), the Steam friends who also played here (``friends_seen``, at most 10) and the Steam ``profile_url``.
+       Every player carries both GUIDs next to the Steam ID: ``guid`` (BattlEye's) and ``bi_guid`` (the hashed Steam ID the
+       game reports, what DayZ Expansion knows players by)
    * - ``POST /players/<steamid>/lookup``
      - ``moderator`` (``player.history``)
      - ask BattlEye and Steam about the player now and answer the fresh record (audited as ``player.lookup``). ``429`` for a

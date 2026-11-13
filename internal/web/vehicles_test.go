@@ -7,22 +7,27 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/bzed/dayz-server-operator/internal/admin"
 	"github.com/bzed/dayz-server-operator/internal/api"
+	"github.com/bzed/dayz-server-operator/internal/moderation"
 )
 
 // The vehicle list keeps the vehicles of the Expansion virtual garage apart from the ones in the
 // world: they are not on the map, and their panel offers the garage actions instead.
 func TestVehiclesFragmentListsStoredVehiclesApart(t *testing.T) {
 	e := newEnv(t, api.RoleAdmin)
+	require.NoError(t, e.st.PlayerJoined(t.Context(), "alpha", "76561198000000001", "alice", time.Now()))
+	guid, err := moderation.DeriveBIGUID("76561198000000001")
+	require.NoError(t, err)
 	e.hub.Sync(admin.SyncRequest{Proto: 1, Vehicles: []admin.Vehicle{
 		{ID: "1.2.3.4", Kind: "car", Type: "OffroadHatchback", Health: 0.5, Fuel: 0.25},
-		{ID: "g1.2.3.4", Type: "ExpansionOlga", Stored: true, StoredBy: "76561198000000001",
-			Owners: []string{"76561198000000001"}, X: 100.4, Z: 200.6},
+		{ID: "g1.2.3.4", Type: "ExpansionOlga", Stored: true, StoredBy: guid,
+			Owners: []string{guid}, X: 100.4, Z: 200.6},
 	}})
 	_, body, _ := e.get("/b/main/i/alpha/vehicles")
 	live := strings.Index(body, "OffroadHatchback")
@@ -32,22 +37,39 @@ func TestVehiclesFragmentListsStoredVehiclesApart(t *testing.T) {
 	require.Greater(t, stored, at, "the stored vehicle is not in its own section: %s", body)
 	require.Greater(t, live, -1, "no live row: %s", body)
 	require.Less(t, live, at, "the live table must come before the stored section")
-	// The stored-by and the owners cells link the player's page.
+	// The stored-by and the owners cells show the player the GUID resolved to, and link their page.
 	require.Equal(t, 2, strings.Count(body, `href="/b/main/players/76561198000000001"`),
 		"stored by and owners must link the player page: %s", body)
+	require.Equal(t, 2, strings.Count(body, ">alice</a>"), "both cells show the name: %s", body)
+	require.Equal(t, 2, strings.Count(body, `title="`+guid+`"`), "the GUID is the tooltip: %s", body)
 	// The position link opens the map on the stored vehicle (which the map does not draw otherwise).
 	require.Contains(t, body, `sv=g1.2.3.4`, "the position link does not name the stored vehicle")
-	require.Contains(t, body, `label=ExpansionOlga&#43;%28stored&#43;by&#43;76561198000000001%29`)
+	require.Contains(t, body, `label=ExpansionOlga&#43;%28stored&#43;by&#43;alice%29`)
 	require.Contains(t, body, ">100 / 201</a>")
 	// The live table keeps its columns and its panel button.
 	require.Contains(t, body, `<th data-sort="num">Health</th>`)
 	require.Contains(t, body, `/vehicles/1.2.3.4/panel`)
 }
 
+// A garage owner who never connected to these servers cannot be resolved: the GUID stays, as
+// "unknown" with the GUID in the tooltip.
+func TestVehiclesFragmentUnknownGarageOwner(t *testing.T) {
+	e := newEnv(t, api.RoleAdmin)
+	stranger, err := moderation.DeriveBIGUID("76561198000000002")
+	require.NoError(t, err)
+	e.hub.Sync(admin.SyncRequest{Proto: 1, Vehicles: []admin.Vehicle{
+		{ID: "g1.2.3.4", Type: "ExpansionOlga", Stored: true, StoredBy: stranger, Owners: []string{stranger}},
+	}})
+	_, body, _ := e.get("/b/main/i/alpha/vehicles")
+	require.Equal(t, 2, strings.Count(body, ">unknown</span>"), "both cells say unknown: %s", body)
+	require.Equal(t, 2, strings.Count(body, `title="`+stranger+`"`), "the GUID is the tooltip: %s", body)
+	require.NotContains(t, body, `href="/b/main/players/`, "no link without a known player: %s", body)
+}
+
 func TestVehiclesFragmentNotesABrokenStoredVehicle(t *testing.T) {
 	e := newEnv(t, api.RoleAdmin)
 	e.hub.Sync(admin.SyncRequest{Proto: 1, Vehicles: []admin.Vehicle{
-		{ID: "g1.2.3.4", Type: "ExpansionOlga", Stored: true, StoredBy: "76561198000000001", Broken: true},
+		{ID: "g1.2.3.4", Type: "ExpansionOlga", Stored: true, StoredBy: "F-bFI9I7fZCOna700tjPMHdAujllgWJwcr6VGoYrJvE=", Broken: true},
 	}})
 	_, body, _ := e.get("/b/main/i/alpha/vehicles")
 	require.Contains(t, body, "no storage file", "a broken stored vehicle cannot come back: %s", body)
@@ -77,7 +99,7 @@ func TestVehiclesFragmentWithoutStoredVehicles(t *testing.T) {
 func TestVehiclesPanelOffersTheGarageActionsForAStoredVehicle(t *testing.T) {
 	e := newEnv(t, api.RoleAdmin)
 	e.hub.Sync(admin.SyncRequest{Proto: 1, Vehicles: []admin.Vehicle{
-		{ID: "g1.2.3.4", Type: "ExpansionOlga", Stored: true, StoredBy: "76561198000000001"},
+		{ID: "g1.2.3.4", Type: "ExpansionOlga", Stored: true, StoredBy: "F-bFI9I7fZCOna700tjPMHdAujllgWJwcr6VGoYrJvE="},
 	}})
 	_, body, _ := e.get("/b/main/i/alpha/vehicles/g1.2.3.4/panel")
 	for _, want := range []string{
@@ -110,7 +132,7 @@ func TestVehiclesPanelKeepsTheLiveActions(t *testing.T) {
 func TestVehiclesPanelGarageActionsNeedTheTeleportPermission(t *testing.T) {
 	e := newEnv(t, api.RoleViewer)
 	e.hub.Sync(admin.SyncRequest{Proto: 1, Vehicles: []admin.Vehicle{
-		{ID: "g1.2.3.4", Type: "ExpansionOlga", Stored: true, StoredBy: "76561198000000001"},
+		{ID: "g1.2.3.4", Type: "ExpansionOlga", Stored: true, StoredBy: "F-bFI9I7fZCOna700tjPMHdAujllgWJwcr6VGoYrJvE="},
 	}})
 	_, body, _ := e.get("/b/main/i/alpha/vehicles/g1.2.3.4/panel")
 	require.NotContains(t, body, "/retrieve")
@@ -155,9 +177,13 @@ func TestVehiclesMapLinkForStoredVehicles(t *testing.T) {
 		require.NoError(t, err)
 		return u.Query()
 	}
-	got := query(admin.Vehicle{ID: "g1.2.3.4", Type: "ExpansionOlga", Stored: true, StoredBy: "76561198000000001"})
+	got := query(admin.Vehicle{ID: "g1.2.3.4", Type: "ExpansionOlga", Stored: true,
+		StoredBy: "F-bFI9I7fZCOna700tjPMHdAujllgWJwcr6VGoYrJvE=", StoredBySteamID: "76561198000000001", StoredByName: "alice"})
 	require.Equal(t, "g1.2.3.4", got.Get("sv"), "the map needs sv to draw the one stored vehicle")
-	require.Equal(t, "ExpansionOlga (stored by 76561198000000001)", got.Get("label"))
+	require.Equal(t, "ExpansionOlga (stored by alice)", got.Get("label"))
+	// Without a known player the label falls back to the GUID.
+	got = query(admin.Vehicle{ID: "g2.2.2.2", Type: "ExpansionOlga", Stored: true, StoredBy: "F-bFI9I7fZCOna700tjPMHdAujllgWJwcr6VGoYrJvE="})
+	require.Equal(t, "ExpansionOlga (stored by F-bFI9I7fZCOna700tjPMHdAujllgWJwcr6VGoYrJvE=)", got.Get("label"))
 	// A garage of a territory has no player to name.
 	got = query(admin.Vehicle{ID: "g9.9.9.9", Type: "ExpansionOlga", Stored: true, TerritoryID: 3})
 	require.Equal(t, "ExpansionOlga", got.Get("label"))

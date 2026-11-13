@@ -108,8 +108,12 @@ func (i SteamInfo) Banned() bool {
 
 // PlayerSummary is a player in a list.
 type PlayerSummary struct {
-	SteamID   string    `json:"steam_id"`
-	GUID      string    `json:"guid"`
+	SteamID string `json:"steam_id"`
+	GUID    string `json:"guid"`
+	// BIGUID is the Bohemia Interactive GUID of the player: the hashed Steam ID the game reports
+	// (PlayerIdentity.GetId()), which DayZ Expansion knows players by. It is derived, not stored
+	// in the answer of every query.
+	BIGUID    string    `json:"bi_guid,omitempty"`
 	Name      string    `json:"name"`
 	FirstSeen time.Time `json:"first_seen"`
 	LastSeen  time.Time `json:"last_seen"`
@@ -134,7 +138,7 @@ type PlayerRecord struct {
 
 // PlayerFilter selects players for Players. Limit defaults to 50 and is at most 200.
 type PlayerFilter struct {
-	Query    string // a Steam ID, a GUID or a part of a name the player ever used
+	Query    string // a Steam ID, a BattlEye GUID, a BI GUID or a part of a name the player ever used
 	Instance string
 	// Only restricts the players to those seen on one of these instances (a token for some instances); empty
 	// does not restrict.
@@ -187,11 +191,15 @@ func (s *Store) PlayerJoined(ctx context.Context, instance, steamID, name string
 	if err != nil {
 		return err
 	}
+	bi, err := DeriveBIGUID(steamID)
+	if err != nil {
+		return err
+	}
 	name = clip(name, maxName)
 	err = s.tx(ctx, func(tx *sql.Tx) error {
-		if _, err := tx.ExecContext(ctx, `INSERT INTO players (steam_id, guid, name, first_seen, last_seen) VALUES (?, ?, ?, ?, ?)
+		if _, err := tx.ExecContext(ctx, `INSERT INTO players (steam_id, guid, bi_guid, name, first_seen, last_seen) VALUES (?, ?, ?, ?, ?, ?)
 			ON CONFLICT (steam_id) DO UPDATE SET name = excluded.name, last_seen = MAX(last_seen, excluded.last_seen), first_seen = MIN(first_seen, excluded.first_seen)`,
-			steamID, guid, name, at.Unix(), at.Unix()); err != nil {
+			steamID, guid, bi, name, at.Unix(), at.Unix()); err != nil {
 			return err
 		}
 		if _, err := tx.ExecContext(ctx, `INSERT INTO player_names (steam_id, name, first_seen, last_seen) VALUES (?, ?, ?, ?)
@@ -266,8 +274,8 @@ func (s *Store) Players(ctx context.Context, f PlayerFilter) ([]PlayerSummary, i
 	where, args := ` WHERE 1 = 1`, []any{}
 	if q := strings.TrimSpace(f.Query); q != "" {
 		like := "%" + likeEscape(q) + "%"
-		where += ` AND (p.steam_id = ? OR p.guid = ? OR p.name LIKE ? ESCAPE '\' OR EXISTS (SELECT 1 FROM player_names n WHERE n.steam_id = p.steam_id AND n.name LIKE ? ESCAPE '\'))`
-		args = append(args, q, strings.ToLower(q), like, like)
+		where += ` AND (p.steam_id = ? OR p.guid = ? OR p.bi_guid = ? OR p.name LIKE ? ESCAPE '\' OR EXISTS (SELECT 1 FROM player_names n WHERE n.steam_id = p.steam_id AND n.name LIKE ? ESCAPE '\'))`
+		args = append(args, q, strings.ToLower(q), q, like, like)
 	}
 	if f.Instance != "" {
 		where += ` AND EXISTS (SELECT 1 FROM player_sessions x WHERE x.steam_id = p.steam_id AND x.instance = ?)`
@@ -349,6 +357,9 @@ func (s *Store) Players(ctx context.Context, f PlayerFilter) ([]PlayerSummary, i
 
 // fillSummary adds the instances, the online state and the verdicts of the lookups.
 func (s *Store) fillSummary(ctx context.Context, p *PlayerSummary) error {
+	if g, err := DeriveBIGUID(p.SteamID); err == nil {
+		p.BIGUID = g
+	}
 	rows, err := s.db.QueryContext(ctx, `SELECT instance, MAX(ended_at IS NULL) FROM player_sessions WHERE steam_id = ? GROUP BY instance ORDER BY MAX(started_at) DESC`, p.SteamID)
 	if err != nil {
 		return fmt.Errorf("moderation: player instances: %w", err)
@@ -636,6 +647,46 @@ func (s *Store) FriendsSeen(ctx context.Context, friendIDs []string) ([]PlayerSu
 		}
 	}
 	slices.SortStableFunc(out, func(a, b PlayerSummary) int { return b.LastSeen.Compare(a.LastSeen) })
+	return out, nil
+}
+
+// PlayersByBIGUIDs returns the known players of the given BI GUIDs (the hashed Steam IDs the game
+// and DayZ Expansion know players by), keyed by GUID; a GUID no known player has is simply missing.
+// Only the Steam ID, the BI GUID and the name are filled in: the callers show who a GUID is, not the
+// whole player.
+func (s *Store) PlayersByBIGUIDs(ctx context.Context, guids []string) (map[string]PlayerSummary, error) {
+	var want []string
+	for _, g := range guids {
+		if ValidBIGUID(g) && !slices.Contains(want, g) {
+			want = append(want, g)
+		}
+	}
+	out := map[string]PlayerSummary{}
+	for len(want) > 0 {
+		chunk := want[:min(friendChunk, len(want))]
+		want = want[len(chunk):]
+		args := make([]any, len(chunk))
+		for i, g := range chunk {
+			args[i] = g
+		}
+		//nolint:gosec // only the number of ? placeholders is concatenated; every value is bound
+		rows, err := s.db.QueryContext(ctx, `SELECT bi_guid, steam_id, name FROM players WHERE bi_guid IN (`+
+			strings.TrimSuffix(strings.Repeat("?,", len(chunk)), ",")+`)`, args...)
+		if err != nil {
+			return nil, fmt.Errorf("moderation: players by bi guid: %w", err)
+		}
+		for rows.Next() {
+			var p PlayerSummary
+			if err := rows.Scan(&p.BIGUID, &p.SteamID, &p.Name); err != nil {
+				_ = rows.Close()
+				return nil, fmt.Errorf("moderation: players by bi guid: %w", err)
+			}
+			out[p.BIGUID] = p
+		}
+		if err := rows.Close(); err != nil {
+			return nil, fmt.Errorf("moderation: players by bi guid: %w", err)
+		}
+	}
 	return out, nil
 }
 

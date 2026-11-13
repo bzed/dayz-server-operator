@@ -72,6 +72,7 @@
 <header class="phead">
   <h1>{{$d.Name}}</h1>
   <code class="sid">{{$d.SteamID}}</code>
+  {{with $d.BIGUID}}<code class="sid" title="Bohemia Interactive GUID: the hashed Steam ID the game reports, what DayZ Expansion knows this player by">{{.}}</code>{{end}}
 </header>
 <p class="pstatus">{{if .OnlineOn}}<span class="dot on"></span>online on {{range $i, $x := .OnlineOn}}{{if $i}}, {{end}}<a href="/b/{{$.Backend}}/i/{{$x}}">{{$x}}</a>{{end}}{{else}}<span class="dot"></span>last seen {{stamp $d.LastSeen}}{{end}}{{if .Aliases}} <span class="mute">also known as {{.Aliases}}</span>{{end}}</p>
 <p class="pactions">

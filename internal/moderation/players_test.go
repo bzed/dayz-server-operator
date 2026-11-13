@@ -106,6 +106,7 @@ func TestPlayersSearch(t *testing.T) {
 	assert.Equal(t, []string{steamA}, search(PlayerFilter{Query: "fritz"}), "an old name")
 	assert.Equal(t, []string{steamB}, search(PlayerFilter{Query: steamB}), "Steam ID")
 	assert.Equal(t, []string{steamA}, search(PlayerFilter{Query: guidOf(t, steamA)}), "GUID")
+	assert.Equal(t, []string{steamA}, search(PlayerFilter{Query: biOf(t, steamA)}), "BI GUID")
 	assert.Equal(t, []string{steamB}, search(PlayerFilter{Query: "100%"}), "% is literal")
 	assert.Empty(t, search(PlayerFilter{Query: "%zzz"}))
 	assert.Equal(t, []string{steamB}, search(PlayerFilter{Instance: "beta"}))
@@ -115,6 +116,49 @@ func TestPlayersSearch(t *testing.T) {
 	page, _, _ := s.Players(ctx, PlayerFilter{Limit: 1, Offset: 1})
 	require.Len(t, page, 1)
 	assert.Equal(t, steamA, page[0].SteamID)
+}
+
+// The BI GUID is what the game and DayZ Expansion know players by: it is stored with the player, is
+// part of the answers, finds the player in a search and resolves a garage owner to a name.
+func TestBIGUID(t *testing.T) {
+	s, path := newStore(t)
+	ctx := t.Context()
+	require.NoError(t, s.PlayerJoined(ctx, "alpha", steamA, "Fritz", t0))
+	want := biOf(t, steamA)
+
+	var got string
+	require.NoError(t, s.db.QueryRowContext(ctx, `SELECT bi_guid FROM players WHERE steam_id = ?`, steamA).Scan(&got))
+	assert.Equal(t, want, got, "the row stores it")
+
+	list, _, err := s.Players(ctx, PlayerFilter{})
+	require.NoError(t, err)
+	require.Len(t, list, 1)
+	assert.Equal(t, want, list[0].BIGUID, "the list carries it")
+	rec, err := s.Player(ctx, steamA)
+	require.NoError(t, err)
+	assert.Equal(t, want, rec.BIGUID, "the record carries it")
+
+	by, err := s.PlayersByBIGUIDs(ctx, []string{want, "not-a-biguid", biOf(t, steamB)})
+	require.NoError(t, err)
+	p, ok := by[want]
+	require.True(t, ok, "the known GUID resolves")
+	assert.Equal(t, steamA, p.SteamID)
+	assert.Equal(t, "Fritz", p.Name)
+	assert.NotEmpty(t, p.BIGUID)
+	_, ok = by[biOf(t, steamB)]
+	assert.False(t, ok, "a GUID of a player who never connected")
+	_, ok = by["not-a-biguid"]
+	assert.False(t, ok, "an invalid GUID is not looked up")
+
+	// A row from before the column existed (written by an older dzo) is backfilled on the next open.
+	_, err = s.db.ExecContext(ctx, `UPDATE players SET bi_guid = ''`)
+	require.NoError(t, err)
+	require.NoError(t, s.Close())
+	s, err = Open(ctx, path)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = s.Close() })
+	require.NoError(t, s.db.QueryRowContext(ctx, `SELECT bi_guid FROM players WHERE steam_id = ?`, steamA).Scan(&got))
+	assert.Equal(t, want, got, "the backfill filled it")
 }
 
 func TestPlayersOnlineFilter(t *testing.T) {

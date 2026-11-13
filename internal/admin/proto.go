@@ -82,10 +82,19 @@ type Vehicle struct {
 	Owner       string   `json:"owner,omitempty"`        // DayZ Expansion: the name on the key chain
 	Covered     Flag     `json:"covered,omitempty"`      // DayZ Expansion: stored under a cover; only class and place are known
 	Stored      Flag     `json:"stored,omitempty"`       // DayZ Expansion: stored in the virtual garage, not in the world
-	StoredBy    string   `json:"stored_by,omitempty"`    // DayZ Expansion: the Steam ID of the player whose garage holds it
+	StoredBy    string   `json:"stored_by,omitempty"`    // DayZ Expansion: the BI GUID (the hashed Steam ID, PlayerIdentity.GetId()) of the player whose garage holds it
 	TerritoryID int      `json:"territory_id,omitempty"` // DayZ Expansion: the territory of the garage (0 = none)
-	Owners      []string `json:"owners,omitempty"`       // DayZ Expansion: the Steam IDs that may retrieve it
+	Owners      []string `json:"owners,omitempty"`       // DayZ Expansion: the BI GUIDs of the players that may retrieve it
 	Broken      Flag     `json:"broken,omitempty"`       // DayZ Expansion: a missing entity-storage file (it can never come back)
+
+	// StoredBySteamID, StoredByName and ResolvedOwners are filled by the API from the player
+	// database (a BI GUID is the SHA-256 of a Steam ID, so it can be looked up): the garage holder
+	// and the owners as known players, so the interfaces show names and link to player pages
+	// instead of the 44 characters of a GUID. They are empty when the player database knows nobody
+	// with that GUID, and stay empty in everything the mod itself reads.
+	StoredBySteamID string        `json:"stored_by_steam_id,omitempty"`
+	StoredByName    string        `json:"stored_by_name,omitempty"`
+	ResolvedOwners  []GarageOwner `json:"resolved_owners,omitempty"`
 
 	// Driver, DriverName and DrivenAgo come from the mod (feature "driver"): the last player to take the
 	// driver's seat and the seconds since. The hub drops all three when the drive is not plausible.
@@ -106,6 +115,15 @@ const FeatureDriver = "driver"
 
 // FeatureGarage is the hello feature of a mod that reports the vehicles stored in the Expansion virtual garage.
 const FeatureGarage = "garage"
+
+// GarageOwner is one owner of a garage-stored vehicle: the BI GUID the mod reports and, when a player
+// with that GUID is known, their Steam ID and name. An owner who never connected to these servers has
+// only the GUID.
+type GarageOwner struct {
+	GUID    string `json:"guid"`
+	SteamID string `json:"steam_id,omitempty"`
+	Name    string `json:"name,omitempty"`
+}
 
 // KV is one tooltip entry of a marker.
 type KV struct {

@@ -205,32 +205,55 @@ func TestPlayerAndVehicleCommands(t *testing.T) {
 }
 
 // The vehicle list marks the vehicles stored in the Expansion virtual garage, so an admin can tell
-// them apart from abandoned world vehicles (their health and fuel read as 0).
+// them apart from abandoned world vehicles (their health and fuel read as 0). The garage knows
+// players by BI GUID; with the player database the list names them, without it the GUID stays.
 func TestVehicleListMarksStored(t *testing.T) {
 	dir := t.TempDir()
 	hubs := admin.NewRegistry(dir)
 	hub := hubs.Add(admin.NewHub("alpha"))
 	srv := api.New("s", "v", hubs, api.NewTokenStore(filepath.Join(dir, "t.json")), admin.NewAudit(filepath.Join(dir, "a.jsonl")))
+	const guidA, guidB = "F-bFI9I7fZCOna700tjPMHdAujllgWJwcr6VGoYrJvE=", "e9O13H01aY6sR2UNIIlSjFYZxWYClNMcfAyeLWD-IZA="
+	hub.Sync(admin.SyncRequest{Proto: 1, Hello: true, Vehicles: []admin.Vehicle{
+		{ID: "v1", Type: "Truck"},
+		{ID: "g1.1", Type: "Olga", Stored: true, StoredBy: guidA, Owners: []string{guidA}},
+		{ID: "g1.2", Type: "Olga", Stored: true, TerritoryID: 7},
+		{ID: "g1.3", Type: "Olga", Stored: true, StoredBy: guidB, Broken: true},
+		{ID: "g1.4", Type: "Olga", Stored: true},
+	}})
+	out, err := runCmd(t, "vehicle", "list", "alpha", "--api", apiURL(t, srv), "--token-file", apiToken(t, srv, dir))
+	require.NoError(t, err, "vehicle list: %s", out)
+	require.Contains(t, out, "(stored in the garage by "+guidA+")", "stored in a player's garage")
+	require.Contains(t, out, "(stored in a territory #7 garage)", "stored in a territory garage")
+	require.Contains(t, out, "(stored in the garage by "+guidB+", no storage file)", "broken stored vehicle")
+	require.Contains(t, out, "(stored)", "stored without an owner or a territory")
+	require.Equal(t, 4, strings.Count(out, "(stored"), "only the stored vehicles are marked:\n%s", out)
+
+	// With the player database the GUID becomes the player, so the admin can act on them.
+	st, err := moderation.Open(t.Context(), filepath.Join(dir, "db", "dzo.sqlite"))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = st.Close() })
+	require.NoError(t, st.PlayerJoined(t.Context(), "alpha", "76561198000000001", "alice", time.Unix(1700000000, 0)))
+	srv.Moderation = cliMod{st}
+	out, err = runCmd(t, "vehicle", "list", "alpha", "--api", apiURL(t, srv), "--token-file", apiToken(t, srv, dir))
+	require.NoError(t, err, "vehicle list: %s", out)
+	require.Contains(t, out, "(stored in the garage by alice (76561198000000001))", "the resolved garage holder")
+	require.Contains(t, out, "(stored in the garage by "+guidB+", no storage file)", "an unknown holder stays a GUID")
+}
+
+// apiURL and apiToken run one command against the given API server.
+func apiURL(t *testing.T, srv *api.Server) string {
+	t.Helper()
 	ts := httptest.NewServer(srv.Handler())
-	defer ts.Close()
+	t.Cleanup(ts.Close)
+	return ts.URL
+}
+
+func apiToken(t *testing.T, srv *api.Server, dir string) string {
+	t.Helper()
 	secret, _, _ := srv.Tokens.Create("cli", api.RoleOperator, nil, true, false, time.Hour)
 	tokenFile := filepath.Join(dir, "token")
 	writeFile(t, tokenFile, secret+"\n")
-	hub.Sync(admin.SyncRequest{Proto: 1, Hello: true, Vehicles: []admin.Vehicle{
-		{ID: "v1", Type: "Truck"},
-		{ID: "g1.1", Type: "Olga", Stored: true, StoredBy: "76561198000000001", Owners: []string{"76561198000000001"}},
-		{ID: "g1.2", Type: "Olga", Stored: true, TerritoryID: 7},
-		{ID: "g1.3", Type: "Olga", Stored: true, StoredBy: "76561198000000002", Broken: true},
-		{ID: "g1.4", Type: "Olga", Stored: true},
-	}})
-
-	out, err := runCmd(t, "vehicle", "list", "alpha", "--api", ts.URL, "--token-file", tokenFile)
-	require.NoError(t, err, "vehicle list: %s", out)
-	require.Contains(t, out, "(stored in the garage by 76561198000000001)", "stored in a player's garage")
-	require.Contains(t, out, "(stored in a territory #7 garage)", "stored in a territory garage")
-	require.Contains(t, out, "(stored in the garage by 76561198000000002, no storage file)", "broken stored vehicle")
-	require.Contains(t, out, "(stored)", "stored without an owner or a territory")
-	require.Equal(t, 4, strings.Count(out, "(stored"), "only the stored vehicles are marked:\n%s", out)
+	return tokenFile
 }
 
 func TestRenderWritesAdminConfig(t *testing.T) {

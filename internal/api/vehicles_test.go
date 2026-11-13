@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -155,4 +156,50 @@ func TestStoredVehicleActionsAreTeleportPerm(t *testing.T) {
 		c, _ := e.do("POST", path, view, `{"x":100,"z":200}`)
 		require.Equal(t, http.StatusForbidden, c, path)
 	}
+}
+
+type fakeModeration struct {
+	st *moderation.Store
+}
+
+func (f fakeModeration) Store() *moderation.Store { return f.st }
+
+func (f fakeModeration) Changed(context.Context, moderation.Ban, *moderation.Ban) map[string]string {
+	return nil
+}
+
+func (f fakeModeration) Kick(context.Context, string, string, string) error { return nil }
+
+// The garage reports players as BI GUIDs; the vehicle list resolves them to the players the database
+// knows, so the interfaces can show names. A GUID of a player who never connected stays a GUID.
+func TestVehicleListResolvesGarageOwners(t *testing.T) {
+	e := newEnv(t)
+	st, err := moderation.Open(t.Context(), filepath.Join(t.TempDir(), "dzo.sqlite"))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = st.Close() })
+	const alice, bob = "76561198000000001", "76561198000000002"
+	require.NoError(t, st.PlayerJoined(t.Context(), "alpha", alice, "alice", time.Unix(1700000000, 0).UTC()))
+	known, err := moderation.DeriveBIGUID(alice)
+	require.NoError(t, err)
+	stranger, err := moderation.DeriveBIGUID(bob)
+	require.NoError(t, err)
+	e.srv.Moderation = fakeModeration{st: st}
+	e.alpha.Sync(admin.SyncRequest{Proto: 1, Hello: true, ModVersion: "0.1.0", World: "chernarusplus",
+		Vehicles: []admin.Vehicle{{ID: "g1.1", Type: "ExpansionOlga", Stored: true, StoredBy: known,
+			Owners: []string{known, stranger}}}})
+	c, b := e.do("GET", "/api/v1/instances/alpha/vehicles", e.token(RoleViewer, nil, false), "")
+	require.Equal(t, 200, c, "%s", b)
+	var got []admin.Vehicle
+	require.NoError(t, json.Unmarshal(b, &got))
+	require.Len(t, got, 1)
+	v := got[0]
+	require.Equal(t, alice, v.StoredBySteamID)
+	require.Equal(t, "alice", v.StoredByName)
+	require.Len(t, v.ResolvedOwners, 2)
+	require.Equal(t, known, v.ResolvedOwners[0].GUID)
+	require.Equal(t, alice, v.ResolvedOwners[0].SteamID)
+	require.Equal(t, "alice", v.ResolvedOwners[0].Name)
+	require.Equal(t, stranger, v.ResolvedOwners[1].GUID)
+	require.Empty(t, v.ResolvedOwners[1].SteamID, "a player who never connected stays a GUID")
+	require.Empty(t, v.ResolvedOwners[1].Name)
 }

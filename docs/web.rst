@@ -280,9 +280,13 @@ Instance
 
    Vehicles stored in the virtual garage of DayZ Expansion are not in the world, so the list shows them apart,
    under **Stored in the Expansion garage**: class, position with the map link, stored by, owners and a note.
-   "Stored by" and the owners link to the player's page (the Steam ID is in the tooltip); the garage of a
-   territory shows ``territory #<id>`` instead of a player. The position link opens the map on the stored
-   position with ``<class> (stored by <Steam ID>)`` as the label and that one vehicle as a marker (stored
+   The garage knows players by their BI GUID (the hashed Steam ID the game reports, not a Steam ID), so
+   dzo resolves them against the player database: "Stored by" and the owners show the player's name and
+   link to the player's page (the GUID is in the tooltip), so you can act on them - message, kick, ban.
+   A GUID no known player has reads ``unknown`` with the GUID in the tooltip (a garage owner always
+   connected to the server that keeps the garage, so this means a wiped or foreign database); the garage
+   of a territory shows ``territory #<id>`` instead of a player. The position link opens the map on the stored
+   position with ``<class> (stored by <player>)`` as the label and that one vehicle as a marker (stored
    vehicles are not drawn on the map otherwise). A vehicle whose entity-storage file is missing can never
    come back; its note says ``no storage file``. The **Actions** button opens the vehicle panel, which for a
    stored vehicle offers two forms to people who may teleport players: **Retrieve** takes the vehicle out of
@@ -357,13 +361,15 @@ Live map
 Players
    The player database of an installation (``Players`` in the header; it needs the ``player.history`` permission,
    that is the moderator role or higher, :doc:`moderation`). The list has a search over every name a player ever used,
-   the Steam ID and the BattlEye GUID, an instance filter, "Only online players" (who is on an instance now; with an instance chosen, on that one) and "Only flagged players", most recently seen first. Clicking
+   the Steam ID, the BattlEye GUID and the BI GUID (the hashed Steam ID the game reports, what DayZ
+   Expansion knows players by - paste a garage GUID to find its player), an instance filter, "Only online players" (who is on an instance now; with an instance chosen, on that one) and "Only flagged players", most recently seen first. Clicking
    the header of the Name, Last seen, First seen, BattlEye, Steam or Here column sorts the whole list (not only the page) by
    it; a second click reverses it. Name starts A to Z, the others with the newest or the flagged players first; the arrow in the
    header shows the order, and the choice is part of the page's address, so it survives paging and can be shared. Instances is
    not sortable. The list has a red mark in the BattlEye, Steam and Here columns for a player something flags, with a
    red mark in the BattlEye, Steam and Here columns for a player something flags. A player's page shows, under the name
-   with the other names used, a **verdict row** of three cells that each answer one question and say how old the answer is:
+   with the other names used, the Steam ID and the BI GUID beside it in the header (the ID types the
+   game and its mods know the player by), and a **verdict row** of three cells that each answer one question and say how old the answer is:
 
    * **BattlEye**: whether BattlEye's master server lists the GUID as globally banned, one line per game (DayZ first, then
      Arma 3 and Arma 2). A ban in an Arma game alone is shown in red with the game's name, because it is the same Steam
