@@ -11,6 +11,8 @@ package setup
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -168,6 +170,9 @@ func Run(ctx context.Context, o Options) error {
 		r.paths()
 		if podmanOK {
 			r.images(ctx, false)
+			if r.Cfg.Remote() {
+				r.remote(ctx)
+			}
 		}
 		r.steam()
 		r.site(ctx)
@@ -312,6 +317,104 @@ func (r *runner) podmanVersion(ctx context.Context) bool {
 	}
 	r.say("ok", "podman %s", strings.TrimSpace(string(out)))
 	return true
+}
+
+// remote checks what podman.mode remote needs from the other side of
+// CONTAINER_HOST, in the order of the output: the podman server is new enough,
+// it sees paths.data at the same path (the game containers mount it), and it
+// uses systemd cgroups (the instance health checks are systemd units there).
+// The first and the last are read-only and run in a dry run too; the mount
+// check starts a container, so a dry run only says that it cannot do it.
+func (r *runner) remote(ctx context.Context) {
+	r.remoteVersion(ctx)
+	r.samePath(ctx)
+	r.systemdCgroups(ctx)
+}
+
+// remoteVersion checks the host's podman, not the client dzo runs: the client
+// can be new enough locally while the server builds the containers and runs the
+// instances.
+func (r *runner) remoteVersion(ctx context.Context) {
+	out, err := r.Exec(ctx, "podman", "version", "--format", "{{.Server.Version}}")
+	switch {
+	case errors.Is(err, exec.ErrNotFound):
+		r.say("error", "podman is not installed")
+		return
+	case err != nil:
+		r.say("error", "the host's podman server version: %v\n%s", err, strings.TrimSpace(string(out)))
+		return
+	}
+	v := strings.TrimSpace(string(out))
+	if _, _, err := parsePodmanVersion(v); err != nil {
+		r.say("error", "the host's podman: %v", err)
+		return
+	}
+	if err := checkPodmanVersion(v); err != nil {
+		r.say("error", "the host's %v", err)
+		return
+	}
+	r.say("ok", "podman server %s", v)
+}
+
+// samePath checks that the host's podman sees paths.data at the same path,
+// which every container of an instance mounts: a file written here must be
+// readable in the runtime image at exactly its path. The file is random, so a
+// stale or shared directory cannot fake the answer, and private; it is removed
+// again whether the check succeeds or fails.
+func (r *runner) samePath(ctx context.Context) {
+	data := r.Cfg.Paths.Data
+	if r.DryRun {
+		r.say("info", "a dry run cannot check whether paths.data %s is mounted at the same path on the host", data)
+		return
+	}
+	img := Images[0].Tag // runtime; it has cat
+	if out, err := r.Exec(ctx, "podman", "image", "exists", img); err != nil {
+		r.say("error", "the runtime image %s is missing, cannot check whether paths.data %s is mounted at the same path on the host: %v %s", img, data, err, strings.TrimSpace(string(out)))
+		return
+	}
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		r.say("error", "cannot make the test file for paths.data %s: %v", data, err)
+		return
+	}
+	content := hex.EncodeToString(b)
+	marker := filepath.Join(data, ".dzo-setup-"+hex.EncodeToString(b[:8]))
+	if err := os.WriteFile(marker, []byte(content), 0o600); err != nil {
+		r.say("error", "paths.data %s is not writable for this user: %v", data, err)
+		return
+	}
+	defer os.Remove(marker) //nolint:errcheck // a scratch file, gone either way
+	out, err := r.Exec(ctx, "podman", "run", "--rm", "-v", data+":"+data+":ro", img, "cat", marker)
+	if err != nil {
+		r.say("error", "paths.data %s is not mounted at the same path on the host: %v\n%s", data, err, strings.TrimSpace(string(out)))
+		return
+	}
+	if got := strings.TrimSpace(string(out)); got != content {
+		r.say("error", "paths.data %s is not mounted at the same path on the host: the container read %q, not what dzo wrote", data, got)
+		return
+	}
+	r.say("ok", "paths.data %s is mounted at the same path on the host", data)
+}
+
+// systemdCgroups checks the host's cgroup manager. The supervisor runs the
+// instance health checks as systemd units there; with the cgroupfs driver they
+// never run, and since an instance only becomes ready when its health check
+// passes, it would never become ready.
+func (r *runner) systemdCgroups(ctx context.Context) {
+	out, err := r.Exec(ctx, "podman", "info", "--format", "{{.Host.CgroupManager}}")
+	switch {
+	case errors.Is(err, exec.ErrNotFound):
+		r.say("error", "podman is not installed")
+		return
+	case err != nil:
+		r.say("error", "the host's podman info: %v\n%s", err, strings.TrimSpace(string(out)))
+		return
+	}
+	if mgr := strings.TrimSpace(string(out)); mgr != "systemd" {
+		r.say("error", "the host's podman does not use systemd: container health checks never run there, and no instance would become ready")
+		return
+	}
+	r.say("ok", "the host's podman uses systemd cgroups")
 }
 
 func (r *runner) images(ctx context.Context, rebuild bool) {

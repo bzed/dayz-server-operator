@@ -76,6 +76,21 @@ func newTestBootCmd() *cobra.Command {
 	return cmd
 }
 
+// bootRunDir is where a boot test keeps its run tree, the tree the server runs
+// from. A remote host's podman only sees paths.data at the same path, so there
+// the tree goes below paths.data; natively it stays in the user's cache
+// directory, which nothing but this host needs to see.
+func bootRunDir(cfg *config.Config, stamp string) (string, error) {
+	if cfg.Remote() {
+		return filepath.Join(cfg.Paths.Data, "boottest", stamp), nil
+	}
+	cacheHome, err := os.UserCacheDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(cacheHome, "dzo", "boottest", stamp), nil
+}
+
 func runBoot(cmd *cobra.Command, name string, f bootFlags) error {
 	cfg, inst, err := loadInstance(f.configPath, name)
 	if err != nil {
@@ -103,11 +118,10 @@ func runBoot(cmd *cobra.Command, name string, f bootFlags) error {
 		}
 	}
 
-	cacheHome, err := os.UserCacheDir()
+	run, err := bootRunDir(cfg, time.Now().Format("20060102-150405")+"-"+runfiles.Hex(3))
 	if err != nil {
 		return err
 	}
-	run := filepath.Join(cacheHome, "dzo", "boottest", time.Now().Format("20060102-150405")+"-"+runfiles.Hex(3))
 	if err := os.MkdirAll(run, 0o750); err != nil {
 		return err
 	}

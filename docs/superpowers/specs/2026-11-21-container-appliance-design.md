@@ -191,10 +191,15 @@ In `remote` mode:
   path in a container the host starts (this catches a wrong mount); the host uses
   systemd (without it health checks never run and no instance would ever become ready).
 - **The boot test and the debug shell** run their own containers with mounts. Anything
-  they mount must lie below the data directory in remote mode. The boot test creates at
-  least its token directory with `os.MkdirTemp` in the system temp directory
-  (`internal/boottest/run.go`), which the host cannot see; in remote mode it goes below
-  the data directory, and the builder checks the rest of its tree the same way.
+  they mount must lie below the data directory in remote mode. The boot test does not
+  mount its token directory (`os.MkdirTemp` in the system temp directory,
+  `internal/boottest/run.go`); dzo reads the tokens and writes the dzo-admin
+  `config.json` that uses them into the profiles directory. What its container does mount
+  is the run tree (`serverCommand` in `internal/boottest/run.go`), today below
+  `~/.cache/dzo/boottest` (`cmd/dzo/testboot.go`), which the host cannot see; in remote
+  mode it goes to `<paths.data>/boottest/<stamp>`. The server install and the mod
+  directories it mounts too have to be visible on the host at the same paths; the
+  builder checks those the same way.
 
 steamcmd runs inside the appliance from the Debian package, with its home under the
 secrets directory in the data directory, as on Debian. Hooks from the site repository run

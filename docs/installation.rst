@@ -493,6 +493,11 @@ installed mod or one of its files cannot be read by the service user, or when th
   is low,
 * builds the two container images, ``localhost/dzo-runtime`` for the game
   servers and ``localhost/dzo-steamcmd``, unless they exist already,
+* in ``remote`` mode (``podman.mode: remote``, the container appliance), also checks the
+  host's podman, which runs the containers and their health checks: it is version 5.4 or
+  newer, it uses systemd cgroups, and ``paths.data`` is mounted there at the same path
+  (setup writes a random file below it and reads it back in the runtime image). A dry run
+  still runs the two read-only checks and skips that container with an ``info`` line,
 * tells you if the Steam login is still to be done,
 * clones the site repository from ``site.remote``, and
 * enables a weekly timer, ``dzo-image-refresh.timer``, that rebuilds the images
