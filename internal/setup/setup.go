@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 // Package setup is `dzo setup`: the first-time steps after installing the
-// package, run as the service user. It creates and checks the data
-// directories, builds the two container images, tells the operator what is
-// left to do for Steam, clones the site repo and installs the weekly image
-// refresh timer. Every step is idempotent, so it can be run again after a
-// package upgrade, and --dry-run only reports what it would do.
+// package, run as the service user. It checks the podman version, creates and
+// checks the data directories, builds the two container images, tells the
+// operator what is left to do for Steam, clones the site repo and installs the
+// weekly image refresh timer. Every step is idempotent, so it can be run again
+// after a package upgrade, and --dry-run only reports what it would do.
 package setup
 
 import (
@@ -43,6 +43,47 @@ const (
 	minFreeGiB   = 10
 	refreshTimer = "dzo-image-refresh"
 )
+
+// minPodmanMajor and minPodmanMinor are the oldest podman dzo works with.
+// There is no upper bound: a newer major version is fine. The version is
+// checked on the client, which is the podman that builds the images and writes
+// the quadlets.
+const (
+	minPodmanMajor = 5
+	minPodmanMinor = 4
+)
+
+// checkPodmanVersion checks the output of
+// `podman version --format {{.Client.Version}}` (for example 5.4.2 or
+// 5.8.6-dev) against minPodman. It has no side effects and no access to the
+// runner, so the remote check of a server's podman can reuse it.
+func checkPodmanVersion(out string) error {
+	v := strings.TrimSpace(out)
+	major, minor, err := parsePodmanVersion(v)
+	if err != nil {
+		return err
+	}
+	if major < minPodmanMajor || (major == minPodmanMajor && minor < minPodmanMinor) {
+		return fmt.Errorf("podman %s is too old: dzo needs podman %d.%d or newer", v, minPodmanMajor, minPodmanMinor)
+	}
+	return nil
+}
+
+// parsePodmanVersion takes the major and minor number from a version string.
+// The patch number and a suffix such as -dev or -rc1 do not matter.
+func parsePodmanVersion(s string) (major, minor int, err error) {
+	parts := strings.Split(s, ".")
+	if len(parts) < 2 {
+		return 0, 0, fmt.Errorf("cannot parse podman version %q: want major.minor.patch", s)
+	}
+	if major, err = strconv.Atoi(parts[0]); err != nil {
+		return 0, 0, fmt.Errorf("cannot parse podman version %q: %w", s, err)
+	}
+	if minor, err = strconv.Atoi(parts[1]); err != nil {
+		return 0, 0, fmt.Errorf("cannot parse podman version %q: %w", s, err)
+	}
+	return major, minor, nil
+}
 
 // Exec runs a command and returns its combined output; tests replace it.
 type Exec func(ctx context.Context, name string, args ...string) ([]byte, error)
@@ -104,12 +145,20 @@ func Run(ctx context.Context, o Options) error {
 		r.say("error", "run dzo setup as the service user, not as root (sudo -iu dayz dzo setup): rootless podman and the user's systemd need it")
 		return errors.New("setup: must not run as root")
 	}
+	// The podman check comes first: everything below that runs podman needs it,
+	// and with --images-only it is the only thing that can be checked before the
+	// build. The check only reads a version, so a dry run does it too.
+	podmanOK := r.podmanVersion(ctx)
 	if o.ImagesOnly {
-		r.images(ctx, true)
+		if podmanOK {
+			r.images(ctx, true)
+		}
 	} else {
 		r.journal()
 		r.paths()
-		r.images(ctx, false)
+		if podmanOK {
+			r.images(ctx, false)
+		}
 		r.steam()
 		r.site(ctx)
 		r.refreshTimer(ctx)
@@ -232,6 +281,27 @@ func (r *runner) filesystems() {
 			r.say("warn", "only %d GiB free below paths.data %s; a server build and a few mods need about %d GiB", free, p.Data, minFreeGiB)
 		}
 	}
+}
+
+// podmanVersion reports the client version and checks that it is new enough.
+// It returns false when podman is missing, unreadable or too old, so the
+// caller skips the steps that would only repeat the same failure.
+func (r *runner) podmanVersion(ctx context.Context) bool {
+	out, err := r.Exec(ctx, "podman", "version", "--format", "{{.Client.Version}}")
+	switch {
+	case errors.Is(err, exec.ErrNotFound):
+		r.say("error", "podman is not installed")
+		return false
+	case err != nil:
+		r.say("error", "podman version: %v\n%s", err, strings.TrimSpace(string(out)))
+		return false
+	}
+	if err := checkPodmanVersion(string(out)); err != nil {
+		r.say("error", "%v", err)
+		return false
+	}
+	r.say("ok", "podman %s", strings.TrimSpace(string(out)))
+	return true
 }
 
 func (r *runner) images(ctx context.Context, rebuild bool) {

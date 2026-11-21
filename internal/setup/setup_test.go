@@ -21,9 +21,10 @@ import (
 )
 
 type fake struct {
-	calls  []string
-	exists map[string]bool // image tags that exist
-	fail   map[string]bool // command prefixes that fail
+	calls   []string
+	exists  map[string]bool // image tags that exist
+	fail    map[string]bool // command prefixes that fail
+	version string          // podman version --format output
 }
 
 func (f *fake) run(_ context.Context, name string, args ...string) ([]byte, error) {
@@ -33,6 +34,9 @@ func (f *fake) run(_ context.Context, name string, args ...string) ([]byte, erro
 		if strings.HasPrefix(line, p) {
 			return []byte("it broke"), errors.New("exit status 1")
 		}
+	}
+	if strings.HasPrefix(line, "podman version ") {
+		return []byte(f.version), nil
 	}
 	if strings.HasPrefix(line, "podman image exists ") {
 		if f.exists[args[2]] {
@@ -71,7 +75,7 @@ func newEnv(t testing.TB) *env {
 		require.NoError(t, os.MkdirAll(filepath.Join(images, i.Dir), 0o750))
 		require.NoError(t, os.WriteFile(filepath.Join(images, i.Dir, "Containerfile"), []byte("FROM scratch\n"), 0o600))
 	}
-	return &env{cfg: cfg, images: images, units: filepath.Join(root, "units"), f: &fake{exists: map[string]bool{}, fail: map[string]bool{}}}
+	return &env{cfg: cfg, images: images, units: filepath.Join(root, "units"), f: &fake{exists: map[string]bool{}, fail: map[string]bool{}, version: "5.4.2\n"}}
 }
 
 func (e *env) run(t testing.TB, mod func(*Options)) error {
@@ -91,7 +95,7 @@ func TestDryRunChangesNothing(t *testing.T) {
 	assert.NoDirExists(t, e.units, "a dry run must not write units")
 	assert.Zero(t, e.f.ran("podman build"), "a dry run must not build anything: %v", e.f.calls)
 	assert.Zero(t, e.f.ran("systemctl"), "a dry run must not enable anything: %v", e.f.calls)
-	for _, want := range []string{"todo  create paths.instances", "todo  build image localhost/dzo-runtime:latest", "todo  build image localhost/dzo-steamcmd:latest", "todo  install dzo-image-refresh.timer", "warn  steam.account", "warn  site.remote"} {
+	for _, want := range []string{"todo  create paths.instances", "todo  build image localhost/dzo-runtime:latest", "todo  build image localhost/dzo-steamcmd:latest", "todo  install dzo-image-refresh.timer", "warn  steam.account", "warn  site.remote", "ok    podman 5.4.2"} {
 		assert.Contains(t, e.out.String(), want)
 	}
 }
@@ -138,6 +142,55 @@ func TestSetupRefusesRoot(t *testing.T) {
 	require.Error(t, err, "root must be refused")
 	require.Contains(t, e.out.String(), "not as root")
 	assert.Empty(t, e.f.calls, "nothing may run as root")
+}
+
+func TestCheckPodmanVersion(t *testing.T) {
+	for _, c := range []struct {
+		out  string
+		want string // "" means accepted
+	}{
+		{"5.4.2\n", ""},
+		{"5.4.0", ""},
+		{"6.2.0\n", ""},
+		{"5.8.6-dev", ""},
+		{"5.3.9", "podman 5.4 or newer"},
+		{"4.9.3", "podman 5.4 or newer"},
+		{"garbage", "cannot parse"},
+		{"", "cannot parse"},
+	} {
+		err := checkPodmanVersion(c.out)
+		if c.want == "" {
+			require.NoError(t, err, "output %q", c.out)
+			continue
+		}
+		require.Error(t, err, "output %q", c.out)
+		assert.Contains(t, err.Error(), c.want, "output %q", c.out)
+	}
+}
+
+func TestSetupReportsOldPodman(t *testing.T) {
+	e := newEnv(t)
+	e.f.version = "4.9.3\n"
+	require.Error(t, e.run(t, nil), "podman older than 5.4 must be an error")
+	assert.Contains(t, e.out.String(), "error podman 4.9.3 is too old: dzo needs podman 5.4 or newer\n")
+	assert.Zero(t, e.f.ran("podman build"), "nothing may be built with an unsupported podman: %v", e.f.calls)
+
+	// the check is read-only, so a dry run makes it too
+	require.Error(t, e.run(t, func(o *Options) { o.DryRun = true }), "a dry run must report it as well")
+	assert.Contains(t, e.out.String(), "error podman 4.9.3 is too old")
+
+	// --images-only, what the weekly timer runs, must refuse it too
+	e.f.calls = nil
+	require.Error(t, e.run(t, func(o *Options) { o.ImagesOnly = true }), "--images-only must refuse it")
+	assert.Contains(t, e.out.String(), "error podman 4.9.3 is too old")
+	assert.Zero(t, e.f.ran("podman build"), "nothing may be built with an unsupported podman: %v", e.f.calls)
+}
+
+func TestSetupReportsUnreadablePodmanVersion(t *testing.T) {
+	e := newEnv(t)
+	e.f.fail["podman version"] = true
+	require.Error(t, e.run(t, func(o *Options) { o.DryRun = true }))
+	assert.Contains(t, e.out.String(), "error podman version: exit status 1")
 }
 
 func TestSetupReportsProblems(t *testing.T) {

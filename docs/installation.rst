@@ -194,6 +194,8 @@ skip a mod directory they cannot read. ``dzo instance render`` fails, so the ser
 installed mod or one of its files cannot be read by the service user, or when the mod holds nothing to load
 (an empty folder from Steam, or an empty or missing ``.pbo``). The setup
 
+* checks that ``podman`` is version 5.4 or newer (a newer major version, podman
+  6 included, is fine) and reports ``ok podman <version>``,
 * creates the directories under ``paths`` (the secrets directory is private) and
   checks that they are writable, that ``instances`` and ``snapshots`` are on the
   same filesystem, and warns if ``instances`` is not on btrfs or the free space

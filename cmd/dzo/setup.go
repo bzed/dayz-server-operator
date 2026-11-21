@@ -15,9 +15,9 @@ func newSetupCmd() *cobra.Command {
 	var dryRun, imagesOnly bool
 	cmd := &cobra.Command{
 		Use:   "setup",
-		Short: "First-time setup as the service user: data directories, container images, site repo, image refresh timer",
-		Long: "Run as the service user (sudo -iu dayz dzo setup) after installing the package. It creates and checks the " +
-			"data directories, builds the two container images from the package's Containerfiles, reports what is left " +
+		Short: "First-time setup as the service user: podman version check, data directories, container images, site repo, image refresh timer",
+		Long: "Run as the service user (sudo -iu dayz dzo setup) after installing the package. It checks that podman is version 5.4 or newer, " +
+			"creates and checks the data directories, builds the two container images from the package's Containerfiles, reports what is left " +
 			"for the Steam login, clones the site repo and enables a weekly timer that rebuilds the images. " +
 			"It is safe to run again; --dry-run only reports what it would do.",
 		Args: cobra.NoArgs,
