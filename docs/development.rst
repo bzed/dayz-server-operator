@@ -664,6 +664,38 @@ step. A "Supported" distribution that fails a step drops to "Best effort" in the
 matrix (and in the README) until it passes again; a "Best effort" distribution
 that passes all eight steps for a release line can move up.
 
+.. _release-checklist-container-appliance:
+
+Release checklist for the container appliance
+---------------------------------------------
+
+The appliance (``images/appliance/``) is Debian trixie and follows the Debian
+steps above, but its game servers are containers of the *host's* podman: the
+host quadlet and the wrapper live in ``contrib/appliance/``. CI builds and
+boots the image and runs ``dzo setup --dry-run`` inside it; it cannot run DayZ
+or a client. Once per release line, on a host with the appliance, the
+following is the rest:
+
+1. **A real server and a client.** Install the quadlet and the wrapper, start
+   the appliance, then ``dzo setup`` (the three remote checks ``ok``), a site
+   with one instance, ``dzo instance create``, ``dzo instance apply`` and
+   ``dzo start <instance>``. The instance's unit becomes active when the
+   server is healthy, ``podman ps`` on the host lists ``dzo-<instance>``, and
+   a DayZ client joins.
+2. **The stop.** ``podman stop dzo`` stops the server before the appliance:
+   the RCon shutdown is in the instance's journal, and ``dzo-<instance>`` is
+   gone on the host within the quadlet's ``StopTimeout``.
+3. **An upgrade with a server running.** ``apt upgrade`` inside the appliance
+   (or ``apt install --reinstall`` of the next ``.deb``) leaves the server
+   alone: its ``StartedAt`` does not change, and the next ``dzo restart
+   <instance>`` runs the new binary.
+4. **A killed appliance.** ``podman kill dzo`` and ``systemctl --user start
+   dzo.service``: the supervised unit starts again, its supervisor attaches to
+   the running server, and the server's ``StartedAt`` does not change. The
+   quadlet starts the appliance with ``--rm``, so ``podman stop`` and ``podman
+   kill`` remove the appliance container and ``podman start dzo`` has nothing
+   to start; the unit is the way back.
+
 Contributing
 ------------
 
