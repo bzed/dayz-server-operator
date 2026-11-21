@@ -60,9 +60,9 @@ const (
 	minPodmanMinor = 4
 )
 
-// checkPodmanVersion checks the output of
-// `podman version --format {{.Client.Version}}` (for example 5.4.2 or
-// 5.8.6-dev) against minPodman. It has no side effects and no access to the
+// checkPodmanVersion checks a podman version (for example 5.4.2 or 5.8.6-dev:
+// what `podman --version` prints after "podman version ", or a server's
+// {{.Server.Version}}) against minPodman. It has no side effects and no access to the
 // runner, so the remote check of a server's podman can reuse it.
 func checkPodmanVersion(out string) error {
 	v := strings.TrimSpace(out)
@@ -301,21 +301,28 @@ func (r *runner) filesystems() {
 // podmanVersion reports the client version and checks that it is new enough.
 // It returns false when podman is missing, unreadable or too old, so the
 // caller skips the steps that would only repeat the same failure.
+//
+// It asks `podman --version`, not `podman version`: rootless, the latter sets
+// up the user namespace before it prints anything, and fails where that is
+// not possible yet (no subuid range, an unprivileged container) with a
+// newuidmap error that says nothing about the version.
 func (r *runner) podmanVersion(ctx context.Context) bool {
-	out, err := r.Exec(ctx, "podman", "version", "--format", "{{.Client.Version}}")
+	out, err := r.Exec(ctx, "podman", "--version")
 	switch {
 	case errors.Is(err, exec.ErrNotFound):
 		r.say("error", "podman is not installed")
 		return false
 	case err != nil:
-		r.say("error", "podman version: %v\n%s", err, strings.TrimSpace(string(out)))
+		r.say("error", "podman --version: %v\n%s", err, strings.TrimSpace(string(out)))
 		return false
 	}
-	if err := checkPodmanVersion(string(out)); err != nil {
+	v := strings.TrimSpace(string(out))
+	v = strings.TrimPrefix(v, "podman version ") // "podman version 5.4.2"
+	if err := checkPodmanVersion(v); err != nil {
 		r.say("error", "%v", err)
 		return false
 	}
-	r.say("ok", "podman %s", strings.TrimSpace(string(out)))
+	r.say("ok", "podman %s", v)
 	return true
 }
 

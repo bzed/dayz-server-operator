@@ -24,7 +24,7 @@ type fake struct {
 	calls         []string
 	exists        map[string]bool // image tags that exist
 	fail          map[string]bool // command prefixes that fail
-	version       string          // podman version --format {{.Client.Version}}
+	version       string          // the version `podman --version` prints after "podman version "
 	serverVersion string          // podman version --format {{.Server.Version}}
 	cgroup        string          // podman info --format {{.Host.CgroupManager}}
 	mountBroken   bool            // the host cannot read paths.data
@@ -40,8 +40,8 @@ func (f *fake) run(_ context.Context, name string, args ...string) ([]byte, erro
 		}
 	}
 	switch line {
-	case "podman version --format {{.Client.Version}}":
-		return []byte(f.version), nil
+	case "podman --version":
+		return []byte("podman version " + f.version), nil
 	case "podman version --format {{.Server.Version}}":
 		return []byte(f.serverVersion), nil
 	case "podman info --format {{.Host.CgroupManager}}":
@@ -223,9 +223,20 @@ func TestSetupReportsOldPodman(t *testing.T) {
 
 func TestSetupReportsUnreadablePodmanVersion(t *testing.T) {
 	e := newEnv(t)
-	e.f.fail["podman version"] = true
+	e.f.fail["podman --version"] = true
 	require.Error(t, e.run(t, func(o *Options) { o.DryRun = true }))
-	assert.Contains(t, e.out.String(), "error podman version: exit status 1")
+	assert.Contains(t, e.out.String(), "error podman --version: exit status 1")
+}
+
+// The local check must not need a user namespace: rootless `podman version`
+// sets one up before it prints and fails where that is not allowed (an
+// unprivileged container, a host without a subuid range yet), `podman
+// --version` does not. Only the --version form may be asked.
+func TestSetupAsksPodmanVersionWithoutANamespace(t *testing.T) {
+	e := newEnv(t)
+	require.NoError(t, e.run(t, func(o *Options) { o.DryRun = true }))
+	assert.Contains(t, e.out.String(), "ok    podman 5.4.2")
+	assert.Zero(t, e.f.ran("podman version --format {{.Client.Version}}"), "%v", e.f.calls)
 }
 
 // In remote mode the containers run on another host through its podman: its
