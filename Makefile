@@ -89,9 +89,9 @@ reuse:
 vulncheck:
 	$(GO) run golang.org/x/vuln/cmd/govulncheck@v1.7.0 ./...
 
-## e2e: browser tests of the web UI (chromedp, build tag e2e). Needs Chrome/Chromium and the JavaScript
-## assets of libjs-htmx, libjs-leaflet and fonts-fork-awesome; DZO_E2E_CHROME and DZO_E2E_ASSETS override
-## where they are (see docs/development.rst).
+## e2e: browser tests of the web UI (chromedp, build tag e2e). Needs Chrome/Chromium; the JavaScript is
+## compiled in, and DZO_E2E_CHROME and DZO_E2E_ASSETS override the browser and the assets directory (see
+## docs/development.rst).
 e2e:
 	$(GO) test -tags e2e -count=1 -race -run '^TestE2E' ./internal/web/
 

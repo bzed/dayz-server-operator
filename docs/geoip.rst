@@ -100,7 +100,7 @@ The directories can be changed in the :doc:`configuration <configuration>`:
      geoip_dir: /var/lib/GeoIP           # GeoLite2-City, -Country and -ASN (.mmdb)
      geoip_legacy_dir: /usr/share/GeoIP  # GeoIP.dat and GeoIPv6.dat
    web:
-     flags_dir: /usr/share/iso-flags-svg/country-4x3
+     flags_dir: ""   # default: none (the built-in flags)
 
 Which database answers
 ----------------------
@@ -114,9 +114,10 @@ For each address dzo asks, in this order:
 Flags
 -----
 
-The flags are the SVG files of Debian's ``iso-flags-svg`` package (a dependency of dzo, in the 4:3 shape),
-which the web interface serves under ``/flags/``. If the directory (``web.flags_dir``) is missing, for example on
-a host that runs ``dzo web`` from a build without the package, the list shows the country code where the flag
-would be.
+The flags are built into dzo, from the ``iso-country-flags-svg-collection`` in the 4:3 shape, and the
+web interface serves them under ``/flags/``. A directory in ``web.flags_dir`` overrides them file by
+file: a flag it lacks comes from the built-in set, and a missing directory only logs a warning at the
+start of ``dzo web``. Without a flag for a country, for example for a code outside ISO 3166-1, the list
+shows the country code where the flag would be.
 
 GeoLite2 is a product of MaxMind. Use of the databases is bound by MaxMind's GeoLite2 end-user licence.

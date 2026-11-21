@@ -26,20 +26,23 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// The browser tests run against the JavaScript a dzo installation really serves: htmx, Leaflet and Fork Awesome
-// from the Debian packages libjs-htmx, libjs-leaflet and fonts-fork-awesome, not the stubs of newEnv.
+// The browser tests run against the JavaScript a dzo installation serves: the htmx, Leaflet and Fork
+// Awesome compiled into the binary, not the stubs of newEnv.
 const (
 	e2eChromeEnv = "DZO_E2E_CHROME"
 	e2eAssetsEnv = "DZO_E2E_ASSETS"
 )
 
-// useRealAssets copies htmx and Leaflet from $DZO_E2E_ASSETS (default /usr/share/javascript) into dst, the
-// assets directory of a web server.
+// useRealAssets empties dst, the assets directory of a web server, so the built-in htmx and Leaflet are
+// served. With $DZO_E2E_ASSETS set, its htmx, Leaflet and Fork Awesome are copied into dst instead and
+// override the built-in files, for a run against another version.
 func useRealAssets(t *testing.T, dst string) {
 	t.Helper()
 	src := os.Getenv(e2eAssetsEnv)
 	if src == "" {
-		src = "/usr/share/javascript"
+		require.NoError(t, os.RemoveAll(dst))
+		require.NoError(t, os.MkdirAll(dst, 0o750))
+		return
 	}
 	files := []string{"htmx/htmx.min.js", "leaflet/leaflet.js", "leaflet/leaflet.css", "fork-awesome/css/fork-awesome.css"}
 	for _, glob := range []string{"leaflet/images/*", "fork-awesome/fonts/*"} {
@@ -53,7 +56,7 @@ func useRealAssets(t *testing.T, dst string) {
 	}
 	for _, f := range files {
 		from := filepath.Join(src, f)
-		require.FileExists(t, from, "install libjs-htmx, libjs-leaflet and fonts-fork-awesome or set %s", e2eAssetsEnv)
+		require.FileExists(t, from, "%s lacks %s; point %s at a directory with it or unset it for the built-in files", src, f, e2eAssetsEnv)
 		in, err := os.Open(from) //nolint:gosec // a path of the test environment
 		require.NoError(t, err)
 		require.NoError(t, os.MkdirAll(filepath.Join(dst, filepath.Dir(f)), 0o750))

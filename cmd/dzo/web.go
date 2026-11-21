@@ -55,6 +55,22 @@ func webBackend(cfg *config.Config, logf func(string, ...any)) (*web.Backend, fu
 	return &web.Backend{Name: cfg.Serve.Installation, Client: client}, reload, nil
 }
 
+// warnMissingWebDirs names each configured web asset directory that is not a directory: the web
+// interface then serves the copies compiled into dzo, so the configuration is stale but not broken.
+func warnMissingWebDirs(logf func(string, ...any), assets, flagsDir string) {
+	for _, d := range []struct{ key, dir string }{
+		{"web.assets", assets},
+		{"web.flags_dir", flagsDir},
+	} {
+		if d.dir == "" {
+			continue
+		}
+		if fi, err := os.Stat(d.dir); err != nil || !fi.IsDir() {
+			logf("%s %s is not a directory; serving the built-in copies", d.key, d.dir)
+		}
+	}
+}
+
 func newWebCmd() *cobra.Command {
 	var configPath string
 	cmd := &cobra.Command{
@@ -81,6 +97,7 @@ func newWebCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			warnMissingWebDirs(logf, cfg.Web.Assets, cfg.Web.FlagsDir)
 			ln, err := net.Listen("tcp", cfg.Web.Listen)
 			if err != nil {
 				return err

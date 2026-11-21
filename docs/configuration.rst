@@ -90,9 +90,9 @@ built-in ones, and an entry of the same name replaces the built-in entry as a wh
      enabled: null                   # default: unset (see below)
      listen: 127.0.0.1:8081          # default
      allow_insecure_http: false      # default
-     assets: /usr/share/javascript   # default
+     assets: ""                      # default: none (the built-in copies)
      docs_dir: /usr/share/doc/dzo/html   # default
-     flags_dir: /usr/share/iso-flags-svg/country-4x3   # default
+     flags_dir: ""                   # default: none (the built-in flags)
      tls:                            # default: none (plain HTTP on listen)
        cert_file: /etc/dzo/tls/web-cert.pem     # default: empty
        key_file: /etc/dzo/tls/web-key.pem       # default: empty
@@ -297,12 +297,20 @@ and print what is wrong. A key dzo does not know is ignored.
       the address of the connection is used and forwarding headers are ignored. A value that is
       neither an address nor a CIDR network is refused, naming it. Read at start.
    ``assets``
-      The directory with htmx and Leaflet (Debian's ``libjs-*`` packages).
+      An optional directory that overrides the web files compiled into dzo, file by file: htmx 2.0.4,
+      Leaflet 1.7.1 and Fork Awesome 1.2.0 are built in and served under ``/vendor/``. A file the
+      directory holds wins; a file it lacks comes from the binary, so a directory with only
+      ``htmx/htmx.min.js`` replaces htmx alone and keeps the rest. A directory that is not there, for
+      example an old ``/usr/share/javascript`` after the Debian packages were autoremoved, is not an
+      error: ``dzo web`` logs one warning at start and serves the built-in copies. Read at start of
+      ``dzo web``; a change needs a restart.
    ``docs_dir``
       The built documentation, served under ``/docs/``.
    ``flags_dir``
-      The country flags as ``<code>.svg`` in the 4:3 shape (Debian's ``iso-flags-svg``); without
-      them the player list shows the country code.
+      The same for the country flags, ``<code>.svg``: the built-in set comes from
+      ``iso-country-flags-svg-collection`` (commit ``f2cf92f``) in the 4:3 shape and is served under
+      ``/flags/``. A directory overrides it file by file, a flag the directory lacks comes from the
+      binary, and a missing directory only logs the warning above. Read at start of ``dzo web``.
    ``backends``, ``user_header``
       Removed. One web interface serves one installation (use ``api``), and ``dzo web`` has its own
       login. A configuration that still sets either key is refused with a pointer to the migration

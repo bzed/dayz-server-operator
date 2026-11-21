@@ -159,6 +159,8 @@ func TestServeAndWebDefaults(t *testing.T) {
 	require.Equal(t, "127.0.0.1:8080", c.Serve.Listen)
 	require.Equal(t, "127.0.0.1:2400", c.Serve.ModListen)
 	require.Equal(t, "127.0.0.1:8081", c.Web.Listen)
+	require.Empty(t, c.Web.Assets, "the built-in web assets")
+	require.Empty(t, c.Web.FlagsDir, "the built-in flags")
 	require.NotEmpty(t, c.Serve.Installation)
 }
 

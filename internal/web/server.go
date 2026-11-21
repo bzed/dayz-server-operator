@@ -45,12 +45,13 @@ type Backend struct {
 // Options configure the web interface.
 type Options struct {
 	Version string
-	// Assets holds htmx/htmx.min.js and leaflet/leaflet.{js,css} (Debian's
-	// libjs-htmx and libjs-leaflet under /usr/share/javascript).
+	// Assets is an optional directory that overrides the built-in htmx, Leaflet and Fork Awesome file
+	// by file: a file it holds wins, a file it lacks comes from the binary.
 	Assets string
 	// DocsDir is the built Sphinx site, served under /docs/ when set.
 	DocsDir string
-	// FlagsDir holds the country flags, <code>.svg (Debian's iso-flags-svg country-4x3); empty serves none.
+	// FlagsDir is an optional directory that overrides the built-in country flags, <code>.svg, file by
+	// file, as Assets does.
 	FlagsDir string
 	// TrustedProxies are the reverse proxies whose X-Forwarded-For is believed when working out the
 	// browser's address for the login log and the audit log.
@@ -100,9 +101,7 @@ func (s *Server) Handler() http.Handler {
 	root := http.NewServeMux()
 	static, _ := fs.Sub(staticFS, "static")
 	root.Handle("GET /static/", http.StripPrefix("/static/", http.FileServerFS(static)))
-	if s.opts.Assets != "" {
-		root.Handle("GET /vendor/", http.StripPrefix("/vendor/", http.FileServer(http.Dir(s.opts.Assets))))
-	}
+	root.Handle("GET /vendor/", http.StripPrefix("/vendor/", vendorHandler(vendorFS(s.opts.Assets))))
 	if s.opts.DocsDir != "" {
 		root.Handle("GET /docs/", http.StripPrefix("/docs/", http.FileServer(http.Dir(s.opts.DocsDir))))
 	} else {

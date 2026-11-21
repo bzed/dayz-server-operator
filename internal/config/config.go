@@ -217,12 +217,13 @@ type Web struct {
 	} `yaml:"api"`
 	// TrustedProxies are the reverse proxies (addresses or CIDRs) whose X-Forwarded-For is believed.
 	TrustedProxies []string `yaml:"trusted_proxies"`
-	// Assets is the directory with htmx and Leaflet (Debian's libjs-*).
+	// Assets is an optional directory that overrides the built-in htmx, Leaflet and Fork Awesome file
+	// by file; empty serves the copies compiled into dzo.
 	Assets string `yaml:"assets"`
 	// DocsDir is the built documentation, served under /docs/.
 	DocsDir string `yaml:"docs_dir"`
-	// FlagsDir holds the country flags as <code>.svg in the 4:3 shape (Debian's iso-flags-svg); without
-	// them the player list shows the country code.
+	// FlagsDir is an optional directory that overrides the built-in country flags, <code>.svg, file by
+	// file; empty serves the copies compiled into dzo.
 	FlagsDir string `yaml:"flags_dir"`
 
 	// RemovedBackends and RemovedUserHeader only exist so that a config that still sets the keys
@@ -291,7 +292,7 @@ func defaultsTemplated() *Config {
 			Site:      "${data}/site",
 		},
 		Serve:    Serve{Installation: "default", Listen: "127.0.0.1:8080", ModListen: "127.0.0.1:2400", GeoIPDir: "/var/lib/GeoIP", GeoIPLegacyDir: "/usr/share/GeoIP"},
-		Web:      Web{Listen: "127.0.0.1:8081", Assets: "/usr/share/javascript", DocsDir: "/usr/share/doc/dzo/html", FlagsDir: "/usr/share/iso-flags-svg/country-4x3"},
+		Web:      Web{Listen: "127.0.0.1:8081", DocsDir: "/usr/share/doc/dzo/html"},
 		Exporter: Exporter{Listen: ":9464"},
 		Products: map[string]Product{
 			"dayz-stable": {

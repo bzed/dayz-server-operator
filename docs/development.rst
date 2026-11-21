@@ -264,17 +264,18 @@ Playwright downloads its own browsers at test time. The cost is that only
 Chrome-based browsers are covered.
 
 The tests run against the fake backends of ``newEnv`` but with the JavaScript
-a dzo installation really serves: htmx, Leaflet and Fork Awesome from the
-Debian packages ``libjs-htmx``, ``libjs-leaflet`` and ``fonts-fork-awesome``.
-A missing browser or missing assets fail the test, they never skip it.
+dzo serves: htmx, Leaflet and Fork Awesome are compiled into the binary, so
+the tests need nothing but a browser. A missing browser fails the test, it
+never skips it.
 
 ``DZO_E2E_CHROME``
    the browser binary; default: chromedp's lookup (``google-chrome``,
    ``chromium``)
 
 ``DZO_E2E_ASSETS``
-   the directory with ``htmx/``, ``leaflet/`` and ``fork-awesome/`` (default
-   ``/usr/share/javascript``)
+   optional: a directory with ``htmx/``, ``leaflet/`` and ``fork-awesome/``
+   that overrides the built-in files file by file, for a run against another
+   version (an htmx 4 beta, say). Unset, the tests use the built-in copies.
 
 The browser reports every JavaScript exception, console error and CSP
 violation, and the test fails on any of them. An unexpected ``confirm()``
@@ -285,13 +286,13 @@ dialog fails the test too; a test that expects one answers it through
 
 CI runs ``make e2e`` in a ``debian:trixie`` container with Debian's
 ``chromium``, as an unprivileged user with the sandbox on. A second run in
-``debian:forky`` is allowed to fail: it warns early about the next htmx (4.0
-beta).
+``debian:forky`` is allowed to fail: it warns early about the next Debian
+release.
 
 On a machine that is not Debian trixie, ``make e2e-container`` runs the same
 suite in a ``debian:trixie`` podman container, built from
-``images/e2e/Containerfile`` with the Chromium and the JavaScript packages of
-the CI job. The checkout is bind-mounted and the tests run as your own user
+``images/e2e/Containerfile`` with the Chromium of the CI job. The checkout is
+bind-mounted and the tests run as your own user
 (never as root, and without chowning your checkout); the Go caches persist in
 the ``dzo-e2e-home-<suite>`` volume, so the toolchain and module downloads
 happen once. ``DZO_E2E_SUITE`` builds from another Debian suite (``forky``
@@ -309,8 +310,9 @@ test-client`` (``scripts/test-client.sh``, see below) starts a real server with
 dzo-admin, a real ``dzo serve`` and, unless ``--no-client``, the headless DayZ
 client; its last check drives the web UI over that stack with the same browser
 harness (``internal/web/live_test.go``, build tags ``e2e live``, tests
-``TestLive*``). Run it by hand, with ``DZO_E2E_CHROME`` and ``DZO_E2E_ASSETS``
-as above; it fails without them. The script sets:
+``TestLive*``). Run it by hand, with ``DZO_E2E_CHROME`` as above (and
+``DZO_E2E_ASSETS`` for JavaScript other than the built-in copy); it fails
+without a browser. The script sets:
 
 ``DZO_LIVE_API``
    the base URL of the API of the running ``dzo serve``; without it the tests
