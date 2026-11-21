@@ -84,7 +84,8 @@ commit of a release itself is built as it is.
 
 Signing: the key is the repository secret ``APT_GPG_PRIVATE_KEY`` (an
 ASCII-armored secret key without a passphrase). The public half is
-``apt/dzo-archive-keyring.asc``; the workflow fails if the two do not match.
+``apt/dzo-archive-keyring.asc``; the workflow fails if the two do not match. It
+signs the dnf repository too (``rpm/dzo-repo-keyring.asc``, see below).
 
 To replace the key, create one in a throwaway GnuPG home, never in your own
 keyring:
@@ -94,11 +95,49 @@ keyring:
    export GNUPGHOME=$(mktemp -d)
    gpg --batch --passphrase '' --quick-gen-key "dzo apt repository <bernd@bzed.de>" ed25519 sign never
    gpg --armor --export > apt/dzo-archive-keyring.asc
+   cp apt/dzo-archive-keyring.asc rpm/dzo-repo-keyring.asc
    gpg --armor --export-secret-keys | gh secret set APT_GPG_PRIVATE_KEY
    rm -rf "$GNUPGHOME"
 
-Then commit the new public key and update the fingerprint here and in the
+Then commit the new public keys and update the fingerprint here and in the
 README. Users have to fetch the new key.
+
+.. _dnf-repository:
+
+The dnf repository
+~~~~~~~~~~~~~~~~~~
+
+The same ``Docs`` run publishes the rpm repository under ``/rpm/`` from the
+``dzo-rpm`` artifact, which CI's ``rpm`` job builds. ``scripts/build-rpm-repo.sh``
+signs every package with ``rpmsign``, runs ``createrepo_c`` and then signs
+``repodata/repomd.xml`` for dnf's ``repo_gpgcheck``; it also writes the public key
+as ``dzo-repo-keyring.asc`` and copies ``rpm/dzo.repo`` next to it, which is the
+repository file the installation guide tells users to add. Both repositories use
+the same key: ``rpm --import`` accepts its EdDSA key on Fedora 43/44 and CentOS
+Stream 10 (verified against those images when the repository was added), so one
+trusted dzo key covers apt and dnf. The workflow fails if the exported public
+key differs from ``rpm/dzo-repo-keyring.asc``.
+
+The rpm is a package-only build. ``scripts/build-rpm.sh`` puts the binary from
+the ``build`` job and the payload the ``deb`` job uploads (``dzo-payload``: the
+servermods, the images, the presets, the HTML documentation, the generated man
+pages and the cheat sheet) into rpmbuild's tree, and ``packaging/rpm/dzo.spec``
+copies them into place. The .deb and the rpm therefore ship the same files, and
+no Go toolchain is needed on a Fedora build host. The release is the Debian
+revision from the top ``debian/changelog`` entry; a development build appends
+``+git<commits>.<sha>`` to it, as ``scripts/debian-snapshot.sh`` does for the
+.deb, and rpm orders that exactly like dpkg: ``0.8.2-1`` <
+``0.8.2-1+git43.abc1234`` < ``0.8.2-2``, so ``dnf upgrade`` picks up every
+snapshot that ``apt upgrade`` would.
+
+The rpm creates the ``dayz`` user in ``%pre`` instead of shipping
+``dzo.sysusers``: rpm's own sysusers.d handling and Fedora's
+``%sysusers_create_compat`` both allocate a system UID below 1000, while dzo
+needs a regular user for its own journal (``dzo logs``), so the scriptlet takes
+the first free UID at or above 1000, the result the sysusers entry gives on
+Debian. ``rpmlint`` runs with ``packaging/rpm/dzo.rpmlintrc``, which filters only
+what a Go package cannot change (the statically linked binary, DayZ in rpmlint's
+spelling data) and says why.
 
 Building and testing the servermod
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

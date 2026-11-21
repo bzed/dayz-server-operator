@@ -7,20 +7,23 @@ Installation
 Requirements
 ------------
 
-* Debian 13 (trixie) or Ubuntu 26.04 LTS or later, x86_64, with podman 5.4 and
-  systemd 257 or newer from the distribution. Ubuntu 26.04 LTS is the minimum;
-  24.04 LTS ships podman 4.9 and systemd 255.
+* Debian 13 (trixie) or Ubuntu 26.04 LTS or later, or Fedora 43 or later, or
+  the RHEL 10 family (RHEL 10, CentOS Stream 10, AlmaLinux 10, Rocky Linux 10),
+  x86_64, with podman 5.4 and systemd 257 or newer from the distribution.
+  Ubuntu 26.04 LTS is the minimum; 24.04 LTS ships podman 4.9 and systemd 255.
 * Linux kernel 6.12 or newer (the trixie kernel, or a trixie-backports kernel).
-* A **btrfs** filesystem for the instance data and the snapshots. Both must be on
-  the same btrfs filesystem. The download cache can live anywhere, but on btrfs
-  copies are nearly free.
+* A **btrfs** filesystem for the instance data and the snapshots, for the
+  snapshot backups. Both must be on the same btrfs filesystem. On the RHEL 10
+  family there is no btrfs; see `Fedora 43+ and the RHEL 10 family`_. The
+  download cache can live anywhere, but on btrfs copies are nearly free.
 * A Steam account that owns DayZ. The DayZ server cannot be downloaded
   anonymously.
 * Enough disk space: about 3 GB per server build, plus mods, plus snapshots.
 
-* The ``contrib`` and ``non-free`` components of the Debian archive (``multiverse``
-  on Ubuntu) and the ``i386`` architecture: the ``steamcmd`` package is non-free
-  and exists for i386 only, and ``dzo`` depends on it (see `Prepare apt`_).
+* On Debian and Ubuntu, the ``contrib`` and ``non-free`` components of the
+  Debian archive (``multiverse`` on Ubuntu) and the ``i386`` architecture: the
+  ``steamcmd`` package is non-free and exists for i386 only, and ``dzo``
+  depends on it (see `Prepare apt`_).
 
 Recommended, not required:
 
@@ -133,7 +136,8 @@ Install the package
 -------------------
 
 dzo is shipped as a Debian package, ``dzo``, from the repository above or as a
-``.deb`` file from the CI artifacts. It pulls in ``podman``, ``passt``,
+``.deb`` file from the CI artifacts, and as an rpm for Fedora and the RHEL 10
+family (see below). It pulls in ``podman``, ``passt``,
 ``git``, ``uidmap``, ``geoip-database`` and ``steamcmd:i386`` (prepare apt as described
 above first); the web interface's htmx, Leaflet, Fork Awesome and country flags are
 compiled in, so it needs no Debian package for them. The commands that download
@@ -169,6 +173,72 @@ It does **not** start any game server.
 
 On a development or test host without the package, see :doc:`dev-host` for the
 user, the btrfs mount and the other steps by hand.
+
+Fedora 43+ and the RHEL 10 family
+---------------------------------
+
+The same package is built as an rpm for Fedora 43 and later and for the RHEL 10
+family (RHEL 10, CentOS Stream 10, AlmaLinux 10, Rocky Linux 10), x86_64. CI
+installs it on Fedora 43, Fedora 44 and CentOS Stream 10. It is published in a
+signed dnf repository next to the apt one; the packages and the repository
+metadata are signed with the same key as the apt repository (fingerprint
+``184C DDC4 96A9 C739 D10F  67B0 FE4E E034 4431 4050``):
+
+.. code-block:: sh
+
+   curl -fsSLo /etc/yum.repos.d/dzo.repo https://bzed.github.io/dayz-server-operator/rpm/dzo.repo
+   dnf install dzo
+
+On Fedora, dnf5's ``dnf config-manager addrepo --from-repofile=<url>`` writes the
+same file; the RHEL 10 family ships dnf4, where the ``curl`` line is the way.
+
+dnf asks once to confirm the key's fingerprint (or import it with
+``rpm --import https://bzed.github.io/dayz-server-operator/rpm/dzo-repo-keyring.asc``)
+and then verifies both the package signatures (``gpgcheck``) and the repository
+metadata (``repo_gpgcheck``). The repository holds the latest build of ``main``
+only, with the same snapshot versions as the Debian package: the rpm release is
+the Debian revision, so ``0.8.2-1`` is older than ``0.8.2-1+git43.abc1234`` and
+that is older than ``0.8.2-2`` (see :ref:`apt-repository`).
+
+The rpm carries the same files as the ``.deb`` and creates the same ``dayz``
+account: a regular user with a UID of 1000 or higher (rpm's own sysusers.d
+handling would allocate a system UID below 1000, so the package creates the
+account itself), its subordinate uid/gid range and lingering. As on Debian it
+pulls in ``podman``, ``systemd``, ``git``, ``patch``, ``shadow-utils`` and
+``passt``; ``btrfs-progs`` and ``geoipupdate`` are recommended
+(``geoipupdate`` is in EPEL).
+
+There is no ``steamcmd`` package on Fedora or the RHEL family; dzo runs steamcmd
+from the ``localhost/dzo-steamcmd`` image. See `steamcmd on Fedora, RHEL and
+Arch`_ below.
+
+SELinux: not verified yet
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Fedora and the RHEL family enforce SELinux by default, and dzo has **not** been
+verified on an enforcing host yet. The game server containers bind-mount the
+build, the mods, the profiles and the dzo binary, and the steamcmd wrapper
+mounts the download cache and its Steam home without a ``:z`` relabelling, so a
+container or the wrapper can hit an AVC denial. If something fails with a
+permission error that root does not have, check the audit log:
+
+.. code-block:: sh
+
+   ausearch -m avc -ts recent
+   journalctl -t setroubleshoot
+
+Setting SELinux to permissive (``setenforce 0``) only confirms that SELinux is
+the cause; it is not a fix. Please report the denials together with the output
+of ``dzo status`` and of ``systemctl --user cat <instance>`` (as ``dayz``).
+
+No btrfs on the RHEL 10 family
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The RHEL 10 kernel has no btrfs, so ``paths.instances`` and ``paths.snapshots``
+cannot be on one there. dzo runs, but the btrfs snapshot backups are not
+available and ``dzo setup`` warns about it; use the distribution's backup for
+the data directory, or back up the instance and site directories another way.
+Fedora's default filesystem is btrfs, so the backups work there.
 
 steamcmd on Fedora, RHEL and Arch
 ---------------------------------
@@ -269,7 +339,8 @@ If ``dayz`` already exists as a system user (UID below 1000), ``dzo logs`` and
 Upgrading
 ---------
 
-``apt install ./dzo_<version>.deb`` (or ``apt upgrade``) replaces ``/usr/bin/dzo`` by renaming, so
+``apt install ./dzo_<version>.deb`` (or ``apt upgrade``; ``dnf upgrade dzo`` on Fedora and the RHEL
+family) replaces ``/usr/bin/dzo`` by renaming, so
 running processes keep the old build until they restart. The package then runs ``dzo units sync`` as
 ``dayz`` (it rewrites the generated units for the new version) and restarts the services that run from
 the binary: the exporter, ``dzo serve`` and ``dzo web``, when they are active. **A game server is

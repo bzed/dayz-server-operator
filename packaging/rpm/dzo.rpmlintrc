@@ -1,0 +1,27 @@
+# SPDX-FileCopyrightText: 2026 Bernd Zeimetz <bernd@bzed.de>
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# rpmlint filters for dzo. CI runs
+#
+#   rpmlint -r packaging/rpm/dzo.rpmlintrc dzo-*.rpm
+#
+# Every entry here is a finding that cannot be fixed in the package: either it
+# is the point of the package or rpmlint's dictionary does not know DayZ.
+
+# dzo is built with CGO_ENABLED=0 so one static binary serves every
+# distribution and needs no libc from the host. That is a design decision, not
+# an accident; the same binary has no unpatched shared libraries to chase.
+addFilter(r"statically-linked-binary /usr/bin/dzo$")
+
+# DayZ, podman, quadlets and the dayz user are the names of the project and its
+# dependencies, not typos. (rpmlint's spelling data is en_US.)
+addFilter(r"spelling-error \('DayZ'")
+addFilter(r"spelling-error \('podman'")
+addFilter(r"spelling-error \('quadlets'")
+addFilter(r"spelling-error \('dayz'")
+
+# The repository publishes snapshot builds of main: their release is
+# "<debian revision>+git<commits>.<sha>", so rpm orders them after the release
+# they build on and before the next one (see packaging/rpm/dzo.spec). The spec's
+# changelog names the release, which then cannot match a snapshot's version.
+addFilter(r"incoherent-version-in-changelog")

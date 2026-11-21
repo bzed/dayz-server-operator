@@ -242,6 +242,100 @@ jobs:
           name: dzo-deb
           path: deb-artifacts/*
           if-no-files-found: error
+      - name: Assemble the rpm payload
+        # The rpm repackages the binary the build job made plus exactly these
+        # files, so the .deb and the rpm ship the same payload and neither can
+        # drift from the other.
+        run: |
+          mkdir -p rpm-payload
+          cp -a dist/servermods images contrib rpm-payload/
+          cp -a docs/_build/html rpm-payload/html
+          cp -a debian/man rpm-payload/man
+          cp docs/cheatsheet/dzo-cheatsheet.pdf rpm-payload/
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: dzo-payload
+          path: rpm-payload/
+          if-no-files-found: error
+
+  rpm:
+    name: Build rpm package
+    needs: [build, deb]
+    runs-on: ubuntu-latest
+    # In a Fedora 44 container: the rpm is built where its tools live, from the
+    # binary the build job made and the payload the deb job assembled. Nothing
+    # is compiled here (packaging/rpm/dzo.spec).
+    container:
+      image: registry.fedoraproject.org/fedora:44
+    steps:
+      - name: Install git and the rpm build tools
+        run: dnf install -y git ca-certificates rpm-build rpmlint
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # `git describe` for the snapshot release
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: dzo-binaries
+          path: dist
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: dzo-payload
+          path: rpm-payload
+      - name: Build the package
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          scripts/build-rpm.sh dist/dzo-linux-amd64 rpm-payload rpm-out
+      - name: rpmlint
+        # Errors fail the build; packaging/rpm/dzo.rpmlintrc filters the ones
+        # that are inherent to the package (the static Go binary, DayZ in
+        # rpmlint's spelling data) and explains why.
+        run: rpmlint -r packaging/rpm/dzo.rpmlintrc rpm-out/dzo-*.rpm
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: dzo-rpm
+          path: rpm-out/*.rpm
+          if-no-files-found: error
+
+  rpm-install:
+    name: Install the rpm (${{ matrix.image }})
+    needs: [rpm]
+    runs-on: ubuntu-latest
+    # The package as a user gets it, installed into a bare distribution image
+    # with its dependencies from that distribution, and run as the service user
+    # the package creates. Fedora 43 and 44 and CentOS Stream 10 must pass:
+    # Stream 10 stands in for the RHEL 10 family, which has no free image.
+    strategy:
+      fail-fast: false
+      matrix:
+        image:
+          - registry.fedoraproject.org/fedora:43
+          - registry.fedoraproject.org/fedora:44
+          - quay.io/centos/centos:stream10
+    container:
+      image: ${{ matrix.image }}
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: dzo-rpm
+          path: rpm/
+      - name: Install the package
+        # git comes with the package as a dependency; both are named here because
+        # actions/checkout below needs them and must not depend on that.
+        run: dnf install -y ./rpm/dzo-*.rpm git ca-certificates
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: The rendered quadlets pass the installed podman's own generator
+        run: scripts/check-quadlet.sh internal/resolve/testdata
+      - name: dzo version
+        run: dzo version
+      - name: dzo setup --dry-run as the service user
+        run: su dayz -s /bin/sh -c 'dzo setup --dry-run'
+      - name: The dayz user is a regular user with subordinate ids
+        run: |
+          uid=$(getent passwd dayz | cut -d: -f3)
+          [ -n "$uid" ] || { echo "the package did not create the dayz user" >&2; exit 1; }
+          [ "$uid" -ge 1000 ] || { echo "dayz has UID $uid, below 1000" >&2; exit 1; }
+          grep -q '^dayz:' /etc/subuid || { echo "no subordinate uid range for dayz" >&2; exit 1; }
+          grep -q '^dayz:' /etc/subgid || { echo "no subordinate gid range for dayz" >&2; exit 1; }
 
   package-install:
     name: Install the package (${{ matrix.image }})

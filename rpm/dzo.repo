@@ -1,0 +1,21 @@
+# SPDX-FileCopyrightText: 2026 Bernd Zeimetz <bernd@bzed.de>
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# dzo's dnf repository, published next to the documentation and the apt
+# repository. Install it as /etc/yum.repos.d/dzo.repo:
+#
+#   curl -fsSLo /etc/yum.repos.d/dzo.repo https://bzed.github.io/dayz-server-operator/rpm/dzo.repo
+#
+# (on Fedora, dnf5's "dnf config-manager addrepo --from-repofile=<url>" writes
+# the same file).
+#
+# Both the packages and the repository metadata are signed with the same key
+# that signs the apt repository; dnf asks once to confirm the fingerprint
+# (184C DDC4 96A9 C739 D10F  67B0 FE4E E034 4431 4050) and imports it.
+[dzo]
+name=dzo - DayZ server operator
+baseurl=https://bzed.github.io/dayz-server-operator/rpm/
+enabled=1
+gpgcheck=1
+repo_gpgcheck=1
+gpgkey=https://bzed.github.io/dayz-server-operator/rpm/dzo-repo-keyring.asc

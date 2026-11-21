@@ -92,7 +92,16 @@ $ sudo apt update && sudo apt install dzo
 The key's fingerprint is `184C DDC4 96A9 C739 D10F  67B0 FE4E E034 4431 4050`.
 `stable` serves the same package as the older `Suites: trixie`, which keeps working.
 
-Other ways: a `.deb` or a static binary from the
+**From the dnf repository** (Fedora 43 or later and the RHEL 10 family, amd64; signed, rebuilt from `main`):
+
+```console
+$ sudo curl -fsSLo /etc/yum.repos.d/dzo.repo https://bzed.github.io/dayz-server-operator/rpm/dzo.repo
+$ sudo dnf install dzo
+```
+
+It is signed with the same key and fingerprint as the apt repository.
+
+Other ways: a `.deb`, an `.rpm` or a static binary from the
 [CI artifacts](https://github.com/bzed/dayz-server-operator/actions/workflows/ci.yml),
 or build it yourself (a recent Go toolchain, see `go.mod`):
 
