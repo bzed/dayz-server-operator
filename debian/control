@@ -18,11 +18,7 @@ Depends:
  patch,
  uidmap,
  passt,
- libjs-htmx,
- libjs-leaflet,
  geoip-database,
- iso-flags-svg,
- fonts-fork-awesome,
  steamcmd:i386,
 Recommends:
  geoipupdate,

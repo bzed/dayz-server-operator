@@ -301,7 +301,7 @@ and print what is wrong. A key dzo does not know is ignored.
       Leaflet 1.7.1 and Fork Awesome 1.2.0 are built in and served under ``/vendor/``. A file the
       directory holds wins; a file it lacks comes from the binary, so a directory with only
       ``htmx/htmx.min.js`` replaces htmx alone and keeps the rest. A directory that is not there, for
-      example an old ``/usr/share/javascript`` after the Debian packages were autoremoved, is not an
+      example a stale ``/usr/share/javascript`` from an older configuration, is not an
       error: ``dzo web`` logs one warning at start and serves the built-in copies. Read at start of
       ``dzo web``; a change needs a restart. ``dzo site validate`` reads the same
       ``fork-awesome/css/fork-awesome.css``, so it warns about the admin-map icons of an override

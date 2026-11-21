@@ -285,9 +285,10 @@ dialog fails the test too; a test that expects one answers it through
 ``newBrowser``; never commit that.
 
 CI runs ``make e2e`` in a ``debian:trixie`` container with Debian's
-``chromium``, as an unprivileged user with the sandbox on. A second run in
-``debian:forky`` is allowed to fail: it warns early about the next Debian
-release.
+``chromium``, as an unprivileged user with the sandbox on, and a second run in
+``debian:forky``; the JavaScript is compiled into the binary, so a suite only
+brings the browser of its release. ``debian:forky`` covers the browser that the
+next Debian release ships.
 
 On a machine that is not Debian trixie, ``make e2e-container`` runs the same
 suite in a ``debian:trixie`` podman container, built from
@@ -295,8 +296,8 @@ suite in a ``debian:trixie`` podman container, built from
 bind-mounted and the tests run as your own user
 (never as root, and without chowning your checkout); the Go caches persist in
 the ``dzo-e2e-home-<suite>`` volume, so the toolchain and module downloads
-happen once. ``DZO_E2E_SUITE`` builds from another Debian suite (``forky``
-reproduces CI's early-warning run), ``DZO_E2E_TARGET`` runs another make target
+happen once. ``DZO_E2E_SUITE`` builds from another Debian suite (``forky``, the
+other suite CI runs), ``DZO_E2E_TARGET`` runs another make target
 in the container, and ``DZO_E2E_PODMAN_OPTS`` replaces the sandbox options (a
 host without AppArmor drops ``--security-opt apparmor=unconfined`` there). On
 an SELinux host, add ``:Z`` to the checkout bind mount.

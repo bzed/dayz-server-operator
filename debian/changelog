@@ -1,3 +1,13 @@
+dayz-server-operator (0.8.2-1) trixie; urgency=medium
+
+  * Web interface: htmx 2.0.4, Leaflet 1.7.1, Fork Awesome 1.2.0 and the
+    country flags are compiled into the binary; dzo no longer depends on
+    libjs-htmx, libjs-leaflet, fonts-fork-awesome and iso-flags-svg, and
+    web.assets and web.flags_dir default to none (the built-in copies)
+    and only override them file by file.
+
+ -- Bernd Zeimetz <bernd@bzed.de>  Sat, 21 Nov 2026 17:04:18 +0100
+
 dayz-server-operator (0.8.1-1) trixie; urgency=medium
 
   * dzo-admin 0.8.1, which changes the packaged PBO: a moved or spawned

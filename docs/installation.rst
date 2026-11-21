@@ -81,11 +81,12 @@ Install the package
 
 dzo is shipped as a Debian package, ``dzo``, from the repository above or as a
 ``.deb`` file from the CI artifacts. It pulls in ``podman``, ``passt``,
-``git``, ``uidmap``, ``steamcmd:i386`` and the web libraries from Debian (prepare
-apt as described above first). The commands that download servers and mods run the
-``steamcmd`` they find in the ``PATH`` (``--steamcmd`` picks another program, for
-example a wrapper that runs the ``localhost/dzo-steamcmd`` image that ``dzo setup``
-builds).
+``git``, ``uidmap``, ``geoip-database`` and ``steamcmd:i386`` (prepare apt as described
+above first); the web interface's htmx, Leaflet, Fork Awesome and country flags are
+compiled in, so it needs no Debian package for them. The commands that download
+servers and mods run the ``steamcmd`` they find in the ``PATH`` (``--steamcmd`` picks
+another program, for example a wrapper that runs the ``localhost/dzo-steamcmd`` image
+that ``dzo setup`` builds).
 
 .. code-block:: sh
 

@@ -166,8 +166,8 @@ with a real Steam account, and on a workstation with the DayZ client:
   refusal in a vehicle), spawning an item into the inventory, the hands and the
   ground, an unknown class, the crew of a vehicle, class watch rules on items,
   vehicle repair and delete.
-- **The web interface and the map** against a live server with a player, using
-  Debian's own `libjs-htmx` 2.0.4 and `libjs-leaflet` 1.7.1 (trixie).
+- **The web interface and the map** against a live server with a player, with the
+  built-in htmx 2.0.4 and Leaflet 1.7.1 (Debian trixie's versions).
 - **The Central Economy mission** is fetched from Bohemia's repository by branch or
   by bare commit id, rendered, applied in place, and booted by `dzo test boot`
   (also with CF-Test on the experimental server).
@@ -206,9 +206,6 @@ with a real Steam account, and on a workstation with the DayZ client:
   macros): `dzo mod cfgpatches` reports an error for 10 of the ~4,900 PBOs. It is
   only a diagnostic and does not decide the load order, which is the order of the
   `mods` list.
-- The package depends on Debian's `libjs-htmx` and `libjs-leaflet`. On trixie
-  that is htmx 2.0.4, which the pages were written for; the htmx 4 beta of
-  forky and sid has not been tried.
 - The world sizes of `sakhal` and of unknown maps without tiles are guesses.
 
 ### Needs live verification

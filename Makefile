@@ -96,9 +96,9 @@ e2e:
 	$(GO) test -tags e2e -count=1 -race -run '^TestE2E' ./internal/web/
 
 ## e2e-container: make e2e (or DZO_E2E_TARGET) inside a debian:trixie podman container, for machines
-## that are not Debian trixie: the same Chromium, htmx, Leaflet and Fork Awesome the CI job uses
-## (images/e2e/Containerfile, docs/development.rst). DZO_E2E_SUITE (trixie), DZO_E2E_TARGET (e2e) and
-## DZO_E2E_PODMAN_OPTS (Chromium's sandbox options, those of CI) change the defaults.
+## that are not Debian trixie: the same Chromium the CI job uses (images/e2e/Containerfile,
+## docs/development.rst). DZO_E2E_SUITE (trixie), DZO_E2E_TARGET (e2e) and DZO_E2E_PODMAN_OPTS
+## (Chromium's sandbox options, those of CI) change the defaults.
 DZO_E2E_SUITE ?= trixie
 DZO_E2E_TARGET ?= e2e
 DZO_E2E_PODMAN_OPTS ?= --security-opt seccomp=unconfined --security-opt apparmor=unconfined --cap-add SYS_ADMIN

@@ -817,8 +817,8 @@
 
   // ---- marker icons ----
   //
-  // A marker's icon is the name of a Fork Awesome icon (fire, car, ...), from Debian's
-  // fonts-fork-awesome. A name the font does not know, or a font that is not there, leaves the
+  // A marker's icon is the name of a Fork Awesome icon (fire, car, ...), from the font dzo
+  // ships. A name the font does not know, or a font that is not there, leaves the
   // marker a coloured dot.
   var glyphs = {};
   function iconClass(name) {

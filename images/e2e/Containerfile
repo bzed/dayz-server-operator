@@ -2,9 +2,9 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 # dzo-e2e: the browser e2e suite (make e2e) on any machine, in the same Debian
-# a dzo installation serves its JavaScript from. CI runs the suite in this very
-# container (.github/workflows/ci.yml, job "e2e"); make e2e-container builds
-# and runs it locally (see docs/development.rst).
+# a dzo installation runs in. CI runs the suite in this very container
+# (.github/workflows/ci.yml, job "e2e"); make e2e-container builds and runs it
+# locally (see docs/development.rst).
 #
 # Debian's golang-go is older than go.mod asks for; GOTOOLCHAIN=auto (the
 # default) downloads the go.mod version on first use, into the module cache of
@@ -25,12 +25,13 @@ ARG UID=1000
 ARG GID=1000
 
 # What make e2e needs: git for the Makefile's version stamp, gcc and libc6-dev
-# for the race detector, Chromium with its sandbox (it stays on), and the
-# htmx, Leaflet and Fork Awesome a dzo installation serves.
+# for the race detector, and Chromium with its sandbox (it stays on). The htmx,
+# Leaflet, Fork Awesome and flags are compiled into dzo, so the image brings
+# nothing else.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         git ca-certificates make gcc libc6-dev golang-go \
-        chromium chromium-sandbox libjs-htmx libjs-leaflet fonts-fork-awesome \
+        chromium chromium-sandbox \
     && rm -rf /var/lib/apt/lists/*
 
 RUN groupadd -g ${GID} tester && useradd -m -u ${UID} -g ${GID} -s /bin/sh tester
