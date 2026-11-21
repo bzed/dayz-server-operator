@@ -7,7 +7,9 @@ Installation
 Requirements
 ------------
 
-* Debian 13 (trixie), x86_64, with podman 5.4 and systemd 257 from Debian.
+* Debian 13 (trixie) or Ubuntu 26.04 LTS or later, x86_64, with podman 5.4 and
+  systemd 257 or newer from the distribution. Ubuntu 26.04 LTS is the minimum;
+  24.04 LTS ships podman 4.9 and systemd 255.
 * Linux kernel 6.12 or newer (the trixie kernel, or a trixie-backports kernel).
 * A **btrfs** filesystem for the instance data and the snapshots. Both must be on
   the same btrfs filesystem. The download cache can live anywhere, but on btrfs
@@ -16,9 +18,9 @@ Requirements
   anonymously.
 * Enough disk space: about 3 GB per server build, plus mods, plus snapshots.
 
-* The ``contrib`` and ``non-free`` components of the Debian archive and the
-  ``i386`` architecture: the ``steamcmd`` package is non-free and exists for
-  i386 only, and ``dzo`` depends on it (see `Prepare apt`_).
+* The ``contrib`` and ``non-free`` components of the Debian archive (``multiverse``
+  on Ubuntu) and the ``i386`` architecture: the ``steamcmd`` package is non-free
+  and exists for i386 only, and ``dzo`` depends on it (see `Prepare apt`_).
 
 Recommended, not required:
 
@@ -28,8 +30,9 @@ Recommended, not required:
 Prepare apt
 -----------
 
-``dzo`` depends on Debian's ``steamcmd:i386``. That package is non-free and only
-built for i386, so apt must know both before it can install ``dzo``. As root:
+``dzo`` depends on ``steamcmd:i386``. That package is non-free and only
+built for i386, so apt must know both before it can install ``dzo``. As root, on
+Debian:
 
 .. code-block:: sh
 
@@ -37,6 +40,9 @@ built for i386, so apt must know both before it can install ``dzo``. As root:
    sed -i /etc/apt/sources.list.d/debian.sources \
        -e 's/^Components: main$/Components: main contrib non-free/'   # or edit your sources by hand
    apt update
+
+On Ubuntu ``steamcmd`` is in ``multiverse`` instead of Debian's
+``contrib``/``non-free``; see `Ubuntu 26.04 LTS and later`_ for the commands.
 
 The steamcmd package asks you to accept Valve's license when it is installed.
 For an unattended install, answer it beforehand:
@@ -50,8 +56,9 @@ Add the apt repository
 ----------------------
 
 The package is published in a signed apt repository on GitHub Pages. It is
-built from ``main`` for Debian 13 (trixie), amd64. The repository is signed with
-a key of its own (``dzo apt repository <bernd@bzed.de>``, fingerprint
+built from ``main`` on Debian 13 (trixie), for Debian 13 and for Ubuntu 26.04 LTS
+and later, amd64. The repository is signed with a key of its own (``dzo apt
+repository <bernd@bzed.de>``, fingerprint
 ``184C DDC4 96A9 C739 D10F  67B0 FE4E E034 4431 4050``); apt only trusts that
 key for this one source.
 
@@ -64,7 +71,7 @@ key for this one source.
    cat >/etc/apt/sources.list.d/dzo.sources <<'EOF'
    Types: deb
    URIs: https://bzed.github.io/dayz-server-operator/apt
-   Suites: trixie
+   Suites: stable
    Components: main
    Architectures: amd64
    Signed-By: /etc/apt/keyrings/dzo-archive-keyring.asc
@@ -72,9 +79,55 @@ key for this one source.
    apt update
    apt install dzo
 
+``stable`` is the suite to use: today it names the same package as ``trixie``,
+and it keeps its name if the repository ever moves to another codename.
+``Suites: trixie`` still works and serves exactly the same package, so an
+existing installation needs no change.
+
 ``apt upgrade`` then keeps dzo current. The repository holds the latest build of
 ``main`` only; its versions are snapshots of the form
 ``0.1.0-1+git5.abc1234`` (see :ref:`apt-repository`).
+
+Ubuntu 26.04 LTS and later
+--------------------------
+
+The same package and this repository work on Ubuntu. **26.04 LTS** is the
+minimum: earlier releases ship podman and systemd versions older than the 5.4
+and 257 that ``dzo`` requires (24.04 LTS: podman 4.9, systemd 255), so apt
+refuses the package there. Later Ubuntu releases, interim ones included, work;
+everything the web interface needs is compiled into ``dzo``.
+
+Only the preparation differs: ``steamcmd`` is in Ubuntu's ``multiverse``
+component. The official sources enable it already (``Components: main
+restricted universe multiverse``); the ``sed`` below adds it where they do not.
+As root:
+
+.. code-block:: sh
+
+   dpkg --add-architecture i386
+   sed -i /etc/apt/sources.list.d/ubuntu.sources \
+       -e '/^Components:.*multiverse/! s/^Components: \(.*\)$/Components: \1 multiverse/'  # usually a no-op
+   apt update
+   echo steamcmd steam/question select "I AGREE" | debconf-set-selections
+   echo steamcmd steam/license note '' | debconf-set-selections
+
+   install -d -m 0755 /etc/apt/keyrings
+   curl -fsSLo /etc/apt/keyrings/dzo-archive-keyring.asc \
+       https://bzed.github.io/dayz-server-operator/apt/dzo-archive-keyring.asc
+   gpg --show-keys --with-fingerprint /etc/apt/keyrings/dzo-archive-keyring.asc  # compare the fingerprint
+   cat >/etc/apt/sources.list.d/dzo.sources <<'EOF'
+   Types: deb
+   URIs: https://bzed.github.io/dayz-server-operator/apt
+   Suites: stable
+   Components: main
+   Architectures: amd64
+   Signed-By: /etc/apt/keyrings/dzo-archive-keyring.asc
+   EOF
+   apt update
+   apt install dzo
+
+Everything else on this page applies unchanged, including the btrfs filesystem
+and ``dzo setup``.
 
 Install the package
 -------------------

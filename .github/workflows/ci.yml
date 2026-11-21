@@ -244,14 +244,28 @@ jobs:
           if-no-files-found: error
 
   package-install:
-    name: Install the package in a clean trixie container
+    name: Install the package (${{ matrix.image }})
     needs: [deb]
     runs-on: ubuntu-latest
-    # The package as a user gets it: installed into a bare debian:trixie, with
-    # its dependencies from Debian, and run as the service user the package
-    # creates (M5).
+    # The package as a user gets it: installed into a bare distribution image,
+    # with its dependencies from that distribution, and run as the service user
+    # the package creates (M5). Debian 13 and Ubuntu 26.04 LTS must pass; the
+    # next releases only show what breaks before it reaches a user.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: debian:trixie
+            experimental: false
+          - image: ubuntu:26.04
+            experimental: false
+          - image: ubuntu:26.10
+            experimental: true
+          - image: debian:forky
+            experimental: true
+    continue-on-error: ${{ matrix.experimental }}
     container:
-      image: debian:trixie
+      image: ${{ matrix.image }}
     steps:
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -259,9 +273,19 @@ jobs:
           path: deb/
       - name: Install the package
         run: |
-          # steamcmd is non-free and i386 only: enable both before apt resolves the dependencies
+          # steamcmd is non-free and i386 only: enable both before apt resolves
+          # the dependencies. Debian has it in contrib/non-free, Ubuntu in multiverse.
+          . /etc/os-release
           dpkg --add-architecture i386
-          sed -i /etc/apt/sources.list.d/debian.sources -e 's/^Components: main$/Components: main contrib non-free/'
+          case "$ID" in
+            debian)
+              sed -i /etc/apt/sources.list.d/debian.sources -e 's/^Components: main$/Components: main contrib non-free/'
+              ;;
+            ubuntu)
+              # the official images already list multiverse; add it if one does not
+              sed -i /etc/apt/sources.list.d/ubuntu.sources -e '/^Components:.*multiverse/! s/^Components: \(.*\)$/Components: \1 multiverse/'
+              ;;
+          esac
           echo steamcmd steam/question select "I AGREE" | debconf-set-selections
           echo steamcmd steam/license note '' | debconf-set-selections
           apt-get update
@@ -270,6 +294,13 @@ jobs:
         run: dzo version
       - name: dzo setup --dry-run as the service user
         run: su dayz -s /bin/sh -c 'dzo setup --dry-run'
+      - name: The dayz user is a regular user with subordinate ids
+        run: |
+          uid=$(getent passwd dayz | cut -d: -f3)
+          [ -n "$uid" ] || { echo "the package did not create the dayz user" >&2; exit 1; }
+          [ "$uid" -ge 1000 ] || { echo "dayz has UID $uid, below 1000" >&2; exit 1; }
+          grep -q '^dayz:' /etc/subuid || { echo "no subordinate uid range for dayz" >&2; exit 1; }
+          grep -q '^dayz:' /etc/subgid || { echo "no subordinate gid range for dayz" >&2; exit 1; }
 
   release:
     name: Create GitHub release

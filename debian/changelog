@@ -5,6 +5,10 @@ dayz-server-operator (0.8.2-1) trixie; urgency=medium
     libjs-htmx, libjs-leaflet, fonts-fork-awesome and iso-flags-svg, and
     web.assets and web.flags_dir default to none (the built-in copies)
     and only override them file by file.
+  * The apt repository also publishes the suite "stable" (a symlink to
+    trixie) and the installation guide uses it; "trixie" keeps working.
+    CI install-tests the package in a clean Ubuntu 26.04 LTS container,
+    blocking, next to Debian 13.
 
  -- Bernd Zeimetz <bernd@bzed.de>  Sat, 21 Nov 2026 17:04:18 +0100
 

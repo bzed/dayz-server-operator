@@ -66,20 +66,22 @@ also a [two-page cheat sheet (PDF)](docs/cheatsheet/dzo-cheatsheet.pdf).
 
 ## Install
 
-**From the apt repository** (Debian 13 "trixie", amd64; signed, rebuilt from `main`):
+**From the apt repository** (Debian 13 "trixie" and Ubuntu 26.04 LTS or later, amd64; signed, rebuilt from `main`):
 
 `dzo` depends on `steamcmd:i386`, which is non-free and i386 only, so enable both first
-(see the [installation guide](docs/installation.rst) for the details and the license prompt):
+(see the [installation guide](docs/installation.rst) for the details and the license prompt).
+Debian has it in `contrib`/`non-free`, Ubuntu in `multiverse`:
 
 ```console
 $ sudo dpkg --add-architecture i386
-$ sudo sed -i /etc/apt/sources.list.d/debian.sources -e 's/^Components: main$/Components: main contrib non-free/'
+$ sudo sed -i /etc/apt/sources.list.d/debian.sources -e 's/^Components: main$/Components: main contrib non-free/'   # Debian
+$ sudo sed -i /etc/apt/sources.list.d/ubuntu.sources -e '/^Components:.*multiverse/! s/^Components: \(.*\)$/Components: \1 multiverse/'   # Ubuntu
 $ sudo install -d -m 0755 /etc/apt/keyrings
 $ sudo curl -fsSLo /etc/apt/keyrings/dzo-archive-keyring.asc https://bzed.github.io/dayz-server-operator/apt/dzo-archive-keyring.asc
 $ sudo tee /etc/apt/sources.list.d/dzo.sources <<'EOF'
 Types: deb
 URIs: https://bzed.github.io/dayz-server-operator/apt
-Suites: trixie
+Suites: stable
 Components: main
 Architectures: amd64
 Signed-By: /etc/apt/keyrings/dzo-archive-keyring.asc
@@ -88,6 +90,7 @@ $ sudo apt update && sudo apt install dzo
 ```
 
 The key's fingerprint is `184C DDC4 96A9 C739 D10F  67B0 FE4E E034 4431 4050`.
+`stable` serves the same package as the older `Suites: trixie`, which keeps working.
 
 Other ways: a `.deb` or a static binary from the
 [CI artifacts](https://github.com/bzed/dayz-server-operator/actions/workflows/ci.yml),

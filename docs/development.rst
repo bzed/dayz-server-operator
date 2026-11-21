@@ -67,7 +67,12 @@ The ``Docs`` workflow (``.github/workflows/docs.yml``) starts when CI has passed
 on ``main``, takes the package the ``deb`` job of that CI run built (the
 ``dzo-deb`` artifact), runs ``scripts/build-apt-repo.sh`` (reprepro, configured in
 ``apt/conf/distributions``) and publishes the result under ``/apt/`` next to the
-documentation. The repository holds the latest build of ``main`` only.
+documentation. The repository holds the latest build of ``main`` only. Besides the codename's
+directory (``dists/trixie``), the script publishes the suite the installation guide
+tells users to configure, ``dists/stable``, as a symlink to it:
+``reprepro createsymlinks`` creates that symlink from ``Suite: stable`` in
+``apt/conf/distributions``, and apt follows it when a sources entry says
+``Suites: stable``. ``Suites: trixie`` keeps working.
 
 Versions: the top entry of ``debian/changelog`` is always the latest release; the
 upcoming one is added when it is cut. In CI, ``scripts/debian-snapshot.sh`` adds a changelog entry
