@@ -81,6 +81,16 @@ CentOS Stream 10 stands in for the RHEL 10 family, which has no free image.
 A job marked as not blocking is ``continue-on-error``: it runs and reports, and a
 red cross there is information, not a broken build.
 
+The install jobs test the package file of their own run. After each build of
+``main`` that is published, the ``verify-repos`` job of ``.github/workflows/docs.yml``
+installs ``dzo`` the way this page describes it: from the published apt
+(``debian:trixie``), dnf (``fedora:44``) and pacman (``archlinux:latest``, not
+blocking) repositories over HTTPS, with the signatures enforced. It catches a
+broken signature, repository file or URL that the package tests cannot see. A
+failed Arch build does not hold back the publication of the documentation and the
+other repositories: the pacman repository that is already published is kept
+as it is until the next Arch build succeeds.
+
 What CI cannot check
 ~~~~~~~~~~~~~~~~~~~~
 

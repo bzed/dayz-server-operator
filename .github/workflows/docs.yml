@@ -191,6 +191,12 @@ jobs:
   publish:
     name: Assemble the site
     needs: [build, apt, rpm-repo, arch-repo]
+    # Arch is best effort: a failed arch or arch-repo job must not hold back the docs, the apt
+    # and the dnf repository. The others must have succeeded; always() lets the job run when
+    # only arch-repo failed (a pull request skips build's dependents, so it skips this too).
+    if: >-
+      always() && needs.build.result == 'success' && needs.apt.result == 'success' &&
+      needs.rpm-repo.result == 'success'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -206,9 +212,31 @@ jobs:
           name: rpm-repo
           path: site/rpm
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        if: needs.arch-repo.result == 'success'
         with:
           name: arch-repo
           path: site/arch
+      # Pages replaces the whole site: without a new pacman repository, keep the one that is
+      # published, so Arch hosts keep their last snapshot instead of a 404. Every file is taken
+      # as it is served; the signatures were made when it was built.
+      - name: Keep the published pacman repository
+        if: needs.arch-repo.result != 'success'
+        env:
+          BASE: https://bzed.github.io/dayz-server-operator/arch
+        run: |
+          set -eu
+          mkdir -p site/arch
+          cd site/arch
+          if ! curl -fsSLO "$BASE/dzo.db"; then
+            echo "::warning title=No pacman repository::the arch-repo job failed and none is published yet; the site has no /arch/"
+            exit 0
+          fi
+          for f in dzo.db.sig dzo.conf dzo-repo-keyring.asc; do curl -fsSLO "$BASE/$f"; done
+          for pkg in $(tar -xOzf dzo.db --wildcards '*/desc' | awk 'f{print; f=0} /^%FILENAME%$/{f=1}'); do
+            curl -fsSLO "$BASE/$pkg"
+            curl -fsSLO "$BASE/$pkg.sig"
+          done
+          echo "::warning title=pacman repository not updated::the arch-repo job failed; the published repository is kept as it was"
       - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
@@ -218,6 +246,8 @@ jobs:
     name: Deploy
     needs: publish
     runs-on: ubuntu-latest
+    outputs:
+      current: ${{ steps.head.outputs.current }}
     permissions:
       contents: read
       pages: write
@@ -246,3 +276,82 @@ jobs:
       - id: deployment
         if: steps.head.outputs.current == 'true'
         uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
+
+  # The published repositories as a user meets them: fetched over HTTPS from Pages, with the
+  # signatures enforced (apt's Signed-By, dnf's gpgcheck and repo_gpgcheck, pacman's SigLevel),
+  # and the package installed with the distribution's dependencies. The CI install jobs only
+  # test the package file of their own run; this catches a broken signature, repository file
+  # or URL. It runs after a deploy that published and says when the installed build is not the
+  # one this run published. Arch is best effort here too.
+  verify-repos:
+    name: Install from the published repository (${{ matrix.image }})
+    needs: deploy
+    if: needs.deploy.outputs.current == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: debian:trixie
+            experimental: false
+          - image: registry.fedoraproject.org/fedora:44
+            experimental: false
+          - image: docker.io/library/archlinux:latest
+            experimental: true
+    continue-on-error: ${{ matrix.experimental }}
+    container:
+      image: ${{ matrix.image }}
+    env:
+      BASE: https://bzed.github.io/dayz-server-operator
+      SHA: ${{ github.event.workflow_run.head_sha }}
+    steps:
+      - name: Install dzo from the repository
+        run: |
+          set -eu
+          . /etc/os-release
+          case "$ID" in
+          debian)
+            apt-get update
+            apt-get install -y --no-install-recommends ca-certificates curl
+            # steamcmd is non-free and i386 only, as in the package-install job
+            sed -i /etc/apt/sources.list.d/debian.sources -e 's/^Components: main$/Components: main contrib non-free/'
+            dpkg --add-architecture i386
+            echo steamcmd steam/question select "I AGREE" | debconf-set-selections
+            echo steamcmd steam/license note '' | debconf-set-selections
+            install -d /etc/apt/keyrings
+            curl -fsSLo /etc/apt/keyrings/dzo-archive-keyring.asc "$BASE/apt/dzo-archive-keyring.asc"
+            printf '%s\n' 'Types: deb' "URIs: $BASE/apt" 'Suites: stable' 'Components: main' \
+              'Architectures: amd64' 'Signed-By: /etc/apt/keyrings/dzo-archive-keyring.asc' \
+              >/etc/apt/sources.list.d/dzo.sources
+            apt-get update
+            DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends dzo
+            ;;
+          fedora)
+            curl -fsSLo /etc/yum.repos.d/dzo.repo "$BASE/rpm/dzo.repo"
+            # -y confirms the import of the key the repository file names; gpgcheck and
+            # repo_gpgcheck then verify the metadata and the package against it
+            dnf install -y dzo
+            ;;
+          arch)
+            pacman -Syu --noconfirm --needed ca-certificates
+            pacman-key --init
+            curl -fsSLo /etc/pacman.d/dzo.conf "$BASE/arch/dzo.conf"
+            printf '\nInclude = /etc/pacman.d/dzo.conf\n' >>/etc/pacman.conf
+            curl -fsSLo /tmp/dzo-repo-keyring.asc "$BASE/arch/dzo-repo-keyring.asc"
+            pacman-key --add /tmp/dzo-repo-keyring.asc
+            pacman-key --lsign-key 184CDDC496A9C739D10F67B0FE4EE03444314050
+            pacman -Sy --noconfirm dzo
+            ;;
+          esac
+      - name: It is the version this run published
+        run: |
+          set -eu
+          v=$(dzo version)
+          echo "$v"
+          # Pages' CDN can serve the previous index for a few minutes: a mismatch is reported, the
+          # install itself (signatures, dependencies) is what must not fail.
+          case "$v" in
+          *"$(printf '%s' "$SHA" | cut -c1-7)"*) ;;
+          *) echo "::warning title=Older package::the repository still served an older build than $SHA" ;;
+          esac
