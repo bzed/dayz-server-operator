@@ -31,11 +31,32 @@ Modules are vendored, so builds work offline.
 
    make build      # static binary
    make servermods # pack the dzo-admin mod into dist/servermods/ (needs the submodules; see below)
+   make vendor-web # re-download the vendored web files into internal/web/vendor and check their sums
    make test       # tests with race detector and coverage gate
    make lint       # includes reuse lint (licence headers)
    make licenses   # dependency licences must be AGPL-compatible
    make docs       # this documentation (needs python3-sphinx)
    make deb        # Debian package
+
+The vendored web files
+~~~~~~~~~~~~~~~~~~~~~~
+
+``internal/web/vendor`` holds the pinned copies of the JavaScript, CSS, images and fonts the web
+interface serves: htmx 2.0.4, Leaflet 1.7.1 and Fork Awesome 1.2.0 (the versions Debian trixie
+packages) and the 4:3 country flags of the linuxmint ISO country flags SVG collection, the set Debian's
+``iso-flags-svg`` is built from. They are upstream's release artefacts (the npm tarballs, the GitHub
+tarball of the collection's commit), extracted by ``scripts/vendor-web.sh`` (``make vendor-web``),
+which pins the sha256 of every archive and then checks the extracted files against
+``internal/web/vendor/SHA256SUMS``. Nothing is downloaded during a build: a version bump is
+``make vendor-web ARGS=--update`` and a commit of the files together with the sums. The licences are
+recorded in ``REUSE.toml``, ``LICENSES/`` and ``debian/copyright``.
+
+The collection ships no release tags, so its pin is a commit
+(``f2cf92fc2fb200a9132b39672091fc6717a3ad32``, master of 2025-07-16). Only the 4:3 shape goes in, and
+only ``<code>.svg`` for a two-letter ISO 3166-1 alpha-2 code; the square flags, the regions and
+organisations (``_scotland.svg``, ``_united_nations.svg``, …) and ``brl.svg`` are left out, because a
+flag is looked up by exactly that code. The flags claim no copyright and are in the public domain
+(``LicenseRef-PublicDomain``); the SVGs say so in their RDF metadata.
 
 .. _apt-repository:
 
@@ -46,7 +67,12 @@ The ``Docs`` workflow (``.github/workflows/docs.yml``) starts when CI has passed
 on ``main``, takes the package the ``deb`` job of that CI run built (the
 ``dzo-deb`` artifact), runs ``scripts/build-apt-repo.sh`` (reprepro, configured in
 ``apt/conf/distributions``) and publishes the result under ``/apt/`` next to the
-documentation. The repository holds the latest build of ``main`` only.
+documentation. The repository holds the latest build of ``main`` only. Besides the codename's
+directory (``dists/trixie``), the script publishes the suite the installation guide
+tells users to configure, ``dists/stable``, as a symlink to it:
+``reprepro createsymlinks`` creates that symlink from ``Suite: stable`` in
+``apt/conf/distributions``, and apt follows it when a sources entry says
+``Suites: stable``. ``Suites: trixie`` keeps working.
 
 Versions: the top entry of ``debian/changelog`` is always the latest release; the
 upcoming one is added when it is cut. In CI, ``scripts/debian-snapshot.sh`` adds a changelog entry
@@ -58,7 +84,9 @@ commit of a release itself is built as it is.
 
 Signing: the key is the repository secret ``APT_GPG_PRIVATE_KEY`` (an
 ASCII-armored secret key without a passphrase). The public half is
-``apt/dzo-archive-keyring.asc``; the workflow fails if the two do not match.
+``apt/dzo-archive-keyring.asc``; the workflow fails if the two do not match. It
+signs the dnf and pacman repositories too (``rpm/dzo-repo-keyring.asc`` and
+``arch/dzo-repo-keyring.asc``, see below).
 
 To replace the key, create one in a throwaway GnuPG home, never in your own
 keyring:
@@ -68,11 +96,96 @@ keyring:
    export GNUPGHOME=$(mktemp -d)
    gpg --batch --passphrase '' --quick-gen-key "dzo apt repository <bernd@bzed.de>" ed25519 sign never
    gpg --armor --export > apt/dzo-archive-keyring.asc
+   cp apt/dzo-archive-keyring.asc rpm/dzo-repo-keyring.asc
+   cp apt/dzo-archive-keyring.asc arch/dzo-repo-keyring.asc
    gpg --armor --export-secret-keys | gh secret set APT_GPG_PRIVATE_KEY
    rm -rf "$GNUPGHOME"
 
-Then commit the new public key and update the fingerprint here and in the
+Then commit the new public keys and update the fingerprint here and in the
 README. Users have to fetch the new key.
+
+.. _dnf-repository:
+
+The dnf repository
+~~~~~~~~~~~~~~~~~~
+
+The same ``Docs`` run publishes the rpm repository under ``/rpm/`` from the
+``dzo-rpm`` artifact, which CI's ``rpm`` job builds. ``scripts/build-rpm-repo.sh``
+signs every package with ``rpmsign``, runs ``createrepo_c`` and then signs
+``repodata/repomd.xml`` for dnf's ``repo_gpgcheck``; it also writes the public key
+as ``dzo-repo-keyring.asc`` and copies ``rpm/dzo.repo`` next to it, which is the
+repository file the installation guide tells users to add. Both repositories use
+the same key: ``rpm --import`` accepts its EdDSA key on Fedora 43/44 and CentOS
+Stream 10 (verified against those images when the repository was added), so one
+trusted dzo key covers apt and dnf. The workflow fails if the exported public
+key differs from ``rpm/dzo-repo-keyring.asc``.
+
+The rpm is a package-only build. ``scripts/build-rpm.sh`` puts the binary from
+the ``build`` job and the payload the ``deb`` job uploads (``dzo-payload``: the
+servermods, the images, the presets, the HTML documentation, the generated man
+pages and the cheat sheet) into rpmbuild's tree, and ``packaging/rpm/dzo.spec``
+copies them into place. The .deb and the rpm therefore ship the same files, and
+no Go toolchain is needed on a Fedora build host. The release is the Debian
+revision from the top ``debian/changelog`` entry; a development build appends
+``+git<commits>.<sha>`` to it, as ``scripts/debian-snapshot.sh`` does for the
+.deb, and rpm orders that exactly like dpkg: ``0.8.2-1`` <
+``0.8.2-1+git43.abc1234`` < ``0.8.2-2``, so ``dnf upgrade`` picks up every
+snapshot that ``apt upgrade`` would.
+
+The rpm creates the ``dayz`` user in ``%pre`` instead of shipping
+``dzo.sysusers``: rpm's own sysusers.d handling and Fedora's
+``%sysusers_create_compat`` both allocate a system UID below 1000, while dzo
+needs a regular user for its own journal (``dzo logs``), so the scriptlet takes
+the first free UID at or above 1000, the result the sysusers entry gives on
+Debian. ``rpmlint`` runs with ``packaging/rpm/dzo.rpmlintrc``, which filters only
+what a Go package cannot change (the statically linked binary, DayZ in rpmlint's
+spelling data) and says why.
+
+.. _pacman-repository:
+
+The pacman repository
+~~~~~~~~~~~~~~~~~~~~~
+
+The same ``Docs`` run publishes the pacman repository under ``/arch/`` from the
+``dzo-arch-pkg`` artifact, which CI's ``arch`` job builds. ``makepkg`` runs as a
+non-root build user in an ``archlinux:latest`` container and only assembles the
+binary and the payload the ``deb`` job uploads (``dzo-payload``), so
+``packaging/arch/PKGBUILD`` ships the same files as ``packaging/rpm/dzo.spec``
+and no Go toolchain is needed on an Arch build host. Both Arch jobs are
+``continue-on-error``: the distribution is a rolling release. To build the
+package locally, run ``make build-static``, assemble ``arch-payload`` as the
+``deb`` job does (``dist/servermods``, ``images``, ``contrib``, ``html``,
+``man`` and the cheat sheet; the PKGBUILD's header lists them) and run
+``cd packaging/arch && makepkg -f --nodeps``, which needs ``base-devel``.
+
+``scripts/build-arch-repo.sh`` signs every package with a detached signature, runs
+``repo-add --sign`` and publishes the database as ``dzo.db`` with its signature
+as ``dzo.db.sig``. (``repo-add`` writes both as links into ``dzo.db.tar.gz``, and
+GitHub Pages serves a static tree, so the script replaces them with regular
+files.) It also writes the public key as ``dzo-repo-keyring.asc`` and copies
+``arch/dzo.conf`` next to it: the ``[dzo]`` stanza that the installation guide
+makes users include from ``/etc/pacman.conf``, with
+``SigLevel = Required DatabaseRequired``. The workflow fails if the exported
+public key differs from ``arch/dzo-repo-keyring.asc``, which is the same key as
+``apt/`` and ``rpm/``.
+
+Versions: ``pkgver`` is the upstream version from the top ``debian/changelog``
+entry and ``pkgrel`` the Debian revision; a development build appends the commit
+count since the last tag to ``pkgrel`` (``0.8.2-1.43``). That is the only place
+where ``vercmp`` keeps a snapshot after the release and before the next Debian
+revision (``0.8.2-1`` < ``0.8.2-1.43`` < ``0.8.2-2`` < ``0.8.3-1``); the same
+snapshot in ``pkgver`` would sort after ``0.8.2-2``, and ``pkgrel`` accepts
+integers only, so the sha stays out of the package version (``dzo version``
+prints it).
+
+The account: Arch's ``systemd-sysusers`` hook creates users from
+``/usr/lib/sysusers.d`` in the post-transaction hooks, after ``post_install``,
+while ``postinst`` already needs the ``dayz`` user. ``packaging/arch/dzo.install``
+therefore runs ``systemd-sysusers`` itself before ``postinst``, which keeps
+``packaging/common/dzo.sysusers`` the one description of the account: it gives a
+regular UID from 1000-59999 (59999 on a fresh host), the result the .deb gets. The
+rpm cannot do that, because rpm's own sysusers handling allocates a system UID
+below 1000.
 
 Building and testing the servermod
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -231,6 +344,31 @@ and uploads the crashing input on failure. To fuzz one target longer::
 A crash is a real bug. Go leaves the input in ``testdata/fuzz/<Target>/``;
 commit that file together with the fix, it is the regression test.
 
+Quadlet compatibility
+~~~~~~~~~~~~~~~~~~~~~
+
+dzo renders the ``.container`` quadlets itself (``internal/quadlet``) instead of
+calling ``podman generate systemd``, so every key it writes is a promise about
+the podman of the distribution the instance runs on, and no Go test can keep
+that promise: the program that reads the file is podman's own generator.
+``scripts/check-quadlet.sh internal/resolve/testdata`` takes the rendered units
+out of the golden files (a ``<name>.golden`` is the resolved instance, a ``---``
+line and the rendered unit) and runs the distribution's generator on them
+(``QUADLET_UNIT_DIRS`` pointing at them, ``-dryrun -user``; the paths and flags
+it probes, and ``QUADLET_GENERATOR``, are in the script). It fails when the
+generator exits non-zero, reports an unsupported key or option, or silently
+skips a unit instead of converting it, and it prints the generator's output
+either way. A dryrun only converts: the volume sources and the image of the
+units need not exist, and no container is started, so the script runs anywhere
+podman is installed, as root or not.
+
+CI runs it in the ``quadlet-check`` job and, against the installed package's
+podman, in every ``package-install`` job. ``debian:trixie`` (podman 5.4, the
+version dzo requires) and ``registry.fedoraproject.org/fedora:44`` fail the
+build; ``quay.io/centos/centos:stream10`` and ``archlinux:latest`` carry podman 6
+and are allowed to fail, so that a key the next podman drops shows up in the log
+before it shows up in a user's journal.
+
 Browser end-to-end tests
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -243,17 +381,18 @@ Playwright downloads its own browsers at test time. The cost is that only
 Chrome-based browsers are covered.
 
 The tests run against the fake backends of ``newEnv`` but with the JavaScript
-a dzo installation really serves: htmx, Leaflet and Fork Awesome from the
-Debian packages ``libjs-htmx``, ``libjs-leaflet`` and ``fonts-fork-awesome``.
-A missing browser or missing assets fail the test, they never skip it.
+dzo serves: htmx, Leaflet and Fork Awesome are compiled into the binary, so
+the tests need nothing but a browser. A missing browser fails the test, it
+never skips it.
 
 ``DZO_E2E_CHROME``
    the browser binary; default: chromedp's lookup (``google-chrome``,
    ``chromium``)
 
 ``DZO_E2E_ASSETS``
-   the directory with ``htmx/``, ``leaflet/`` and ``fork-awesome/`` (default
-   ``/usr/share/javascript``)
+   optional: a directory with ``htmx/``, ``leaflet/`` and ``fork-awesome/``
+   that overrides the built-in files file by file, for a run against another
+   version (an htmx 4 beta, say). Unset, the tests use the built-in copies.
 
 The browser reports every JavaScript exception, console error and CSP
 violation, and the test fails on any of them. An unexpected ``confirm()``
@@ -263,21 +402,43 @@ dialog fails the test too; a test that expects one answers it through
 ``newBrowser``; never commit that.
 
 CI runs ``make e2e`` in a ``debian:trixie`` container with Debian's
-``chromium``, as an unprivileged user with the sandbox on. A second run in
-``debian:forky`` is allowed to fail: it warns early about the next htmx (4.0
-beta).
+``chromium``, as an unprivileged user with the sandbox on, and a second run in
+``debian:forky``; the JavaScript is compiled into the binary, so a suite only
+brings the browser of its release. ``debian:forky`` covers the browser that the
+next Debian release ships.
 
 On a machine that is not Debian trixie, ``make e2e-container`` runs the same
 suite in a ``debian:trixie`` podman container, built from
-``images/e2e/Containerfile`` with the Chromium and the JavaScript packages of
-the CI job. The checkout is bind-mounted and the tests run as your own user
+``images/e2e/Containerfile`` with the Chromium of the CI job. The checkout is
+bind-mounted and the tests run as your own user
 (never as root, and without chowning your checkout); the Go caches persist in
 the ``dzo-e2e-home-<suite>`` volume, so the toolchain and module downloads
-happen once. ``DZO_E2E_SUITE`` builds from another Debian suite (``forky``
-reproduces CI's early-warning run), ``DZO_E2E_TARGET`` runs another make target
+happen once. ``DZO_E2E_SUITE`` builds from another Debian suite (``forky``, the
+other suite CI runs), ``DZO_E2E_TARGET`` runs another make target
 in the container, and ``DZO_E2E_PODMAN_OPTS`` replaces the sandbox options (a
 host without AppArmor drops ``--security-opt apparmor=unconfined`` there). On
 an SELinux host, add ``:Z`` to the checkout bind mount.
+
+The supervisor against a real podman
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``make test-appliance`` runs ``TestSuperviseRealPodman`` (build tag
+``appliance``, ``internal/supervise/appliance_test.go``) against a real
+rootless podman socket: it starts a ``debian:trixie-slim`` container with
+``sleep infinity`` and a health check through ``supervise.Run``, the code
+behind ``dzo instance supervise``, waits for ``READY=1``, stops the run the way
+systemd does and checks that ``--rm`` left no container behind. The test is
+skipped unless ``DZO_APPLIANCE_PODMAN=1``, and it needs
+``systemctl --user enable --now podman.socket``; it pulls the image when the
+store does not have it. It is not part of ``make check``: CI has no podman
+socket.
+
+``CONTAINER_HOST``
+   the podman endpoint, as podman itself reads it; without it the test uses
+   ``unix://$XDG_RUNTIME_DIR/podman/podman.sock``, the rootless socket.
+
+The container name carries a random suffix and the test removes only that
+container, so it can run next to a real installation on the same host.
 
 The browser against a real DayZ server
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -288,8 +449,9 @@ test-client`` (``scripts/test-client.sh``, see below) starts a real server with
 dzo-admin, a real ``dzo serve`` and, unless ``--no-client``, the headless DayZ
 client; its last check drives the web UI over that stack with the same browser
 harness (``internal/web/live_test.go``, build tags ``e2e live``, tests
-``TestLive*``). Run it by hand, with ``DZO_E2E_CHROME`` and ``DZO_E2E_ASSETS``
-as above; it fails without them. The script sets:
+``TestLive*``). Run it by hand, with ``DZO_E2E_CHROME`` as above (and
+``DZO_E2E_ASSETS`` for JavaScript other than the built-in copy); it fails
+without a browser. The script sets:
 
 ``DZO_LIVE_API``
    the base URL of the API of the running ``dzo serve``; without it the tests
@@ -438,6 +600,103 @@ Steam query (``steamQueryPort`` in ``serverDZ.cfg``) and RCon (``RConPort`` in
 (absolute ones are silently ignored), run it from the tree with ``ulimit -c 0``
 and stop it with ``timeout -k 15``. Then read ``script_*.log``, the ``.RPT`` and
 ``error.log`` in ``profiles/``.
+
+.. _release-checklist-other-distributions:
+
+Release checklist for other distributions
+-----------------------------------------
+
+The CI jobs of the other distributions (:doc:`installation`, "CI, per
+distribution") install the package, run ``dzo version`` and ``dzo setup
+--dry-run`` and let the distribution's own podman generate the quadlets. That is
+all a container can do: it has no booted systemd and no DayZ, so it says nothing
+about SELinux, a Steam login, a server or a client. This list is the rest, and it
+is the **only** real check on Ubuntu, Fedora, the RHEL 10 family and Arch. Run it
+
+* on a VM of the distribution (never in a container: SELinux's enforcing mode,
+  a real user systemd, the kernel and podman's runtime are part of the test),
+* once per dzo release line (0.8, 0.9, …), and
+* when a distribution release joins or leaves the matrix (a new Fedora, a new
+  Ubuntu LTS, the next Debian stable).
+
+1. **Install from the repository**, with the commands of that distribution's
+   section in :doc:`installation`, as a user would: the package the repository
+   serves for the release, its dependencies from the distribution, ``dzo version``
+   and ``dzo --help``.
+2. **``dzo setup``** as ``dayz`` (not ``--dry-run``): the directories, both
+   container images, the site clone and the image-refresh timer. Every step must
+   report ``ok``. A ``warn`` about a missing btrfs is expected on the RHEL 10
+   family; any ``error`` ends the checklist here.
+3. **The Steam login** with a real account, including Steam Guard:
+   ``dzo steam login --user <account>``, then ``dzo steam status``. On Fedora, the
+   RHEL 10 family and Arch this runs steamcmd in the ``localhost/dzo-steamcmd``
+   image through the pty of the wrapper, which has never been tried with a real
+   account. This step is what decides whether those distributions stay
+   "Supported", so it is also a release blocker.
+4. **A real server and a client.** ``dzo product install dayz-stable``, create an
+   instance (:doc:`quickstart`), ``dzo start <instance>``, ``dzo status`` and
+   ``dzo logs <instance>``, then join from a workstation with the DayZ client,
+   BattlEye on. This is the only check of the podman 6 quadlets (CentOS Stream
+   10, Arch) and of SELinux in enforcing mode (Fedora, RHEL).
+5. **A restart** while the client is connected: ``dzo restart <instance>
+   --minutes 1`` announces, locks, kicks and starts the server again, and the
+   client can rejoin.
+6. **Backup and restore** where btrfs exists (Debian, Ubuntu, Fedora, Arch):
+   ``dzo backup create <instance>``, ``dzo backup list <instance>``, then
+   ``dzo restore <instance> <snapshot>`` of one path and of the whole instance.
+   On the RHEL 10 family the kernel has no btrfs, so the step does not apply;
+   note that in the release notes instead of skipping it silently (the
+   distribution's own backup is the answer there).
+7. **The web interface**: ``dzo instance apply <instance>`` starts ``dzo-serve``
+   and ``dzo-web``; log in, and check the player list and the map with the client
+   from step 4 still connected (:doc:`web`).
+8. **An upgrade with a server running.** With the server from step 4 up, install
+   the next build the repository serves (``apt upgrade``, ``dnf upgrade dzo``,
+   ``pacman -Syu``). ``dzo version`` must print the new one, the exporter,
+   ``dzo serve`` and ``dzo web`` must come back by themselves, and the game
+   server must keep running on the old binary until its next restart and then
+   start on the new one. **A package upgrade never restarts a game server**; if
+   it does, or if a server does not come back, that is a bug, not a checklist
+   item.
+
+Note in the release's ``debian/changelog`` entry which distribution passed which
+step. A "Supported" distribution that fails a step drops to "Best effort" in the
+matrix (and in the README) until it passes again; a "Best effort" distribution
+that passes all eight steps for a release line can move up.
+
+.. _release-checklist-container-appliance:
+
+Release checklist for the container appliance
+---------------------------------------------
+
+The appliance (``images/appliance/``) is Debian trixie and follows the Debian
+steps above, but its game servers are containers of the *host's* podman: the
+host quadlet and the wrapper live in ``contrib/appliance/``. CI builds and
+boots the image and runs ``dzo setup --dry-run`` inside it; it cannot run DayZ
+or a client. ``make test-appliance`` covers the supervisor against a real
+podman socket (see `The supervisor against a real podman`_). Once per release
+line, on a host with the appliance, the following is the rest:
+
+1. **A real server and a client.** Install the quadlet and the wrapper, start
+   the appliance, then ``dzo setup`` (the three remote checks ``ok``), a site
+   with one instance, ``dzo instance create``, ``dzo instance apply`` and
+   ``dzo start <instance>``. The instance's unit becomes active when the
+   server is healthy, ``podman ps`` on the host lists ``dzo-<instance>``, and
+   a DayZ client joins.
+2. **The stop.** ``podman stop dzo`` stops the server before the appliance:
+   the RCon shutdown is in the instance's journal, and ``dzo-<instance>`` is
+   gone on the host within the quadlet's ``StopTimeout``.
+3. **An upgrade with a server running.** ``apt upgrade`` inside the appliance
+   (or ``apt install --reinstall`` of the next ``.deb``) leaves the server
+   alone: its ``StartedAt`` does not change, and the next ``dzo restart
+   <instance>`` runs the new binary.
+4. **A killed appliance.** ``podman kill dzo``: the quadlet's
+   ``Restart=on-failure`` starts the appliance again (``systemctl --user start
+   dzo.service`` if the start limit stopped it), its supervisor attaches to the
+   running server, and the server's ``StartedAt`` does not change. The quadlet
+   starts the appliance with ``--rm``, so ``podman stop`` and ``podman kill``
+   remove the appliance container and ``podman start dzo`` has nothing to
+   start; the unit is the way back.
 
 Contributing
 ------------

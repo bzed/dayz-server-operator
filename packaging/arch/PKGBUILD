@@ -1,0 +1,143 @@
+# SPDX-FileCopyrightText: 2026 Bernd Zeimetz <bernd@bzed.de>
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# shellcheck disable=SC2034,SC2154  # pkgname/pkgdesc/pkgver/pkgrel/... are read
+# by makepkg, and $pkgdir/$srcdir are set by it; shellcheck cannot see either.
+#
+# The Arch package repackages what CI already built, like packaging/rpm/dzo.spec:
+# the static binary of the build job (make build-static) and the payload of the
+# Debian package (servermods, images, presets, the HTML documentation, the
+# generated man pages and the cheat sheet). Nothing is compiled here, so the
+# package needs no Go toolchain, and the .deb, the rpm and this package ship the
+# same files.
+#
+#   makepkg -f                                   # in this directory
+#   DZO_PAYLOAD=... DZO_BINARY=... makepkg -f    # somewhere else
+#
+# It reads the checkout's dist/dzo-linux-amd64 and the payload the deb job
+# uploads as "dzo-payload", which the "arch" CI job downloads into
+# <repo>/arch-payload:
+#
+#   servermods/  images/  contrib/  html/  man/  dzo-cheatsheet.pdf
+#
+# The files under packaging/common/ and the LICENSE come from this checkout, so
+# the package cannot drift from the .deb.
+#
+# Version: pkgver is the upstream version of the top debian/changelog entry and
+# pkgrel is the Debian revision. A development build appends the number of
+# commits since the last tag to pkgrel, "<revision>.<commits>". pacman's vercmp
+# then orders the versions exactly like dpkg and rpm do:
+#
+#   0.8.2-1  <  0.8.2-1.43  <  0.8.2-1.44  <  0.8.2-2  <  0.8.3-1
+#
+# (dpkg: 0.8.2-1 < 0.8.2-1+git43 < 0.8.2-2). The git snapshot cannot go into
+# pkgver: "0.8.2.git43.abc1234" sorts after 0.8.2-1 (good) but also after
+# 0.8.2-2, so a packaging fix would never reach a host that runs a snapshot.
+# pkgrel only takes "integer[.integer]", so the sha cannot be part of it either;
+# "dzo version" prints the commit, and the commit count in pkgrel identifies the
+# snapshot. DZO_ARCH_PKGVER and DZO_ARCH_PKGREL override both, for a build
+# without git history.
+pkgname=dzo
+pkgdesc="DayZ dedicated server operator"
+arch=(x86_64)
+url="https://github.com/bzed/dayz-server-operator"
+# SPDX identifier; the dzo-admin servermod in the payload is AGPL too.
+license=(AGPL-3.0-or-later)
+# shadow provides useradd/usermod for /usr/lib/sysusers.d/dzo.conf and the
+# post-install step, passt is the network backend of podman 5 and later.
+depends=(podman systemd git patch shadow passt)
+optdepends=(btrfs-progs geoipupdate)
+install=dzo.install
+backup=(etc/dzo/config.yaml)
+# The payload's binary is already stripped (make build-static); there is nothing
+# left to strip, the build must not touch it, and there are no debug symbols to
+# split out into an empty /usr/src/debug.
+options=(!strip !debug)
+
+_repo=${DZO_ARCH_REPO:-$(cd "${startdir:-$(dirname "$0")}/../.." && pwd)}
+_payload=${DZO_PAYLOAD:-$_repo/arch-payload}
+_binary=${DZO_BINARY:-$_repo/dist/dzo-linux-amd64}
+
+# 0.8.2-1 -> upstream 0.8.2, Debian revision 1
+_changelog_version=$(sed -n '1s/^[^(]*(\([^)]*\)).*/\1/p' "$_repo/debian/changelog")
+[ -n "$_changelog_version" ] ||
+	{ echo "cannot read the version from $_repo/debian/changelog" >&2; exit 2; }
+_upstream=${_changelog_version%-*}
+_deb_revision=${_changelog_version##*-}
+if [ "$_upstream" = "$_changelog_version" ]; then
+	_deb_revision=1
+fi
+
+pkgver=${DZO_ARCH_PKGVER:-$_upstream}
+# pkgver may not contain "-", "~", "+" or ":"; the Debian version may not either,
+# and a version that does has to be mapped here, not silently accepted.
+case "$pkgver" in
+'' | *[-~+:]*)
+	echo "cannot use '$_changelog_version' as an Arch pkgver" >&2
+	exit 2
+	;;
+esac
+
+if [ -n "${DZO_ARCH_PKGREL:-}" ]; then
+	pkgrel=$DZO_ARCH_PKGREL
+elif git -C "$_repo" rev-parse --git-dir >/dev/null 2>&1; then
+	_last=$(git -C "$_repo" describe --tags --abbrev=0 2>/dev/null || true)
+	if [ -n "$_last" ]; then
+		_commits=$(git -C "$_repo" rev-list --count "$_last"..HEAD)
+	else
+		_commits=$(git -C "$_repo" rev-list --count HEAD)
+	fi
+	if [ "$_commits" -gt 0 ]; then
+		pkgrel="$_deb_revision.$_commits"
+	else
+		pkgrel=$_deb_revision
+	fi
+else
+	# No git history (a source tarball): the version of the top changelog entry.
+	pkgrel=$_deb_revision
+fi
+
+prepare() {
+	[ -f "$_binary" ] || { echo "no binary at $_binary (run make build-static)" >&2; exit 2; }
+	for dir in servermods images contrib html man; do
+		[ -d "$_payload/$dir" ] || { echo "the payload has no $dir/" >&2; exit 2; }
+	done
+	[ -f "$_payload/dzo-cheatsheet.pdf" ] || { echo "the payload has no dzo-cheatsheet.pdf" >&2; exit 2; }
+	[ -f "$_payload/contrib/dzo/config.yaml" ] || { echo "the payload has no contrib/dzo/config.yaml" >&2; exit 2; }
+	[ -d "$_payload/contrib/presets/maps" ] || { echo "the payload has no contrib/presets/maps/" >&2; exit 2; }
+}
+
+package() {
+	install -Dm0755 "$_binary" "$pkgdir/usr/bin/dzo"
+	install -Dm0644 "$_payload/contrib/dzo/config.yaml" "$pkgdir/etc/dzo/config.yaml"
+	install -Dm0755 "$_repo/packaging/common/dzo-postinst.sh" "$pkgdir/usr/libexec/dzo/postinst"
+	install -Dm0755 "$_repo/packaging/common/steamcmd-container" "$pkgdir/usr/libexec/dzo/steamcmd-container"
+	# The account comes from sysusers.d (see dzo.install); the tmpfiles entries
+	# are the run directory of the exporter.
+	install -Dm0644 "$_repo/packaging/common/dzo.sysusers" "$pkgdir/usr/lib/sysusers.d/dzo.conf"
+	install -Dm0644 "$_repo/packaging/common/dzo.tmpfiles" "$pkgdir/usr/lib/tmpfiles.d/dzo.conf"
+
+	install -d "$pkgdir/usr/share/dzo/presets/maps" "$pkgdir/usr/share/doc/dzo/html" "$pkgdir/usr/share/man/man1"
+	cp -a "$_payload/servermods" "$pkgdir/usr/share/dzo/servermods"
+	cp -a "$_payload/images" "$pkgdir/usr/share/dzo/images"
+	cp -a "$_payload/contrib/presets/maps/." "$pkgdir/usr/share/dzo/presets/maps/"
+	cp -a "$_payload/html/." "$pkgdir/usr/share/doc/dzo/html/"
+	# Sphinx writes its doctrees and a buildinfo file into the output tree; the
+	# .deb does not ship them either and the rpm removes them too.
+	rm -rf "$pkgdir/usr/share/doc/dzo/html/.doctrees" "$pkgdir/usr/share/doc/dzo/html/.buildinfo"
+	# The HTML documentation carries a downloadable copy of the cheat sheet. The
+	# rpm hardlinks the two; an Arch package may not hold a hardlink across
+	# directories (namcap counts it as an error), so the 230 KB PDF is shipped
+	# twice.
+	install -m0644 "$_payload/dzo-cheatsheet.pdf" "$pkgdir/usr/share/doc/dzo/dzo-cheatsheet.pdf"
+	install -m0644 "$_payload"/man/*.1 "$pkgdir/usr/share/man/man1/"
+	install -Dm0644 "$_repo/LICENSE" "$pkgdir/usr/share/licenses/dzo/LICENSE"
+
+	# The payload comes from a build tree with a restrictive umask (the servermod
+	# packer writes 0600/0750); makepkg has no dh_fixperms step.
+	find "$pkgdir" -type d -exec chmod 0755 {} +
+	find "$pkgdir" -type f -exec chmod 0644 {} +
+	chmod 0755 "$pkgdir/usr/bin/dzo" \
+		"$pkgdir/usr/libexec/dzo/postinst" \
+		"$pkgdir/usr/libexec/dzo/steamcmd-container"
+}

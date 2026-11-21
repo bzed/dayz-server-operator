@@ -15,8 +15,9 @@ Setup and Steam
    :widths: 45 55
 
    * - ``dzo setup [--dry-run]``
-     - first-time setup as the service user: directories, container images, site
-       repo, weekly image refresh timer (see :doc:`installation`)
+     - first-time setup as the service user: podman version check, directories,
+       container images, site repo, weekly image refresh timer (see
+       :doc:`installation`)
    * - ``dzo setup --images-only``
      - rebuild the container images and prune the old ones
    * - ``dzo steam login [--user <name>] [--passthrough]``
@@ -25,6 +26,12 @@ Setup and Steam
      - account, last login, session state
    * - ``dzo steam reset-cache``
      - wipe steamcmd's working directory
+
+``--steamcmd <program>`` (``dzo mod add | update | refresh`` and ``dzo product install | update``)
+and ``dzo steam login --command <program>`` choose the program that runs Steam's commands. The
+default is ``steamcmd`` when the host has it, and ``/usr/libexec/dzo/steamcmd-container`` when it
+does not (Fedora, RHEL, Arch): the wrapper runs the ``localhost/dzo-steamcmd`` image that
+``dzo setup`` built (see :doc:`installation`).
 
 Site repository
 ---------------
@@ -149,6 +156,13 @@ Missions and config
      - recreate the live mission (confirmation and snapshot)
    * - ``dzo config diff | apply <name>``
      - serverDZ.cfg changes
+   * - ``dzo config validate``
+     - load and validate config.yaml, and resolve the site's instances
+   * - ``dzo config get <key>``
+     - one resolved path of config.yaml (``paths.cache``, ``paths.data``, ``paths.db``,
+       ``paths.instances``, ``paths.logs``, ``paths.secrets``, ``paths.site``, ``paths.snapshots``),
+       as dzo uses it after expanding ``${data}``; the steamcmd container wrapper reads
+       ``paths.secrets`` and ``paths.cache`` with it (:doc:`installation`)
 
 Backups
 -------

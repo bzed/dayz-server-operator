@@ -2,15 +2,17 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 // Package setup is `dzo setup`: the first-time steps after installing the
-// package, run as the service user. It creates and checks the data
-// directories, builds the two container images, tells the operator what is
-// left to do for Steam, clones the site repo and installs the weekly image
-// refresh timer. Every step is idempotent, so it can be run again after a
-// package upgrade, and --dry-run only reports what it would do.
+// package, run as the service user. It checks the podman version, creates and
+// checks the data directories, builds the two container images, tells the
+// operator what is left to do for Steam, clones the site repo and installs the
+// weekly image refresh timer. Every step is idempotent, so it can be run again
+// after a package upgrade, and --dry-run only reports what it would do.
 package setup
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -32,6 +34,11 @@ import (
 // DefaultImagesDir is where the package ships the Containerfiles.
 const DefaultImagesDir = "/usr/share/dzo/images"
 
+// SteamcmdWrapper runs steamcmd from the dzo-steamcmd image that setup builds.
+// It is the default steamcmd on a host whose distribution packages none
+// (Fedora, RHEL, Arch); the dzo binary and the package install it there.
+const SteamcmdWrapper = "/usr/libexec/dzo/steamcmd-container"
+
 // Images are the container images dzo builds: the directory below the images
 // dir, and the tag the instance quadlets and the steamcmd jobs refer to.
 var Images = []struct{ Dir, Tag string }{
@@ -43,6 +50,47 @@ const (
 	minFreeGiB   = 10
 	refreshTimer = "dzo-image-refresh"
 )
+
+// minPodmanMajor and minPodmanMinor are the oldest podman dzo works with.
+// There is no upper bound: a newer major version is fine. The version is
+// checked on the client, which is the podman that builds the images and writes
+// the quadlets.
+const (
+	minPodmanMajor = 5
+	minPodmanMinor = 4
+)
+
+// checkPodmanVersion checks a podman version (for example 5.4.2 or 5.8.6-dev:
+// what `podman --version` prints after "podman version ", or a server's
+// {{.Server.Version}}) against minPodman. It has no side effects and no access to the
+// runner, so the remote check of a server's podman can reuse it.
+func checkPodmanVersion(out string) error {
+	v := strings.TrimSpace(out)
+	major, minor, err := parsePodmanVersion(v)
+	if err != nil {
+		return err
+	}
+	if major < minPodmanMajor || (major == minPodmanMajor && minor < minPodmanMinor) {
+		return fmt.Errorf("podman %s is too old: dzo needs podman %d.%d or newer", v, minPodmanMajor, minPodmanMinor)
+	}
+	return nil
+}
+
+// parsePodmanVersion takes the major and minor number from a version string.
+// The patch number and a suffix such as -dev or -rc1 do not matter.
+func parsePodmanVersion(s string) (major, minor int, err error) {
+	parts := strings.Split(s, ".")
+	if len(parts) < 2 {
+		return 0, 0, fmt.Errorf("cannot parse podman version %q: want major.minor.patch", s)
+	}
+	if major, err = strconv.Atoi(parts[0]); err != nil {
+		return 0, 0, fmt.Errorf("cannot parse podman version %q: %w", s, err)
+	}
+	if minor, err = strconv.Atoi(parts[1]); err != nil {
+		return 0, 0, fmt.Errorf("cannot parse podman version %q: %w", s, err)
+	}
+	return major, minor, nil
+}
 
 // Exec runs a command and returns its combined output; tests replace it.
 type Exec func(ctx context.Context, name string, args ...string) ([]byte, error)
@@ -63,6 +111,8 @@ type Options struct {
 	Out        io.Writer
 	Exec       Exec
 	Geteuid    func() int // default os.Geteuid
+	// LookPath finds a program in PATH; default exec.LookPath.
+	LookPath func(string) (string, error)
 	// Groups returns the names of the groups of the current user; default: the process's groups.
 	Groups func() []string
 }
@@ -96,6 +146,9 @@ func Run(ctx context.Context, o Options) error {
 	if o.Geteuid == nil {
 		o.Geteuid = os.Geteuid
 	}
+	if o.LookPath == nil {
+		o.LookPath = exec.LookPath
+	}
 	if o.Groups == nil {
 		o.Groups = processGroups
 	}
@@ -104,12 +157,23 @@ func Run(ctx context.Context, o Options) error {
 		r.say("error", "run dzo setup as the service user, not as root (sudo -iu dayz dzo setup): rootless podman and the user's systemd need it")
 		return errors.New("setup: must not run as root")
 	}
+	// The podman check comes first: everything below that runs podman needs it,
+	// and with --images-only it is the only thing that can be checked before the
+	// build. The check only reads a version, so a dry run does it too.
+	podmanOK := r.podmanVersion(ctx)
 	if o.ImagesOnly {
-		r.images(ctx, true)
+		if podmanOK {
+			r.images(ctx, true)
+		}
 	} else {
 		r.journal()
 		r.paths()
-		r.images(ctx, false)
+		if podmanOK {
+			r.images(ctx, false)
+			if r.Cfg.Remote() {
+				r.remote(ctx)
+			}
+		}
 		r.steam()
 		r.site(ctx)
 		r.refreshTimer(ctx)
@@ -234,6 +298,132 @@ func (r *runner) filesystems() {
 	}
 }
 
+// podmanVersion reports the client version and checks that it is new enough.
+// It returns false when podman is missing, unreadable or too old, so the
+// caller skips the steps that would only repeat the same failure.
+//
+// It asks `podman --version`, not `podman version`: rootless, the latter sets
+// up the user namespace before it prints anything, and fails where that is
+// not possible yet (no subuid range, an unprivileged container) with a
+// newuidmap error that says nothing about the version.
+func (r *runner) podmanVersion(ctx context.Context) bool {
+	out, err := r.Exec(ctx, "podman", "--version")
+	switch {
+	case errors.Is(err, exec.ErrNotFound):
+		r.say("error", "podman is not installed")
+		return false
+	case err != nil:
+		r.say("error", "podman --version: %v\n%s", err, strings.TrimSpace(string(out)))
+		return false
+	}
+	v := strings.TrimSpace(string(out))
+	v = strings.TrimPrefix(v, "podman version ") // "podman version 5.4.2"
+	if err := checkPodmanVersion(v); err != nil {
+		r.say("error", "%v", err)
+		return false
+	}
+	r.say("ok", "podman %s", v)
+	return true
+}
+
+// remote checks what podman.mode remote needs from the other side of
+// CONTAINER_HOST, in the order of the output: the podman server is new enough,
+// it sees paths.data at the same path (the game containers mount it), and it
+// uses systemd cgroups (the instance health checks are systemd units there).
+// The first and the last are read-only and run in a dry run too; the mount
+// check starts a container, so a dry run only says that it cannot do it.
+func (r *runner) remote(ctx context.Context) {
+	r.remoteVersion(ctx)
+	r.samePath(ctx)
+	r.systemdCgroups(ctx)
+}
+
+// remoteVersion checks the host's podman, not the client dzo runs: the client
+// can be new enough locally while the server builds the containers and runs the
+// instances.
+func (r *runner) remoteVersion(ctx context.Context) {
+	out, err := r.Exec(ctx, "podman", "version", "--format", "{{.Server.Version}}")
+	switch {
+	case errors.Is(err, exec.ErrNotFound):
+		r.say("error", "podman is not installed")
+		return
+	case err != nil:
+		r.say("error", "the host's podman server version: %v\n%s", err, strings.TrimSpace(string(out)))
+		return
+	}
+	v := strings.TrimSpace(string(out))
+	if _, _, err := parsePodmanVersion(v); err != nil {
+		r.say("error", "the host's podman: %v", err)
+		return
+	}
+	if err := checkPodmanVersion(v); err != nil {
+		r.say("error", "the host's %v", err)
+		return
+	}
+	r.say("ok", "podman server %s", v)
+}
+
+// samePath checks that the host's podman sees paths.data at the same path,
+// which every container of an instance mounts: a file written here must be
+// readable in the runtime image at exactly its path. The file is random, so a
+// stale or shared directory cannot fake the answer, and private; it is removed
+// again whether the check succeeds or fails.
+func (r *runner) samePath(ctx context.Context) {
+	data := r.Cfg.Paths.Data
+	if r.DryRun {
+		r.say("info", "a dry run cannot check whether paths.data %s is mounted at the same path on the host", data)
+		return
+	}
+	img := Images[0].Tag // runtime; it has cat
+	if out, err := r.Exec(ctx, "podman", "image", "exists", img); err != nil {
+		r.say("error", "the runtime image %s is missing, cannot check whether paths.data %s is mounted at the same path on the host: %v %s", img, data, err, strings.TrimSpace(string(out)))
+		return
+	}
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		r.say("error", "cannot make the test file for paths.data %s: %v", data, err)
+		return
+	}
+	content := hex.EncodeToString(b)
+	marker := filepath.Join(data, ".dzo-setup-"+hex.EncodeToString(b[:8]))
+	if err := os.WriteFile(marker, []byte(content), 0o600); err != nil {
+		r.say("error", "paths.data %s is not writable for this user: %v", data, err)
+		return
+	}
+	defer os.Remove(marker) //nolint:errcheck // a scratch file, gone either way
+	out, err := r.Exec(ctx, "podman", "run", "--rm", "-v", data+":"+data+":ro", img, "cat", marker)
+	if err != nil {
+		r.say("error", "paths.data %s is not mounted at the same path on the host: %v\n%s", data, err, strings.TrimSpace(string(out)))
+		return
+	}
+	if got := strings.TrimSpace(string(out)); got != content {
+		r.say("error", "paths.data %s is not mounted at the same path on the host: the container read %q, not what dzo wrote", data, got)
+		return
+	}
+	r.say("ok", "paths.data %s is mounted at the same path on the host", data)
+}
+
+// systemdCgroups checks the host's cgroup manager. The supervisor runs the
+// instance health checks as systemd units there; with the cgroupfs driver they
+// never run, and since an instance only becomes ready when its health check
+// passes, it would never become ready.
+func (r *runner) systemdCgroups(ctx context.Context) {
+	out, err := r.Exec(ctx, "podman", "info", "--format", "{{.Host.CgroupManager}}")
+	switch {
+	case errors.Is(err, exec.ErrNotFound):
+		r.say("error", "podman is not installed")
+		return
+	case err != nil:
+		r.say("error", "the host's podman info: %v\n%s", err, strings.TrimSpace(string(out)))
+		return
+	}
+	if mgr := strings.TrimSpace(string(out)); mgr != "systemd" {
+		r.say("error", "the host's podman does not use systemd: container health checks never run there, and no instance would become ready")
+		return
+	}
+	r.say("ok", "the host's podman uses systemd cgroups")
+}
+
 func (r *runner) images(ctx context.Context, rebuild bool) {
 	for _, img := range Images {
 		dir := filepath.Join(r.ImagesDir, img.Dir)
@@ -269,6 +459,14 @@ func (r *runner) images(ctx context.Context, rebuild bool) {
 }
 
 func (r *runner) steam() {
+	// Which steamcmd the downloads run decides whole host setups: a
+	// distribution without a steamcmd package (Fedora, RHEL, Arch) uses the
+	// image, and the operator should see that before the login prompt.
+	if path, err := r.LookPath("steamcmd"); err == nil {
+		r.say("info", "steamcmd: using %s", path)
+	} else {
+		r.say("info", "steamcmd: not installed, using %s (the dzo-steamcmd image)", SteamcmdWrapper)
+	}
 	acct := r.Cfg.Steam.Account
 	if acct == "" {
 		r.say("warn", "steam.account is not set in config.yaml; mod and server downloads need it")

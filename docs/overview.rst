@@ -11,9 +11,11 @@ Building blocks
 ---------------
 
 Host
-   One Debian trixie machine. dzo runs as the service user ``dayz``. All game
-   servers run as **rootless podman containers** described by **quadlets**
-   (systemd unit files for containers) that dzo generates.
+   One Linux machine, with Debian 13 (trixie) as the reference setup (see
+   :doc:`installation` for the other distributions and how well each is tested).
+   dzo runs as the service user ``dayz``. All game servers run as **rootless
+   podman containers** described by **quadlets** (systemd unit files for
+   containers) that dzo generates.
 
 Product
    A kind of server that Steam delivers, for example ``dayz-stable`` (Steam app

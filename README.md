@@ -7,7 +7,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
   <img src="assets/logo.svg" alt="dzo logo" width="160" height="160">
 
   <h1>dzo</h1>
-  <p><strong>Run DayZ dedicated servers on Debian with rootless podman.</strong></p>
+  <p><strong>Run DayZ dedicated servers with rootless podman.</strong></p>
 
   [![CI](https://github.com/bzed/dayz-server-operator/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/bzed/dayz-server-operator/actions/workflows/ci.yml)
   [![Codecov](https://codecov.io/gh/bzed/dayz-server-operator/branch/main/graph/badge.svg)](https://codecov.io/gh/bzed/dayz-server-operator)
@@ -20,10 +20,12 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 ---
 
 `dzo` installs, configures, updates and watches one or more DayZ dedicated
-servers on a single Debian machine. It is one static binary: no Node.js, no
+servers on a single Linux machine. It is one static binary: no Node.js, no
 shell-script fleet, no external RCon tool. Every server runs in a rootless
 podman container, started by systemd, and everything about your servers lives
-in a git repository you own.
+in a git repository you own. It installs from the native package of Debian,
+Ubuntu, Fedora, the RHEL 10 family and Arch; [how well each is tested](#supported-distributions)
+differs.
 
 **Built with**
 [![Debian](assets/built-with-debian.svg)](https://www.debian.org/)
@@ -64,22 +66,46 @@ and the operations guide, is at
 **<https://bzed.github.io/dayz-server-operator/>**. For the first setup there is
 also a [two-page cheat sheet (PDF)](docs/cheatsheet/dzo-cheatsheet.pdf).
 
+## Supported distributions
+
+Each of these installs from its own package manager. How much that means differs,
+and the level below is what was actually tested, not what might work:
+
+| Level | Distributions | Tested by |
+|---|---|---|
+| **Reference** | Debian 13 (trixie) | everything: the blocking CI jobs, the browser e2e suite, `make test-client` against a real DayZ client, and the author's servers |
+| **Supported** | Ubuntu 26.04 LTS, Fedora 43 and 44, the RHEL 10 family | a blocking CI install per distribution (`package-install`, `rpm-install`), podman's own generator over the rendered quadlets (`quadlet-check`), and the [manual release checklist](docs/development.rst) on a VM, once per dzo release line |
+| **Best effort** | Arch Linux, Ubuntu interim releases, Debian testing | CI smoke in a container only, and those jobs do not block a merge |
+
+The CI jobs install the package, run `dzo version` and `dzo setup --dry-run` as
+the `dayz` user the package creates, and feed the rendered quadlets to the
+distribution's own podman generator. They cannot start DayZ, so a few things are
+not verified yet: SELinux in enforcing mode on Fedora and the RHEL family (a
+container can hit an AVC denial), a real Steam login through the `steamcmd`
+container wrapper that those distributions use instead of a `steamcmd` package,
+and a server on podman 6 (CentOS Stream 10, Arch). The RHEL 10 family has no btrfs
+in its kernel, so the snapshot backups do not work there. Arch is container-tested
+only: no real host, no Steam login. The [installation guide](docs/installation.rst)
+has the matrix with the CI job names and says per distribution what is missing.
+
 ## Install
 
-**From the apt repository** (Debian 13 "trixie", amd64; signed, rebuilt from `main`):
+**From the apt repository** (Debian 13 "trixie" and Ubuntu 26.04 LTS or later, amd64; signed, rebuilt from `main`):
 
 `dzo` depends on `steamcmd:i386`, which is non-free and i386 only, so enable both first
-(see the [installation guide](docs/installation.rst) for the details and the license prompt):
+(see the [installation guide](docs/installation.rst) for the details and the license prompt).
+Debian has it in `contrib`/`non-free`, Ubuntu in `multiverse`:
 
 ```console
 $ sudo dpkg --add-architecture i386
-$ sudo sed -i /etc/apt/sources.list.d/debian.sources -e 's/^Components: main$/Components: main contrib non-free/'
+$ sudo sed -i /etc/apt/sources.list.d/debian.sources -e 's/^Components: main$/Components: main contrib non-free/'   # Debian
+$ sudo sed -i /etc/apt/sources.list.d/ubuntu.sources -e '/^Components:.*multiverse/! s/^Components: \(.*\)$/Components: \1 multiverse/'   # Ubuntu
 $ sudo install -d -m 0755 /etc/apt/keyrings
 $ sudo curl -fsSLo /etc/apt/keyrings/dzo-archive-keyring.asc https://bzed.github.io/dayz-server-operator/apt/dzo-archive-keyring.asc
 $ sudo tee /etc/apt/sources.list.d/dzo.sources <<'EOF'
 Types: deb
 URIs: https://bzed.github.io/dayz-server-operator/apt
-Suites: trixie
+Suites: stable
 Components: main
 Architectures: amd64
 Signed-By: /etc/apt/keyrings/dzo-archive-keyring.asc
@@ -88,8 +114,39 @@ $ sudo apt update && sudo apt install dzo
 ```
 
 The key's fingerprint is `184C DDC4 96A9 C739 D10F  67B0 FE4E E034 4431 4050`.
+`stable` serves the same package as the older `Suites: trixie`, which keeps working.
 
-Other ways: a `.deb` or a static binary from the
+**From the dnf repository** (Fedora 43 or later and the RHEL 10 family, amd64; signed, rebuilt from `main`):
+
+```console
+$ sudo curl -fsSLo /etc/yum.repos.d/dzo.repo https://bzed.github.io/dayz-server-operator/rpm/dzo.repo
+$ sudo dnf install dzo
+```
+
+It is signed with the same key and fingerprint as the apt repository.
+
+**From the pacman repository** (Arch Linux, amd64; best effort, signed, rebuilt from `main`):
+
+```console
+$ sudo curl -fsSLo /etc/pacman.d/dzo.conf https://bzed.github.io/dayz-server-operator/arch/dzo.conf
+$ printf '\nInclude = /etc/pacman.d/dzo.conf\n' | sudo tee -a /etc/pacman.conf
+$ sudo curl -fsSLo /tmp/dzo-repo-keyring.asc https://bzed.github.io/dayz-server-operator/arch/dzo-repo-keyring.asc
+$ sudo pacman-key --add /tmp/dzo-repo-keyring.asc
+$ sudo pacman-key --finger 184CDDC496A9C739D10F67B0FE4EE03444314050   # compare the fingerprint
+$ sudo pacman-key --lsign-key 184CDDC496A9C739D10F67B0FE4EE03444314050
+$ sudo pacman -Syu dzo
+```
+
+The pacman repository is signed with the same key as the apt and dnf repositories.
+Its two CI jobs are best effort: Arch is a rolling release.
+
+**In a container** (any Linux host with rootless podman 5.4 or newer and systemd;
+the game servers are containers of the host's podman): `ghcr.io/bzed/dzo` is a
+Debian 13 system with dzo and steamcmd, started by the host user's systemd with
+the quadlet and wrapper in `contrib/appliance/`. See the
+[container guide](docs/container.rst) for the host requirements and the setup.
+
+Other ways: a `.deb`, an `.rpm` or a static binary from the
 [CI artifacts](https://github.com/bzed/dayz-server-operator/actions/workflows/ci.yml),
 or build it yourself (a recent Go toolchain, see `go.mod`):
 
@@ -149,8 +206,9 @@ been checked yet.
 
 ### Run for real
 
-On a Debian 13 development host (rootless podman 5.4.2, a user systemd, btrfs)
-with a real Steam account, and on a workstation with the DayZ client:
+On a Debian 13 development host (the reference distribution; rootless podman
+5.4.2, a user systemd, btrfs) with a real Steam account, and on a workstation with
+the DayZ client:
 
 - **Servers.** DayZ 1.30 (stable) and the experimental build run in the runtime
   image from the generated quadlets, side by side, with workshop mods (CF-Test
@@ -166,8 +224,8 @@ with a real Steam account, and on a workstation with the DayZ client:
   refusal in a vehicle), spawning an item into the inventory, the hands and the
   ground, an unknown class, the crew of a vehicle, class watch rules on items,
   vehicle repair and delete.
-- **The web interface and the map** against a live server with a player, using
-  Debian's own `libjs-htmx` 2.0.4 and `libjs-leaflet` 1.7.1 (trixie).
+- **The web interface and the map** against a live server with a player, with the
+  built-in htmx 2.0.4 and Leaflet 1.7.1 (Debian trixie's versions).
 - **The Central Economy mission** is fetched from Bohemia's repository by branch or
   by bare commit id, rendered, applied in place, and booted by `dzo test boot`
   (also with CF-Test on the experimental server).
@@ -206,15 +264,18 @@ with a real Steam account, and on a workstation with the DayZ client:
   macros): `dzo mod cfgpatches` reports an error for 10 of the ~4,900 PBOs. It is
   only a diagnostic and does not decide the load order, which is the order of the
   `mods` list.
-- The package depends on Debian's `libjs-htmx` and `libjs-leaflet`. On trixie
-  that is htmx 2.0.4, which the pages were written for; the htmx 4 beta of
-  forky and sid has not been tried.
 - The world sizes of `sakhal` and of unknown maps without tiles are guesses.
 
 ### Needs live verification
 
 Things that could not be checked yet, roughly in the order they would bite:
 
+- **The package outside Debian.** Ubuntu, Fedora, the RHEL 10 family and Arch have
+  only run in containers: no `dzo setup` that builds both images, no real Steam
+  login through the `steamcmd` wrapper, no SELinux-enforcing host (Fedora, RHEL)
+  and no server on podman 6 (CentOS Stream 10, Arch). The
+  [support matrix](docs/installation.rst) says who is expected to check what, and
+  the [release checklist](docs/development.rst) is the list itself.
 - **BattlEye's `Verified GUID` line.** The other player events (connect, GUID, chat,
   kick, disconnect) were captured from a real client with BattlEye and the patterns
   fixed; the verified-GUID line needs a BattlEye master that answers, which it did not

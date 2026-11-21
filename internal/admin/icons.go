@@ -4,19 +4,16 @@
 package admin
 
 import (
-	"os"
-	"path/filepath"
 	"regexp"
 	"strings"
 )
 
 var faSelectorRe = regexp.MustCompile(`\.fa-([a-z0-9]+(?:-[a-z0-9]+)*):before`)
 
-// IconNames returns the icon names of the Fork Awesome stylesheet below assets (Debian's
-// fonts-fork-awesome, served with the other web assets), or nil if it is not installed there.
-func IconNames(assets string) map[string]bool {
-	css, err := os.ReadFile(filepath.Join(assets, "fork-awesome", "css", "fork-awesome.css")) //nolint:gosec // the configured web assets directory
-	if err != nil {
+// IconNames returns the icon names of the Fork Awesome stylesheet css, or nil if css is empty. css is
+// the content of fork-awesome/css/fork-awesome.css, as the web interface serves it.
+func IconNames(css []byte) map[string]bool {
+	if len(css) == 0 {
 		return nil
 	}
 	names := map[string]bool{}

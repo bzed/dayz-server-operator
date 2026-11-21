@@ -21,9 +21,14 @@ import (
 )
 
 type fake struct {
-	calls  []string
-	exists map[string]bool // image tags that exist
-	fail   map[string]bool // command prefixes that fail
+	calls         []string
+	exists        map[string]bool // image tags that exist
+	fail          map[string]bool // command prefixes that fail
+	version       string          // the version `podman --version` prints after "podman version "
+	serverVersion string          // podman version --format {{.Server.Version}}
+	cgroup        string          // podman info --format {{.Host.CgroupManager}}
+	mountBroken   bool            // the host cannot read paths.data
+	markerMode    os.FileMode     // mode of the file the mount check writes
 }
 
 func (f *fake) run(_ context.Context, name string, args ...string) ([]byte, error) {
@@ -34,11 +39,33 @@ func (f *fake) run(_ context.Context, name string, args ...string) ([]byte, erro
 			return []byte("it broke"), errors.New("exit status 1")
 		}
 	}
+	switch line {
+	case "podman --version":
+		return []byte("podman version " + f.version), nil
+	case "podman version --format {{.Server.Version}}":
+		return []byte(f.serverVersion), nil
+	case "podman info --format {{.Host.CgroupManager}}":
+		return []byte(f.cgroup), nil
+	}
 	if strings.HasPrefix(line, "podman image exists ") {
 		if f.exists[args[2]] {
 			return nil, nil
 		}
 		return nil, errors.New("exit status 1")
+	}
+	if strings.HasPrefix(line, "podman run ") {
+		file := args[len(args)-1]
+		if fi, err := os.Stat(file); err == nil {
+			f.markerMode = fi.Mode().Perm()
+		}
+		if f.mountBroken {
+			return []byte("cat: " + file + ": No such file or directory"), errors.New("exit status 125")
+		}
+		b, err := os.ReadFile(file)
+		if err != nil {
+			return []byte("cat: " + err.Error()), errors.New("exit status 1")
+		}
+		return b, nil
 	}
 	return nil, nil
 }
@@ -71,7 +98,19 @@ func newEnv(t testing.TB) *env {
 		require.NoError(t, os.MkdirAll(filepath.Join(images, i.Dir), 0o750))
 		require.NoError(t, os.WriteFile(filepath.Join(images, i.Dir, "Containerfile"), []byte("FROM scratch\n"), 0o600))
 	}
-	return &env{cfg: cfg, images: images, units: filepath.Join(root, "units"), f: &fake{exists: map[string]bool{}, fail: map[string]bool{}}}
+	return &env{cfg: cfg, images: images, units: filepath.Join(root, "units"), f: &fake{exists: map[string]bool{}, fail: map[string]bool{}, version: "5.4.2\n", serverVersion: "5.4.2\n", cgroup: "systemd\n"}}
+}
+
+// newRemoteEnv is newEnv with podman.mode remote and both images present: a
+// remote host's setup checks them through the server's podman.
+func newRemoteEnv(t testing.TB) *env {
+	t.Helper()
+	e := newEnv(t)
+	cfg, err := config.Parse([]byte("podman:\n  mode: remote\npaths:\n  data: " + e.cfg.Paths.Data + "\n"))
+	require.NoError(t, err)
+	e.cfg = cfg
+	e.f.exists["localhost/dzo-runtime:latest"], e.f.exists["localhost/dzo-steamcmd:latest"] = true, true
+	return e
 }
 
 func (e *env) run(t testing.TB, mod func(*Options)) error {
@@ -91,7 +130,7 @@ func TestDryRunChangesNothing(t *testing.T) {
 	assert.NoDirExists(t, e.units, "a dry run must not write units")
 	assert.Zero(t, e.f.ran("podman build"), "a dry run must not build anything: %v", e.f.calls)
 	assert.Zero(t, e.f.ran("systemctl"), "a dry run must not enable anything: %v", e.f.calls)
-	for _, want := range []string{"todo  create paths.instances", "todo  build image localhost/dzo-runtime:latest", "todo  build image localhost/dzo-steamcmd:latest", "todo  install dzo-image-refresh.timer", "warn  steam.account", "warn  site.remote"} {
+	for _, want := range []string{"todo  create paths.instances", "todo  build image localhost/dzo-runtime:latest", "todo  build image localhost/dzo-steamcmd:latest", "todo  install dzo-image-refresh.timer", "warn  steam.account", "warn  site.remote", "ok    podman 5.4.2"} {
 		assert.Contains(t, e.out.String(), want)
 	}
 }
@@ -138,6 +177,121 @@ func TestSetupRefusesRoot(t *testing.T) {
 	require.Error(t, err, "root must be refused")
 	require.Contains(t, e.out.String(), "not as root")
 	assert.Empty(t, e.f.calls, "nothing may run as root")
+}
+
+func TestCheckPodmanVersion(t *testing.T) {
+	for _, c := range []struct {
+		out  string
+		want string // "" means accepted
+	}{
+		{"5.4.2\n", ""},
+		{"5.4.0", ""},
+		{"6.2.0\n", ""},
+		{"5.8.6-dev", ""},
+		{"5.3.9", "podman 5.4 or newer"},
+		{"4.9.3", "podman 5.4 or newer"},
+		{"garbage", "cannot parse"},
+		{"", "cannot parse"},
+	} {
+		err := checkPodmanVersion(c.out)
+		if c.want == "" {
+			require.NoError(t, err, "output %q", c.out)
+			continue
+		}
+		require.Error(t, err, "output %q", c.out)
+		assert.Contains(t, err.Error(), c.want, "output %q", c.out)
+	}
+}
+
+func TestSetupReportsOldPodman(t *testing.T) {
+	e := newEnv(t)
+	e.f.version = "4.9.3\n"
+	require.Error(t, e.run(t, nil), "podman older than 5.4 must be an error")
+	assert.Contains(t, e.out.String(), "error podman 4.9.3 is too old: dzo needs podman 5.4 or newer\n")
+	assert.Zero(t, e.f.ran("podman build"), "nothing may be built with an unsupported podman: %v", e.f.calls)
+
+	// the check is read-only, so a dry run makes it too
+	require.Error(t, e.run(t, func(o *Options) { o.DryRun = true }), "a dry run must report it as well")
+	assert.Contains(t, e.out.String(), "error podman 4.9.3 is too old")
+
+	// --images-only, what the weekly timer runs, must refuse it too
+	e.f.calls = nil
+	require.Error(t, e.run(t, func(o *Options) { o.ImagesOnly = true }), "--images-only must refuse it")
+	assert.Contains(t, e.out.String(), "error podman 4.9.3 is too old")
+	assert.Zero(t, e.f.ran("podman build"), "nothing may be built with an unsupported podman: %v", e.f.calls)
+}
+
+func TestSetupReportsUnreadablePodmanVersion(t *testing.T) {
+	e := newEnv(t)
+	e.f.fail["podman --version"] = true
+	require.Error(t, e.run(t, func(o *Options) { o.DryRun = true }))
+	assert.Contains(t, e.out.String(), "error podman --version: exit status 1")
+}
+
+// The local check must not need a user namespace: rootless `podman version`
+// sets one up before it prints and fails where that is not allowed (an
+// unprivileged container, a host without a subuid range yet), `podman
+// --version` does not. Only the --version form may be asked.
+func TestSetupAsksPodmanVersionWithoutANamespace(t *testing.T) {
+	e := newEnv(t)
+	require.NoError(t, e.run(t, func(o *Options) { o.DryRun = true }))
+	assert.Contains(t, e.out.String(), "ok    podman 5.4.2")
+	assert.Zero(t, e.f.ran("podman version --format {{.Client.Version}}"), "%v", e.f.calls)
+}
+
+// In remote mode the containers run on another host through its podman: its
+// version, its cgroups and the shared paths.data decide whether an instance can
+// work at all.
+func TestSetupRemoteChecks(t *testing.T) {
+	t.Run("ok", func(t *testing.T) {
+		e := newRemoteEnv(t)
+		require.NoError(t, e.run(t, nil), e.out.String())
+		for _, want := range []string{
+			"ok    podman server 5.4.2",
+			"ok    paths.data " + e.cfg.Paths.Data + " is mounted at the same path on the host",
+			"ok    the host's podman uses systemd cgroups",
+		} {
+			assert.Contains(t, e.out.String(), want)
+		}
+		assert.Equal(t, os.FileMode(0o600), e.f.markerMode, "the test file below paths.data must be private")
+		left, err := filepath.Glob(filepath.Join(e.cfg.Paths.Data, ".dzo-setup-*"))
+		require.NoError(t, err)
+		assert.Empty(t, left, "the test file must be removed again")
+	})
+
+	t.Run("server too old", func(t *testing.T) {
+		e := newRemoteEnv(t)
+		e.f.serverVersion = "4.9.3\n"
+		require.Error(t, e.run(t, nil))
+		assert.Contains(t, e.out.String(), "error the host's podman 4.9.3 is too old: dzo needs podman 5.4 or newer\n")
+	})
+
+	t.Run("paths.data not mounted at the same path", func(t *testing.T) {
+		e := newRemoteEnv(t)
+		e.f.mountBroken = true
+		err := e.run(t, nil)
+		require.Error(t, err)
+		assert.Contains(t, e.out.String(), "error paths.data "+e.cfg.Paths.Data+" is not mounted at the same path on the host: ")
+		left, globErr := filepath.Glob(filepath.Join(e.cfg.Paths.Data, ".dzo-setup-*"))
+		require.NoError(t, globErr)
+		assert.Empty(t, left, "the test file must also be removed when the check fails")
+	})
+
+	t.Run("host does not use systemd cgroups", func(t *testing.T) {
+		e := newRemoteEnv(t)
+		e.f.cgroup = "cgroupfs\n"
+		require.Error(t, e.run(t, nil))
+		assert.Contains(t, e.out.String(), "error the host's podman does not use systemd: container health checks never run there, and no instance would become ready\n")
+	})
+
+	t.Run("dry run", func(t *testing.T) {
+		e := newRemoteEnv(t)
+		require.NoError(t, e.run(t, func(o *Options) { o.DryRun = true }), e.out.String())
+		assert.Contains(t, e.out.String(), "info  a dry run cannot check whether paths.data")
+		assert.Zero(t, e.f.ran("podman run"), "a dry run must not start a container: %v", e.f.calls)
+		assert.Equal(t, os.FileMode(0), e.f.markerMode, "a dry run must not write the test file")
+		assert.NoDirExists(t, e.cfg.Paths.Data)
+	})
 }
 
 func TestSetupReportsProblems(t *testing.T) {
@@ -233,6 +387,23 @@ func TestRefreshCommand(t *testing.T) {
 	}
 	for _, c := range cases {
 		assert.Equal(t, c.want, c.r.refreshCommand("/usr/bin/dzo"), c.name)
+	}
+}
+
+func TestSetupSaysWhichSteamcmd(t *testing.T) {
+	for _, c := range []struct {
+		name, path, want string
+		err              error
+	}{
+		{"installed", "/usr/bin/steamcmd", "info  steamcmd: using /usr/bin/steamcmd", nil},
+		{"missing", "", "info  steamcmd: not installed, using /usr/libexec/dzo/steamcmd-container (the dzo-steamcmd image)", exec.ErrNotFound},
+	} {
+		e := newEnv(t)
+		require.NoError(t, e.run(t, func(o *Options) {
+			o.DryRun = true
+			o.LookPath = func(string) (string, error) { return c.path, c.err }
+		}), c.name)
+		assert.Contains(t, e.out.String(), c.want, c.name)
 	}
 }
 

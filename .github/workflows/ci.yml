@@ -15,6 +15,11 @@ on:
     branches: [main]
     tags: ["v*"]
   pull_request:
+  schedule:
+    # A weekly rebuild of main's image, so the release in ghcr.io picks up
+    # Debian's security updates and dzo's latest package for the same commit
+    # (job "appliance-image"). Monday, 04:00 UTC.
+    - cron: "0 4 * * 1"
 
 permissions:
   contents: read
@@ -142,9 +147,8 @@ jobs:
   e2e:
     name: Browser e2e (${{ matrix.suite }})
     runs-on: ubuntu-latest
-    # The web UI in a real browser, with the htmx, Leaflet and Fork Awesome of the Debian release a dzo
-    # installation serves them from. forky ships the next htmx (4.0 beta): its run only warns early.
-    continue-on-error: ${{ matrix.suite == 'forky' }}
+    # The web UI in a real browser. The htmx, Leaflet, Fork Awesome and flags are compiled into dzo, so
+    # a suite only brings the browser that its Debian release ships.
     strategy:
       fail-fast: false
       matrix:
@@ -154,10 +158,10 @@ jobs:
       # Chromium's sandbox needs namespaces: Docker's default seccomp profile, the runner's AppArmor policy and the missing CAP_SYS_ADMIN block them. The sandbox stays on.
       options: --security-opt seccomp=unconfined --security-opt apparmor=unconfined --cap-add SYS_ADMIN
     steps:
-      - name: Install the browser and the JavaScript assets
+      - name: Install the browser
         run: |
           apt-get update
-          apt-get install -y --no-install-recommends git ca-certificates make gcc libc6-dev chromium chromium-sandbox libjs-htmx libjs-leaflet fonts-fork-awesome
+          apt-get install -y --no-install-recommends git ca-certificates make gcc libc6-dev chromium chromium-sandbox
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
@@ -219,7 +223,7 @@ jobs:
           # it present even though Debian policy lets Build-Depends omit it.
           # Running as root here (the container's default user) is why
           # there's no `sudo` in either apt-get invocation in this job.
-          apt-get install -y --no-install-recommends build-essential debhelper lintian python3-sphinx dh-sequence-sphinxdoc
+          apt-get install -y --no-install-recommends build-essential debhelper lintian python3-sphinx
       - name: Snapshot version
         # <latest release>+git<commits>.<sha>: newer than the release, older than the next one.
         # A no-op at the commit of a release tag, so the release package has the changelog's version.
@@ -243,16 +247,124 @@ jobs:
           name: dzo-deb
           path: deb-artifacts/*
           if-no-files-found: error
+      - name: Assemble the rpm payload
+        # The rpm repackages the binary the build job made plus exactly these
+        # files, so the .deb and the rpm ship the same payload and neither can
+        # drift from the other.
+        run: |
+          mkdir -p rpm-payload
+          cp -a dist/servermods images contrib rpm-payload/
+          cp -a docs/_build/html rpm-payload/html
+          cp -a debian/man rpm-payload/man
+          cp docs/cheatsheet/dzo-cheatsheet.pdf rpm-payload/
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: dzo-payload
+          path: rpm-payload/
+          if-no-files-found: error
+
+  rpm:
+    name: Build rpm package
+    needs: [build, deb]
+    runs-on: ubuntu-latest
+    # In a Fedora 44 container: the rpm is built where its tools live, from the
+    # binary the build job made and the payload the deb job assembled. Nothing
+    # is compiled here (packaging/rpm/dzo.spec).
+    container:
+      image: registry.fedoraproject.org/fedora:44
+    steps:
+      - name: Install git and the rpm build tools
+        run: dnf install -y git ca-certificates rpm-build rpmlint
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # `git describe` for the snapshot release
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: dzo-binaries
+          path: dist
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: dzo-payload
+          path: rpm-payload
+      - name: Build the package
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          scripts/build-rpm.sh dist/dzo-linux-amd64 rpm-payload rpm-out
+      - name: rpmlint
+        # Errors fail the build; packaging/rpm/dzo.rpmlintrc filters the ones
+        # that are inherent to the package (the static Go binary, DayZ in
+        # rpmlint's spelling data) and explains why.
+        run: rpmlint -r packaging/rpm/dzo.rpmlintrc rpm-out/dzo-*.rpm
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: dzo-rpm
+          path: rpm-out/*.rpm
+          if-no-files-found: error
+
+  rpm-install:
+    name: Install the rpm (${{ matrix.image }})
+    needs: [rpm]
+    runs-on: ubuntu-latest
+    # The package as a user gets it, installed into a bare distribution image
+    # with its dependencies from that distribution, and run as the service user
+    # the package creates. Fedora 43 and 44 and CentOS Stream 10 must pass:
+    # Stream 10 stands in for the RHEL 10 family, which has no free image.
+    strategy:
+      fail-fast: false
+      matrix:
+        image:
+          - registry.fedoraproject.org/fedora:43
+          - registry.fedoraproject.org/fedora:44
+          - quay.io/centos/centos:stream10
+    container:
+      image: ${{ matrix.image }}
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: dzo-rpm
+          path: rpm/
+      - name: Install the package
+        # git comes with the package as a dependency; both are named here because
+        # actions/checkout below needs them and must not depend on that.
+        run: dnf install -y ./rpm/dzo-*.rpm git ca-certificates
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: The rendered quadlets pass the installed podman's own generator
+        run: scripts/check-quadlet.sh internal/resolve/testdata
+      - name: dzo version
+        run: dzo version
+      - name: dzo setup --dry-run as the service user
+        run: su dayz -s /bin/sh -c 'dzo setup --dry-run'
+      - name: The dayz user is a regular user with subordinate ids
+        run: |
+          uid=$(getent passwd dayz | cut -d: -f3)
+          [ -n "$uid" ] || { echo "the package did not create the dayz user" >&2; exit 1; }
+          [ "$uid" -ge 1000 ] || { echo "dayz has UID $uid, below 1000" >&2; exit 1; }
+          grep -q '^dayz:' /etc/subuid || { echo "no subordinate uid range for dayz" >&2; exit 1; }
+          grep -q '^dayz:' /etc/subgid || { echo "no subordinate gid range for dayz" >&2; exit 1; }
 
   package-install:
-    name: Install the package in a clean trixie container
+    name: Install the package (${{ matrix.image }})
     needs: [deb]
     runs-on: ubuntu-latest
-    # The package as a user gets it: installed into a bare debian:trixie, with
-    # its dependencies from Debian, and run as the service user the package
-    # creates (M5).
+    # The package as a user gets it: installed into a bare distribution image,
+    # with its dependencies from that distribution, and run as the service user
+    # the package creates (M5). Debian 13 and Ubuntu 26.04 LTS must pass; the
+    # next releases only show what breaks before it reaches a user.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: debian:trixie
+            experimental: false
+          - image: ubuntu:26.04
+            experimental: false
+          - image: ubuntu:26.10
+            experimental: true
+          - image: debian:forky
+            experimental: true
+    continue-on-error: ${{ matrix.experimental }}
     container:
-      image: debian:trixie
+      image: ${{ matrix.image }}
     steps:
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -260,17 +372,295 @@ jobs:
           path: deb/
       - name: Install the package
         run: |
-          # steamcmd is non-free and i386 only: enable both before apt resolves the dependencies
+          # steamcmd is non-free and i386 only: enable both before apt resolves
+          # the dependencies. Debian has it in contrib/non-free, Ubuntu in multiverse.
+          . /etc/os-release
           dpkg --add-architecture i386
-          sed -i /etc/apt/sources.list.d/debian.sources -e 's/^Components: main$/Components: main contrib non-free/'
+          case "$ID" in
+            debian)
+              sed -i /etc/apt/sources.list.d/debian.sources -e 's/^Components: main$/Components: main contrib non-free/'
+              ;;
+            ubuntu)
+              # the official images already list multiverse; add it if one does not
+              sed -i /etc/apt/sources.list.d/ubuntu.sources -e '/^Components:.*multiverse/! s/^Components: \(.*\)$/Components: \1 multiverse/'
+              ;;
+          esac
           echo steamcmd steam/question select "I AGREE" | debconf-set-selections
           echo steamcmd steam/license note '' | debconf-set-selections
           apt-get update
-          apt-get install -y --no-install-recommends ./deb/dzo_*.deb
+          # git comes with the package as a dependency; both are named here because
+          # actions/checkout below needs them and must not depend on that.
+          apt-get install -y --no-install-recommends ./deb/dzo_*.deb git ca-certificates
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: The rendered quadlets pass the installed podman's own generator
+        run: scripts/check-quadlet.sh internal/resolve/testdata
       - name: dzo version
         run: dzo version
       - name: dzo setup --dry-run as the service user
         run: su dayz -s /bin/sh -c 'dzo setup --dry-run'
+      - name: The dayz user is a regular user with subordinate ids
+        run: |
+          uid=$(getent passwd dayz | cut -d: -f3)
+          [ -n "$uid" ] || { echo "the package did not create the dayz user" >&2; exit 1; }
+          [ "$uid" -ge 1000 ] || { echo "dayz has UID $uid, below 1000" >&2; exit 1; }
+          grep -q '^dayz:' /etc/subuid || { echo "no subordinate uid range for dayz" >&2; exit 1; }
+          grep -q '^dayz:' /etc/subgid || { echo "no subordinate gid range for dayz" >&2; exit 1; }
+
+  appliance-image:
+    name: Build and boot the appliance image
+    # The image runs the package of this run, so it comes after package-install
+    # has installed that package into a bare Debian and run dzo's own checks.
+    needs: [deb, package-install]
+    # ubuntu-latest, which has been Ubuntu 26.04 (podman 5.7) since November
+    # 2026: the appliance asks the host's podman for its version and cgroup
+    # manager and needs 5.4 or newer, while 24.04 has 4.9.
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: dzo-deb
+          path: deb/
+      - name: Assemble the build context
+        # images/appliance/Containerfile plus the package of this run and the
+        # apt repository's key; nothing of the checkout ends up in the image.
+        run: |
+          build=$(mktemp -d /var/tmp/dzo-appliance-context-XXXXXX)
+          cp -a images/appliance/. "$build"/
+          cp deb/dzo_*.deb "$build"/
+          cp apt/dzo-archive-keyring.asc "$build"/
+          version=$(basename deb/dzo_*.deb | sed -e 's/^dzo_//' -e 's/_[^_]*\.deb$//')
+          # A docker tag cannot hold the + and ~ of a Debian version.
+          tag=$(printf '%s' "$version" | sed -e 's/[^A-Za-z0-9_.-]/-/g')
+          {
+            echo "DZO_BUILD_CONTEXT=$build"
+            echo "DZO_IMAGE_TAG=$tag"
+          } >> "$GITHUB_ENV"
+          echo "building ghcr.io/bzed/dzo:$tag ($version)"
+      - name: Start the host podman the appliance talks to
+        # Rootful: a runner has no lingering user session, so a rootless podman
+        # there has no systemd cgroup manager, which the appliance's `dzo
+        # setup` checks for. The socket is made accessible to dayz (UID 1000)
+        # for the checks below only, as CI's host user is not dayz's owner.
+        run: |
+          podman --version
+          sudo install -d -m 0755 /etc/containers/containers.conf.d
+          printf '[engine]\ncgroup_manager = "systemd"\n' \
+            | sudo tee /etc/containers/containers.conf.d/99-ci-systemd-cgroups.conf
+          sudo systemctl enable --now podman.socket
+          sudo chmod 0666 /run/podman/podman.sock
+      - name: Build the image
+        run: sudo podman build -t "ghcr.io/bzed/dzo:$DZO_IMAGE_TAG" "$DZO_BUILD_CONTEXT"
+      - name: Boot the appliance
+        # The options of contrib/appliance/dzo.container (Task 8) except the
+        # user mapping: rootful podman maps container UID 1000 to host UID 1000
+        # by itself, and keep-id is rootless-only. The data directory is mounted
+        # at the same path on both sides, which every game container mounts.
+        run: |
+          data=$(mktemp -d /var/tmp/dzo-appliance-data-XXXXXX)
+          sudo chown 1000:1000 "$data"
+          echo "DZO_DATA=$data" >> "$GITHUB_ENV"
+          sudo podman run --detach --name dzo-appliance-test \
+            --systemd=always \
+            --network host \
+            --security-opt label=disable \
+            --volume /run/podman/podman.sock:/run/host-podman.sock \
+            --volume "$data":/srv/dzo \
+            "ghcr.io/bzed/dzo:$DZO_IMAGE_TAG"
+      - name: systemd is running in the appliance
+        run: |
+          state=$(sudo podman exec dzo-appliance-test systemctl is-system-running --wait || true)
+          echo "systemd: $state"
+          if [ "$state" != running ]; then
+            sudo podman exec dzo-appliance-test systemctl --failed --no-pager || true
+            exit 1
+          fi
+      - name: The user manager holds CONTAINER_HOST
+        run: |
+          sudo podman exec --user dayz --env XDG_RUNTIME_DIR=/run/user/1000 \
+            dzo-appliance-test systemctl --user show-environment \
+            | grep -qx 'CONTAINER_HOST=unix:///run/host-podman.sock'
+      - name: podman in the appliance reaches the host's podman
+        run: |
+          sudo podman exec --user dayz dzo-appliance-test podman ps --format '{{.Names}}' \
+            | grep -qx dzo-appliance-test
+      - name: dayz is UID/GID 1000, created before the package
+        # The package's sysusers.d file must leave the image's user alone; the
+        # host maps its own user to this id (--userns keep-id on a rootless
+        # host, the same number on a rootful one).
+        run: |
+          sudo podman exec dzo-appliance-test getent passwd dayz
+          [ "$(sudo podman exec dzo-appliance-test id -u dayz)" = 1000 ]
+          [ "$(sudo podman exec dzo-appliance-test id -g dayz)" = 1000 ]
+      - name: dzo version
+        run: sudo podman exec --user dayz dzo-appliance-test dzo version
+      - name: dzo setup --dry-run as the service user
+        run: |
+          sudo podman exec --user dayz --env XDG_RUNTIME_DIR=/run/user/1000 \
+            dzo-appliance-test dzo setup --dry-run
+      - name: Push the image
+        # main and release tags only, and the weekly rebuild of them; a pull
+        # request must never overwrite what main published.
+        if: ${{ (github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/'))) || github.event_name == 'schedule' }}
+        run: |
+          printf '%s' "${{ github.token }}" \
+            | sudo podman login ghcr.io --username "${{ github.actor }}" --password-stdin
+          sudo podman tag "ghcr.io/bzed/dzo:$DZO_IMAGE_TAG" ghcr.io/bzed/dzo:latest
+          sudo podman push "ghcr.io/bzed/dzo:$DZO_IMAGE_TAG"
+          sudo podman push ghcr.io/bzed/dzo:latest
+      - name: Clean up
+        if: always()
+        run: |
+          sudo podman rm --force --volumes dzo-appliance-test || true
+          sudo podman rmi --force "ghcr.io/bzed/dzo:$DZO_IMAGE_TAG" ghcr.io/bzed/dzo:latest || true
+          sudo rm -rf "$DZO_BUILD_CONTEXT" "$DZO_DATA"
+
+  arch:
+    name: Build the Arch package (best effort)
+    needs: [build, deb]
+    runs-on: ubuntu-latest
+    # archlinux:latest is a rolling release, so neither this job nor arch-install
+    # may fail the build: they show what the current archive, podman 6 and the
+    # next systemd change, and the package is best effort.
+    # Nothing is compiled here (packaging/arch/PKGBUILD): like the rpm job, the
+    # package assembles the binary the build job made and the payload the deb job
+    # uploaded.
+    continue-on-error: true
+    container:
+      image: docker.io/library/archlinux:latest
+    steps:
+      - name: Upgrade the image and install the build tools
+        # The image is a snapshot of the archive: installing without the full
+        # upgrade it needs fails on file conflicts (openssl, say).
+        run: pacman -Syu --noconfirm --needed base-devel git ca-certificates zstd namcap
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # `git describe` for the pkgrel of a snapshot build
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: dzo-binaries
+          path: dist
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: dzo-payload
+          path: arch-payload
+      - name: Build the package
+        # makepkg refuses to run as root. --nodeps: nothing is compiled and the
+        # package's runtime dependencies are resolved by pacman in arch-install,
+        # not downloaded into this container.
+        run: |
+          useradd --create-home --shell /bin/bash builder
+          mkdir -p arch-out
+          chown -R builder:builder "$GITHUB_WORKSPACE"
+          su builder -c "cd '$GITHUB_WORKSPACE/packaging/arch' && PKGDEST='$GITHUB_WORKSPACE/arch-out' makepkg -f --nodeps"
+      - name: namcap
+        # Errors fail the job. The warnings it prints are inherent to the package:
+        # the prebuilt static binary (no PIE, no RELRO), /usr/libexec for the
+        # shared post-install script, and the dependencies of a package that ships
+        # no compiled code of its own.
+        run: |
+          namcap arch-out/dzo-*.pkg.tar.zst | tee namcap.log
+          ! grep -q ' E: ' namcap.log
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: dzo-arch-pkg
+          path: arch-out/*.pkg.tar.zst
+          if-no-files-found: error
+
+  arch-install:
+    name: Install the Arch package (best effort)
+    needs: [arch]
+    runs-on: ubuntu-latest
+    # The package as a user gets it, installed into a bare archlinux:latest with
+    # its dependencies from the Arch repositories and run as the service user the
+    # package creates. Best effort for the same reason as the arch job.
+    continue-on-error: true
+    container:
+      image: docker.io/library/archlinux:latest
+    steps:
+      - name: Upgrade the image
+        run: pacman -Syu --noconfirm
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: dzo-arch-pkg
+          path: pkg/
+      - name: Install the package
+        # git comes with the package as a dependency; it is named here because
+        # actions/checkout below needs it and must not depend on that.
+        run: pacman -U --noconfirm ./pkg/dzo-*.pkg.tar.zst
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: The rendered quadlets pass the installed podman's own generator
+        run: scripts/check-quadlet.sh internal/resolve/testdata
+      - name: dzo version
+        run: dzo version
+      - name: The dayz user is a regular user with subordinate ids
+        # Before the dry run: a namespace failure in a container (see the next
+        # step) must not hide the checks the package is responsible for.
+        run: |
+          uid=$(getent passwd dayz | cut -d: -f3)
+          [ -n "$uid" ] || { echo "the package did not create the dayz user" >&2; exit 1; }
+          [ "$uid" -ge 1000 ] || { echo "dayz has UID $uid, below 1000" >&2; exit 1; }
+          grep -q '^dayz:' /etc/subuid || { echo "no subordinate uid range for dayz" >&2; exit 1; }
+          grep -q '^dayz:' /etc/subgid || { echo "no subordinate gid range for dayz" >&2; exit 1; }
+      - name: dzo setup --dry-run as the service user
+        # Inside CI's container the nested user namespace can fail on newuidmap
+        # ("could not set caps"); that is the container, not the package. The
+        # job is continue-on-error, and the step prints what failed.
+        run: su dayz -s /bin/sh -c 'dzo setup --dry-run'
+
+  quadlet-check:
+    name: Quadlet check (${{ matrix.image }})
+    runs-on: ubuntu-latest
+    # dzo renders the .container quadlets itself (internal/quadlet) instead of
+    # calling `podman generate systemd`, so a key it writes is only as good as the
+    # podman of the distribution the instance runs on. The golden units of
+    # internal/resolve are fed to the distribution's own quadlet generator here;
+    # no Go test can see a key that a later podman drops. Debian trixie (podman
+    # 5.4, the minimum dzo supports) and Fedora must pass; CentOS Stream and Arch
+    # carry podman 6 and only show what the next release changes.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: debian:trixie
+            experimental: false
+          - image: registry.fedoraproject.org/fedora:44
+            experimental: false
+          - image: quay.io/centos/centos:stream10
+            experimental: true
+          - image: docker.io/library/archlinux:latest
+            experimental: true
+    continue-on-error: ${{ matrix.experimental }}
+    container:
+      image: ${{ matrix.image }}
+    steps:
+      - name: Install podman (and git for actions/checkout, which no image has)
+        run: |
+          . /etc/os-release
+          case "$ID" in
+            debian | ubuntu)
+              apt-get update
+              apt-get install -y --no-install-recommends podman git ca-certificates
+              ;;
+            fedora | centos | rhel)
+              dnf install -y podman git ca-certificates
+              ;;
+            arch)
+              # The image is a snapshot of the archive: installing without the full
+              # upgrade it needs fails on file conflicts (openssl, say).
+              pacman -Syu --noconfirm podman git ca-certificates
+              ;;
+            *)
+              echo "no podman package for $ID in this job" >&2
+              exit 1
+              ;;
+          esac
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Check the rendered quadlets with the distribution's own generator
+        run: scripts/check-quadlet.sh internal/resolve/testdata
 
   release:
     name: Create GitHub release

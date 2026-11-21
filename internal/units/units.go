@@ -11,6 +11,7 @@
 package units
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -52,6 +53,7 @@ type File struct {
 	Name    string
 	Content string
 	Enable  string // unit to enable and start with it ("" for none)
+	Install bool   // also enable this unit, without starting it (a supervised instance unit)
 	Hold    bool   // keep the file that is there: an update is pending (see Options.Deploy)
 }
 
@@ -249,13 +251,28 @@ func Desired(o Options, tree *site.Tree) (files []File, warnings []string, err e
 		}
 		adminMod = adminMod || inst.AdminEnabled()
 		if len(inst.Missing) == 0 {
-			unit, err := quadlet.RenderContainer(inst.Quadlet)
-			if err != nil {
-				return nil, nil, fmt.Errorf("instance %s: %w", name, err)
+			// Local mode: a quadlet, the host's podman generates the unit. Remote
+			// mode (the container appliance): a plain unit whose supervisor drives
+			// podman through CONTAINER_HOST.
+			var f File
+			if o.Cfg.Remote() {
+				unit, err := quadlet.RenderSupervised(inst.Quadlet, o.cmd("instance", "supervise", name))
+				if err != nil {
+					return nil, nil, fmt.Errorf("instance %s: %w", name, err)
+				}
+				f = File{Dir: Systemd, Name: inst.Quadlet.Name + ".service", Content: generated(unit), Install: true}
+			} else {
+				unit, err := quadlet.RenderContainer(inst.Quadlet)
+				if err != nil {
+					return nil, nil, fmt.Errorf("instance %s: %w", name, err)
+				}
+				f = File{Dir: Quadlet, Name: inst.Quadlet.Name + ".container", Content: generated(unit)}
 			}
-			f := File{Dir: Quadlet, Name: inst.Quadlet.Name + ".container", Content: generated(unit)}
 			if p := Pending(inst); len(p) > 0 && !o.deploys(name) {
-				if _, err := os.Stat(filepath.Join(o.QuadletDir, f.Name)); err == nil {
+				// Hold what exists: a running server keeps its unit until it is
+				// restarted. After a mode switch the unit of the other mode is what
+				// is there, which is nothing to hold: then the new one is written.
+				if _, err := os.Stat(filepath.Join(o.dir(f.Dir), f.Name)); err == nil {
 					f.Hold = true
 					warnings = append(warnings, fmt.Sprintf("instance %s: %s pending, its unit keeps the generations it runs until it is restarted", name, strings.Join(p, ", ")))
 				}
@@ -334,26 +351,38 @@ func (o Options) dir(d Dir) string {
 
 // Sync writes the desired units, removes generated units that are no longer
 // desired, records the generations of the deployed instances, and tells
-// systemd (daemon-reload, then enable --now for timers and the exporter).
-// Instances are never started or stopped by it. With dryRun nothing is
-// written.
+// systemd (daemon-reload, then enable --now for timers and the exporter,
+// enable without starting for a supervised instance unit). Instances are
+// never started or stopped by it. With dryRun nothing is written.
 func Sync(ctx context.Context, o Options, tree *site.Tree, lc instance.Lifecycle, dryRun bool) (Result, error) {
 	files, warnings, err := Desired(o, tree)
 	res := Result{Warnings: warnings}
 	if err != nil {
 		return res, err
 	}
+	// Before any unit is written, and never in a dry run: a unit must not
+	// reference a binary that is not there.
+	if o.Cfg.Remote() && !dryRun {
+		if err := copyHealthBinary(o.Cfg); err != nil {
+			return res, err
+		}
+	}
 	want := map[string]bool{}
 	for _, f := range files {
 		want[filepath.Join(o.dir(f.Dir), f.Name)] = true
 	}
-	var enable []string
+	var enable, install []string
 	held := map[string]bool{}
 	for _, f := range files {
 		path := filepath.Join(o.dir(f.Dir), f.Name)
+		if f.Install {
+			install = append(install, f.Name)
+		}
 		if f.Hold {
 			res.Unchanged++
-			held[strings.TrimSuffix(f.Name, ".container")] = true
+			// Keyed by the instance, whatever the pending unit is: a quadlet of
+			// local mode or a supervised service of remote mode.
+			held[strings.TrimSuffix(strings.TrimSuffix(f.Name, ".container"), ".service")] = true
 			continue
 		}
 		if old, err := os.ReadFile(path); err == nil && string(old) == f.Content { //nolint:gosec // dzo's own unit dir
@@ -377,6 +406,10 @@ func Sync(ctx context.Context, o Options, tree *site.Tree, lc instance.Lifecycle
 			return res, err
 		}
 	}
+	instances := map[string]bool{} // an instance's own supervised unit must never be disabled
+	for _, name := range tree.InstanceNames() {
+		instances["dzo-"+name+".service"] = true
+	}
 	var gone []string // timers and services to disable
 	for _, d := range []Dir{Quadlet, Systemd} {
 		es, _ := os.ReadDir(o.dir(d))
@@ -389,7 +422,13 @@ func Sync(ctx context.Context, o Options, tree *site.Tree, lc instance.Lifecycle
 				continue // not ours
 			}
 			res.Removed = append(res.Removed, p)
-			if strings.HasSuffix(e.Name(), ".timer") || strings.HasSuffix(e.Name(), ".service") && d == Systemd {
+			switch {
+			case strings.HasSuffix(e.Name(), ".timer"):
+				gone = append(gone, e.Name())
+			case d == Systemd && strings.HasSuffix(e.Name(), ".service") && !instances[e.Name()]:
+				// A stale timer, exporter or serve unit: disable it. An instance's
+				// own unit is not: a switch back to local mode removes it, but
+				// disabling (--now) would stop a running server.
 				gone = append(gone, e.Name())
 			}
 			if !dryRun {
@@ -422,6 +461,13 @@ func Sync(ctx context.Context, o Options, tree *site.Tree, lc instance.Lifecycle
 		if err := lc.DaemonReload(ctx); err != nil {
 			res.Warnings = append(res.Warnings, "daemon-reload: "+err.Error())
 			return res, nil
+		}
+	}
+	if len(install) > 0 {
+		// Enable, never start: the unit comes up with the user manager after a
+		// reboot; a running server is left alone.
+		if err := lc.Enable(ctx, install...); err != nil {
+			res.Warnings = append(res.Warnings, "enable: "+err.Error())
 		}
 	}
 	if len(gone) > 0 {
@@ -476,4 +522,55 @@ func writeAtomic(path string, b []byte, mode os.FileMode) error {
 		return err
 	}
 	return os.Rename(tmp.Name(), path)
+}
+
+// copyHealthBinary copies the binary the game containers mount for their health
+// checks to where the host's podman can see it (resolve.HealthBinary): below
+// paths.data, which is mounted at the same absolute path in the appliance and on
+// the host, so the path in the unit is valid for both. It writes a temporary file
+// in the same directory, fsyncs and renames it over the old one, so a container
+// that is being created never sees a half-written binary. A bind mount pins the
+// inode: a running container keeps the binary it started with, as it keeps
+// /usr/bin/dzo on a native install, and there is no old copy to clean up.
+func copyHealthBinary(cfg *config.Config) error {
+	src, dst := cfg.Binary, resolve.HealthBinary(cfg)
+	want, err := os.ReadFile(src) //nolint:gosec // dzo's own binary, config.yaml binary
+	if err != nil {
+		return fmt.Errorf("health binary: %w", err)
+	}
+	if have, err := os.ReadFile(dst); err == nil && bytes.Equal(have, want) { //nolint:gosec // dzo's own data dir
+		return nil
+	}
+	dir := filepath.Dir(dst)
+	// 0755: the copy is executed by the host's podman through the bind mount (as
+	// the container's user), which is not necessarily dzo's user.
+	if err := os.MkdirAll(dir, 0o755); err != nil { //nolint:gosec // see above
+		return fmt.Errorf("health binary: %w", err)
+	}
+	tmp, err := os.CreateTemp(dir, ".dzo.tmp-*")
+	if err != nil {
+		return fmt.Errorf("health binary: %w", err)
+	}
+	defer os.Remove(tmp.Name()) //nolint:errcheck // gone after the rename
+	if _, err := tmp.Write(want); err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("health binary: %w", err)
+	}
+	if err := tmp.Chmod(0o755); err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("health binary: %w", err)
+	}
+	// fsync before the rename: a crash must leave either the old or the complete
+	// new binary, never a truncated one under the path a unit names.
+	if err := tmp.Sync(); err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("health binary: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("health binary: %w", err)
+	}
+	if err := os.Rename(tmp.Name(), dst); err != nil {
+		return fmt.Errorf("health binary: %w", err)
+	}
+	return nil
 }

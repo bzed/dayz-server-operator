@@ -303,6 +303,31 @@ func TestUnitsUseTheConfiguredBinary(t *testing.T) {
 	assert.Equal(t, "/opt/dzo/bin/dzo", q.Volumes[0].Source)
 }
 
+func TestHealthBinary(t *testing.T) {
+	cfg := config.Default()
+	cfg.Binary = "/opt/dzo/bin/dzo"
+	assert.Equal(t, "/opt/dzo/bin/dzo", HealthBinary(cfg), "local mode mounts the binary itself")
+
+	cfg.Podman.Mode = config.PodmanRemote
+	cfg.Paths.Data = "/srv/d"
+	assert.Equal(t, "/srv/d/bin/dzo", HealthBinary(cfg), "remote mode mounts the copy below paths.data")
+}
+
+func TestHealthBinaryRemote(t *testing.T) {
+	cfg, tree, _ := fixture(t, true)
+	cfg.Binary = "/usr/bin/dzo"
+	cfg.Paths.Data = "/srv/d"
+	cfg.Podman.Mode = config.PodmanRemote
+	inst, err := Resolve(cfg, tree, "alpha")
+	require.NoError(t, err)
+	require.NotEmpty(t, inst.Quadlet.Volumes)
+	assert.Equal(t, "/srv/d/bin/dzo", inst.Quadlet.Volumes[0].Source, "the health binary the host's podman can see")
+	assert.Equal(t, "/usr/local/bin/dzo", inst.Quadlet.Volumes[0].Destination)
+	assert.True(t, inst.Quadlet.Volumes[0].ReadOnly)
+	assert.Equal(t, "/usr/bin/dzo instance render alpha", inst.Quadlet.PreStart[1],
+		"the supervisor's own commands still run the appliance's binary")
+}
+
 func TestRConBind(t *testing.T) {
 	cfg, tree, _ := fixture(t, true)
 	alpha, _ := Resolve(cfg, tree, "alpha") // network: host

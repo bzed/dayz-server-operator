@@ -159,6 +159,8 @@ func TestServeAndWebDefaults(t *testing.T) {
 	require.Equal(t, "127.0.0.1:8080", c.Serve.Listen)
 	require.Equal(t, "127.0.0.1:2400", c.Serve.ModListen)
 	require.Equal(t, "127.0.0.1:8081", c.Web.Listen)
+	require.Empty(t, c.Web.Assets, "the built-in web assets")
+	require.Empty(t, c.Web.FlagsDir, "the built-in flags")
 	require.NotEmpty(t, c.Serve.Installation)
 }
 
@@ -399,6 +401,29 @@ func TestSteamProfileLookupDefaultsOn(t *testing.T) {
 	require.Equal(t, "/var/lib/dzo/secrets/steam-web-api.key", c.Steam.WebAPIKeyFile)
 	_, err = Parse([]byte("steam: {web_api_key_file: relative/key}\n"))
 	require.Error(t, err, "a relative key path is refused")
+}
+
+func TestPodmanModeDefault(t *testing.T) {
+	c, err := Parse([]byte("{}\n"))
+	require.NoError(t, err)
+	require.Equal(t, PodmanLocal, c.Podman.Mode, "an absent key means local")
+	require.False(t, c.Remote())
+	c, err = Parse([]byte("podman: {mode: local}\n"))
+	require.NoError(t, err)
+	require.Equal(t, PodmanLocal, c.Podman.Mode)
+	require.False(t, c.Remote())
+}
+
+func TestPodmanModeRemote(t *testing.T) {
+	c, err := Parse([]byte("podman: {mode: remote}\n"))
+	require.NoError(t, err)
+	require.Equal(t, PodmanRemote, c.Podman.Mode)
+	require.True(t, c.Remote())
+}
+
+func TestPodmanModeInvalid(t *testing.T) {
+	_, err := Parse([]byte("podman: {mode: docker}\n"))
+	require.ErrorContains(t, err, `podman.mode: must be "local" or "remote", got "docker"`)
 }
 
 func TestAuditIPRetentionDefault(t *testing.T) {

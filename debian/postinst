@@ -5,55 +5,25 @@ set -e
 
 # The debhelper marker below expands to, among others, the
 # dh_installsysusers snippet, which runs systemd-sysusers to create the
-# "dayz" user from debian/dzo.sysusers. Our own subuid/linger setup further
-# down needs that user to already exist, so it must run after the
+# "dayz" user from packaging/common/dzo.sysusers (installed as
+# debian/dzo.sysusers through a symlink). The shared post-install script
+# below needs that user to already exist, so it must run after the
 # expansion, not before - keep it below this point in the file.
 #DEBHELPER#
 
-# sysusers.d creates the "dayz" system user, but it does not allocate a
-# subuid/subgid range, which rootless podman needs. Assign one if none
-# exists yet; leave an existing range alone so a reinstall/upgrade never
-# disturbs a running instance's container namespace mapping.
+# The post-install steps live in /usr/libexec/dzo/postinst so the rpm %post and
+# the Arch .install hook run the same code (packaging/common/dzo-postinst.sh).
+# dpkg calls "postinst configure" with an empty $2 on a fresh install and with
+# the previously configured version on an upgrade; the script calls those
+# "configure" and "upgrade". Both create the dayz user's data directory,
+# subuid/subgid range and lingering; "upgrade" also refreshes the generated
+# units and restarts dzo's own services.
 if [ "$1" = "configure" ]; then
-	# The home and data directory is persistent state, not a tmpfiles.d entry
-	# (sysusers.d does not create home directories). Never chown recursively.
-	install -d -o dayz -g dayz -m 0750 /var/lib/dzo
-
-	if command -v usermod >/dev/null 2>&1 \
-		&& ! grep -q '^dayz:' /etc/subuid 2>/dev/null; then
-		usermod --add-subuids 100000-165535 --add-subgids 100000-165535 dayz || true
-	fi
-
-	# Podman under systemd user sessions needs the session to keep running
-	# without an interactive login (D-Bus activation, timers).
-	if command -v loginctl >/dev/null 2>&1; then
-		loginctl enable-linger dayz || true
+	if [ -n "$2" ]; then
+		/usr/libexec/dzo/postinst upgrade
+	else
+		/usr/libexec/dzo/postinst configure
 	fi
 fi
-
-# An upgrade: rewrite the generated units for the new version and restart the services that run
-# from the binary (the exporter, serve, web). dpkg replaces the file by renaming, so every process
-# keeps the old binary until it is restarted. A game server is never restarted here: it keeps
-# running on the old binary (mounted into its container) and picks up the new units and the new
-# binary at its next restart, which dzo schedules or the operator does (dzo restart <name>).
-if [ "$1" = "configure" ] && [ -n "$2" ] && id dayz >/dev/null 2>&1; then
-	uid=$(id -u dayz)
-	if [ -S "/run/user/$uid/bus" ] && command -v runuser >/dev/null 2>&1; then
-		as_dayz() {
-			runuser -u dayz -- env "XDG_RUNTIME_DIR=/run/user/$uid" "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$uid/bus" "$@"
-		}
-		if [ -r /etc/dzo/config.yaml ] && [ -d /var/lib/dzo/site ]; then
-			as_dayz /usr/bin/dzo units sync || echo "dzo: units sync failed after the upgrade; run it as dayz" >&2
-		fi
-		for unit in dzo-exporter dzo-serve dzo-web; do
-			if as_dayz systemctl --user is-active --quiet "$unit.service"; then
-				as_dayz systemctl --user restart "$unit.service" || true
-			fi
-		done
-	fi
-fi
-
-# No game server is ever started here: bringing up an instance is always an
-# explicit "dzo setup"/"dzo instance start" step (D18/§C14).
 
 exit 0

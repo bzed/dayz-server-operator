@@ -10,7 +10,6 @@ import (
 	"math"
 	"net/http"
 	"net/url"
-	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -571,15 +570,16 @@ func actDelete(r *http.Request, c *apiclient.Client, inst string) (api.ActionRes
 	return c.DeleteVehicle(r.Context(), inst, r.PathValue("id"), r.PostFormValue("force") == "1")
 }
 
-// flag serves the flag of a country, <flags_dir>/<code>.svg. Only a two-letter code is looked up.
+// flag serves the flag of a country, <code>.svg from the built-in flags or the configured directory.
+// Only a two-letter code is looked up.
 func (s *Server) flag(w http.ResponseWriter, r *http.Request) {
 	code := strings.ToLower(strings.TrimSuffix(r.PathValue("code"), ".svg"))
-	if s.opts.FlagsDir == "" || len(code) != 2 || code[0] < 'a' || code[0] > 'z' || code[1] < 'a' || code[1] > 'z' {
+	if len(code) != 2 || code[0] < 'a' || code[0] > 'z' || code[1] < 'a' || code[1] > 'z' {
 		http.NotFound(w, r)
 		return
 	}
 	w.Header().Set("Cache-Control", "public, max-age=86400")
-	http.ServeFileFS(w, r, os.DirFS(s.opts.FlagsDir), code+".svg") //nolint:gosec // G703: code is two ASCII letters (checked above) and the file system is rooted at the flags directory
+	http.ServeFileFS(w, r, flagsFS(s.opts.FlagsDir), code+".svg") //nolint:gosec // G703: code is two ASCII letters (checked above) and the file system is the flags tree
 }
 
 // setFacts fills the instance bar from an instance's status; without one (the request failed) the bar has the

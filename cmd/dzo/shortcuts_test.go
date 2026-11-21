@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -72,6 +73,48 @@ func TestSiteValidateAndPull(t *testing.T) {
 	require.NoError(t, err, "pull")
 	_, err = os.Stat(filepath.Join(pullDir, "site", "more.yaml"))
 	assert.NoError(t, err, "the second commit was not pulled")
+}
+
+// watchSite is exporterSite whose instance x watches two layers with the given icons.
+func watchSite(t testing.TB, extra string, icons ...string) string {
+	t.Helper()
+	cfg := exporterSite(t, extra)
+	rules := ""
+	for i, icon := range icons {
+		rules += "    - {layer: l" + strconv.Itoa(i) + ", classes: [FireplaceBase], icon: " + icon + "}\n"
+	}
+	writeFile(t, filepath.Join(filepath.Dir(cfg), "site", "instances", "x", "instance.yaml"), `name: x
+product: dayz-stable
+map: empty.m
+mission_source: {git: g, ref: r, path: p}
+ports: {game: 2302, rcon: 2306, query: 27016}
+network: host
+admin_map:
+  watch:
+`+rules)
+	return cfg
+}
+
+func TestSiteValidateWarnsAboutUnknownIconsFromTheBuiltInFont(t *testing.T) {
+	cfg := watchSite(t, "", "car", "firee")
+	out, err := runCmd(t, "site", "validate", "--config", cfg)
+	require.NoError(t, err, "validate: %s", out)
+	assert.Contains(t, out, `admin_map icon "firee" is not in the Fork Awesome font`,
+		"the built-in stylesheet knows no firee")
+	assert.NotContains(t, out, `admin_map icon "car"`, "car is in the built-in stylesheet")
+}
+
+func TestSiteValidateChecksIconsAgainstAWebAssetsOverride(t *testing.T) {
+	dir := t.TempDir()
+	css := filepath.Join(dir, "fork-awesome", "css")
+	require.NoError(t, os.MkdirAll(css, 0o750))
+	writeFile(t, filepath.Join(css, "fork-awesome.css"), ".fa-fire:before{content:\"\\f06d\"}\n")
+	cfg := watchSite(t, "web:\n  assets: "+dir+"\n", "fire", "car")
+	out, err := runCmd(t, "site", "validate", "--config", cfg)
+	require.NoError(t, err, "validate: %s", out)
+	assert.Contains(t, out, `admin_map icon "car" is not in the Fork Awesome font`,
+		"the override lacks car, so it is reported although the built-in stylesheet has it")
+	assert.NotContains(t, out, `admin_map icon "fire"`, "fire is in the override")
 }
 
 func TestStopWithCountdownOptions(t *testing.T) {

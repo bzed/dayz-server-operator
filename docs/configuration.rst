@@ -37,6 +37,9 @@ built-in ones, and an entry of the same name replaces the built-in entry as a wh
      db: ${data}/db                  # default
      site: ${data}/site              # default
 
+   podman:
+     mode: local                     # default
+
    site:
      remote: ssh://git@<git host>/<you>/dayz-site.git   # default: empty (not configured)
      branch: main                                 # default: empty, required with remote
@@ -90,9 +93,9 @@ built-in ones, and an entry of the same name replaces the built-in entry as a wh
      enabled: null                   # default: unset (see below)
      listen: 127.0.0.1:8081          # default
      allow_insecure_http: false      # default
-     assets: /usr/share/javascript   # default
+     assets: ""                      # default: none (the built-in copies)
      docs_dir: /usr/share/doc/dzo/html   # default
-     flags_dir: /usr/share/iso-flags-svg/country-4x3   # default
+     flags_dir: ""                   # default: none (the built-in flags)
      tls:                            # default: none (plain HTTP on listen)
        cert_file: /etc/dzo/tls/web-cert.pem     # default: empty
        key_file: /etc/dzo/tls/web-key.pem       # default: empty
@@ -133,6 +136,19 @@ and print what is wrong. A key dzo does not know is ignored.
    ``cache`` holds downloaded server builds and mods, ``secrets`` holds the Steam session,
    RCon passwords and tokens (mode 0600), ``db`` the databases (bans, player sightings),
    ``site`` the checkout of the site repository.
+
+``podman.mode``
+   How the instances run. ``local`` (the default) runs each one as a quadlet of this host's podman.
+   ``remote`` (the :doc:`container appliance <container>`) runs them as plain systemd units
+   supervised by ``dzo instance supervise``, through the podman of ``CONTAINER_HOST``. Any other
+   value is refused when the configuration loads, with ``podman.mode: must be "local" or "remote",
+   got "<value>"``. A change takes effect at the next ``dzo units sync`` and, for a running instance,
+   at its next restart; nothing is lost.
+   In ``remote`` mode the game containers belong to the host's podman, which cannot see the
+   appliance's own binary, so ``dzo units sync`` copies the ``binary`` to
+   ``<paths.data>/bin/dzo`` and the containers mount that copy for their health checks. The copy is
+   replaced atomically and only when its content changed; a running container keeps the copy it
+   started with, as it keeps ``/usr/bin/dzo`` on a native install.
 
 ``site``
    The site repository, see below.
@@ -297,12 +313,22 @@ and print what is wrong. A key dzo does not know is ignored.
       the address of the connection is used and forwarding headers are ignored. A value that is
       neither an address nor a CIDR network is refused, naming it. Read at start.
    ``assets``
-      The directory with htmx and Leaflet (Debian's ``libjs-*`` packages).
+      An optional directory that overrides the web files compiled into dzo, file by file: htmx 2.0.4,
+      Leaflet 1.7.1 and Fork Awesome 1.2.0 are built in and served under ``/vendor/``. A file the
+      directory holds wins; a file it lacks comes from the binary, so a directory with only
+      ``htmx/htmx.min.js`` replaces htmx alone and keeps the rest. A directory that is not there, for
+      example a stale ``/usr/share/javascript`` from an older configuration, is not an
+      error: ``dzo web`` logs one warning at start and serves the built-in copies. Read at start of
+      ``dzo web``; a change needs a restart. ``dzo site validate`` reads the same
+      ``fork-awesome/css/fork-awesome.css``, so it warns about the admin-map icons of an override
+      too (:ref:`map-icons`).
    ``docs_dir``
       The built documentation, served under ``/docs/``.
    ``flags_dir``
-      The country flags as ``<code>.svg`` in the 4:3 shape (Debian's ``iso-flags-svg``); without
-      them the player list shows the country code.
+      The same for the country flags, ``<code>.svg``: the built-in set comes from
+      ``iso-country-flags-svg-collection`` (commit ``f2cf92f``) in the 4:3 shape and is served under
+      ``/flags/``. A directory overrides it file by file, a flag the directory lacks comes from the
+      binary, and a missing directory only logs the warning above. Read at start of ``dzo web``.
    ``backends``, ``user_header``
       Removed. One web interface serves one installation (use ``api``), and ``dzo web`` has its own
       login. A configuration that still sets either key is refused with a pointer to the migration

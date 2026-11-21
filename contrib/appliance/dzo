@@ -1,0 +1,29 @@
+#!/bin/sh
+# SPDX-FileCopyrightText: 2026 Bernd Zeimetz <bernd@bzed.de>
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# Run dzo inside the dzo appliance (contrib/appliance/dzo.container) as the
+# service user, with the environment the appliance was started with: the
+# user's runtime directory, so systemctl --user and the podman socket work,
+# and the dayz home, so relative paths of dzo's own files land there.
+#
+#   ./contrib/appliance/dzo setup
+#   ./contrib/appliance/dzo instance apply deerisle
+#
+# DZO_CONTAINER names the appliance container; the default is the one the
+# quadlet creates. -it is added only when stdin is a terminal, so the wrapper
+# also works from scripts and cron.
+set -eu
+
+container=${DZO_CONTAINER:-dzo}
+tty=
+if [ -t 0 ]; then
+	tty=-it
+fi
+
+# shellcheck disable=SC2086 # $tty is a flag or empty, never a path
+exec podman exec $tty \
+	-u dayz \
+	-e XDG_RUNTIME_DIR=/run/user/1000 \
+	-w /var/lib/dzo \
+	"$container" dzo "$@"

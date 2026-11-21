@@ -562,8 +562,9 @@ func TestFlagsAreServedOnlyForTwoLetterCodes(t *testing.T) {
 		assert.Contains(t, []int{404, 400, 301}, code, p)
 	}
 	e.srv.opts.FlagsDir = ""
-	code, _, _ = e.get("/flags/de.svg")
-	require.Equal(t, 404, code, "no flags dir")
+	code, body, _ = e.get("/flags/de.svg")
+	require.Equal(t, 200, code, "the built-in flag without a flags dir")
+	require.Contains(t, body, "<svg", "the built-in flag without a flags dir")
 }
 
 func TestInstancePageOffersExpansionOnlyWithTheFeature(t *testing.T) {

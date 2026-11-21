@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"sort"
@@ -18,6 +19,7 @@ import (
 	"github.com/bzed/dayz-server-operator/internal/product"
 	"github.com/bzed/dayz-server-operator/internal/resolve"
 	"github.com/bzed/dayz-server-operator/internal/servermods"
+	"github.com/bzed/dayz-server-operator/internal/setup"
 	"github.com/bzed/dayz-server-operator/internal/site"
 )
 
@@ -32,7 +34,8 @@ type installFlags struct {
 
 func (f *installFlags) add(cmd *cobra.Command) {
 	configFlag(cmd, &f.config)
-	cmd.Flags().StringVar(&f.steamcmd, "steamcmd", "steamcmd", "steamcmd binary to run")
+	cmd.Flags().StringVar(&f.steamcmd, "steamcmd", defaultSteamcmd(exec.LookPath, setup.SteamcmdWrapper),
+		"steamcmd program to run (default: steamcmd when the host has it, else "+setup.SteamcmdWrapper+", which runs the dzo-steamcmd image)")
 	cmd.Flags().BoolVar(&f.ignoreCompat, "ignore-compat", false, "use a shipped servermod even if its PBOs differ from the tested set in compat.yaml")
 }
 

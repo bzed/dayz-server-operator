@@ -36,3 +36,10 @@ override_dh_auto_clean:
 # Nothing to do: the Makefile has no "install" target, and the binary/
 # conffile placement is entirely handled by debian/dzo.install (dh_install).
 override_dh_auto_install:
+
+# dh_install copies a file into a directory and keeps its name, but the
+# post-install script is installed as /usr/libexec/dzo/postinst - the one path
+# the rpm %post and the Arch .install hook call as well.
+override_dh_install:
+	dh_install
+	mv debian/dzo/usr/libexec/dzo/dzo-postinst.sh debian/dzo/usr/libexec/dzo/postinst

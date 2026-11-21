@@ -510,18 +510,19 @@ Icons and colours
 
 A point marker is drawn as a round badge with an icon in it, in the marker's colour.
 The icons are those of `Fork Awesome <https://forkaweso.me/Fork-Awesome/icons/>`_ (a
-community fork of Font Awesome 4.7, SIL OFL), which comes with the ``fonts-fork-awesome``
-package that dzo depends on. ``icon`` is the icon's name without the ``fa-``
+community fork of Font Awesome 4.7, SIL OFL), which is compiled into dzo with the
+rest of the web interface. ``icon`` is the icon's name without the ``fa-``
 prefix: ``fire``, ``car``, ``truck``, ``plane``, ``ambulance``, ``bus``, ``tree``,
 ``bomb``, ``crosshairs``, ``user-secret``, ``rocket``, ``android``, ``flag``, ``home``,
 ``medkit``, ``key``, ``gift``, ``trophy``, ``wrench``, ``star``, ``bolt``, ``eye``
 and about nine hundred more, plus ``helicopter`` (Fork Awesome has none; dzo ships the
 Font Awesome Free one, CC BY 4.0). Browse the gallery on the Fork Awesome site, or list
-the names installed on the host:
+the names of the ``fork-awesome.css`` of a dzo source tree or of a ``web.assets``
+directory:
 
 .. code-block:: sh
 
-   grep -o '^\.fa-[a-z0-9-]*' /usr/share/javascript/fork-awesome/css/fork-awesome.css | sed 's/^\.fa-//' | sort -u
+   grep -o '^\.fa-[a-z0-9-]*' internal/web/vendor/fork-awesome/css/fork-awesome.css | sed 's/^\.fa-//' | sort -u
 
 ``color`` is a CSS colour: ``#rgb``, ``#rrggbb`` (``#rrggbbaa`` with transparency), or a name
 such as ``red`` or ``orange``. Circles, polygons and lines use it for their outline.
@@ -534,5 +535,6 @@ Where the look comes from, first match wins:
 
 A marker with no icon, or with a name the font does not have, is a plain dot, and with no
 colour the default purple. ``dzo site validate`` warns about an icon name of a watch rule that
-the installed font does not know, and rejects a malformed name or colour. Lines, circles and
+the font dzo serves does not know (the built-in one, or the ``fork-awesome.css`` of a
+``web.assets`` directory), and rejects a malformed name or colour. Lines, circles and
 polygons have no icon. Icons shipped inside mod PBOs are not supported.

@@ -1,0 +1,109 @@
+# SPDX-FileCopyrightText: 2026 Bernd Zeimetz <bernd@bzed.de>
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# dzo-appliance: dzo and the system it needs as a Debian system in a container.
+# systemd is PID 1 and runs the game servers as user units of dayz, but they are
+# containers of the *host's* rootless podman: dzo talks to the user socket the
+# host mounts at /run/host-podman.sock, so the appliance holds no server and can
+# be restarted, updated or replaced without stopping one.
+#
+# The build context is this directory plus the package to install and the apt
+# repository's public key:
+#
+#   build=$(mktemp -d)
+#   cp -a images/appliance/. "$build"/
+#   cp ../dzo_*.deb "$build"/
+#   cp apt/dzo-archive-keyring.asc "$build"/
+#   podman build -t ghcr.io/bzed/dzo:test "$build"
+#
+# CI does the same from the .deb of the same run (.github/workflows/ci.yml, job
+# "appliance-image") and boots the result.
+FROM debian:trixie
+
+ARG DEBIAN_FRONTEND=noninteractive
+
+# The package depends on steamcmd, which Debian only has in non-free and for
+# i386; its licence question is answered here so apt never prompts. Same as
+# images/steamcmd/Containerfile.
+RUN sed -i /etc/apt/sources.list.d/debian.sources -e 's/^Components: main$/Components: main contrib non-free/' \
+    && dpkg --add-architecture i386 \
+    && echo steam steam/question select "I AGREE" | debconf-set-selections \
+    && echo steam steam/license note '' | debconf-set-selections
+
+# systemd as PID 1 (systemd-sysv) and the pieces of a user manager, because the
+# servers run as user units of dayz: dbus-user-session brings the session bus,
+# libpam-systemd the logind session for it.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        ca-certificates \
+        dbus-user-session \
+        libpam-systemd \
+        systemd-sysv \
+    && rm -rf /var/lib/apt/lists/*
+
+# The service user, fixed at UID/GID 1000 so the host can map its own user to it
+# with --userns keep-id:uid=1000,gid=1000. It exists *before* the package is
+# installed: the package's sysusers.d file then leaves an existing dayz alone
+# instead of picking an id of its own, and its postinst finds the home.
+RUN groupadd --gid 1000 dayz \
+    && useradd --uid 1000 --gid 1000 --home-dir /var/lib/dzo --create-home --shell /bin/bash dayz
+
+# The package of this build, with its dependencies from Debian. dzo's apt
+# repository is added *afterwards*: the package comes from the build context,
+# and the image must build even while the repository has no such suite yet.
+COPY dzo_*.deb /tmp/
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends /tmp/dzo_*.deb \
+    && rm -f /tmp/dzo_*.deb \
+    && rm -rf /var/lib/apt/lists/*
+
+# dzo's apt repository, so `apt update && apt upgrade` inside the running
+# appliance updates dzo: the package's postinst then rewrites the units and
+# restarts dzo's own services, never a game server. The key is the one the
+# repository is signed with (apt/dzo-archive-keyring.asc in the source).
+COPY dzo-archive-keyring.asc /etc/apt/keyrings/dzo-archive-keyring.asc
+RUN printf '%s\n' \
+        'Types: deb' \
+        'URIs: https://bzed.github.io/dayz-server-operator/apt' \
+        'Suites: stable' \
+        'Components: main' \
+        'Architectures: amd64' \
+        'Signed-By: /etc/apt/keyrings/dzo-archive-keyring.asc' \
+        > /etc/apt/sources.list.d/dzo.sources
+
+# Lingering for dayz, so its user manager - and with it the game servers - starts
+# at boot without a login. The package's `loginctl enable-linger` cannot work
+# during the build (no logind runs yet); the flag is the file logind looks for.
+RUN install -d -m 0755 /var/lib/systemd/linger \
+    && touch /var/lib/systemd/linger/dayz
+
+# Every podman call in the appliance is a client call to the host's podman:
+# containers.conf makes it remote (image builds, inspect, the debug shell,
+# `dzo instance supervise`), and CONTAINER_HOST names the socket. environment.d
+# gives the value to the user manager, the ENV line to the sessions
+# `podman exec -u dayz` starts, which read neither environment.d nor PAM.
+COPY containers-remote.conf /etc/containers/containers.conf.d/50-dzo-remote.conf
+COPY environment.d-podman.conf /etc/environment.d/50-dzo-podman.conf
+ENV CONTAINER_HOST=unix:///run/host-podman.sock
+
+# Debian's steamcmd wrapper lives in /usr/games, which no default PATH has:
+# without it dzo would use the dzo-steamcmd container instead of the package
+# the .deb depends on. Same as images/steamcmd/Containerfile.
+ENV PATH=/usr/games:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+# The appliance mode and the data directory, which the host mounts at the same
+# path on both sides. /etc/dzo is a named volume on the host, so this file only
+# seeds it on the first run and a local change survives an image update.
+COPY config.yaml /etc/dzo/config.yaml
+
+# What systemd expects as the stop signal of a container: the units shut down
+# (the servers stop cleanly) instead of PID 1 being killed with SIGTERM.
+STOPSIGNAL SIGRTMIN+3
+
+# Not a no-op: with the host's --userns keep-id, podman runs the container as
+# the mapped user (UID 1000) unless the image asks for root, and systemd in
+# system mode must be PID 1 as root. dayz keeps UID 1000 and remains the host
+# user on the mounted data directory; root maps to a subuid, which is enough
+# for the container's own files and services.
+USER 0
+CMD ["/sbin/init"]

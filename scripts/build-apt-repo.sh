@@ -32,6 +32,9 @@ codename=$(awk '/^Codename:/{print $2}' "$base/conf/distributions")
 for deb in "$debs"/*.deb; do
 	reprepro --silent --basedir "$base" --outdir "$out" includedeb "$codename" "$deb"
 done
+# dists/<suite> as a symlink to dists/<codename>, so a sources entry can use the
+# stable suite name and keep working when the codename changes (apt follows it).
+reprepro --silent --basedir "$base" --outdir "$out" createsymlinks
 # only the published tree: no database, no config
 rm -rf "$out/db" "$out/conf"
 

@@ -1,3 +1,67 @@
+dayz-server-operator (0.8.2-1) trixie; urgency=medium
+
+  * Web interface: htmx 2.0.4, Leaflet 1.7.1, Fork Awesome 1.2.0 and the
+    country flags are compiled into the binary; dzo no longer depends on
+    libjs-htmx, libjs-leaflet, fonts-fork-awesome and iso-flags-svg, and
+    web.assets and web.flags_dir default to none (the built-in copies)
+    and only override them file by file.
+  * The apt repository also publishes the suite "stable" (a symlink to
+    trixie) and the installation guide uses it; "trixie" keeps working.
+    CI install-tests the package in a clean Ubuntu 26.04 LTS container,
+    blocking, next to Debian 13.
+  * The package no longer depends on libjs-sphinxdoc: the HTML
+    documentation ships Sphinx's own JavaScript and CSS instead of
+    symlinks into /usr/share/javascript/sphinxdoc, so a package built on
+    Debian 13 installs on Ubuntu 26.04 LTS whatever Sphinx version
+    built it.
+  * The post-install steps (data directory, subuid/subgid range,
+    lingering, and the unit refresh and service restarts on upgrade)
+    move into /usr/libexec/dzo/postinst, the one script the rpm and Arch
+    packages will call too. The subordinate id range is no longer fixed
+    at 100000-165535: it is the lowest free 65536-id block at or above
+    100000 that overlaps no range in /etc/subuid and /etc/subgid, so the
+    package installs on a host where another rootless podman user
+    already holds that range. An existing range for dayz is kept.
+  * On a host without a steamcmd package (Fedora, RHEL, Arch), dzo runs
+    steamcmd from the localhost/dzo-steamcmd image that dzo setup builds:
+    --steamcmd (dzo mod add/update/refresh, dzo product install/update) and
+    dzo steam login --command default to /usr/libexec/dzo/steamcmd-container
+    when PATH has no steamcmd. The wrapper mounts the steamcmd home under
+    paths.secrets/steamcmd-home (created 0700) and paths.cache into the
+    image at the same paths, so downloads and the Steam session persist; the
+    new `dzo config get <paths.* key>` prints those resolved paths. dzo setup
+    reports which steamcmd the downloads use.
+  * Packages for Fedora 43 and later and the RHEL 10 family (rpm) and, best
+    effort, for Arch Linux, built from the same binary and the same payload
+    as the .deb, each with a signed repository next to the apt one (dnf and
+    pacman); all three repositories are signed with the same key.
+  * README and the documentation now show which distributions dzo supports
+    and how well each is tested: Debian 13 is the reference, Ubuntu 26.04
+    LTS, Fedora 43/44 and the RHEL 10 family are supported (blocking CI
+    install jobs plus a manual release checklist on a VM), Arch, Ubuntu
+    interim releases and Debian testing are best effort. They also say what
+    is not verified yet: SELinux in enforcing mode on Fedora and the RHEL
+    family, a real Steam login through the steamcmd container wrapper, and
+    no btrfs snapshot backups on the RHEL 10 family.
+  * dzo also ships as a container image (ghcr.io/bzed/dzo, tagged with the
+    package version and latest): Debian trixie with systemd as PID 1, dayz
+    at UID/GID 1000 with lingering, dzo's apt repository, and podman switched
+    to remote against the host's user socket, so the game servers run on the
+    host and survive a restart, update or replacement of the appliance. CI
+    builds it from the .deb of the same run, boots it, and rebuilds it weekly
+    for Debian security updates.
+  * Running dzo as a container appliance is documented in docs/container.rst:
+    the host requirements (rootless podman 5.4 or newer with systemd,
+    podman.socket, lingering, systemd cgroups, btrfs for backups), the host
+    user's quadlet and the dzo wrapper in contrib/appliance/, the same-path
+    rule for the data directory, the three checks dzo setup makes in
+    podman.mode remote, and what differs from a native install. The quadlet
+    brings a crashed appliance back (Restart=on-failure) and waits longer
+    than podman's own stop timeout (TimeoutStopSec=150) so the servers stop
+    cleanly.
+
+ -- Bernd Zeimetz <bernd@bzed.de>  Sat, 21 Nov 2026 17:04:18 +0100
+
 dayz-server-operator (0.8.1-1) trixie; urgency=medium
 
   * dzo-admin 0.8.1, which changes the packaged PBO: a moved or spawned

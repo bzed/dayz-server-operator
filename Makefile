@@ -20,7 +20,7 @@ COVERAGE_MIN := 85
 GO           ?= go
 
 .PHONY: all cheatsheet docs build build-static test test-race cover coverage-check cover-html lint vet fmt fmt-check \
-        licenses reuse vulncheck fuzz e2e e2e-container check deb clean tidy generate servermods servermods-check servermods-lock test-findfile test-client
+        licenses reuse vulncheck fuzz e2e e2e-container check deb clean tidy generate servermods servermods-check servermods-lock test-findfile test-client vendor-web
 
 all: lint reuse test build
 
@@ -89,16 +89,16 @@ reuse:
 vulncheck:
 	$(GO) run golang.org/x/vuln/cmd/govulncheck@v1.7.0 ./...
 
-## e2e: browser tests of the web UI (chromedp, build tag e2e). Needs Chrome/Chromium and the JavaScript
-## assets of libjs-htmx, libjs-leaflet and fonts-fork-awesome; DZO_E2E_CHROME and DZO_E2E_ASSETS override
-## where they are (see docs/development.rst).
+## e2e: browser tests of the web UI (chromedp, build tag e2e). Needs Chrome/Chromium; the JavaScript is
+## compiled in, and DZO_E2E_CHROME and DZO_E2E_ASSETS override the browser and the assets directory (see
+## docs/development.rst).
 e2e:
 	$(GO) test -tags e2e -count=1 -race -run '^TestE2E' ./internal/web/
 
 ## e2e-container: make e2e (or DZO_E2E_TARGET) inside a debian:trixie podman container, for machines
-## that are not Debian trixie: the same Chromium, htmx, Leaflet and Fork Awesome the CI job uses
-## (images/e2e/Containerfile, docs/development.rst). DZO_E2E_SUITE (trixie), DZO_E2E_TARGET (e2e) and
-## DZO_E2E_PODMAN_OPTS (Chromium's sandbox options, those of CI) change the defaults.
+## that are not Debian trixie: the same Chromium the CI job uses (images/e2e/Containerfile,
+## docs/development.rst). DZO_E2E_SUITE (trixie), DZO_E2E_TARGET (e2e) and DZO_E2E_PODMAN_OPTS
+## (Chromium's sandbox options, those of CI) change the defaults.
 DZO_E2E_SUITE ?= trixie
 DZO_E2E_TARGET ?= e2e
 DZO_E2E_PODMAN_OPTS ?= --security-opt seccomp=unconfined --security-opt apparmor=unconfined --cap-add SYS_ADMIN
@@ -111,6 +111,12 @@ e2e-container:
 		--user $(shell id -u):$(shell id -g) \
 		-e GOFLAGS=-buildvcs=false \
 		dzo-e2e:$(DZO_E2E_SUITE) make $(DZO_E2E_TARGET)
+
+## test-appliance: the supervisor against a real rootless podman socket (build tag appliance, tests
+## TestSuperviseRealPodman). Skipped unless DZO_APPLIANCE_PODMAN=1; CONTAINER_HOST selects the socket
+## (default: $XDG_RUNTIME_DIR/podman/podman.sock, see docs/development.rst). Not part of `make check`.
+test-appliance:
+	$(GO) test -tags appliance -count=1 -race -run '^TestSuperviseRealPodman$$' ./internal/supervise/
 
 ## fuzz: run every fuzz target for FUZZTIME (default 10s) each; the seeds also run in `make test`.
 ## Go fuzzes one target per invocation. Fuzz longer with FUZZTIME=5m or one target by hand
@@ -196,6 +202,12 @@ deb:
 ## tidy: tidy go.mod/go.sum.
 tidy:
 	$(GO) mod tidy
+
+## vendor-web: download the pinned web files (htmx, Leaflet, Fork Awesome, the country flags) into
+## internal/web/vendor and check them against internal/web/vendor/SHA256SUMS. ARGS=--update rewrites the
+## sums after a version bump.
+vendor-web:
+	scripts/vendor-web.sh $(ARGS)
 
 ## clean: remove build artifacts.
 clean:

@@ -19,6 +19,17 @@ container runs. Under the hood these are plain systemd user units
 (``dzo-deerisle.service``), so ``systemctl --user`` and ``journalctl --user``
 work too.
 
+With ``podman.mode: remote`` (the :doc:`container appliance <container>`) the
+unit is not a quadlet but a plain unit of the same name: ``Type=notify``, and
+its ``ExecStart`` is ``dzo instance supervise <name>`` followed by the
+container's ``podman run`` arguments after ``--``. The supervisor starts the
+container through the podman of ``CONTAINER_HOST``, reports the unit ready when
+the container is healthy and stops the container on ``SIGTERM``. ``dzo logs``,
+``dzo status``, the timers and every other command are the same. The arguments
+belong to the unit, so a pending update stays pending through a crash restart,
+and a running server switches to a new unit at its next restart - also when
+``podman.mode`` changes.
+
 .. _stopping-the-server:
 
 Stopping the server

@@ -14,6 +14,10 @@ func main() {
 	if err == nil {
 		return
 	}
+	var codeErr *exitCodeErr
+	if errors.As(err, &codeErr) {
+		os.Exit(codeErr.code)
+	}
 	var exitErr *checkExitErr
 	if errors.As(err, &exitErr) {
 		os.Exit(exitErr.code)

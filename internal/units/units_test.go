@@ -4,6 +4,7 @@
 package units
 
 import (
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -103,6 +104,17 @@ func (e *env) tree() *site.Tree {
 	tree, err := site.LoadTree(e.opts.Cfg.Paths.Site)
 	require.NoError(e.t, err)
 	return tree
+}
+
+// remote switches the environment to podman.mode remote with a binary that
+// exists, as the appliance has one.
+func (e *env) remote() {
+	e.t.Helper()
+	bin := filepath.Join(e.data, "dzo")
+	write(e.t, bin, "dzo v1")
+	require.NoError(e.t, os.Chmod(bin, 0o755)) //nolint:gosec // fixture
+	e.opts.Cfg.Binary = bin
+	e.opts.Cfg.Podman.Mode = config.PodmanRemote
 }
 
 func (e *env) sync(dry bool) Result {
@@ -285,6 +297,128 @@ func TestPendingUpdatesAreHeldBackUntilTheInstanceIsDeployed(t *testing.T) {
 	assert.Contains(t, string(after), "g3", "* deploys every instance")
 }
 
+func TestDesiredRemoteWritesService(t *testing.T) {
+	e := newEnv(t)
+	e.remote()
+	files, _, err := Desired(e.opts, e.tree())
+	require.NoError(t, err)
+	var service *File
+	for i := range files {
+		f := &files[i]
+		assert.False(t, strings.HasSuffix(f.Name, ".container"), "remote mode writes no quadlet: %+v", *f)
+		if f.Name == "dzo-x.service" {
+			service = f
+		}
+	}
+	require.NotNil(t, service, "want dzo-x.service")
+	assert.Equal(t, Systemd, service.Dir, "the supervised unit is a plain systemd unit")
+	assert.True(t, service.Install, "the instance unit must be enabled (and never started)")
+	assert.Contains(t, service.Content, "Type=notify\n")
+	assert.Contains(t, service.Content, "ExecStart=/usr/bin/dzo instance supervise x -- run --name dzo-x --replace --rm --network host ",
+		"the unit carries the supervisor and the podman run arguments")
+
+	e.sync(false)
+	assert.NoFileExists(t, filepath.Join(e.opts.QuadletDir, "dzo-x.container"), "no quadlet in remote mode")
+	assert.FileExists(t, filepath.Join(e.opts.UnitDir, "dzo-x.service"))
+}
+
+// assertNeverStops fails for every systemctl call that stops or disables unit.
+func assertNeverStops(t *testing.T, calls []string, unit string) {
+	t.Helper()
+	for _, c := range calls {
+		if !strings.Contains(c, unit) {
+			continue
+		}
+		for _, verb := range []string{"disable", "stop", "start", "--now"} {
+			// "start" also covers "restart".
+			assert.NotContains(t, c, verb, "a sync must never stop or start %s: %q", unit, c)
+		}
+	}
+}
+
+func TestSyncModeSwitchKeepsRunningInstance(t *testing.T) {
+	e := newEnv(t)
+	e.sync(false) // local: a quadlet
+	container := filepath.Join(e.opts.QuadletDir, "dzo-x.container")
+	service := filepath.Join(e.opts.UnitDir, "dzo-x.service")
+	assert.FileExists(t, container)
+
+	// local -> remote: the quadlet goes, the supervised unit comes, nothing is stopped
+	e.remote()
+	res := e.sync(false)
+	assert.Contains(t, res.Removed, container, "the quadlet must be replaced")
+	assert.NoFileExists(t, container)
+	assert.FileExists(t, service)
+	calls := strings.Join(e.calls(), "\n")
+	assert.Contains(t, calls, "enable dzo-x.service", "the supervised unit must be enabled")
+	assertNeverStops(t, e.calls(), "dzo-x.service")
+
+	// remote -> local: the supervised unit goes, the quadlet comes back, still nothing is stopped
+	e.opts.Cfg.Podman.Mode = config.PodmanLocal
+	res = e.sync(false)
+	assert.Contains(t, res.Removed, service, "the supervised unit must be replaced")
+	assert.NoFileExists(t, service)
+	assert.FileExists(t, container)
+	assertNeverStops(t, e.calls(), "dzo-x.service")
+}
+
+func TestSyncRemoteHoldsPendingUpdate(t *testing.T) {
+	e := newEnv(t)
+	e.remote()
+	e.sync(false)
+	unit := filepath.Join(e.opts.UnitDir, "dzo-x.service")
+	before, err := os.ReadFile(unit)
+	require.NoError(t, err)
+	assert.Contains(t, string(before), "g1", "the deployed unit carries the generation it runs")
+	inst := func() *resolve.Instance {
+		i, err := resolve.Resolve(e.opts.Cfg, e.tree(), "x")
+		require.NoError(t, err)
+		return i
+	}
+
+	e.localMod("tools", "g2") // an update lands in the cache
+	res := e.sync(false)
+	after, err := os.ReadFile(unit)
+	require.NoError(t, err)
+	assert.Equal(t, string(before), string(after), "a pending update must not change the unit")
+	assert.Contains(t, string(after), "g1", "the held unit keeps the arguments of the generation it runs")
+	assert.Len(t, Pending(inst()), 1, "the hold is looked up in the systemd dir: the update stays pending")
+	warned := false
+	for _, w := range res.Warnings {
+		warned = warned || strings.Contains(w, "instance x: @tools pending")
+	}
+	assert.True(t, warned, "warnings = %v", res.Warnings)
+	assert.NotContains(t, res.Removed, unit, "a held unit must not be removed as stale")
+
+	e.opts.Deploy = []string{"x"}
+	e.sync(false)
+	after, err = os.ReadFile(unit)
+	require.NoError(t, err)
+	assert.Contains(t, string(after), "g2", "deploying writes the new generation into the unit")
+	assert.Empty(t, Pending(inst()), "deploying records the new generations")
+}
+
+func TestSyncModeSwitchWithPendingUpdateWritesTheNewUnit(t *testing.T) {
+	e := newEnv(t)
+	e.sync(false) // local: the quadlet is what exists
+	inst := func() *resolve.Instance {
+		i, err := resolve.Resolve(e.opts.Cfg, e.tree(), "x")
+		require.NoError(t, err)
+		return i
+	}
+	e.localMod("tools", "g2")
+
+	// Nothing to hold: the unit of the other mode is what is there, so the
+	// switch must write (and record) the new one instead of waiting.
+	e.remote()
+	res := e.sync(false)
+	assert.FileExists(t, filepath.Join(e.opts.UnitDir, "dzo-x.service"))
+	assert.Empty(t, Pending(inst()), "a mode switch writes the new unit and records the generations")
+	for _, w := range res.Warnings {
+		assert.NotContains(t, w, "pending", "nothing is held across a mode switch, warnings = %v", res.Warnings)
+	}
+}
+
 func unitNames(t testing.TB, e *env) map[string]string {
 	t.Helper()
 	files, _, err := Desired(e.opts, e.tree())
@@ -354,6 +488,57 @@ mods:
   - {local: dzo-admin, server: true}
 `)
 	return e
+}
+
+func TestSyncCopiesHealthBinary(t *testing.T) {
+	e := newEnv(t)
+	e.remote()
+	dst := filepath.Join(e.data, "bin", "dzo")
+
+	e.sync(true)
+	assert.NoFileExists(t, dst, "a dry run must not copy the health binary")
+
+	e.sync(false)
+	got, err := os.ReadFile(dst)
+	require.NoError(t, err)
+	assert.Equal(t, "dzo v1", string(got))
+	info, err := os.Stat(dst)
+	require.NoError(t, err)
+	assert.Equal(t, os.FileMode(0o755), info.Mode().Perm(), "the host's podman and the container must be able to read and run the copy")
+	unit, err := os.ReadFile(filepath.Join(e.opts.UnitDir, "dzo-x.service"))
+	require.NoError(t, err)
+	assert.Contains(t, string(unit), dst+":/usr/local/bin/dzo:ro", "the unit mounts the copy, not the appliance's binary")
+
+	// The same content is not written again: rewriting it would give the copy a
+	// new inode for nothing, and a running container pins the one it has.
+	e.sync(false)
+	again, err := os.Stat(dst)
+	require.NoError(t, err)
+	assert.True(t, os.SameFile(info, again), "an unchanged binary must not be rewritten")
+}
+
+func TestSyncReplacesHealthBinaryAtomically(t *testing.T) {
+	e := newEnv(t)
+	e.remote()
+	e.sync(false)
+	dst := filepath.Join(e.data, "bin", "dzo")
+
+	old, err := os.Open(dst)
+	require.NoError(t, err)
+	defer old.Close() //nolint:errcheck // read-only fixture
+
+	write(t, e.opts.Cfg.Binary, "dzo v2")
+	e.sync(false)
+
+	// A bind mount pins the inode: what a running container already opened still
+	// reads the binary it started with, exactly as with /usr/bin/dzo on a host.
+	buf := make([]byte, len("dzo v1"))
+	_, err = io.ReadFull(old, buf)
+	require.NoError(t, err)
+	assert.Equal(t, "dzo v1", string(buf), "the open handle keeps the old binary")
+	got, err := os.ReadFile(dst)
+	require.NoError(t, err)
+	assert.Equal(t, "dzo v2", string(got), "the path has the new binary")
 }
 
 func TestSyncCreatesTheAnnounceToken(t *testing.T) {

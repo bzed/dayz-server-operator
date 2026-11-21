@@ -99,6 +99,16 @@ func (l Lifecycle) EnableNow(ctx context.Context, units ...string) error {
 	return err
 }
 
+// Enable runs `systemctl --user enable <units>`: it only links the units into
+// the default.target wants directory, it never starts one. `dzo units sync`
+// uses it for a supervised instance unit (podman.mode: remote), which must
+// come up with the user manager after a reboot but must never be started by
+// the sync itself.
+func (l Lifecycle) Enable(ctx context.Context, units ...string) error {
+	_, err := l.run(ctx, append([]string{"enable"}, units...)...)
+	return err
+}
+
 // Disable runs `systemctl --user disable --now <units>`, for units dzo no
 // longer generates. A unit that is already gone is not an error.
 func (l Lifecycle) Disable(ctx context.Context, units ...string) error {

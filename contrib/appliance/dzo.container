@@ -1,0 +1,69 @@
+# SPDX-FileCopyrightText: 2026 Bernd Zeimetz <bernd@bzed.de>
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# The dzo appliance as a unit of the host user's systemd. Install it for the
+# user that owns the game servers (the same user the appliance maps to its
+# dayz with keep-id):
+#
+#   install -Dm0644 contrib/appliance/dzo.container \
+#       ~/.config/containers/systemd/dzo.container
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now dzo.service
+#
+# Run dzo inside it with contrib/appliance/dzo (or `podman exec -u dayz dzo
+# dzo ...`). Do not add User= here: the image's USER 0 is what makes systemd
+# work as PID 1 under keep-id. With a User= line, keep-id would run PID 1 as
+# UID 1000 and systemd dies before it can start.
+[Unit]
+Requires=podman.socket
+After=podman.socket
+
+[Container]
+Image=ghcr.io/bzed/dzo:latest
+ContainerName=dzo
+Network=host
+UserNS=keep-id:uid=1000,gid=1000
+PodmanArgs=--systemd=always
+SecurityLabelDisable=true
+
+# %t is the user's runtime directory: the socket of the user's own rootless
+# podman, the one the image's CONTAINER_HOST points at. Every podman call in
+# the appliance (image builds, instance supervision) goes through it, so the
+# servers are the host user's containers, not the appliance's.
+Volume=%t/podman/podman.sock:/run/host-podman.sock
+
+# The data directory at the same absolute path on both sides: every game
+# container on the host mounts it, so a server build the appliance downloaded
+# is at the same path for the container that runs it. Change it here and in
+# the appliance's /etc/dzo/config.yaml (paths.data) together.
+Volume=/srv/dzo:/srv/dzo
+
+# A container update replaces the image's copy of these; keep the appliance's
+# configuration, the dayz home (Steam login, caches) and its journal.
+Volume=dzo-etc:/etc/dzo
+Volume=dzo-home:/var/lib/dzo
+Volume=dzo-journal:/var/log/journal
+
+# A stop of the appliance stops its user units first, and with them the game
+# servers: each supervised unit gives its container stop.timeout (30 s by
+# default, see docs/configuration.rst) plus the 30 s it adds on top, and with
+# several instances they stop one after another. Both values below therefore
+# have to cover the sum of the instances' stop timeouts plus 60 s for the
+# appliance's own shutdown. 90 s covers one instance with the defaults; raise
+# StopTimeout and TimeoutStopSec together when stop.timeout is raised or more
+# instances run.
+StopTimeout=90
+
+[Service]
+# systemd has to wait longer than podman's own --stop-timeout (StopTimeout
+# above), or it kills the appliance while its servers are still stopping. That
+# is StopTimeout + 60 s.
+TimeoutStopSec=150
+
+# Bring a crashed or killed appliance back without a login. `podman stop dzo`
+# is a clean exit and does not restart it; use `systemctl --user start
+# dzo.service` then (quadlet creates the container with --rm).
+Restart=on-failure
+
+[Install]
+WantedBy=default.target

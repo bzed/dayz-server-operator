@@ -363,7 +363,6 @@ Everything targets **Debian 13 "trixie"** (stable): host, container base images,
 | python3 | 3.13 (+ `python3-requests` 2.32) | only for hooks/legacy helpers; **packaged modules only, no pip/venv** |
 | steamcmd | `steamcmd` (non-free, i386) | used inside the `dzo-steamcmd` image (as in legacy) |
 | geoipupdate | 7.1 (contrib) | GeoIP DB updates via its own systemd timer |
-| libjs-htmx / libjs-leaflet | 2.0.4 / 1.7.1 | web UI assets are taken **from the Debian packages** (§C12) |
 | postgresql | 17 | optional DB backend (§C18) |
 | monitoring-plugins-basic, btrfs-progs, git, uidmap | packaged | Recommends/Depends of the `.deb` |
 | linux kernel | 6.12 (trixie stock) | **pinned in D29.** Unprivileged btrfs subvolume creation and **snapshots of own subvolumes** are allowed on 6.12 (the snapshot ioctl only checks `inode_owner_or_capable` on the source; verified in the v6.12 and v4.19 sources and on 7.1). `SNAP_DESTROY` needs `user_subvol_rm_allowed`. If spike S7 on the target kernel shows a gap, a **trixie-backports kernel is an accepted requirement** (no userspace workaround) |
@@ -1106,7 +1105,7 @@ logs:
 
 ## C12. Web platform (phase 3+)
 
-* `dzo serve`: `net/http` + `html/template` + htmx (served from Debian's `libjs-htmx`, `/usr/share/javascript/htmx/`; an embedded copy only for non-deb dev builds and tests), SSE for live logs, job progress, player lists and the map.
+* `dzo serve`: `net/http` + `html/template` + htmx 2.0.4, Leaflet 1.7.1, Fork Awesome 1.2.0 and the country flags **compiled into the binary** (`web.assets` and `web.flags_dir` override them file by file), SSE for live logs, job progress, player lists and the map.
 * Pages: dashboard (instances, players online, build, pending updates), instance detail (mods with order for merge precedence,
   overlays, serverDZ.cfg editor with diff, render diff, RCon console), **players and moderation (§C18)**, **admin map (§C16/§C17)**,
   **schedules (restarts, broadcasts)**, mod search (Steam Web API), jobs, **backups (list, diff, browse, pin, restore)**, audit log, and later an XML/JSON editor with `dzce`
@@ -1195,7 +1194,7 @@ single-admin setup behind a VPN) and is shown as a warning on the dashboard and 
   `loginctl enable-linger dayz`, and **no** automatic start of game servers. `dzo setup` (run as `dayz`) does the
   first-time steps: image builds, steam login, site repo clone.
 * Documentation: `Build-Depends: python3-sphinx`, `make docs` in `override_dh_auto_build`, installed to `/usr/share/doc/dzo/html/`, and `dh_sphinxdoc` links Sphinx's JS/CSS to the Debian packages (`libjs-sphinxdoc`) instead of duplicating it.
-* Depends: `podman (>= 5.4)`, `systemd (>= 257)`, `git`, `uidmap`, `passt`, `libjs-htmx`, `libjs-leaflet`. Recommends: `geoipupdate`, `btrfs-progs` (admin tooling; dzo uses the ioctls directly),
+* Depends: `podman (>= 5.4)`, `systemd (>= 257)`, `git`, `uidmap`, `passt`. Recommends: `geoipupdate`, `btrfs-progs` (admin tooling; dzo uses the ioctls directly),
   `python3`, `python3-requests` (for hooks). Suggests: `postgresql`, `monitoring-plugins-basic`. All are available in trixie.
 * Upgrades: `postinst` triggers `dzo quadlet regenerate` for the `dayz` user (via `systemctl --user -M dayz@`) so
   generated units follow template changes. Running servers are not restarted automatically.
@@ -1217,7 +1216,7 @@ Test layers:
 | Golden | legacy render outputs (S0) for all five servers + synthetic fixtures; `-update` flag to regenerate on intended changes | everywhere |
 | Fake-backed integration | full CLI flows against fake `systemctl`/`podman`/`steamcmd` binaries (recorded behaviour) and a temp dir tree | everywhere |
 | Real podman | quadlet generation + `systemctl --user` + health checks with a tiny dummy "server" image that answers A2S | GitHub Actions (Ubuntu runner has podman) / GitLab runner with podman+systemd (tagged, optional) |
-| Packaging | build the `.deb`, `lintian`, install into a clean trixie container, `dzo version`, `dzo setup --dry-run` | both CIs |
+| Packaging | build the `.deb`, the rpm and the Arch package (`lintian`, `rpmlint`, `namcap`), install each with its distribution's dependencies into a clean container of Debian 13, Ubuntu 26.04 LTS, Fedora 43/44 and CentOS Stream 10 (plus the best-effort Ubuntu 26.10, Debian forky and Arch), `dzo version`, `dzo setup --dry-run` as the service user, the `dayz` uid/subuid checks, and the container's own podman quadlet generator over the rendered units | GitHub Actions |
 | Boot test (§C22) | real `DayZServer` boots of rendered output: the five example site configs, integration changes, `dzo-admin` builds | developer machines; optional tagged GitLab runner with a pre-installed server; **not** counted in the coverage gate |
 
 The unit, golden, integration and packaging layers never need Steam credentials or the real DayZ server. steamcmd and Steam Web API interactions are replayed from recorded fixtures.
@@ -1393,7 +1392,7 @@ trains (HypeTrain), infected/animal hordes, plus modded events registered by mod
   per-instance allow/deny list, with rate limits per admin and per target. The endpoint accepts only the instance token, only on localhost.
 * **Metrics:** state pushed by the mod also feeds `/metrics` (players online per instance, vehicles per class), because that data is there anyway.
   `dzo-admin` gets **no metrics collector of its own**: server/world metrics are MetricZ's job (§C23).
-* **Map rendering:** Leaflet (from Debian's `libjs-leaflet`, no build chain) on tiles generated from the map's own `data.pbo`, see §C17.
+* **Map rendering:** Leaflet (compiled into the binary, no build chain) on tiles generated from the map's own `data.pbo`, see §C17.
 * `dzo` works fully without the mod (RCon + systemd, no live map). Capabilities are discovered via `hello` and the UI hides what is unavailable.
 
 ## C17. Map tile pipeline (Q18)

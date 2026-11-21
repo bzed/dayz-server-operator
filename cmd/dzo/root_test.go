@@ -41,6 +41,31 @@ func TestConfigValidateCmd(t *testing.T) {
 	assert.Contains(t, out, "is valid")
 }
 
+func TestConfigGetCmd(t *testing.T) {
+	dir := t.TempDir()
+	data := filepath.Join(dir, "data")
+	path := filepath.Join(dir, "config.yaml")
+	require.NoError(t, os.WriteFile(path, []byte("paths:\n  data: "+data+"\n"), 0o600), "write fixture")
+	for key, want := range map[string]string{
+		"paths.data":    data,
+		"paths.cache":   filepath.Join(data, "cache"),
+		"paths.secrets": filepath.Join(data, "secrets"),
+	} {
+		out, err := runCmd(t, "config", "get", "--config", path, key)
+		require.NoError(t, err, "config get %s: %s", key, out)
+		assert.Equal(t, want+"\n", out, "config get %s prints the resolved path", key)
+	}
+
+	_, err := runCmd(t, "config", "get", "--config", path, "steam.account")
+	require.ErrorContains(t, err, `unknown config key "steam.account"`, "only paths.* keys are known")
+	assert.Contains(t, err.Error(), "paths.cache", "the error lists the keys that work")
+}
+
+func TestConfigGetCmdMissingFile(t *testing.T) {
+	_, err := runCmd(t, "config", "get", "--config", "/nonexistent/config.yaml", "paths.data")
+	require.Error(t, err, "expected an error for a missing config file")
+}
+
 func TestConfigValidateCmdMissingFile(t *testing.T) {
 	_, err := runCmd(t, "config", "validate", "--config", "/nonexistent/config.yaml")
 	require.Error(t, err, "expected an error for a missing config file")
