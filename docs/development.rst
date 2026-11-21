@@ -42,16 +42,21 @@ The vendored web files
 ~~~~~~~~~~~~~~~~~~~~~~
 
 ``internal/web/vendor`` holds the pinned copies of the JavaScript, CSS, images and fonts the web
-interface serves: htmx 2.0.4, Leaflet 1.7.1 and Fork Awesome 1.2.0, the versions Debian trixie
-packages. They are upstream's release archives (the npm tarballs), extracted by
-``scripts/vendor-web.sh`` (``make vendor-web``), which pins the sha256 of every archive and then
-checks the extracted files against ``internal/web/vendor/SHA256SUMS``. Nothing is downloaded during a
-build: a version bump is ``make vendor-web ARGS=--update`` and a commit of the files together with the
-sums. The licences are recorded in ``REUSE.toml``, ``LICENSES/`` and ``debian/copyright``.
+interface serves: htmx 2.0.4, Leaflet 1.7.1 and Fork Awesome 1.2.0 (the versions Debian trixie
+packages) and the 4:3 country flags of the linuxmint ISO country flags SVG collection, the set Debian's
+``iso-flags-svg`` is built from. They are upstream's release artefacts (the npm tarballs, the GitHub
+tarball of the collection's commit), extracted by ``scripts/vendor-web.sh`` (``make vendor-web``),
+which pins the sha256 of every archive and then checks the extracted files against
+``internal/web/vendor/SHA256SUMS``. Nothing is downloaded during a build: a version bump is
+``make vendor-web ARGS=--update`` and a commit of the files together with the sums. The licences are
+recorded in ``REUSE.toml``, ``LICENSES/`` and ``debian/copyright``.
 
-The country flags are not vendored. Debian's ``iso-flags-svg`` collects them under the Creative
-Commons Public Domain Dedication, which the ``licenses`` allow-list of the ``Makefile`` does not
-cover, so ``web.flags_dir`` keeps pointing at ``/usr/share/iso-flags-svg/country-4x3``.
+The collection ships no release tags, so its pin is a commit
+(``f2cf92fc2fb200a9132b39672091fc6717a3ad32``, master of 2025-07-16). Only the 4:3 shape goes in, and
+only ``<code>.svg`` for a two-letter ISO 3166-1 alpha-2 code; the square flags, the regions and
+organisations (``_scotland.svg``, ``_united_nations.svg``, …) and ``brl.svg`` are left out, because a
+flag is looked up by exactly that code. The flags claim no copyright and are in the public domain
+(``LicenseRef-PublicDomain``); the SVGs say so in their RDF metadata.
 
 .. _apt-repository:
 

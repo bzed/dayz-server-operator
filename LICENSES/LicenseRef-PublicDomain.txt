@@ -1,0 +1,39 @@
+Public domain dedication for the country flag SVGs
+==================================================
+
+Applies to internal/web/vendor/flags/*.svg, the 4:3 country flags of the
+linuxmint ISO country flags SVG collection
+(https://github.com/linuxmint/iso-country-flags-svg-collection).
+
+The collection claims no copyright on the flags. It carries no licence file;
+each SVG states the dedication in a comment at its top instead, here with the
+text of de.svg (only the title and the rights holder differ between files):
+
+    <!-- /Creative Commons Public Domain -->
+    <!--
+    <rdf:RDF xmlns="http://web.resource.org/cc/"
+        xmlns:dc="http://purl.org/dc/elements/1.1/"
+        xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+    <Work rdf:about="">
+       <dc:title>SVG graphic of German flags</dc:title>
+       <dc:rights><Agent>
+          <dc:title>Philipp Sadleder</dc:title>
+       </Agent></dc:rights>
+       <license rdf:resource="http://web.resource.org/cc/PublicDomain" />
+    </Work>
+
+    <License rdf:about="http://web.resource.org/cc/PublicDomain">
+       <permits rdf:resource="http://web.resource.org/cc/Reproduction" />
+       <permits rdf:resource="http://web.resource.org/cc/Distribution" />
+       <permits rdf:resource="http://web.resource.org/cc/DerivativeWorks" />
+    </License>
+    </rdf:RDF>
+    -->
+
+The license element is the Creative Commons Public Domain dedication, which
+permits reproduction, distribution and derivative works without conditions.
+Debian's iso-flags-svg, which packages the same collection, records it as
+"No copyright claimed" with "License: public-domain".
+
+The flags are therefore in the public domain: no copyright is claimed and no
+conditions, attribution or otherwise, apply to their use.

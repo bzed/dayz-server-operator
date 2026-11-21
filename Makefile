@@ -197,8 +197,9 @@ deb:
 tidy:
 	$(GO) mod tidy
 
-## vendor-web: download the pinned web files (htmx, Leaflet, Fork Awesome) into internal/web/vendor and
-## check them against internal/web/vendor/SHA256SUMS. ARGS=--update rewrites the sums after a version bump.
+## vendor-web: download the pinned web files (htmx, Leaflet, Fork Awesome, the country flags) into
+## internal/web/vendor and check them against internal/web/vendor/SHA256SUMS. ARGS=--update rewrites the
+## sums after a version bump.
 vendor-web:
 	scripts/vendor-web.sh $(ARGS)
 

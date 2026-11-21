@@ -50,10 +50,25 @@ Files: internal/web/vendor/fork-awesome/fonts/*
 Copyright: 2018 Fork Awesome (https://forkawesome.github.io), with Reserved Font Name Fork Awesome
 License: OFL-1.1
 
+Files: internal/web/vendor/flags/*
+Copyright: NONE
+License: public-domain
+Comment: The 4:3 country flags of the linuxmint ISO country flags SVG collection
+ (https://github.com/linuxmint/iso-country-flags-svg-collection), the
+ collection iso-flags-svg is built from, pinned to a commit in
+ scripts/vendor-web.sh.
+
 License: CC-BY-4.0
  The icons are licensed under the Creative Commons Attribution 4.0 International
  licence. The licence text is in LICENSES/CC-BY-4.0.txt of the source package, and
  at https://creativecommons.org/licenses/by/4.0/legalcode .
+
+License: public-domain
+ No copyright is claimed on the flags. Each SVG states the Creative Commons
+ Public Domain dedication (reproduction, distribution and derivative works
+ permitted without conditions) in the RDF metadata at its top, and Debian's
+ iso-flags-svg records the collection as "No copyright claimed". See
+ LICENSES/LicenseRef-PublicDomain.txt of the source package.
 
 License: OFL-1.1
  This Font Software is licensed under the SIL Open Font License, Version 1.1.

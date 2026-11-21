@@ -95,6 +95,14 @@ path = "internal/web/vendor/fork-awesome/fonts/**"
 SPDX-FileCopyrightText = "2018 Fork Awesome (https://forkawesome.github.io)"
 SPDX-License-Identifier = "OFL-1.1"
 
+# The country flags of the linuxmint ISO country flags SVG collection (pinned to a commit in
+# scripts/vendor-web.sh). No copyright is claimed; each SVG states the Creative Commons Public Domain
+# dedication in its RDF metadata, see LICENSES/LicenseRef-PublicDomain.txt.
+[[annotations]]
+path = "internal/web/vendor/flags/**"
+SPDX-FileCopyrightText = "NONE"
+SPDX-License-Identifier = "LicenseRef-PublicDomain"
+
 # The checksum list scripts/vendor-web.sh writes next to the vendored files.
 [[annotations]]
 path = "internal/web/vendor/SHA256SUMS"
