@@ -1,0 +1,66 @@
+#!/bin/sh
+# SPDX-FileCopyrightText: 2026 Bernd Zeimetz <bernd@bzed.de>
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# dzo's steamcmd on a host whose distribution packages none (Fedora, RHEL,
+# Arch, ...): runs steamcmd from the localhost/dzo-steamcmd image that
+# `dzo setup` builds. dzo runs it as the default of `--steamcmd` and of
+# `dzo steam login --command` when the host has no steamcmd in PATH, with the
+# argument list it would give to a local steamcmd.
+#
+# The image's steamcmd keeps its files under $HOME, and dzo hands it paths
+# below paths.cache (+force_install_dir, app_update, workshop items), so both
+# are mounted at the same path: the steamcmd home under paths.secrets (mode
+# 0700, created here if missing, so steamcmd's self-update and the Steam
+# session persist) and paths.cache. The paths come from `dzo config get`, so
+# this script never parses /etc/dzo/config.yaml itself.
+#
+# -t goes to podman only when stdin is a terminal: `dzo steam login` attaches a
+# pty for the password and Steam Guard prompts, a download job does not.
+#
+# DZO and DZO_CONFIG override the dzo binary and config.yaml (for tests); the
+# package uses /usr/bin/dzo and /etc/dzo/config.yaml.
+set -eu
+
+image=localhost/dzo-steamcmd:latest
+dzo=${DZO:-/usr/bin/dzo}
+
+# dzo_config KEY: print one resolved path of config.yaml.
+dzo_config() {
+	if [ -n "${DZO_CONFIG:-}" ]; then
+		"$dzo" config get --config "$DZO_CONFIG" "$1"
+	else
+		"$dzo" config get "$1"
+	fi
+}
+
+secrets=$(dzo_config paths.secrets)
+cache=$(dzo_config paths.cache)
+
+if ! podman image exists "$image"; then
+	echo "dzo-steamcmd image missing: run dzo setup" >&2
+	exit 1
+fi
+
+home=$secrets/steamcmd-home
+mkdir -p "$home"
+chmod 700 "$home"
+
+# run_steamcmd tty|notty [steamcmd arguments...]
+run_steamcmd() {
+	tty=$1
+	shift
+	set -- --network host --userns keep-id \
+		-v "$home:/home/steam" -v "$cache:$cache" \
+		-e HOME=/home/steam \
+		"$image" steamcmd "$@"
+	if [ "$tty" = tty ]; then
+		exec podman run --rm -i -t "$@"
+	fi
+	exec podman run --rm -i "$@"
+}
+
+if [ -t 0 ]; then
+	run_steamcmd tty "$@"
+fi
+run_steamcmd notty "$@"

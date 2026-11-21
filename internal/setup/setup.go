@@ -32,6 +32,11 @@ import (
 // DefaultImagesDir is where the package ships the Containerfiles.
 const DefaultImagesDir = "/usr/share/dzo/images"
 
+// SteamcmdWrapper runs steamcmd from the dzo-steamcmd image that setup builds.
+// It is the default steamcmd on a host whose distribution packages none
+// (Fedora, RHEL, Arch); the dzo binary and the package install it there.
+const SteamcmdWrapper = "/usr/libexec/dzo/steamcmd-container"
+
 // Images are the container images dzo builds: the directory below the images
 // dir, and the tag the instance quadlets and the steamcmd jobs refer to.
 var Images = []struct{ Dir, Tag string }{
@@ -104,6 +109,8 @@ type Options struct {
 	Out        io.Writer
 	Exec       Exec
 	Geteuid    func() int // default os.Geteuid
+	// LookPath finds a program in PATH; default exec.LookPath.
+	LookPath func(string) (string, error)
 	// Groups returns the names of the groups of the current user; default: the process's groups.
 	Groups func() []string
 }
@@ -136,6 +143,9 @@ func Run(ctx context.Context, o Options) error {
 	}
 	if o.Geteuid == nil {
 		o.Geteuid = os.Geteuid
+	}
+	if o.LookPath == nil {
+		o.LookPath = exec.LookPath
 	}
 	if o.Groups == nil {
 		o.Groups = processGroups
@@ -339,6 +349,14 @@ func (r *runner) images(ctx context.Context, rebuild bool) {
 }
 
 func (r *runner) steam() {
+	// Which steamcmd the downloads run decides whole host setups: a
+	// distribution without a steamcmd package (Fedora, RHEL, Arch) uses the
+	// image, and the operator should see that before the login prompt.
+	if path, err := r.LookPath("steamcmd"); err == nil {
+		r.say("info", "steamcmd: using %s", path)
+	} else {
+		r.say("info", "steamcmd: not installed, using %s (the dzo-steamcmd image)", SteamcmdWrapper)
+	}
 	acct := r.Cfg.Steam.Account
 	if acct == "" {
 		r.say("warn", "steam.account is not set in config.yaml; mod and server downloads need it")

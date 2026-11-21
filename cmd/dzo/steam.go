@@ -19,6 +19,7 @@ import (
 	"golang.org/x/term"
 
 	"github.com/bzed/dayz-server-operator/internal/config"
+	"github.com/bzed/dayz-server-operator/internal/setup"
 	"github.com/bzed/dayz-server-operator/internal/steam"
 )
 
@@ -51,7 +52,8 @@ func newSteamLoginCmd() *cobra.Command {
 	cmd.Flags().StringVar(&user, "user", "", "Steam account name (required)")
 	cmd.Flags().StringVar(&configPath, "config", defaultConfigPath, "path to config.yaml (used to derive --status-file when unset)")
 	cmd.Flags().StringVar(&statusFile, "status-file", "", "where to persist login status (default: <paths.secrets>/steam-status.json)")
-	cmd.Flags().StringVar(&command, "command", "steamcmd", "steamcmd binary to run")
+	cmd.Flags().StringVar(&command, "command", defaultSteamcmd(exec.LookPath, setup.SteamcmdWrapper),
+		"steamcmd program to run (default: steamcmd when the host has it, else "+setup.SteamcmdWrapper+", which runs the dzo-steamcmd image)")
 	cmd.Flags().DurationVar(&timeout, "timeout", 5*time.Minute, "overall timeout for the whole interactive login")
 	cmd.Flags().BoolVar(&passthrough, "passthrough", false,
 		"skip the prompt state machine and connect this terminal directly to steamcmd's pty (fallback if Steam changes its prompts)")

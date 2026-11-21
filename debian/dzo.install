@@ -6,3 +6,4 @@ contrib/presets/maps/* usr/share/dzo/presets/maps
 docs/_build/html/* usr/share/doc/dzo/html
 docs/cheatsheet/dzo-cheatsheet.pdf usr/share/doc/dzo
 packaging/common/dzo-postinst.sh usr/libexec/dzo
+packaging/common/steamcmd-container usr/libexec/dzo

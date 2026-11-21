@@ -22,6 +22,15 @@ dayz-server-operator (0.8.2-1) trixie; urgency=medium
     100000 that overlaps no range in /etc/subuid and /etc/subgid, so the
     package installs on a host where another rootless podman user
     already holds that range. An existing range for dayz is kept.
+  * On a host without a steamcmd package (Fedora, RHEL, Arch), dzo runs
+    steamcmd from the localhost/dzo-steamcmd image that dzo setup builds:
+    --steamcmd (dzo mod add/update/refresh, dzo product install/update) and
+    dzo steam login --command default to /usr/libexec/dzo/steamcmd-container
+    when PATH has no steamcmd. The wrapper mounts the steamcmd home under
+    paths.secrets/steamcmd-home (created 0700) and paths.cache into the
+    image at the same paths, so downloads and the Steam session persist; the
+    new `dzo config get <paths.* key>` prints those resolved paths. dzo setup
+    reports which steamcmd the downloads use.
 
  -- Bernd Zeimetz <bernd@bzed.de>  Sat, 21 Nov 2026 17:04:18 +0100
 

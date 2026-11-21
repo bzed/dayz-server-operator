@@ -289,6 +289,23 @@ func TestRefreshCommand(t *testing.T) {
 	}
 }
 
+func TestSetupSaysWhichSteamcmd(t *testing.T) {
+	for _, c := range []struct {
+		name, path, want string
+		err              error
+	}{
+		{"installed", "/usr/bin/steamcmd", "info  steamcmd: using /usr/bin/steamcmd", nil},
+		{"missing", "", "info  steamcmd: not installed, using /usr/libexec/dzo/steamcmd-container (the dzo-steamcmd image)", exec.ErrNotFound},
+	} {
+		e := newEnv(t)
+		require.NoError(t, e.run(t, func(o *Options) {
+			o.DryRun = true
+			o.LookPath = func(string) (string, error) { return c.path, c.err }
+		}), c.name)
+		assert.Contains(t, e.out.String(), c.want, c.name)
+	}
+}
+
 func TestSetupChecksTheUserCanReadItsJournal(t *testing.T) {
 	for _, c := range []struct {
 		name   string

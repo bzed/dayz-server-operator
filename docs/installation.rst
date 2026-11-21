@@ -137,9 +137,10 @@ dzo is shipped as a Debian package, ``dzo``, from the repository above or as a
 ``git``, ``uidmap``, ``geoip-database`` and ``steamcmd:i386`` (prepare apt as described
 above first); the web interface's htmx, Leaflet, Fork Awesome and country flags are
 compiled in, so it needs no Debian package for them. The commands that download
-servers and mods run the ``steamcmd`` they find in the ``PATH`` (``--steamcmd`` picks
-another program, for example a wrapper that runs the ``localhost/dzo-steamcmd`` image
-that ``dzo setup`` builds).
+servers and mods run the ``steamcmd`` they find in the ``PATH``, and
+``/usr/libexec/dzo/steamcmd-container`` (steamcmd from the ``localhost/dzo-steamcmd``
+image that ``dzo setup`` builds) when there is none; ``--steamcmd`` picks another
+program (see below).
 
 .. code-block:: sh
 
@@ -168,6 +169,37 @@ It does **not** start any game server.
 
 On a development or test host without the package, see :doc:`dev-host` for the
 user, the btrfs mount and the other steps by hand.
+
+steamcmd on Fedora, RHEL and Arch
+---------------------------------
+
+These distributions package no ``steamcmd`` (Debian's non-free ``steamcmd:i386`` is
+the only non-free package dzo needs). dzo runs steamcmd from the
+``localhost/dzo-steamcmd`` image instead, which ``dzo setup`` builds from the packaged
+Containerfile: when ``PATH`` holds no ``steamcmd``, ``--steamcmd`` (``dzo mod add |
+update | refresh`` and ``dzo product install | update``) and ``dzo steam login
+--command`` default to ``/usr/libexec/dzo/steamcmd-container``. It runs
+
+.. code-block:: sh
+
+   podman run --rm -i [-t] --network host --userns keep-id \
+       -v <paths.secrets>/steamcmd-home:/home/steam \
+       -v <paths.cache>:<paths.cache> \
+       -e HOME=/home/steam localhost/dzo-steamcmd:latest steamcmd <arguments>
+
+with ``-t`` only when its stdin is a terminal, which it is for ``dzo steam login``
+(that command attaches a pty for the password and Steam Guard prompts) and is not for
+a download job. The container's home is ``<paths.secrets>/steamcmd-home``, created
+with mode 0700: steamcmd updates itself there and the Steam session lives there, so
+both persist between runs. ``paths.cache`` is mounted at its own path because dzo
+hands steamcmd its working directories below it (``+force_install_dir``, product
+updates and workshop items). Without the image the wrapper exits with
+``dzo-steamcmd image missing: run dzo setup``.
+
+The wrapper asks dzo for both paths with ``dzo config get paths.secrets`` and ``dzo
+config get paths.cache`` (see :doc:`cli`), so it follows a ``paths`` configuration
+that is not the default. ``DZO`` and ``DZO_CONFIG`` override the dzo binary and the
+config file it reads; they are meant for tests.
 
 Choose the data locations
 -------------------------

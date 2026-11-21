@@ -6,6 +6,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -45,7 +46,64 @@ func newConfigCmd() *cobra.Command {
 		Use:   "config",
 		Short: "Inspect and validate the operator configuration",
 	}
-	cmd.AddCommand(newConfigValidateCmd())
+	cmd.AddCommand(newConfigGetCmd(), newConfigValidateCmd())
+	return cmd
+}
+
+// configPathKeys are the keys `dzo config get` prints: the resolved directory
+// of every paths field. The scripts around dzo read them instead of parsing
+// config.yaml themselves (the steamcmd container wrapper mounts paths.secrets
+// and paths.cache).
+var configPathKeys = []string{
+	"paths.cache", "paths.data", "paths.db", "paths.instances",
+	"paths.logs", "paths.secrets", "paths.site", "paths.snapshots",
+}
+
+// configPath is the resolved value of one key of configPathKeys.
+func configPath(c *config.Config, key string) (string, bool) {
+	switch key {
+	case "paths.cache":
+		return c.Paths.Cache, true
+	case "paths.data":
+		return c.Paths.Data, true
+	case "paths.db":
+		return c.Paths.DB, true
+	case "paths.instances":
+		return c.Paths.Instances, true
+	case "paths.logs":
+		return c.Paths.Logs, true
+	case "paths.secrets":
+		return c.Paths.Secrets, true
+	case "paths.site":
+		return c.Paths.Site, true
+	case "paths.snapshots":
+		return c.Paths.Snapshots, true
+	}
+	return "", false
+}
+
+func newConfigGetCmd() *cobra.Command {
+	var path string
+	cmd := &cobra.Command{
+		Use:   "get <key>",
+		Short: "Print one resolved path of config.yaml",
+		Long: "Print the resolved absolute path of one paths.* key, as dzo uses it after expanding ${data}: " +
+			strings.Join(configPathKeys, ", ") + ". The steamcmd container wrapper reads paths.secrets and paths.cache with it.",
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			c, err := config.Load(path)
+			if err != nil {
+				return err
+			}
+			p, ok := configPath(c, args[0])
+			if !ok {
+				return fmt.Errorf("unknown config key %q: use one of %s", args[0], strings.Join(configPathKeys, ", "))
+			}
+			_, err = fmt.Fprintln(cmd.OutOrStdout(), p)
+			return err
+		},
+	}
+	configFlag(cmd, &path)
 	return cmd
 }
 
