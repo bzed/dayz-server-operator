@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -110,9 +111,9 @@ func flagValue(t *testing.T, args []string, flag string) string {
 	return ""
 }
 
-// unquoteExec parses one quadlet Exec= value the way systemd splits it: words
-// separated by whitespace, double quotes grouping, backslash escaping inside
-// quotes, and the %% / $$ escapes quoteWord adds.
+// unquoteExec parses one systemd command line the way systemd splits it: words
+// separated by whitespace, double quotes grouping, C-style backslash escapes
+// inside quotes, and the %% / $$ escapes of specifiers and variables.
 func unquoteExec(s string) ([]string, error) {
 	var words []string
 	var word strings.Builder
@@ -125,7 +126,26 @@ func unquoteExec(s string) ([]string, error) {
 			if i == len(s) {
 				return nil, fmt.Errorf("trailing backslash in %q", s)
 			}
-			word.WriteByte(s[i])
+			switch esc := s[i]; esc {
+			case 'n':
+				word.WriteByte('\n')
+			case 'r':
+				word.WriteByte('\r')
+			case 't':
+				word.WriteByte('\t')
+			case 'x':
+				if i+2 >= len(s) {
+					return nil, fmt.Errorf("short \\x escape in %q", s)
+				}
+				v, err := strconv.ParseUint(s[i+1:i+3], 16, 8)
+				if err != nil {
+					return nil, fmt.Errorf("bad \\x escape %q in %q: %w", s[i:i+3], s, err)
+				}
+				word.WriteByte(byte(v))
+				i += 2
+			default:
+				word.WriteByte(esc)
+			}
 		case c == '"':
 			inQuote = !inQuote
 			inWord = true
@@ -330,6 +350,19 @@ func TestRunArgsMatchesQuadlet(t *testing.T) {
 	}
 }
 
+// execStartOf returns the single ExecStart= value of the unit's [Service].
+func execStartOf(t *testing.T, unit string) string {
+	t.Helper()
+	var found []string
+	for _, line := range section(t, unit, "Service") {
+		if line.key == "ExecStart" {
+			found = append(found, line.value)
+		}
+	}
+	require.Len(t, found, 1, "exactly one ExecStart= line in:\n%s", unit)
+	return found[0]
+}
+
 func TestRenderSupervisedService(t *testing.T) {
 	spec := resolvedSpecs(t)["alpha"]
 	container, err := quadlet.RenderContainer(spec)
@@ -347,14 +380,94 @@ func TestRenderSupervisedService(t *testing.T) {
 	for _, want := range []string{
 		"Type=notify",
 		"NotifyAccess=main",
-		"ExecStart=/usr/bin/dzo instance supervise alpha",
 		"KillMode=mixed",
 	} {
 		assert.True(t, got[want], "want [Service] line %s", want)
 	}
+
+	// The unit carries the podman arguments itself, after a `--` of its own:
+	// a held unit holds the arguments of the generations it runs, also when
+	// systemd restarts it.
+	words, err := unquoteExec(execStartOf(t, supervised))
+	require.NoError(t, err)
+	args, err := quadlet.RunArgs(spec)
+	require.NoError(t, err)
+	want := append([]string{"/usr/bin/dzo", "instance", "supervise", "alpha", "--"}, args...)
+	assert.Equal(t, want, words, "ExecStart must be the supervisor, `--`, and the podman run arguments")
+
 	assert.Equal(t, section(t, container, "Unit"), section(t, supervised, "Unit"), "[Unit] must be the quadlet's")
 	assert.Equal(t, section(t, container, "Install"), section(t, supervised, "Install"), "[Install] must be the quadlet's")
 	assert.NotContains(t, supervised, "[Container]", "a supervised unit has no quadlet section")
+}
+
+func TestRenderSupervisedExecStartRoundTrip(t *testing.T) {
+	for name, spec := range resolvedSpecs(t) {
+		t.Run(name, func(t *testing.T) {
+			execStart := "/usr/bin/dzo instance supervise " + name
+			unit, err := quadlet.RenderSupervised(spec, execStart)
+			require.NoError(t, err)
+			words, err := unquoteExec(execStartOf(t, unit))
+			require.NoError(t, err)
+			args, err := quadlet.RunArgs(spec)
+			require.NoError(t, err)
+			assert.Equal(t, append([]string{"/usr/bin/dzo", "instance", "supervise", name, "--"}, args...), words,
+				"ExecStart must be execStart, `--`, and RunArgs exactly")
+			assert.Contains(t, execStartOf(t, unit), " -- run --name dzo-"+name+" ",
+				"the separator is a word of its own and the podman arguments follow it")
+		})
+	}
+
+	// Every value a server can legitimately carry: whitespace, both quote
+	// characters, systemd's % specifier and $ variable syntax, backslashes,
+	// a lone semicolon (a command separator in systemd's ExecStart when it is
+	// a word of its own), an empty word, and control characters that would
+	// otherwise end the ExecStart line.
+	spec := quadlet.ContainerSpec{
+		Name:    "dzo-nasty",
+		Image:   "localhost/dzo-runtime:test",
+		Network: quadlet.NetworkHost,
+		Volumes: []quadlet.Volume{
+			{Source: "/srv/a b", Destination: "/dayz/a b", Overlay: true},
+			{Source: `/srv/back\slash`, Destination: "/dayz/back"},
+		},
+		Environment: map[string]string{
+			"SPACES":    "one two  three",
+			"QUOTES":    `he said "hi" and 'bye'`,
+			"PERCENT":   "100% %n %%",
+			"DOLLAR":    "$HOME ${HOME} $$",
+			"BACKSLASH": `C:\dayz\server`,
+			"SEMICOLON": ";",
+			"NEWLINE":   "a\nb\tc\rd\x1b",
+		},
+		WorkingDir: "/dayz/server dir",
+		Exec:       []string{"./DayZServer", "-mod=@a;@b", "-name=a b", ";", ""},
+		Health: quadlet.Health{
+			Cmd:       `/usr/local/bin/dzo health live --check "x" && echo ok`,
+			Interval:  time.Minute,
+			Retries:   5,
+			OnFailure: "kill",
+		},
+		StopTimeout: 120 * time.Second,
+	}
+	const execStart = "/usr/bin/dzo instance supervise nasty"
+	unit, err := quadlet.RenderSupervised(spec, execStart)
+	require.NoError(t, err)
+	line := execStartOf(t, unit)
+	words, err := unquoteExec(line)
+	require.NoError(t, err)
+	args, err := quadlet.RunArgs(spec)
+	require.NoError(t, err)
+	assert.Equal(t, append([]string{"/usr/bin/dzo", "instance", "supervise", "nasty", "--"}, args...), words,
+		"every argument must survive systemd's ExecStart parsing, got ExecStart=%s", line)
+
+	// The escapes systemd needs, spelled out: % and $ are expanded in argv even
+	// inside quotes, and a word of its own that is ";" is a command separator.
+	assert.Contains(t, line, "100%% %%n %%%%")
+	assert.Contains(t, line, "$$HOME $${HOME} $$$$")
+	assert.Contains(t, line, `"BACKSLASH=C:\\dayz\\server"`)
+	assert.Contains(t, line, `"NEWLINE=a\nb\tc\rd\x1b"`)
+	assert.Contains(t, line, `";"`)
+	assert.True(t, strings.HasSuffix(line, ` ""`), "an empty argument must stay an empty argument, got %s", line)
 }
 
 func TestRenderSupervisedRequiresExecStart(t *testing.T) {

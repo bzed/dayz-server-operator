@@ -302,7 +302,8 @@ func TestDesiredRemoteWritesService(t *testing.T) {
 	assert.Equal(t, Systemd, service.Dir, "the supervised unit is a plain systemd unit")
 	assert.True(t, service.Install, "the instance unit must be enabled (and never started)")
 	assert.Contains(t, service.Content, "Type=notify\n")
-	assert.Contains(t, service.Content, "ExecStart=/usr/bin/dzo instance supervise x\n")
+	assert.Contains(t, service.Content, "ExecStart=/usr/bin/dzo instance supervise x -- run --name dzo-x --replace --rm --network host ",
+		"the unit carries the supervisor and the podman run arguments")
 
 	e.sync(false)
 	assert.NoFileExists(t, filepath.Join(e.opts.QuadletDir, "dzo-x.container"), "no quadlet in remote mode")
@@ -356,6 +357,7 @@ func TestSyncRemoteHoldsPendingUpdate(t *testing.T) {
 	unit := filepath.Join(e.opts.UnitDir, "dzo-x.service")
 	before, err := os.ReadFile(unit)
 	require.NoError(t, err)
+	assert.Contains(t, string(before), "g1", "the deployed unit carries the generation it runs")
 	inst := func() *resolve.Instance {
 		i, err := resolve.Resolve(e.opts.Cfg, e.tree(), "x")
 		require.NoError(t, err)
@@ -367,6 +369,7 @@ func TestSyncRemoteHoldsPendingUpdate(t *testing.T) {
 	after, err := os.ReadFile(unit)
 	require.NoError(t, err)
 	assert.Equal(t, string(before), string(after), "a pending update must not change the unit")
+	assert.Contains(t, string(after), "g1", "the held unit keeps the arguments of the generation it runs")
 	assert.Len(t, Pending(inst()), 1, "the hold is looked up in the systemd dir: the update stays pending")
 	warned := false
 	for _, w := range res.Warnings {
@@ -377,6 +380,9 @@ func TestSyncRemoteHoldsPendingUpdate(t *testing.T) {
 
 	e.opts.Deploy = []string{"x"}
 	e.sync(false)
+	after, err = os.ReadFile(unit)
+	require.NoError(t, err)
+	assert.Contains(t, string(after), "g2", "deploying writes the new generation into the unit")
 	assert.Empty(t, Pending(inst()), "deploying records the new generations")
 }
 

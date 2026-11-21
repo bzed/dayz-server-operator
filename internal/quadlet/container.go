@@ -329,15 +329,49 @@ func formatDuration(d time.Duration) string {
 	return fmt.Sprintf("%ds", int64(d/time.Second))
 }
 
-// quoteWord quotes one Exec= word for systemd's command-line syntax when it
-// holds whitespace, quotes, backslashes or ';' (as in -mod=@a;@b), and
-// escapes the '%' and '$' systemd would otherwise expand.
+// quoteWord quotes one word for systemd's command-line syntax, which is what
+// both a quadlet's Exec= and a supervised unit's ExecStart= are: it escapes the
+// '%' and '$' systemd expands as specifiers and variables (also inside quotes),
+// and double-quotes the word when it holds whitespace, quotes, backslashes or
+// ';' (as in -mod=@a;@b, or a ';' that is a word of its own and would
+// otherwise separate two commands). Control characters are written as C
+// escapes inside the quotes, so no word can end the directive line.
 func quoteWord(w string) string {
 	w = strings.NewReplacer("%", "%%", "$", "$$").Replace(w)
-	if w == "" || strings.ContainsAny(w, " \t\n\"'\\;") {
-		return `"` + strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(w) + `"`
+	if !needsQuoting(w) {
+		return w
 	}
-	return w
+	var b strings.Builder
+	b.WriteByte('"')
+	for i := 0; i < len(w); i++ {
+		switch c := w[i]; {
+		case c == '\\' || c == '"':
+			b.WriteByte('\\')
+			b.WriteByte(c)
+		case c == '\n':
+			b.WriteString(`\n`)
+		case c == '\r':
+			b.WriteString(`\r`)
+		case c == '\t':
+			b.WriteString(`\t`)
+		case c < 0x20 || c == 0x7f:
+			fmt.Fprintf(&b, `\x%02x`, c)
+		default:
+			b.WriteByte(c)
+		}
+	}
+	b.WriteByte('"')
+	return b.String()
+}
+
+// needsQuoting reports whether systemd's parser needs quoteWord's double
+// quotes around w.
+func needsQuoting(w string) bool {
+	if w == "" {
+		return true
+	}
+	return strings.ContainsAny(w, " \t\n\r\"'\\;") ||
+		strings.ContainsFunc(w, func(r rune) bool { return r < 0x20 || r == 0x7f })
 }
 
 type kvWriter struct {

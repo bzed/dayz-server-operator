@@ -12,9 +12,11 @@ import (
 
 // RunArgs returns the arguments that run spec's container: the words after
 // `podman`, starting with `run --name … --replace --rm`. In podman.mode
-// remote the supervisor (`dzo instance supervise`) runs `podman RunArgs(spec)`
-// instead of leaving the unit to quadlet, so every key RenderContainer emits
-// for the container is translated to the equivalent podman flag here.
+// remote the supervisor (`dzo instance supervise`) runs them instead of
+// leaving the unit to quadlet, so every key RenderContainer emits for the
+// container is translated to the equivalent podman flag here. RenderSupervised
+// writes the words into the unit's ExecStart, so that the unit itself holds
+// the container it was rendered for.
 // TestRunArgsMatchesQuadlet keeps the two in step: a new quadlet key fails it
 // until its mapping is decided.
 //
@@ -100,17 +102,28 @@ func RunArgs(spec ContainerSpec) ([]string, error) {
 // podman runs remotely (podman.mode: remote): systemd starts the supervisor,
 // which runs the container through podman's socket. [Unit], [Install] and
 // the [Service] lines dzo controls are the quadlet's, so a mode switch changes
-// as little of the life cycle as possible; the container keys go to podman
-// through RunArgs. The unit itself is Type=notify: the supervisor reports
-// readiness once the container's startup probe succeeds, which is what
-// quadlet's Notify=healthy does for a quadlet.
+// as little of the life cycle as possible.
+//
+// The unit carries the podman run arguments itself, after a `--`: the supervisor
+// runs exactly the container the unit was rendered for, also when systemd
+// restarts a crashed server. That is what holding a unit means in local mode
+// too - the quadlet's paths are the generations - and it keeps a pending update
+// pending through a restart instead of applying it silently. The unit is
+// Type=notify: the supervisor reports readiness once the container's startup
+// probe succeeds, which is what quadlet's Notify=healthy does for a quadlet.
 func RenderSupervised(spec ContainerSpec, execStart string) (string, error) {
-	if err := spec.Validate(); err != nil {
+	args, err := RunArgs(spec) // RunArgs validates the spec
+	if err != nil {
 		return "", err
 	}
 	if execStart == "" {
 		return "", fmt.Errorf("quadlet: execStart is required")
 	}
+	words := make([]string, len(args))
+	for i, a := range args {
+		words[i] = quoteWord(a)
+	}
+	line := execStart + " -- " + strings.Join(words, " ")
 
 	var b strings.Builder
 	writeUnit(&b, spec)
@@ -118,7 +131,7 @@ func RenderSupervised(spec ContainerSpec, execStart string) (string, error) {
 	writeSection(&b, "Service", func(kv *kvWriter) {
 		kv.set("Type", "notify")
 		kv.set("NotifyAccess", "main")
-		kv.set("ExecStart", execStart)
+		kv.set("ExecStart", line)
 		// The stop signal reaches the supervisor only; it hands it to podman,
 		// which gives the server the whole stop grace before SIGKILL.
 		kv.set("KillMode", "mixed")
