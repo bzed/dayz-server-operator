@@ -159,3 +159,12 @@ func TestLifecycleEnableNowAndDisable(t *testing.T) {
 	got = readArgsFile(t, argsFile)
 	assert.True(t, equalStrings(got, []string{"disable", "--now", "a.timer"}), "disable args = %v", got)
 }
+
+func TestLifecycleEnable(t *testing.T) {
+	argsFile := filepath.Join(t.TempDir(), "args.txt")
+	l := Lifecycle{Command: writeFakeSystemctl(t, argsFile, "", 0), UserMode: true}
+	err := l.Enable(t.Context(), "dzo-deerisle.service")
+	require.NoError(t, err)
+	got := readArgsFile(t, argsFile)
+	assert.True(t, equalStrings(got, []string{"--user", "enable", "dzo-deerisle.service"}), "enable args = %v", got)
+}

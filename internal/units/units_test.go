@@ -285,6 +285,122 @@ func TestPendingUpdatesAreHeldBackUntilTheInstanceIsDeployed(t *testing.T) {
 	assert.Contains(t, string(after), "g3", "* deploys every instance")
 }
 
+func TestDesiredRemoteWritesService(t *testing.T) {
+	e := newEnv(t)
+	e.opts.Cfg.Podman.Mode = config.PodmanRemote
+	files, _, err := Desired(e.opts, e.tree())
+	require.NoError(t, err)
+	var service *File
+	for i := range files {
+		f := &files[i]
+		assert.False(t, strings.HasSuffix(f.Name, ".container"), "remote mode writes no quadlet: %+v", *f)
+		if f.Name == "dzo-x.service" {
+			service = f
+		}
+	}
+	require.NotNil(t, service, "want dzo-x.service")
+	assert.Equal(t, Systemd, service.Dir, "the supervised unit is a plain systemd unit")
+	assert.True(t, service.Install, "the instance unit must be enabled (and never started)")
+	assert.Contains(t, service.Content, "Type=notify\n")
+	assert.Contains(t, service.Content, "ExecStart=/usr/bin/dzo instance supervise x\n")
+
+	e.sync(false)
+	assert.NoFileExists(t, filepath.Join(e.opts.QuadletDir, "dzo-x.container"), "no quadlet in remote mode")
+	assert.FileExists(t, filepath.Join(e.opts.UnitDir, "dzo-x.service"))
+}
+
+// assertNeverStops fails for every systemctl call that stops or disables unit.
+func assertNeverStops(t *testing.T, calls []string, unit string) {
+	t.Helper()
+	for _, c := range calls {
+		if !strings.Contains(c, unit) {
+			continue
+		}
+		for _, verb := range []string{"disable", "stop", "start", "--now"} {
+			// "start" also covers "restart".
+			assert.NotContains(t, c, verb, "a sync must never stop or start %s: %q", unit, c)
+		}
+	}
+}
+
+func TestSyncModeSwitchKeepsRunningInstance(t *testing.T) {
+	e := newEnv(t)
+	e.sync(false) // local: a quadlet
+	container := filepath.Join(e.opts.QuadletDir, "dzo-x.container")
+	service := filepath.Join(e.opts.UnitDir, "dzo-x.service")
+	assert.FileExists(t, container)
+
+	// local -> remote: the quadlet goes, the supervised unit comes, nothing is stopped
+	e.opts.Cfg.Podman.Mode = config.PodmanRemote
+	res := e.sync(false)
+	assert.Contains(t, res.Removed, container, "the quadlet must be replaced")
+	assert.NoFileExists(t, container)
+	assert.FileExists(t, service)
+	calls := strings.Join(e.calls(), "\n")
+	assert.Contains(t, calls, "enable dzo-x.service", "the supervised unit must be enabled")
+	assertNeverStops(t, e.calls(), "dzo-x.service")
+
+	// remote -> local: the supervised unit goes, the quadlet comes back, still nothing is stopped
+	e.opts.Cfg.Podman.Mode = config.PodmanLocal
+	res = e.sync(false)
+	assert.Contains(t, res.Removed, service, "the supervised unit must be replaced")
+	assert.NoFileExists(t, service)
+	assert.FileExists(t, container)
+	assertNeverStops(t, e.calls(), "dzo-x.service")
+}
+
+func TestSyncRemoteHoldsPendingUpdate(t *testing.T) {
+	e := newEnv(t)
+	e.opts.Cfg.Podman.Mode = config.PodmanRemote
+	e.sync(false)
+	unit := filepath.Join(e.opts.UnitDir, "dzo-x.service")
+	before, err := os.ReadFile(unit)
+	require.NoError(t, err)
+	inst := func() *resolve.Instance {
+		i, err := resolve.Resolve(e.opts.Cfg, e.tree(), "x")
+		require.NoError(t, err)
+		return i
+	}
+
+	e.localMod("tools", "g2") // an update lands in the cache
+	res := e.sync(false)
+	after, err := os.ReadFile(unit)
+	require.NoError(t, err)
+	assert.Equal(t, string(before), string(after), "a pending update must not change the unit")
+	assert.Len(t, Pending(inst()), 1, "the hold is looked up in the systemd dir: the update stays pending")
+	warned := false
+	for _, w := range res.Warnings {
+		warned = warned || strings.Contains(w, "instance x: @tools pending")
+	}
+	assert.True(t, warned, "warnings = %v", res.Warnings)
+	assert.NotContains(t, res.Removed, unit, "a held unit must not be removed as stale")
+
+	e.opts.Deploy = []string{"x"}
+	e.sync(false)
+	assert.Empty(t, Pending(inst()), "deploying records the new generations")
+}
+
+func TestSyncModeSwitchWithPendingUpdateWritesTheNewUnit(t *testing.T) {
+	e := newEnv(t)
+	e.sync(false) // local: the quadlet is what exists
+	inst := func() *resolve.Instance {
+		i, err := resolve.Resolve(e.opts.Cfg, e.tree(), "x")
+		require.NoError(t, err)
+		return i
+	}
+	e.localMod("tools", "g2")
+
+	// Nothing to hold: the unit of the other mode is what is there, so the
+	// switch must write (and record) the new one instead of waiting.
+	e.opts.Cfg.Podman.Mode = config.PodmanRemote
+	res := e.sync(false)
+	assert.FileExists(t, filepath.Join(e.opts.UnitDir, "dzo-x.service"))
+	assert.Empty(t, Pending(inst()), "a mode switch writes the new unit and records the generations")
+	for _, w := range res.Warnings {
+		assert.NotContains(t, w, "pending", "nothing is held across a mode switch, warnings = %v", res.Warnings)
+	}
+}
+
 func unitNames(t testing.TB, e *env) map[string]string {
 	t.Helper()
 	files, _, err := Desired(e.opts, e.tree())

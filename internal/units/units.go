@@ -52,6 +52,7 @@ type File struct {
 	Name    string
 	Content string
 	Enable  string // unit to enable and start with it ("" for none)
+	Install bool   // also enable this unit, without starting it (a supervised instance unit)
 	Hold    bool   // keep the file that is there: an update is pending (see Options.Deploy)
 }
 
@@ -249,13 +250,28 @@ func Desired(o Options, tree *site.Tree) (files []File, warnings []string, err e
 		}
 		adminMod = adminMod || inst.AdminEnabled()
 		if len(inst.Missing) == 0 {
-			unit, err := quadlet.RenderContainer(inst.Quadlet)
-			if err != nil {
-				return nil, nil, fmt.Errorf("instance %s: %w", name, err)
+			// Local mode: a quadlet, the host's podman generates the unit. Remote
+			// mode (the container appliance): a plain unit whose supervisor drives
+			// podman through CONTAINER_HOST.
+			var f File
+			if o.Cfg.Remote() {
+				unit, err := quadlet.RenderSupervised(inst.Quadlet, o.cmd("instance", "supervise", name))
+				if err != nil {
+					return nil, nil, fmt.Errorf("instance %s: %w", name, err)
+				}
+				f = File{Dir: Systemd, Name: inst.Quadlet.Name + ".service", Content: generated(unit), Install: true}
+			} else {
+				unit, err := quadlet.RenderContainer(inst.Quadlet)
+				if err != nil {
+					return nil, nil, fmt.Errorf("instance %s: %w", name, err)
+				}
+				f = File{Dir: Quadlet, Name: inst.Quadlet.Name + ".container", Content: generated(unit)}
 			}
-			f := File{Dir: Quadlet, Name: inst.Quadlet.Name + ".container", Content: generated(unit)}
 			if p := Pending(inst); len(p) > 0 && !o.deploys(name) {
-				if _, err := os.Stat(filepath.Join(o.QuadletDir, f.Name)); err == nil {
+				// Hold what exists: a running server keeps its unit until it is
+				// restarted. After a mode switch the unit of the other mode is what
+				// is there, which is nothing to hold: then the new one is written.
+				if _, err := os.Stat(filepath.Join(o.dir(f.Dir), f.Name)); err == nil {
 					f.Hold = true
 					warnings = append(warnings, fmt.Sprintf("instance %s: %s pending, its unit keeps the generations it runs until it is restarted", name, strings.Join(p, ", ")))
 				}
@@ -334,9 +350,9 @@ func (o Options) dir(d Dir) string {
 
 // Sync writes the desired units, removes generated units that are no longer
 // desired, records the generations of the deployed instances, and tells
-// systemd (daemon-reload, then enable --now for timers and the exporter).
-// Instances are never started or stopped by it. With dryRun nothing is
-// written.
+// systemd (daemon-reload, then enable --now for timers and the exporter,
+// enable without starting for a supervised instance unit). Instances are
+// never started or stopped by it. With dryRun nothing is written.
 func Sync(ctx context.Context, o Options, tree *site.Tree, lc instance.Lifecycle, dryRun bool) (Result, error) {
 	files, warnings, err := Desired(o, tree)
 	res := Result{Warnings: warnings}
@@ -347,13 +363,18 @@ func Sync(ctx context.Context, o Options, tree *site.Tree, lc instance.Lifecycle
 	for _, f := range files {
 		want[filepath.Join(o.dir(f.Dir), f.Name)] = true
 	}
-	var enable []string
+	var enable, install []string
 	held := map[string]bool{}
 	for _, f := range files {
 		path := filepath.Join(o.dir(f.Dir), f.Name)
+		if f.Install {
+			install = append(install, f.Name)
+		}
 		if f.Hold {
 			res.Unchanged++
-			held[strings.TrimSuffix(f.Name, ".container")] = true
+			// Keyed by the instance, whatever the pending unit is: a quadlet of
+			// local mode or a supervised service of remote mode.
+			held[strings.TrimSuffix(strings.TrimSuffix(f.Name, ".container"), ".service")] = true
 			continue
 		}
 		if old, err := os.ReadFile(path); err == nil && string(old) == f.Content { //nolint:gosec // dzo's own unit dir
@@ -377,6 +398,10 @@ func Sync(ctx context.Context, o Options, tree *site.Tree, lc instance.Lifecycle
 			return res, err
 		}
 	}
+	instances := map[string]bool{} // an instance's own supervised unit must never be disabled
+	for _, name := range tree.InstanceNames() {
+		instances["dzo-"+name+".service"] = true
+	}
 	var gone []string // timers and services to disable
 	for _, d := range []Dir{Quadlet, Systemd} {
 		es, _ := os.ReadDir(o.dir(d))
@@ -389,7 +414,13 @@ func Sync(ctx context.Context, o Options, tree *site.Tree, lc instance.Lifecycle
 				continue // not ours
 			}
 			res.Removed = append(res.Removed, p)
-			if strings.HasSuffix(e.Name(), ".timer") || strings.HasSuffix(e.Name(), ".service") && d == Systemd {
+			switch {
+			case strings.HasSuffix(e.Name(), ".timer"):
+				gone = append(gone, e.Name())
+			case d == Systemd && strings.HasSuffix(e.Name(), ".service") && !instances[e.Name()]:
+				// A stale timer, exporter or serve unit: disable it. An instance's
+				// own unit is not: a switch back to local mode removes it, but
+				// disabling (--now) would stop a running server.
 				gone = append(gone, e.Name())
 			}
 			if !dryRun {
@@ -422,6 +453,13 @@ func Sync(ctx context.Context, o Options, tree *site.Tree, lc instance.Lifecycle
 		if err := lc.DaemonReload(ctx); err != nil {
 			res.Warnings = append(res.Warnings, "daemon-reload: "+err.Error())
 			return res, nil
+		}
+	}
+	if len(install) > 0 {
+		// Enable, never start: the unit comes up with the user manager after a
+		// reboot; a running server is left alone.
+		if err := lc.Enable(ctx, install...); err != nil {
+			res.Warnings = append(res.Warnings, "enable: "+err.Error())
 		}
 	}
 	if len(gone) > 0 {
