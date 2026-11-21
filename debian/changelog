@@ -9,6 +9,11 @@ dayz-server-operator (0.8.2-1) trixie; urgency=medium
     trixie) and the installation guide uses it; "trixie" keeps working.
     CI install-tests the package in a clean Ubuntu 26.04 LTS container,
     blocking, next to Debian 13.
+  * The package no longer depends on libjs-sphinxdoc: the HTML
+    documentation ships Sphinx's own JavaScript and CSS instead of
+    symlinks into /usr/share/javascript/sphinxdoc, so a package built on
+    Debian 13 installs on Ubuntu 26.04 LTS whatever Sphinx version
+    built it.
 
  -- Bernd Zeimetz <bernd@bzed.de>  Sat, 21 Nov 2026 17:04:18 +0100
 
