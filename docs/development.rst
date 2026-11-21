@@ -257,6 +257,31 @@ and uploads the crashing input on failure. To fuzz one target longer::
 A crash is a real bug. Go leaves the input in ``testdata/fuzz/<Target>/``;
 commit that file together with the fix, it is the regression test.
 
+Quadlet compatibility
+~~~~~~~~~~~~~~~~~~~~~
+
+dzo renders the ``.container`` quadlets itself (``internal/quadlet``) instead of
+calling ``podman generate systemd``, so every key it writes is a promise about
+the podman of the distribution the instance runs on, and no Go test can keep
+that promise: the program that reads the file is podman's own generator.
+``scripts/check-quadlet.sh internal/resolve/testdata`` takes the rendered units
+out of the golden files (a ``<name>.golden`` is the resolved instance, a ``---``
+line and the rendered unit) and runs the distribution's generator on them
+(``QUADLET_UNIT_DIRS`` pointing at them, ``-dryrun -user``; the paths and flags
+it probes, and ``QUADLET_GENERATOR``, are in the script). It fails when the
+generator exits non-zero, reports an unsupported key or option, or silently
+skips a unit instead of converting it, and it prints the generator's output
+either way. A dryrun only converts: the volume sources and the image of the
+units need not exist, and no container is started, so the script runs anywhere
+podman is installed, as root or not.
+
+CI runs it in the ``quadlet-check`` job and, against the installed package's
+podman, in every ``package-install`` job. ``debian:trixie`` (podman 5.4, the
+version dzo requires) and ``registry.fedoraproject.org/fedora:44`` fail the
+build; ``quay.io/centos/centos:stream10`` and ``archlinux:latest`` carry podman 6
+and are allowed to fail, so that a key the next podman drops shows up in the log
+before it shows up in a user's journal.
+
 Browser end-to-end tests
 ~~~~~~~~~~~~~~~~~~~~~~~~
 

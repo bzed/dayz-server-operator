@@ -289,7 +289,12 @@ jobs:
           echo steamcmd steam/question select "I AGREE" | debconf-set-selections
           echo steamcmd steam/license note '' | debconf-set-selections
           apt-get update
-          apt-get install -y --no-install-recommends ./deb/dzo_*.deb
+          # git comes with the package as a dependency; both are named here because
+          # actions/checkout below needs them and must not depend on that.
+          apt-get install -y --no-install-recommends ./deb/dzo_*.deb git ca-certificates
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: The rendered quadlets pass the installed podman's own generator
+        run: scripts/check-quadlet.sh internal/resolve/testdata
       - name: dzo version
         run: dzo version
       - name: dzo setup --dry-run as the service user
@@ -301,6 +306,57 @@ jobs:
           [ "$uid" -ge 1000 ] || { echo "dayz has UID $uid, below 1000" >&2; exit 1; }
           grep -q '^dayz:' /etc/subuid || { echo "no subordinate uid range for dayz" >&2; exit 1; }
           grep -q '^dayz:' /etc/subgid || { echo "no subordinate gid range for dayz" >&2; exit 1; }
+
+  quadlet-check:
+    name: Quadlet check (${{ matrix.image }})
+    runs-on: ubuntu-latest
+    # dzo renders the .container quadlets itself (internal/quadlet) instead of
+    # calling `podman generate systemd`, so a key it writes is only as good as the
+    # podman of the distribution the instance runs on. The golden units of
+    # internal/resolve are fed to the distribution's own quadlet generator here;
+    # no Go test can see a key that a later podman drops. Debian trixie (podman
+    # 5.4, the minimum dzo supports) and Fedora must pass; CentOS Stream and Arch
+    # carry podman 6 and only show what the next release changes.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: debian:trixie
+            experimental: false
+          - image: registry.fedoraproject.org/fedora:44
+            experimental: false
+          - image: quay.io/centos/centos:stream10
+            experimental: true
+          - image: docker.io/library/archlinux:latest
+            experimental: true
+    continue-on-error: ${{ matrix.experimental }}
+    container:
+      image: ${{ matrix.image }}
+    steps:
+      - name: Install podman (and git for actions/checkout, which no image has)
+        run: |
+          . /etc/os-release
+          case "$ID" in
+            debian | ubuntu)
+              apt-get update
+              apt-get install -y --no-install-recommends podman git ca-certificates
+              ;;
+            fedora | centos | rhel)
+              dnf install -y podman git ca-certificates
+              ;;
+            arch)
+              # The image is a snapshot of the archive: installing without the full
+              # upgrade it needs fails on file conflicts (openssl, say).
+              pacman -Syu --noconfirm podman git ca-certificates
+              ;;
+            *)
+              echo "no podman package for $ID in this job" >&2
+              exit 1
+              ;;
+          esac
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Check the rendered quadlets with the distribution's own generator
+        run: scripts/check-quadlet.sh internal/resolve/testdata
 
   release:
     name: Create GitHub release
