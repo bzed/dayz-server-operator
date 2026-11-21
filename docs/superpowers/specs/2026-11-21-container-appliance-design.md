@@ -252,10 +252,16 @@ instance is explained.
 
 ## Risks and open points
 
-- **Long-lived attach.** The spike held an attached connection for seconds, not days.
-  The host's `podman.socket` service normally exits when idle; whether a days-long attach
-  survives, and what a restart of that service does to it, must be tested before the
-  rest is built on it. This is the first task of the plan.
+- **Long-lived attach** (tested 2026-11-21, plan Task 1). podman has no daemon: conmon
+  owns the container, `podman.service` only serves the API and is socket-activated, so
+  every short call (inspect, stop, the exit code) reconnects and sees the current state.
+  `systemctl --user restart podman.service` left the container running. The attached
+  `podman run` client then got no more output, with no EOF and no error, and still exited
+  with the container's code (137) when it was stopped later. The service did not exit for
+  idleness during the hour an attach was open. The only effect is that the supervisor's
+  copy of the console in the appliance's journal stops until the next restart. The host's
+  journal (`journalctl --user CONTAINER_NAME=dzo-<name>`) has the complete console, and the
+  docs send operators there.
 - **Version skew.** Client 5.4.2 against server 5.8.6 worked. A podman 6 host is
   untested.
 - **SELinux hosts.** The spike host has none. The socket mount is expected to need label

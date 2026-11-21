@@ -221,18 +221,28 @@ What differs from a native install
   the podman client, steamcmd, git, patch and the usual Debian utilities. They
   cannot use a program installed on the host, and only the host paths the
   quadlet mounts exist for them.
-* **The console is in the unit's journal while a supervisor is attached.** When
-  none is attached - between a supervisor's death and its restart - the server
-  keeps running, but its output is only in the host's ``podman logs
-  dzo-<name>``.
-* **A restart of the host's podman service ends the console in the appliance.**
-  ``systemctl --user restart podman.service`` (a podman update, for instance)
-  leaves the server running, but the appliance's attached client gets no more
-  output: ``dzo logs`` stops there and ``podman logs dzo-<name>`` on the host
-  continues, until the instance's next restart. Exit codes and stops still work,
-  so ``dzo status``, ``dzo stop`` and the rest behave normally. The service does
-  not stop for idleness while an attach is open, so this takes an explicit
-  restart or an upgrade.
+* **Read the server console on the host.** The console is the DayZ server
+  process's stdout and stderr. The host's podman keeps all of it in the host
+  user's journal (podman's default ``journald`` log driver), whatever happens in
+  the appliance, so use that:
+
+  .. code-block:: sh
+
+     journalctl --user CONTAINER_NAME=dzo-<name> -f    # on the host, as the host user
+     podman logs -f dzo-<name>                         # the same, through podman
+
+  ``dzo logs <name>`` inside the appliance shows only the copy the supervisor
+  passes on through its attached ``podman`` client, and that copy has gaps. It
+  is missing while no supervisor is attached (between a supervisor's death and
+  its restart). It also stops after a restart of the host's podman API service
+  (``systemctl --user restart podman.service``, a podman update for instance):
+  the attached stream is served by the old service process and is not resumed,
+  so nothing new arrives until the instance's next restart. Only that copy is
+  affected. podman has no daemon: the server keeps running, the supervisor's
+  short calls (health, running state, stop, the exit code) reconnect through the
+  socket, and ``dzo status``, ``dzo stop`` and the rest behave normally. The
+  profile logs (RPT, script and admin logs) and the event feed are files and
+  are not affected either.
 * **Stopping the appliance stops the servers**, cleanly and one instance after
   another (see below). A host reboot would end them anyway, and an update of dzo
   inside the appliance does not need a stop.
@@ -339,6 +349,9 @@ If a server does not start, look at its unit from the appliance:
 
    dzo status
    dzo logs <name>          # the supervisor's errors are in the journal too
+
+and at the server's own output on the host (``journalctl --user
+CONTAINER_NAME=dzo-<name>``), which is complete even when ``dzo logs`` is not.
 
 ``podman socket … unreachable`` means the socket was not there when the unit
 started: enable it on the host (``systemctl --user enable --now
