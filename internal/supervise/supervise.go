@@ -397,6 +397,11 @@ func clientVerb(attached bool) string {
 // --name, and the stop timeout from their --stop-timeout (podman's default,
 // 10 s, when it is absent).
 //
+// Only the first occurrence of each flag counts: quadlet.RunArgs puts --name
+// right after run and --stop-timeout before the image, and everything after
+// the image is the game server's own argument list, which must not be able to
+// rename the container or shorten its stop grace.
+//
 // It checks that the arguments belong to this instance: --name must be
 // "dzo-"+name. A unit that carries another instance's arguments is a bug in
 // the unit, not a container to start.
@@ -408,7 +413,7 @@ func ParseUnitArgs(name string, words []string) (Options, error) {
 		return Options{}, errors.New("supervise: no podman arguments after --")
 	}
 	o := Options{RunArgs: words, StopTimeout: defaultStopTimeout}
-	named := false
+	named, timeoutSet := false, false
 	for i := 0; i < len(words); i++ {
 		switch w := words[i]; {
 		case w == "--name" || strings.HasPrefix(w, "--name="):
@@ -417,6 +422,9 @@ func ParseUnitArgs(name string, words []string) (Options, error) {
 				return Options{}, err
 			}
 			i = next
+			if named {
+				continue // a later --name is the server's, not podman's
+			}
 			o.Name = value
 			named = true
 		case w == "--stop-timeout" || strings.HasPrefix(w, "--stop-timeout="):
@@ -425,11 +433,15 @@ func ParseUnitArgs(name string, words []string) (Options, error) {
 				return Options{}, err
 			}
 			i = next
+			if timeoutSet {
+				continue // a later --stop-timeout is the server's, not podman's
+			}
 			secs, err := strconv.Atoi(value)
 			if err != nil || secs < 0 {
 				return Options{}, fmt.Errorf("supervise: --stop-timeout %q is not a number of seconds", value)
 			}
 			o.StopTimeout = time.Duration(secs) * time.Second
+			timeoutSet = true
 		}
 	}
 	if !named {

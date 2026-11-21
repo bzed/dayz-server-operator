@@ -684,6 +684,21 @@ func TestParseUnitArgs(t *testing.T) {
 	assert.Equal(t, 10*time.Second, o.StopTimeout, "the podman default when --stop-timeout is absent")
 }
 
+func TestParseUnitArgsFirstOccurrenceWins(t *testing.T) {
+	// Only the words before the image are podman's; the game server's own
+	// arguments follow it. A server argument spelled --name must not rename the
+	// container the unit starts, and a later --stop-timeout must not shorten
+	// the grace the unit gives the server.
+	words := []string{
+		"run", "--name", "dzo-a", "--replace", "--rm", "--stop-timeout", "90",
+		"img", "./server", "--name", "other", "--stop-timeout", "1",
+	}
+	o, err := supervise.ParseUnitArgs("a", words)
+	require.NoError(t, err)
+	assert.Equal(t, "dzo-a", o.Name, "the first --name is the container's")
+	assert.Equal(t, 90*time.Second, o.StopTimeout, "the first --stop-timeout is the unit's")
+}
+
 func TestParseUnitArgsErrors(t *testing.T) {
 	for _, c := range []struct {
 		name     string
