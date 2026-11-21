@@ -15,6 +15,11 @@ on:
     branches: [main]
     tags: ["v*"]
   pull_request:
+  schedule:
+    # A weekly rebuild of main's image, so the release in ghcr.io picks up
+    # Debian's security updates and dzo's latest package for the same commit
+    # (job "appliance-image"). Monday, 04:00 UTC.
+    - cron: "0 4 * * 1"
 
 permissions:
   contents: read
@@ -400,6 +405,118 @@ jobs:
           [ "$uid" -ge 1000 ] || { echo "dayz has UID $uid, below 1000" >&2; exit 1; }
           grep -q '^dayz:' /etc/subuid || { echo "no subordinate uid range for dayz" >&2; exit 1; }
           grep -q '^dayz:' /etc/subgid || { echo "no subordinate gid range for dayz" >&2; exit 1; }
+
+  appliance-image:
+    name: Build and boot the appliance image
+    # The image runs the package of this run, so it comes after package-install
+    # has installed that package into a bare Debian and run dzo's own checks.
+    needs: [deb, package-install]
+    # ubuntu-latest, which has been Ubuntu 26.04 (podman 5.7) since November
+    # 2026: the appliance asks the host's podman for its version and cgroup
+    # manager and needs 5.4 or newer, while 24.04 has 4.9.
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: dzo-deb
+          path: deb/
+      - name: Assemble the build context
+        # images/appliance/Containerfile plus the package of this run and the
+        # apt repository's key; nothing of the checkout ends up in the image.
+        run: |
+          build=$(mktemp -d /var/tmp/dzo-appliance-context-XXXXXX)
+          cp -a images/appliance/. "$build"/
+          cp deb/dzo_*.deb "$build"/
+          cp apt/dzo-archive-keyring.asc "$build"/
+          version=$(basename deb/dzo_*.deb | sed -e 's/^dzo_//' -e 's/_[^_]*\.deb$//')
+          # A docker tag cannot hold the + and ~ of a Debian version.
+          tag=$(printf '%s' "$version" | sed -e 's/[^A-Za-z0-9_.-]/-/g')
+          {
+            echo "DZO_BUILD_CONTEXT=$build"
+            echo "DZO_IMAGE_TAG=$tag"
+          } >> "$GITHUB_ENV"
+          echo "building ghcr.io/bzed/dzo:$tag ($version)"
+      - name: Start the host podman the appliance talks to
+        # Rootful: a runner has no lingering user session, so a rootless podman
+        # there has no systemd cgroup manager, which the appliance's `dzo
+        # setup` checks for. The socket is made accessible to dayz (UID 1000)
+        # for the checks below only, as CI's host user is not dayz's owner.
+        run: |
+          podman --version
+          sudo install -d -m 0755 /etc/containers/containers.conf.d
+          printf '[engine]\ncgroup_manager = "systemd"\n' \
+            | sudo tee /etc/containers/containers.conf.d/99-ci-systemd-cgroups.conf
+          sudo systemctl enable --now podman.socket
+          sudo chmod 0666 /run/podman/podman.sock
+      - name: Build the image
+        run: sudo podman build -t "ghcr.io/bzed/dzo:$DZO_IMAGE_TAG" "$DZO_BUILD_CONTEXT"
+      - name: Boot the appliance
+        # The options of contrib/appliance/dzo.container (Task 8) except the
+        # user mapping: rootful podman maps container UID 1000 to host UID 1000
+        # by itself, and keep-id is rootless-only. The data directory is mounted
+        # at the same path on both sides, which every game container mounts.
+        run: |
+          data=$(mktemp -d /var/tmp/dzo-appliance-data-XXXXXX)
+          sudo chown 1000:1000 "$data"
+          echo "DZO_DATA=$data" >> "$GITHUB_ENV"
+          sudo podman run --detach --name dzo-appliance-test \
+            --systemd=always \
+            --network host \
+            --security-opt label=disable \
+            --volume /run/podman/podman.sock:/run/host-podman.sock \
+            --volume "$data":/srv/dzo \
+            "ghcr.io/bzed/dzo:$DZO_IMAGE_TAG"
+      - name: systemd is running in the appliance
+        run: |
+          state=$(sudo podman exec dzo-appliance-test systemctl is-system-running --wait || true)
+          echo "systemd: $state"
+          if [ "$state" != running ]; then
+            sudo podman exec dzo-appliance-test systemctl --failed --no-pager || true
+            exit 1
+          fi
+      - name: The user manager holds CONTAINER_HOST
+        run: |
+          sudo podman exec --user dayz --env XDG_RUNTIME_DIR=/run/user/1000 \
+            dzo-appliance-test systemctl --user show-environment \
+            | grep -qx 'CONTAINER_HOST=unix:///run/host-podman.sock'
+      - name: podman in the appliance reaches the host's podman
+        run: |
+          sudo podman exec --user dayz dzo-appliance-test podman ps --format '{{.Names}}' \
+            | grep -qx dzo-appliance-test
+      - name: dayz is UID/GID 1000, created before the package
+        # The package's sysusers.d file must leave the image's user alone; the
+        # host maps its own user to this id (--userns keep-id on a rootless
+        # host, the same number on a rootful one).
+        run: |
+          sudo podman exec dzo-appliance-test getent passwd dayz
+          [ "$(sudo podman exec dzo-appliance-test id -u dayz)" = 1000 ]
+          [ "$(sudo podman exec dzo-appliance-test id -g dayz)" = 1000 ]
+      - name: dzo version
+        run: sudo podman exec --user dayz dzo-appliance-test dzo version
+      - name: dzo setup --dry-run as the service user
+        run: |
+          sudo podman exec --user dayz --env XDG_RUNTIME_DIR=/run/user/1000 \
+            dzo-appliance-test dzo setup --dry-run
+      - name: Push the image
+        # main and release tags only, and the weekly rebuild of them; a pull
+        # request must never overwrite what main published.
+        if: ${{ (github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/'))) || github.event_name == 'schedule' }}
+        run: |
+          printf '%s' "${{ github.token }}" \
+            | sudo podman login ghcr.io --username "${{ github.actor }}" --password-stdin
+          sudo podman tag "ghcr.io/bzed/dzo:$DZO_IMAGE_TAG" ghcr.io/bzed/dzo:latest
+          sudo podman push "ghcr.io/bzed/dzo:$DZO_IMAGE_TAG"
+          sudo podman push ghcr.io/bzed/dzo:latest
+      - name: Clean up
+        if: always()
+        run: |
+          sudo podman rm --force --volumes dzo-appliance-test || true
+          sudo podman rmi --force "ghcr.io/bzed/dzo:$DZO_IMAGE_TAG" ghcr.io/bzed/dzo:latest || true
+          sudo rm -rf "$DZO_BUILD_CONTEXT" "$DZO_DATA"
 
   arch:
     name: Build the Arch package (best effort)

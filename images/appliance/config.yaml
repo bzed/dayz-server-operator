@@ -1,0 +1,17 @@
+# SPDX-FileCopyrightText: 2026 Bernd Zeimetz <bernd@bzed.de>
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# The appliance's dzo configuration. /etc/dzo is a named volume on the host, so
+# this file only seeds it on the first run; after that, edit the volume.
+#
+# remote: the game servers are containers of the host's podman, supervised by
+# `dzo instance supervise` through CONTAINER_HOST, instead of quadlets of a
+# podman inside the appliance.
+podman:
+  mode: remote
+
+# The data directory. The host mounts it at the same absolute path, which every
+# game container mounts into the runtime image (so the server build, the mods
+# and the mission are visible on both sides).
+paths:
+  data: /srv/dzo

@@ -43,6 +43,13 @@ dayz-server-operator (0.8.2-1) trixie; urgency=medium
     is not verified yet: SELinux in enforcing mode on Fedora and the RHEL
     family, a real Steam login through the steamcmd container wrapper, and
     no btrfs snapshot backups on the RHEL 10 family.
+  * dzo also ships as a container image (ghcr.io/bzed/dzo, tagged with the
+    package version and latest): Debian trixie with systemd as PID 1, dayz
+    at UID/GID 1000 with lingering, dzo's apt repository, and podman switched
+    to remote against the host's user socket, so the game servers run on the
+    host and survive a restart, update or replacement of the appliance. CI
+    builds it from the .deb of the same run, boots it, and rebuilds it weekly
+    for Debian security updates.
 
  -- Bernd Zeimetz <bernd@bzed.de>  Sat, 21 Nov 2026 17:04:18 +0100
 
