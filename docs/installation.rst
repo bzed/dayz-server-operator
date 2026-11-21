@@ -348,7 +348,8 @@ handling would allocate a system UID below 1000, so the package creates the
 account itself), its subordinate uid/gid range and lingering. As on Debian it
 pulls in ``podman``, ``systemd``, ``git``, ``patch``, ``shadow-utils`` and
 ``passt``; ``btrfs-progs`` and ``geoipupdate`` are recommended
-(``geoipupdate`` is in EPEL).
+(Fedora packages ``geoipupdate``; the RHEL 10 family may have no build of it, and
+then dnf skips the recommendation).
 
 There is no ``steamcmd`` package on Fedora or the RHEL family; dzo runs steamcmd
 from the ``localhost/dzo-steamcmd`` image. See `steamcmd on Fedora, RHEL and
