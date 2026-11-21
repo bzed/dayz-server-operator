@@ -419,6 +419,27 @@ in the container, and ``DZO_E2E_PODMAN_OPTS`` replaces the sandbox options (a
 host without AppArmor drops ``--security-opt apparmor=unconfined`` there). On
 an SELinux host, add ``:Z`` to the checkout bind mount.
 
+The supervisor against a real podman
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``make test-appliance`` runs ``TestSuperviseRealPodman`` (build tag
+``appliance``, ``internal/supervise/appliance_test.go``) against a real
+rootless podman socket: it starts a ``debian:trixie-slim`` container with
+``sleep infinity`` and a health check through ``supervise.Run``, the code
+behind ``dzo instance supervise``, waits for ``READY=1``, stops the run the way
+systemd does and checks that ``--rm`` left no container behind. The test is
+skipped unless ``DZO_APPLIANCE_PODMAN=1``, and it needs
+``systemctl --user enable --now podman.socket``; it pulls the image when the
+store does not have it. It is not part of ``make check``: CI has no podman
+socket.
+
+``CONTAINER_HOST``
+   the podman endpoint, as podman itself reads it; without it the test uses
+   ``unix://$XDG_RUNTIME_DIR/podman/podman.sock``, the rootless socket.
+
+The container name carries a random suffix and the test removes only that
+container, so it can run next to a real installation on the same host.
+
 The browser against a real DayZ server
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 

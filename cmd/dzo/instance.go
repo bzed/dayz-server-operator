@@ -45,7 +45,7 @@ func newInstanceCmd() *cobra.Command {
 		Use:   "instance",
 		Short: "Instance lifecycle: start/stop/restart, the F3 failure gate (§C5/§C8)",
 	}
-	cmd.AddCommand(newInstanceCreateCmd(), newInstanceApplyCmd(), newInstanceRemoveCmd(), newInstanceCloneCmd(), newInstanceUpgradeCmd(), newInstanceModsCmd(), newInstanceShowCmd(), newInstanceRenderCmd(), newInstanceStartCmd(), newInstanceStopCmd(), newInstanceRestartCmd(), newInstanceShutdownCmd(), newInstanceHookCmd(), newInstanceAckFailureCmd())
+	cmd.AddCommand(newInstanceCreateCmd(), newInstanceApplyCmd(), newInstanceRemoveCmd(), newInstanceCloneCmd(), newInstanceUpgradeCmd(), newInstanceModsCmd(), newInstanceShowCmd(), newInstanceRenderCmd(), newInstanceStartCmd(), newInstanceStopCmd(), newInstanceRestartCmd(), newInstanceShutdownCmd(), newInstanceHookCmd(), newInstanceAckFailureCmd(), newInstanceSuperviseCmd())
 	return cmd
 }
 

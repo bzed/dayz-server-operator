@@ -112,6 +112,12 @@ e2e-container:
 		-e GOFLAGS=-buildvcs=false \
 		dzo-e2e:$(DZO_E2E_SUITE) make $(DZO_E2E_TARGET)
 
+## test-appliance: the supervisor against a real rootless podman socket (build tag appliance, tests
+## TestSuperviseRealPodman). Skipped unless DZO_APPLIANCE_PODMAN=1; CONTAINER_HOST selects the socket
+## (default: $XDG_RUNTIME_DIR/podman/podman.sock, see docs/development.rst). Not part of `make check`.
+test-appliance:
+	$(GO) test -tags appliance -count=1 -race -run '^TestSuperviseRealPodman$$' ./internal/supervise/
+
 ## fuzz: run every fuzz target for FUZZTIME (default 10s) each; the seeds also run in `make test`.
 ## Go fuzzes one target per invocation. Fuzz longer with FUZZTIME=5m or one target by hand
 ## (see docs/development.rst); a crash leaves its input in testdata/fuzz/, commit it with the fix.
