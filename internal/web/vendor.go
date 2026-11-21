@@ -68,6 +68,12 @@ func (o overlayFS) Open(name string) (fs.File, error) {
 	return o.embedded.Open(name)
 }
 
+// VendorFile returns the content of name in the vendored web files, as /vendor/ serves them: the file
+// dir holds wins, a file it lacks comes from the binary. name is a slash-separated path below the tree.
+func VendorFile(dir, name string) ([]byte, error) {
+	return fs.ReadFile(vendorFS(dir), name)
+}
+
 // vendorHandler serves the files below the root of fsys. It serves no directory: no listing, and no
 // index.html either.
 func vendorHandler(fsys fs.FS) http.Handler {

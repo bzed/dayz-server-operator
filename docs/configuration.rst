@@ -303,7 +303,9 @@ and print what is wrong. A key dzo does not know is ignored.
       ``htmx/htmx.min.js`` replaces htmx alone and keeps the rest. A directory that is not there, for
       example an old ``/usr/share/javascript`` after the Debian packages were autoremoved, is not an
       error: ``dzo web`` logs one warning at start and serves the built-in copies. Read at start of
-      ``dzo web``; a change needs a restart.
+      ``dzo web``; a change needs a restart. ``dzo site validate`` reads the same
+      ``fork-awesome/css/fork-awesome.css``, so it warns about the admin-map icons of an override
+      too (:ref:`map-icons`).
    ``docs_dir``
       The built documentation, served under ``/docs/``.
    ``flags_dir``

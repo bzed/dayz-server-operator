@@ -535,5 +535,6 @@ Where the look comes from, first match wins:
 
 A marker with no icon, or with a name the font does not have, is a plain dot, and with no
 colour the default purple. ``dzo site validate`` warns about an icon name of a watch rule that
-the installed font does not know, and rejects a malformed name or colour. Lines, circles and
+the font dzo serves does not know (the built-in one, or the ``fork-awesome.css`` of a
+``web.assets`` directory), and rejects a malformed name or colour. Lines, circles and
 polygons have no icon. Icons shipped inside mod PBOs are not supported.

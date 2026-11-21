@@ -107,6 +107,32 @@ func TestFlagsEmbedded(t *testing.T) {
 	assert.NotEqual(t, http.StatusOK, code, "/flags/..")
 }
 
+// TestVendorFileEmbedded reads the built-in stylesheet without a directory: dzo site validate checks the
+// admin-map icon names that way.
+func TestVendorFileEmbedded(t *testing.T) {
+	css, err := VendorFile("", "fork-awesome/css/fork-awesome.css")
+	require.NoError(t, err)
+	assert.Equal(t, vendoredFile(t, "fork-awesome/css/fork-awesome.css"), string(css), "the built-in stylesheet")
+	assert.Contains(t, string(css), ".fa-car:before", "the built-in stylesheet names the icons")
+
+	_, err = VendorFile("", "fork-awesome/css/nonexistent.css")
+	assert.Error(t, err, "a file the tree does not have")
+}
+
+func TestVendorFileOverride(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "fork-awesome", "css"), 0o750))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "fork-awesome", "css", "fork-awesome.css"), []byte(".fa-fire:before{}"), 0o600))
+
+	css, err := VendorFile(dir, "fork-awesome/css/fork-awesome.css")
+	require.NoError(t, err)
+	assert.Equal(t, ".fa-fire:before{}", string(css), "the file of the directory wins")
+
+	css, err = VendorFile(dir, "htmx/htmx.min.js")
+	require.NoError(t, err)
+	assert.Equal(t, vendoredFile(t, "htmx/htmx.min.js"), string(css), "a file the directory lacks comes from the binary")
+}
+
 func TestFlagsDirOverridesFile(t *testing.T) {
 	dir := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "de.svg"), []byte("<svg>local</svg>"), 0o600))

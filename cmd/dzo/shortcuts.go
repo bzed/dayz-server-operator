@@ -17,6 +17,7 @@ import (
 	"github.com/bzed/dayz-server-operator/internal/instance"
 	"github.com/bzed/dayz-server-operator/internal/resolve"
 	"github.com/bzed/dayz-server-operator/internal/site"
+	"github.com/bzed/dayz-server-operator/internal/web"
 )
 
 // newStartCmd and newStopCmd are the short forms the documentation uses.
@@ -286,7 +287,12 @@ func newSiteValidateCmd() *cobra.Command {
 				return err
 			}
 			failed := 0
-			icons := admin.IconNames(cfg.Web.Assets)
+			// The stylesheet the web interface serves, so an override changes which icons are known.
+			css, err := web.VendorFile(cfg.Web.Assets, "fork-awesome/css/fork-awesome.css")
+			if err != nil {
+				return fmt.Errorf("read the Fork Awesome stylesheet: %w", err)
+			}
+			icons := admin.IconNames(css)
 			for _, name := range tree.InstanceNames() {
 				inst, err := resolve.Resolve(cfg, tree, name)
 				if err != nil {
@@ -299,7 +305,7 @@ func newSiteValidateCmd() *cobra.Command {
 					_, _ = fmt.Fprintln(cmd.ErrOrStderr(), w)
 				}
 				for _, ic := range admin.UnknownIcons(inst.AdminMap.Watch, icons) {
-					_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "warning: %s: admin_map icon %q is not in the Fork Awesome font installed here; the map shows a dot instead\n", name, ic)
+					_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "warning: %s: admin_map icon %q is not in the Fork Awesome font dzo serves; the map shows a dot instead\n", name, ic)
 				}
 			}
 			if failed > 0 {

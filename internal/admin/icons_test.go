@@ -4,8 +4,6 @@
 package admin
 
 import (
-	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -13,13 +11,8 @@ import (
 )
 
 func TestIconNamesAndUnknownIcons(t *testing.T) {
-	dir := t.TempDir()
-	css := filepath.Join(dir, "fork-awesome", "css")
-	err := os.MkdirAll(css, 0o750)
-	require.NoError(t, err)
-	err = os.WriteFile(filepath.Join(css, "fork-awesome.css"), []byte(".fa-fire:before{content:\"\\f06d\"}\n.fa-user-secret:before{content:\"\\f21b\"}\n.fa{display:inline-block}\n"), 0o600)
-	require.NoError(t, err)
-	names := IconNames(dir)
+	css := ".fa-fire:before{content:\"\\f06d\"}\n.fa-user-secret:before{content:\"\\f21b\"}\n.fa{display:inline-block}\n"
+	names := IconNames([]byte(css))
 	// helicopter is not in Fork Awesome; dzo ships it itself (web/static/icons).
 	require.True(t, names["fire"])
 	require.True(t, names["user-secret"])
@@ -28,7 +21,9 @@ func TestIconNamesAndUnknownIcons(t *testing.T) {
 	rules := []WatchRule{{Layer: "a", Icon: "fire"}, {Layer: "b", Icon: "fa-user-secret"}, {Layer: "c", Icon: "firee"}, {Layer: "d"}, {Layer: "e", Icon: "helicopter"}}
 	got := UnknownIcons(rules, names)
 	assert.Equal(t, []string{"firee"}, got)
-	require.Nil(t, IconNames(t.TempDir()))
+	// Without a stylesheet nothing can be said, and nothing is reported.
+	require.Nil(t, IconNames(nil))
+	require.Nil(t, IconNames([]byte{}))
 	assert.Nil(t, UnknownIcons(rules, nil))
 }
 
