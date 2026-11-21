@@ -6,6 +6,8 @@ package supervise_test
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"net"
 	"os"
 	"path/filepath"
@@ -743,7 +745,9 @@ func TestSdNotify(t *testing.T) {
 	})
 
 	t.Run("abstract socket", func(t *testing.T) {
-		name := "@dzo-notify-" + filepath.Base(t.TempDir())
+		// Abstract names are global to the network namespace, and t.TempDir's base name is
+		// the same "001" in every test process: a random name cannot meet another listener.
+		name := "@dzo-notify-" + randomName(t)
 		conn, err := net.ListenUnixgram("unixgram", &net.UnixAddr{Name: name, Net: "unixgram"})
 		require.NoError(t, err)
 		defer func() { _ = conn.Close() }()
@@ -762,8 +766,42 @@ func TestSdNotify(t *testing.T) {
 		assert.NoError(t, supervise.SdNotify("READY=1"), "no socket is no error")
 	})
 
+	t.Run("a listener that does not read", func(t *testing.T) {
+		// A full receive queue must give an error after the timeout, never a hang.
+		name := "@dzo-notify-full-" + randomName(t)
+		conn, err := net.ListenUnixgram("unixgram", &net.UnixAddr{Name: name, Net: "unixgram"})
+		require.NoError(t, err)
+		defer func() { _ = conn.Close() }()
+		// The receiver's queue holds net.unix.max_dgram_qlen datagrams; a new sender per
+		// datagram gets past each sender's own buffer limit until the receiver is full.
+		full := false
+		for i := 0; i < 10000 && !full; i++ {
+			fill, err := net.DialUnix("unixgram", nil, &net.UnixAddr{Name: name, Net: "unixgram"})
+			require.NoError(t, err)
+			require.NoError(t, fill.SetWriteDeadline(time.Now().Add(50*time.Millisecond)))
+			if _, err := fill.Write([]byte("X")); err != nil {
+				full = true
+			}
+			_ = fill.Close() // its datagram stays queued at the receiver
+		}
+		require.True(t, full, "the receiver's queue never filled")
+		t.Setenv("NOTIFY_SOCKET", name)
+		start := time.Now()
+		require.Error(t, supervise.SdNotify("READY=1"))
+		assert.Less(t, time.Since(start), 10*time.Second, "SdNotify returns after its timeout")
+	})
+
 	t.Run("unreachable", func(t *testing.T) {
 		t.Setenv("NOTIFY_SOCKET", filepath.Join(t.TempDir(), "missing.sock"))
 		require.Error(t, supervise.SdNotify("READY=1"))
 	})
+}
+
+// randomName is a name no other test process uses.
+func randomName(t *testing.T) string {
+	t.Helper()
+	b := make([]byte, 8)
+	_, err := rand.Read(b)
+	require.NoError(t, err)
+	return hex.EncodeToString(b)
 }
