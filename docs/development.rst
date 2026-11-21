@@ -31,11 +31,27 @@ Modules are vendored, so builds work offline.
 
    make build      # static binary
    make servermods # pack the dzo-admin mod into dist/servermods/ (needs the submodules; see below)
+   make vendor-web # re-download the vendored web files into internal/web/vendor and check their sums
    make test       # tests with race detector and coverage gate
    make lint       # includes reuse lint (licence headers)
    make licenses   # dependency licences must be AGPL-compatible
    make docs       # this documentation (needs python3-sphinx)
    make deb        # Debian package
+
+The vendored web files
+~~~~~~~~~~~~~~~~~~~~~~
+
+``internal/web/vendor`` holds the pinned copies of the JavaScript, CSS, images and fonts the web
+interface serves: htmx 2.0.4, Leaflet 1.7.1 and Fork Awesome 1.2.0, the versions Debian trixie
+packages. They are upstream's release archives (the npm tarballs), extracted by
+``scripts/vendor-web.sh`` (``make vendor-web``), which pins the sha256 of every archive and then
+checks the extracted files against ``internal/web/vendor/SHA256SUMS``. Nothing is downloaded during a
+build: a version bump is ``make vendor-web ARGS=--update`` and a commit of the files together with the
+sums. The licences are recorded in ``REUSE.toml``, ``LICENSES/`` and ``debian/copyright``.
+
+The country flags are not vendored. Debian's ``iso-flags-svg`` collects them under the Creative
+Commons Public Domain Dedication, which the ``licenses`` allow-list of the ``Makefile`` does not
+cover, so ``web.flags_dir`` keeps pointing at ``/usr/share/iso-flags-svg/country-4x3``.
 
 .. _apt-repository:
 

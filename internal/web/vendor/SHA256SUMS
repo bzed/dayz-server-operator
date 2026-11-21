@@ -1,0 +1,17 @@
+# Checksums of the vendored web files, written by scripts/vendor-web.sh; sha256sum -c
+# ignores the # lines. htmx 2.0.4, Leaflet 1.7.1 and Fork Awesome 1.2.0.
+# Rewrite after a version bump with: scripts/vendor-web.sh --update
+8f1d99c389a564499c57ee8c638850650a54280ea41bdea93b736906f7c74bec  fork-awesome/css/fork-awesome.css
+62c52951be321c21d87dbf076af0d199f6e8d51e27e6eddf80bd4d5b737497d0  fork-awesome/fonts/forkawesome-webfont.eot
+d491dbcb3248d003412deafab505433d2e09d59a1dd748fcf7c6dbd7b38e0816  fork-awesome/fonts/forkawesome-webfont.svg
+4f319287827e35f841069eb471c092eccf97d2f7830aa4d8bd7301ded418bf49  fork-awesome/fonts/forkawesome-webfont.ttf
+006708d6691753cfc46eec2dae88fbdafa22823a89194149d9f223050dc78998  fork-awesome/fonts/forkawesome-webfont.woff
+8810ba3440bf482ced33d2f74b7803bba711f689d8e4caa7da5c6ae6844a1b49  fork-awesome/fonts/forkawesome-webfont.woff2
+e209dda5c8235479f3166defc7750e1dbcd5a5c1808b7792fc2e6733768fb447  htmx/htmx.min.js
+066daca850d8ffbef007af00b06eac0015728dee279c51f3cb6c716df7c42edf  leaflet/images/layers-2x.png
+1dbbe9d028e292f36fcba8f8b3a28d5e8932754fc2215b9ac69e4cdecf5107c6  leaflet/images/layers.png
+00179c4c1ee830d3a108412ae0d294f55776cfeb085c60129a39aa6fc4ae2528  leaflet/images/marker-icon-2x.png
+574c3a5cca85f4114085b6841596d62f00d7c892c7b03f28cbfa301deb1dc437  leaflet/images/marker-icon.png
+264f5c640339f042dd729062cfc04c17f8ea0f29882b538e3848ed8f10edb4da  leaflet/images/marker-shadow.png
+04f7caf4ce6fdf87365cfea9d1cc55cf599440bb2dd204cb9349a573b92ea1d0  leaflet/leaflet.css
+c837347a297c1a35852aa375392cc74950a2b868214e8b1909c4637b8b63ee24  leaflet/leaflet.js

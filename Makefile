@@ -20,7 +20,7 @@ COVERAGE_MIN := 85
 GO           ?= go
 
 .PHONY: all cheatsheet docs build build-static test test-race cover coverage-check cover-html lint vet fmt fmt-check \
-        licenses reuse vulncheck fuzz e2e e2e-container check deb clean tidy generate servermods servermods-check servermods-lock test-findfile test-client
+        licenses reuse vulncheck fuzz e2e e2e-container check deb clean tidy generate servermods servermods-check servermods-lock test-findfile test-client vendor-web
 
 all: lint reuse test build
 
@@ -196,6 +196,11 @@ deb:
 ## tidy: tidy go.mod/go.sum.
 tidy:
 	$(GO) mod tidy
+
+## vendor-web: download the pinned web files (htmx, Leaflet, Fork Awesome) into internal/web/vendor and
+## check them against internal/web/vendor/SHA256SUMS. ARGS=--update rewrites the sums after a version bump.
+vendor-web:
+	scripts/vendor-web.sh $(ARGS)
 
 ## clean: remove build artifacts.
 clean:
