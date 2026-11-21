@@ -1,4 +1,4 @@
-dayz-server-operator (0.8.2-1) trixie; urgency=medium
+dayz-server-operator (0.9.0-1) trixie; urgency=medium
 
   * Web interface: htmx 2.0.4, Leaflet 1.7.1, Fork Awesome 1.2.0 and the
     country flags are compiled into the binary; dzo no longer depends on
@@ -43,6 +43,13 @@ dayz-server-operator (0.8.2-1) trixie; urgency=medium
     is not verified yet: SELinux in enforcing mode on Fedora and the RHEL
     family, a real Steam login through the steamcmd container wrapper, and
     no btrfs snapshot backups on the RHEL 10 family.
+  * dzo setup checks that podman is 5.4 or newer (podman 6 is fine), read
+    with `podman --version` so it works before the user has a subuid range.
+  * New podman.mode (local, the default, or remote): in remote mode the
+    instances are plain user units run by `dzo instance supervise`, which
+    drives the game container through CONTAINER_HOST, reports readiness
+    when it is healthy and stops it on SIGTERM; dzo setup checks the
+    remote podman, the shared data path and the host's systemd cgroups.
   * dzo also ships as a container image (ghcr.io/bzed/dzo, tagged with the
     package version and latest): Debian trixie with systemd as PID 1, dayz
     at UID/GID 1000 with lingering, dzo's apt repository, and podman switched
@@ -60,7 +67,7 @@ dayz-server-operator (0.8.2-1) trixie; urgency=medium
     than podman's own stop timeout (TimeoutStopSec=150) so the servers stop
     cleanly.
 
- -- Bernd Zeimetz <bernd@bzed.de>  Sat, 21 Nov 2026 17:04:18 +0100
+ -- Bernd Zeimetz <bernd@bzed.de>  Sun, 22 Nov 2026 00:45:07 +0100
 
 dayz-server-operator (0.8.1-1) trixie; urgency=medium
 
