@@ -144,6 +144,11 @@ and print what is wrong. A key dzo does not know is ignored.
    value is refused when the configuration loads, with ``podman.mode: must be "local" or "remote",
    got "<value>"``. A change takes effect at the next ``dzo units sync`` and, for a running instance,
    at its next restart; nothing is lost.
+   In ``remote`` mode the game containers belong to the host's podman, which cannot see the
+   appliance's own binary, so ``dzo units sync`` copies the ``binary`` to
+   ``<paths.data>/bin/dzo`` and the containers mount that copy for their health checks. The copy is
+   replaced atomically and only when its content changed; a running container keeps the copy it
+   started with, as it keeps ``/usr/bin/dzo`` on a native install.
 
 ``site``
    The site repository, see below.

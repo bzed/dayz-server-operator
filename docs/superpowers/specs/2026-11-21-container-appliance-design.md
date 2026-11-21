@@ -178,9 +178,14 @@ In `remote` mode:
     exiting. Exiting would count as a crash against the unit's start limit.
 - **The health-check binary.** Game containers mount the dzo binary for their health
   checks. `/usr/bin/dzo` does not exist on the host, so in remote mode dzo copies its own
-  binary to a versioned file below the data directory and mounts that. Versioned,
-  because a running server keeps the old binary across an `apt upgrade`, as it does on a
-  native install. Old copies no running container uses are removed.
+  binary (`binary` in `config.yaml`) to a fixed path below the data directory,
+  `<paths.data>/bin/dzo`, and mounts that. `dzo units sync` writes the copy before the
+  units that name it and only when the content differs: a temporary file in the same
+  directory, fsynced, mode `0755` (the host's podman and the container process must be
+  able to read and execute it), renamed over the old path. A bind mount pins the inode,
+  so a container that is running keeps the binary it started with after `apt upgrade`
+  replaced the copy, exactly as a native install keeps `/usr/bin/dzo`; nothing needs
+  cleaning up, and no versioned copies are kept.
 - **`dzo setup` checks**, each with a clear message: the socket answers and the server is
   podman ≥ 5.4; a marker file written below the data directory is visible at the same
   path in a container the host starts (this catches a wrong mount); the host uses

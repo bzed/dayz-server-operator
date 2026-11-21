@@ -4,6 +4,7 @@
 package units
 
 import (
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -103,6 +104,17 @@ func (e *env) tree() *site.Tree {
 	tree, err := site.LoadTree(e.opts.Cfg.Paths.Site)
 	require.NoError(e.t, err)
 	return tree
+}
+
+// remote switches the environment to podman.mode remote with a binary that
+// exists, as the appliance has one.
+func (e *env) remote() {
+	e.t.Helper()
+	bin := filepath.Join(e.data, "dzo")
+	write(e.t, bin, "dzo v1")
+	require.NoError(e.t, os.Chmod(bin, 0o755)) //nolint:gosec // fixture
+	e.opts.Cfg.Binary = bin
+	e.opts.Cfg.Podman.Mode = config.PodmanRemote
 }
 
 func (e *env) sync(dry bool) Result {
@@ -287,7 +299,7 @@ func TestPendingUpdatesAreHeldBackUntilTheInstanceIsDeployed(t *testing.T) {
 
 func TestDesiredRemoteWritesService(t *testing.T) {
 	e := newEnv(t)
-	e.opts.Cfg.Podman.Mode = config.PodmanRemote
+	e.remote()
 	files, _, err := Desired(e.opts, e.tree())
 	require.NoError(t, err)
 	var service *File
@@ -332,7 +344,7 @@ func TestSyncModeSwitchKeepsRunningInstance(t *testing.T) {
 	assert.FileExists(t, container)
 
 	// local -> remote: the quadlet goes, the supervised unit comes, nothing is stopped
-	e.opts.Cfg.Podman.Mode = config.PodmanRemote
+	e.remote()
 	res := e.sync(false)
 	assert.Contains(t, res.Removed, container, "the quadlet must be replaced")
 	assert.NoFileExists(t, container)
@@ -352,7 +364,7 @@ func TestSyncModeSwitchKeepsRunningInstance(t *testing.T) {
 
 func TestSyncRemoteHoldsPendingUpdate(t *testing.T) {
 	e := newEnv(t)
-	e.opts.Cfg.Podman.Mode = config.PodmanRemote
+	e.remote()
 	e.sync(false)
 	unit := filepath.Join(e.opts.UnitDir, "dzo-x.service")
 	before, err := os.ReadFile(unit)
@@ -398,7 +410,7 @@ func TestSyncModeSwitchWithPendingUpdateWritesTheNewUnit(t *testing.T) {
 
 	// Nothing to hold: the unit of the other mode is what is there, so the
 	// switch must write (and record) the new one instead of waiting.
-	e.opts.Cfg.Podman.Mode = config.PodmanRemote
+	e.remote()
 	res := e.sync(false)
 	assert.FileExists(t, filepath.Join(e.opts.UnitDir, "dzo-x.service"))
 	assert.Empty(t, Pending(inst()), "a mode switch writes the new unit and records the generations")
@@ -476,6 +488,57 @@ mods:
   - {local: dzo-admin, server: true}
 `)
 	return e
+}
+
+func TestSyncCopiesHealthBinary(t *testing.T) {
+	e := newEnv(t)
+	e.remote()
+	dst := filepath.Join(e.data, "bin", "dzo")
+
+	e.sync(true)
+	assert.NoFileExists(t, dst, "a dry run must not copy the health binary")
+
+	e.sync(false)
+	got, err := os.ReadFile(dst)
+	require.NoError(t, err)
+	assert.Equal(t, "dzo v1", string(got))
+	info, err := os.Stat(dst)
+	require.NoError(t, err)
+	assert.Equal(t, os.FileMode(0o755), info.Mode().Perm(), "the host's podman and the container must be able to read and run the copy")
+	unit, err := os.ReadFile(filepath.Join(e.opts.UnitDir, "dzo-x.service"))
+	require.NoError(t, err)
+	assert.Contains(t, string(unit), dst+":/usr/local/bin/dzo:ro", "the unit mounts the copy, not the appliance's binary")
+
+	// The same content is not written again: rewriting it would give the copy a
+	// new inode for nothing, and a running container pins the one it has.
+	e.sync(false)
+	again, err := os.Stat(dst)
+	require.NoError(t, err)
+	assert.True(t, os.SameFile(info, again), "an unchanged binary must not be rewritten")
+}
+
+func TestSyncReplacesHealthBinaryAtomically(t *testing.T) {
+	e := newEnv(t)
+	e.remote()
+	e.sync(false)
+	dst := filepath.Join(e.data, "bin", "dzo")
+
+	old, err := os.Open(dst)
+	require.NoError(t, err)
+	defer old.Close() //nolint:errcheck // read-only fixture
+
+	write(t, e.opts.Cfg.Binary, "dzo v2")
+	e.sync(false)
+
+	// A bind mount pins the inode: what a running container already opened still
+	// reads the binary it started with, exactly as with /usr/bin/dzo on a host.
+	buf := make([]byte, len("dzo v1"))
+	_, err = io.ReadFull(old, buf)
+	require.NoError(t, err)
+	assert.Equal(t, "dzo v1", string(buf), "the open handle keeps the old binary")
+	got, err := os.ReadFile(dst)
+	require.NoError(t, err)
+	assert.Equal(t, "dzo v2", string(got), "the path has the new binary")
 }
 
 func TestSyncCreatesTheAnnounceToken(t *testing.T) {

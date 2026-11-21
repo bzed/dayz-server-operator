@@ -11,6 +11,7 @@
 package units
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -359,6 +360,13 @@ func Sync(ctx context.Context, o Options, tree *site.Tree, lc instance.Lifecycle
 	if err != nil {
 		return res, err
 	}
+	// Before any unit is written, and never in a dry run: a unit must not
+	// reference a binary that is not there.
+	if o.Cfg.Remote() && !dryRun {
+		if err := copyHealthBinary(o.Cfg); err != nil {
+			return res, err
+		}
+	}
 	want := map[string]bool{}
 	for _, f := range files {
 		want[filepath.Join(o.dir(f.Dir), f.Name)] = true
@@ -514,4 +522,55 @@ func writeAtomic(path string, b []byte, mode os.FileMode) error {
 		return err
 	}
 	return os.Rename(tmp.Name(), path)
+}
+
+// copyHealthBinary copies the binary the game containers mount for their health
+// checks to where the host's podman can see it (resolve.HealthBinary): below
+// paths.data, which is mounted at the same absolute path in the appliance and on
+// the host, so the path in the unit is valid for both. It writes a temporary file
+// in the same directory, fsyncs and renames it over the old one, so a container
+// that is being created never sees a half-written binary. A bind mount pins the
+// inode: a running container keeps the binary it started with, as it keeps
+// /usr/bin/dzo on a native install, and there is no old copy to clean up.
+func copyHealthBinary(cfg *config.Config) error {
+	src, dst := cfg.Binary, resolve.HealthBinary(cfg)
+	want, err := os.ReadFile(src) //nolint:gosec // dzo's own binary, config.yaml binary
+	if err != nil {
+		return fmt.Errorf("health binary: %w", err)
+	}
+	if have, err := os.ReadFile(dst); err == nil && bytes.Equal(have, want) { //nolint:gosec // dzo's own data dir
+		return nil
+	}
+	dir := filepath.Dir(dst)
+	// 0755: the copy is executed by the host's podman through the bind mount (as
+	// the container's user), which is not necessarily dzo's user.
+	if err := os.MkdirAll(dir, 0o755); err != nil { //nolint:gosec // see above
+		return fmt.Errorf("health binary: %w", err)
+	}
+	tmp, err := os.CreateTemp(dir, ".dzo.tmp-*")
+	if err != nil {
+		return fmt.Errorf("health binary: %w", err)
+	}
+	defer os.Remove(tmp.Name()) //nolint:errcheck // gone after the rename
+	if _, err := tmp.Write(want); err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("health binary: %w", err)
+	}
+	if err := tmp.Chmod(0o755); err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("health binary: %w", err)
+	}
+	// fsync before the rename: a crash must leave either the old or the complete
+	// new binary, never a truncated one under the path a unit names.
+	if err := tmp.Sync(); err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("health binary: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("health binary: %w", err)
+	}
+	if err := os.Rename(tmp.Name(), dst); err != nil {
+		return fmt.Errorf("health binary: %w", err)
+	}
+	return nil
 }

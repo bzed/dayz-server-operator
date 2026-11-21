@@ -149,14 +149,18 @@ type Instance struct {
 	Container    site.ContainerConfig `yaml:"container"`
 	Hooks        site.HooksConfig     `yaml:"hooks"`
 	// Binary is the dzo executable the unit runs and mounts (config.yaml binary).
-	Binary   string            `yaml:"-"`
-	Backup   site.BackupConfig `yaml:"backup"`
-	Logs     site.LogsConfig   `yaml:"logs"`
-	Admin    site.AdminConfig  `yaml:"admin,omitempty"`
-	AdminMap site.AdminMap     `yaml:"admin_map,omitempty"`
-	Welcome  *string           `yaml:"welcome,omitempty"`
-	Messages []site.Message    `yaml:"messages,omitempty"`
-	Priority []string          `yaml:"priority,omitempty"`
+	Binary string `yaml:"-"`
+	// HealthBinary is what the game containers mount at /usr/local/bin/dzo for their
+	// health checks: Binary on a native install, the copy below paths.data in
+	// podman.mode remote (see HealthBinary).
+	HealthBinary string            `yaml:"-"`
+	Backup       site.BackupConfig `yaml:"backup"`
+	Logs         site.LogsConfig   `yaml:"logs"`
+	Admin        site.AdminConfig  `yaml:"admin,omitempty"`
+	AdminMap     site.AdminMap     `yaml:"admin_map,omitempty"`
+	Welcome      *string           `yaml:"welcome,omitempty"`
+	Messages     []site.Message    `yaml:"messages,omitempty"`
+	Priority     []string          `yaml:"priority,omitempty"`
 
 	// Missing lists what is not downloaded yet; Quadlet is only populated
 	// when it is empty.
@@ -251,8 +255,9 @@ func Resolve(cfg *config.Config, t *site.Tree, name string) (*Instance, error) {
 
 	root := filepath.Join(cfg.Paths.Instances, name)
 	inst := &Instance{
-		Binary: cfg.Binary,
-		Name:   name, Map: raw.Map, Ports: raw.Ports, RConBind: raw.RConBind, Network: raw.Network, Image: t.Site.Image,
+		Binary:       cfg.Binary,
+		HealthBinary: HealthBinary(cfg),
+		Name:         name, Map: raw.Map, Ports: raw.Ports, RConBind: raw.RConBind, Network: raw.Network, Image: t.Site.Image,
 		Params: raw.Params, Overlays: raw.Overlays, Updates: raw.Updates, Restarts: raw.Restarts,
 		Health: raw.Health, RestartLimit: raw.RestartLimit, Stop: raw.Stop, Notify: raw.Notify, Killfeed: raw.Killfeed, Container: raw.Container, Hooks: raw.Hooks, Backup: raw.Backup, Logs: raw.Logs, Admin: raw.Admin, AdminMap: raw.AdminMap, Welcome: raw.Welcome, Messages: raw.Messages, Priority: raw.Priority,
 		Mission: Mission{Source: src, Fallback: raw.FallbackMission, Unmanaged: raw.Mission.Unmanaged, Drift: raw.Mission.Drift},
@@ -467,6 +472,20 @@ func LocalSource(t *site.Tree, name string) (product.LocalSource, error) {
 	return product.LocalSource{}, fmt.Errorf("local mod %q: no local_mods entry in site.yaml and no localmods/%s/ in the site repo", name, name)
 }
 
+// HealthBinary is the dzo executable the game containers mount at
+// /usr/local/bin/dzo for their health checks. On a native install that is the
+// binary the units run. In podman.mode remote the containers are started by the
+// host's podman, which cannot see the appliance's /usr/bin/dzo: `dzo units sync`
+// copies cfg.Binary to <paths.data>/bin/dzo, a path the host and the appliance
+// see alike (the data directory is mounted at the same absolute path in both),
+// and that copy is what is mounted.
+func HealthBinary(cfg *config.Config) string {
+	if cfg.Remote() {
+		return filepath.Join(cfg.Paths.Data, "bin", "dzo")
+	}
+	return cfg.Binary
+}
+
 // buildQuadlet composes the instance's container: the shared build mounted
 // read-only with per-instance keys/, mpmissions/ and mod mounts nested on
 // top (§C5), plus the DayZServer command line (§C6 step 8).
@@ -475,9 +494,13 @@ func buildQuadlet(inst *Instance) quadlet.ContainerSpec {
 	if dzoBin == "" {
 		dzoBin = dzoBinary
 	}
+	healthBin := inst.HealthBinary
+	if healthBin == "" {
+		healthBin = dzoBin
+	}
 	rt := inst.Paths.Runtime
 	vols := []quadlet.Volume{
-		{Source: dzoBin, Destination: "/usr/local/bin/dzo", ReadOnly: true},
+		{Source: healthBin, Destination: "/usr/local/bin/dzo", ReadOnly: true},
 		// An overlay, not ":ro": a server that finds the build or a mod on a read-only
 		// mount silently skips its extra addon directories (DLC such as sakhal, and every
 		// -servermod/-mod), with no error and no script from them (verified on 1.29). The
