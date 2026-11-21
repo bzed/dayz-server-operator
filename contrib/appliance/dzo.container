@@ -45,11 +45,25 @@ Volume=dzo-home:/var/lib/dzo
 Volume=dzo-journal:/var/log/journal
 
 # A stop of the appliance stops its user units first, and with them the game
-# servers: the longest instance stop is stop.timeout (30 s by default, see
-# docs/configuration.rst) plus the 30 s its supervised unit adds on top, plus
-# 30 s for the appliance's own shutdown. 90 s covers the defaults; raise it
-# when stop.timeout is raised.
+# servers: each supervised unit gives its container stop.timeout (30 s by
+# default, see docs/configuration.rst) plus the 30 s it adds on top, and with
+# several instances they stop one after another. Both values below therefore
+# have to cover the sum of the instances' stop timeouts plus 60 s for the
+# appliance's own shutdown. 90 s covers one instance with the defaults; raise
+# StopTimeout and TimeoutStopSec together when stop.timeout is raised or more
+# instances run.
 StopTimeout=90
+
+[Service]
+# systemd has to wait longer than podman's own --stop-timeout (StopTimeout
+# above), or it kills the appliance while its servers are still stopping. That
+# is StopTimeout + 60 s.
+TimeoutStopSec=150
+
+# Bring a crashed or killed appliance back without a login. `podman stop dzo`
+# is a clean exit and does not restart it; use `systemctl --user start
+# dzo.service` then (quadlet creates the container with --rm).
+Restart=on-failure
 
 [Install]
 WantedBy=default.target

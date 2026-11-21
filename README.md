@@ -140,6 +140,12 @@ $ sudo pacman -Syu dzo
 The pacman repository is signed with the same key as the apt and dnf repositories.
 Its two CI jobs are best effort: Arch is a rolling release.
 
+**In a container** (any Linux host with rootless podman 5.4 or newer and systemd;
+the game servers are containers of the host's podman): `ghcr.io/bzed/dzo` is a
+Debian 13 system with dzo and steamcmd, started by the host user's systemd with
+the quadlet and wrapper in `contrib/appliance/`. See the
+[container guide](docs/container.rst) for the host requirements and the setup.
+
 Other ways: a `.deb`, an `.rpm` or a static binary from the
 [CI artifacts](https://github.com/bzed/dayz-server-operator/actions/workflows/ci.yml),
 or build it yourself (a recent Go toolchain, see `go.mod`):

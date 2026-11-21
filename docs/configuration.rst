@@ -139,7 +139,7 @@ and print what is wrong. A key dzo does not know is ignored.
 
 ``podman.mode``
    How the instances run. ``local`` (the default) runs each one as a quadlet of this host's podman.
-   ``remote`` (the container appliance, documented separately) runs them as plain systemd units
+   ``remote`` (the :doc:`container appliance <container>`) runs them as plain systemd units
    supervised by ``dzo instance supervise``, through the podman of ``CONTAINER_HOST``. Any other
    value is refused when the configuration loads, with ``podman.mode: must be "local" or "remote",
    got "<value>"``. A change takes effect at the next ``dzo units sync`` and, for a running instance,

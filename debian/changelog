@@ -50,6 +50,15 @@ dayz-server-operator (0.8.2-1) trixie; urgency=medium
     host and survive a restart, update or replacement of the appliance. CI
     builds it from the .deb of the same run, boots it, and rebuilds it weekly
     for Debian security updates.
+  * Running dzo as a container appliance is documented in docs/container.rst:
+    the host requirements (rootless podman 5.4 or newer with systemd,
+    podman.socket, lingering, systemd cgroups, btrfs for backups), the host
+    user's quadlet and the dzo wrapper in contrib/appliance/, the same-path
+    rule for the data directory, the three checks dzo setup makes in
+    podman.mode remote, and what differs from a native install. The quadlet
+    brings a crashed appliance back (Restart=on-failure) and waits longer
+    than podman's own stop timeout (TimeoutStopSec=150) so the servers stop
+    cleanly.
 
  -- Bernd Zeimetz <bernd@bzed.de>  Sat, 21 Nov 2026 17:04:18 +0100
 

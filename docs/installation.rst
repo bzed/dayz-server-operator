@@ -305,6 +305,17 @@ It does **not** start any game server.
 On a development or test host without the package, see :doc:`dev-host` for the
 user, the btrfs mount and the other steps by hand.
 
+In a container
+~~~~~~~~~~~~~~
+
+On a host whose distribution is not among the supported ones, or that should
+run nothing but containers, dzo also ships as a container image,
+``ghcr.io/bzed/dzo``: Debian 13 with systemd and the package in a container,
+with the game servers as containers of the host's rootless podman. It needs
+host podman 5.4 or newer and systemd. The image, the host quadlet and the
+wrapper, the host requirements and the three checks ``dzo setup`` makes in that
+mode are on the :doc:`container` page.
+
 Fedora 43+ and the RHEL 10 family
 ---------------------------------
 
@@ -493,7 +504,7 @@ installed mod or one of its files cannot be read by the service user, or when th
   is low,
 * builds the two container images, ``localhost/dzo-runtime`` for the game
   servers and ``localhost/dzo-steamcmd``, unless they exist already,
-* in ``remote`` mode (``podman.mode: remote``, the container appliance), also checks the
+* in ``remote`` mode (``podman.mode: remote``, the :doc:`container appliance <container>`), also checks the
   host's podman, which runs the containers and their health checks: it is version 5.4 or
   newer, it uses systemd cgroups, and ``paths.data`` is mounted there at the same path
   (setup writes a random file below it and reads it back in the runtime image). A dry run

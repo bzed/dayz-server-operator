@@ -23,6 +23,8 @@ Where to start
 
 * New to dzo: read :doc:`overview`, then follow :doc:`installation` and
   :doc:`quickstart`.
+* On a host that should run nothing but containers:
+  :doc:`container`.
 * In a hurry: the :download:`two-page cheat sheet (PDF) <cheatsheet/dzo-cheatsheet.pdf>` has
   the setup steps and the everyday commands.
 * Coming from ``dayzdockerserver``: see :doc:`migration`.
@@ -34,6 +36,7 @@ Where to start
 
    overview
    installation
+   container
    dev-host
    quickstart
    migration
