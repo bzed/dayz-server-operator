@@ -8,6 +8,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"net"
 	"os"
 	"path/filepath"
@@ -773,16 +774,20 @@ func TestSdNotify(t *testing.T) {
 		require.NoError(t, err)
 		defer func() { _ = conn.Close() }()
 		// The receiver's queue holds net.unix.max_dgram_qlen datagrams; a new sender per
-		// datagram gets past each sender's own buffer limit until the receiver is full.
+		// datagram gets past each sender's own buffer limit until the receiver is full. The
+		// sends are MSG_DONTWAIT: in some CI containers a net.Conn write blocks in the
+		// kernel and ignores its deadline.
 		full := false
 		for i := 0; i < 10000 && !full; i++ {
-			fill, err := net.DialUnix("unixgram", nil, &net.UnixAddr{Name: name, Net: "unixgram"})
+			fd, err := syscall.Socket(syscall.AF_UNIX, syscall.SOCK_DGRAM|syscall.SOCK_CLOEXEC|syscall.SOCK_NONBLOCK, 0)
 			require.NoError(t, err)
-			require.NoError(t, fill.SetWriteDeadline(time.Now().Add(50*time.Millisecond)))
-			if _, err := fill.Write([]byte("X")); err != nil {
+			err = syscall.Sendto(fd, []byte("X"), syscall.MSG_DONTWAIT, &syscall.SockaddrUnix{Name: name})
+			_ = syscall.Close(fd) // its datagram stays queued at the receiver
+			if errors.Is(err, syscall.EAGAIN) {
 				full = true
+			} else {
+				require.NoError(t, err)
 			}
-			_ = fill.Close() // its datagram stays queued at the receiver
 		}
 		require.True(t, full, "the receiver's queue never filled")
 		t.Setenv("NOTIFY_SOCKET", name)
