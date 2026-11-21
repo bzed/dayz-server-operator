@@ -73,8 +73,10 @@ keep running without a login:
    grep '^dayz:' /etc/subuid /etc/subgid
    loginctl enable-linger dayz
 
-Check that the ranges do not overlap with another user's in ``/etc/subuid``. To
-get a shell with a working user systemd session (``systemctl --user``), use
+Check that the ranges do not overlap with another user's in ``/etc/subuid``; if
+they do, pick a free block of 65536 ids at or above 100000 instead (the package
+does that itself, see :doc:`installation`). To get a shell with a working user
+systemd session (``systemctl --user``), use
 ``machinectl shell dayz@``, or ``sudo -iu dayz`` after enabling lingering and
 setting ``XDG_RUNTIME_DIR=/run/user/$(id -u dayz)``.
 

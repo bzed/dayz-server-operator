@@ -152,7 +152,11 @@ The package
   regular users, and ``dzo logs`` reads that one. (A system user, UID below 1000,
   may not read the system journal, so ``dzo logs`` would show nothing. An existing
   ``dayz`` user is left as it is; see below.)
-* assigns subordinate uid/gid ranges to it (needed for rootless podman),
+* assigns subordinate uid/gid ranges to it (needed for rootless podman): the lowest
+  free block of 65536 ids at or above 100000 that overlaps no range in
+  ``/etc/subuid`` resp. ``/etc/subgid``, so the package installs on a host where
+  another rootless podman user already holds 100000-165535. The two files are
+  chosen independently, and a range that ``dayz`` already has is kept as it is.
 * enables lingering, so the user's services run without a login,
 * installs the Containerfiles of the two images in ``/usr/share/dzo/images/``,
   the dzo-admin servermod with its ``compat.yaml`` in

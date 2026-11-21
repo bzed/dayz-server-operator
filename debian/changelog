@@ -14,6 +14,14 @@ dayz-server-operator (0.8.2-1) trixie; urgency=medium
     symlinks into /usr/share/javascript/sphinxdoc, so a package built on
     Debian 13 installs on Ubuntu 26.04 LTS whatever Sphinx version
     built it.
+  * The post-install steps (data directory, subuid/subgid range,
+    lingering, and the unit refresh and service restarts on upgrade)
+    move into /usr/libexec/dzo/postinst, the one script the rpm and Arch
+    packages will call too. The subordinate id range is no longer fixed
+    at 100000-165535: it is the lowest free 65536-id block at or above
+    100000 that overlaps no range in /etc/subuid and /etc/subgid, so the
+    package installs on a host where another rootless podman user
+    already holds that range. An existing range for dayz is kept.
 
  -- Bernd Zeimetz <bernd@bzed.de>  Sat, 21 Nov 2026 17:04:18 +0100
 
