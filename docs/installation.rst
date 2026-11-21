@@ -4,27 +4,154 @@
 Installation
 ============
 
+Support levels
+--------------
+
+Not every distribution is tested as well as the next, so ``dzo`` has three
+levels, and a distribution is only called supported at the level it was actually
+tested at:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 12 28 60
+
+   * - Level
+     - Distributions
+     - What stands behind it
+   * - **Reference**
+     - Debian 13 (trixie)
+     - Everything: the blocking CI jobs below, the browser end-to-end suite,
+       ``make test-client`` against a real DayZ client, and the author's own
+       servers. Changes are developed and run here first.
+   * - **Supported**
+     - Ubuntu 26.04 LTS, Fedora 43 and 44, the RHEL 10 family (RHEL 10, CentOS
+       Stream 10, AlmaLinux 10, Rocky Linux 10)
+     - A blocking CI install per distribution, plus the :ref:`release checklist
+       for other distributions <release-checklist-other-distributions>` on a VM,
+       once per dzo release line and when a distribution release is added. A
+       failure there is a release blocker.
+   * - **Best effort**
+     - Arch Linux, Ubuntu interim releases (26.10), Debian testing (forky)
+     - CI smoke only, in a container, and those jobs do not fail the build: they
+       show what a rolling archive, podman 6 or the next distribution release
+       changes before a user runs into it.
+
+CI, per distribution
+~~~~~~~~~~~~~~~~~~~~
+
+Every job runs in the distribution's own container image (``.github/workflows/ci.yml``).
+The install jobs take the package that the same run built — not the one in the
+repository — and install it with the dependencies of the distribution they run
+in. They then run ``dzo version``, check that the ``dayz`` user the package
+created has a UID of 1000 or higher and a subordinate uid/gid range, run ``dzo
+setup --dry-run`` as that user, and let the distribution's own podman quadlet
+generator convert the rendered golden units. The ``deb``, ``rpm`` and ``arch``
+jobs build the package and run ``lintian``, ``rpmlint`` and ``namcap``.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 34 44 22
+
+   * - Distribution and image
+     - Jobs
+     - Blocking jobs
+   * - Debian 13 (``debian:trixie``)
+     - ``deb``, ``package-install``, ``quadlet-check``, ``e2e``
+     - all of them
+   * - Ubuntu 26.04 LTS (``ubuntu:26.04``)
+     - ``package-install``
+     - ``package-install``
+   * - Ubuntu 26.10 (``ubuntu:26.10``)
+     - ``package-install``
+     - none
+   * - Debian testing (``debian:forky``)
+     - ``package-install``, ``e2e``
+     - ``e2e``
+   * - Fedora 43 and 44 (``registry.fedoraproject.org/fedora:43``, ``registry.fedoraproject.org/fedora:44``)
+     - ``rpm``, ``rpm-install`` (43 and 44), ``quadlet-check`` (44)
+     - all of them
+   * - RHEL 10 family (``quay.io/centos/centos:stream10``)
+     - ``rpm-install``, ``quadlet-check``
+     - ``rpm-install``
+   * - Arch Linux (``archlinux:latest``)
+     - ``arch``, ``arch-install``, ``quadlet-check``
+     - none
+
+CentOS Stream 10 stands in for the RHEL 10 family, which has no free image.
+A job marked as not blocking is ``continue-on-error``: it runs and reports, and a
+red cross there is information, not a broken build.
+
+What CI cannot check
+~~~~~~~~~~~~~~~~~~~~
+
+A container has no booted systemd and no DayZ, so the jobs above prove that the
+package installs and starts and that podman's generator accepts the units — not
+that a server runs. Specifically, and until the :ref:`release checklist
+<release-checklist-other-distributions>` is done on a VM of the distribution:
+
+* **SELinux on Fedora and the RHEL family** is not verified in enforcing mode;
+  see `SELinux: not verified yet`_ below.
+* **The interactive Steam login through the steamcmd container wrapper** has
+  never been done with a real account. It is the one step that decides whether
+  Fedora, the RHEL 10 family and Arch work in practice; see
+  `steamcmd on Fedora, RHEL and Arch`_.
+* **Podman 6** (CentOS Stream 10, Arch) has only generated the quadlets. No
+  server has started on it, and its jobs do not block.
+* **Arch** is container-tested only: no real host, no Steam login, no server.
+* There are **no btrfs snapshot backups on the RHEL 10 family**: its kernel has
+  no btrfs. That is a property of the distribution, not a test gap; see
+  `No btrfs on the RHEL 10 family`_ below.
+
 Requirements
 ------------
 
-* Debian 13 (trixie) or Ubuntu 26.04 LTS or later, or Fedora 43 or later, or
-  the RHEL 10 family (RHEL 10, CentOS Stream 10, AlmaLinux 10, Rocky Linux 10),
-  or Arch Linux (best effort, see `Arch Linux (best effort)`_), x86_64, with
-  podman 5.4 and systemd 257 or newer from the distribution.
-  Ubuntu 26.04 LTS is the minimum; 24.04 LTS ships podman 4.9 and systemd 255.
-* Linux kernel 6.12 or newer (the trixie kernel, or a trixie-backports kernel).
-* A **btrfs** filesystem for the instance data and the snapshots, for the
-  snapshot backups. Both must be on the same btrfs filesystem. On the RHEL 10
-  family there is no btrfs; see `Fedora 43+ and the RHEL 10 family`_. The
-  download cache can live anywhere, but on btrfs copies are nearly free.
-* A Steam account that owns DayZ. The DayZ server cannot be downloaded
-  anonymously.
-* Enough disk space: about 3 GB per server build, plus mods, plus snapshots.
+Every distribution needs x86_64 (``DayZServer`` exists for x86_64 only), podman
+5.4 and systemd 257 or newer from the distribution, a Steam account that owns
+DayZ (the server cannot be downloaded anonymously), and about 3 GB of disk space
+per server build plus mods plus snapshots. What differs:
 
-* On Debian and Ubuntu, the ``contrib`` and ``non-free`` components of the
-  Debian archive (``multiverse`` on Ubuntu) and the ``i386`` architecture: the
-  ``steamcmd`` package is non-free and exists for i386 only, and ``dzo``
-  depends on it (see `Prepare apt`_).
+.. list-table::
+   :header-rows: 1
+   :widths: 18 24 12 46
+
+   * - Distribution
+     - Minimum release
+     - Packages
+     - ``steamcmd``
+   * - Debian 13
+     - 13 (trixie)
+     - apt
+     - ``steamcmd:i386``, which is non-free and exists for i386 only: the
+       ``contrib`` and ``non-free`` components and the ``i386`` architecture are
+       needed (see `Prepare apt`_).
+   * - Ubuntu
+     - 26.04 LTS; 24.04 LTS ships podman 4.9 and systemd 255 and is refused
+     - apt
+     - ``steamcmd:i386`` from ``multiverse``, plus the ``i386`` architecture (see
+       `Ubuntu 26.04 LTS and later`_).
+   * - Fedora
+     - 43
+     - dnf
+     - none packaged: the ``localhost/dzo-steamcmd`` image that ``dzo setup``
+       builds (see `steamcmd on Fedora, RHEL and Arch`_).
+   * - RHEL 10 family
+     - RHEL 10, CentOS Stream 10, AlmaLinux 10 or Rocky Linux 10
+     - dnf
+     - as on Fedora.
+   * - Arch Linux
+     - whatever the archive is today (rolling release)
+     - pacman
+     - as on Fedora.
+
+The snapshot backups need a **btrfs** filesystem for ``paths.instances`` and
+``paths.snapshots``, both on the same btrfs filesystem. Debian, Ubuntu, Fedora
+and Arch do them when you format with btrfs (or, on Fedora, keep the default);
+the RHEL 10 family has no btrfs in its kernel and runs without them, see
+`No btrfs on the RHEL 10 family`_. The download cache can live anywhere, but on
+btrfs copies are nearly free.
+
+Linux kernel 6.12 or newer (Debian 13 ships 6.12; a trixie-backports kernel gives
+a newer btrfs).
 
 Recommended, not required:
 
@@ -98,8 +225,11 @@ Ubuntu 26.04 LTS and later
 The same package and this repository work on Ubuntu. **26.04 LTS** is the
 minimum: earlier releases ship podman and systemd versions older than the 5.4
 and 257 that ``dzo`` requires (24.04 LTS: podman 4.9, systemd 255), so apt
-refuses the package there. Later Ubuntu releases, interim ones included, work;
-everything the web interface needs is compiled into ``dzo``.
+refuses the package there. Later releases work and need no separate package;
+everything the web interface needs is compiled into ``dzo``. Only the LTS is
+"Supported" in the `Support levels`_ above: CI installs the package on the
+interim releases without blocking, so an interim release can break it until
+somebody catches and fixes it.
 
 Only the preparation differs: ``steamcmd`` is in Ubuntu's ``multiverse``
 component. The official sources enable it already (``Components: main

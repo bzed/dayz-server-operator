@@ -1216,7 +1216,7 @@ Test layers:
 | Golden | legacy render outputs (S0) for all five servers + synthetic fixtures; `-update` flag to regenerate on intended changes | everywhere |
 | Fake-backed integration | full CLI flows against fake `systemctl`/`podman`/`steamcmd` binaries (recorded behaviour) and a temp dir tree | everywhere |
 | Real podman | quadlet generation + `systemctl --user` + health checks with a tiny dummy "server" image that answers A2S | GitHub Actions (Ubuntu runner has podman) / GitLab runner with podman+systemd (tagged, optional) |
-| Packaging | build the `.deb`, `lintian`, install into a clean trixie container, `dzo version`, `dzo setup --dry-run` | both CIs |
+| Packaging | build the `.deb`, the rpm and the Arch package (`lintian`, `rpmlint`, `namcap`), install each with its distribution's dependencies into a clean container of Debian 13, Ubuntu 26.04 LTS, Fedora 43/44 and CentOS Stream 10 (plus the best-effort Ubuntu 26.10, Debian forky and Arch), `dzo version`, `dzo setup --dry-run` as the service user, the `dayz` uid/subuid checks, and the container's own podman quadlet generator over the rendered units | GitHub Actions |
 | Boot test (§C22) | real `DayZServer` boots of rendered output: the five example site configs, integration changes, `dzo-admin` builds | developer machines; optional tagged GitLab runner with a pre-installed server; **not** counted in the coverage gate |
 
 The unit, golden, integration and packaging layers never need Steam credentials or the real DayZ server. steamcmd and Steam Web API interactions are replayed from recorded fixtures.

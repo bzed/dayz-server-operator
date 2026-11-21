@@ -4,12 +4,13 @@
 dzo — DayZ server operator
 ==========================
 
-dzo runs and maintains DayZ dedicated servers on a Debian host. It installs the
+dzo runs and maintains DayZ dedicated servers on a Linux host. It installs the
 server and workshop mods, prepares each server's mission, runs every server as a
 rootless podman container managed by systemd, restarts servers gracefully, keeps
 mods up to date, takes btrfs snapshots before changes, and exports monitoring
 data. An optional web interface adds player management, moderation and a live
-admin map.
+admin map. Debian 13 is the reference distribution; :doc:`installation` lists the
+other distributions and the level each one is tested at.
 
 .. note::
 

@@ -580,6 +580,69 @@ Steam query (``steamQueryPort`` in ``serverDZ.cfg``) and RCon (``RConPort`` in
 and stop it with ``timeout -k 15``. Then read ``script_*.log``, the ``.RPT`` and
 ``error.log`` in ``profiles/``.
 
+.. _release-checklist-other-distributions:
+
+Release checklist for other distributions
+-----------------------------------------
+
+The CI jobs of the other distributions (:doc:`installation`, "CI, per
+distribution") install the package, run ``dzo version`` and ``dzo setup
+--dry-run`` and let the distribution's own podman generate the quadlets. That is
+all a container can do: it has no booted systemd and no DayZ, so it says nothing
+about SELinux, a Steam login, a server or a client. This list is the rest, and it
+is the **only** real check on Ubuntu, Fedora, the RHEL 10 family and Arch. Run it
+
+* on a VM of the distribution (never in a container: SELinux's enforcing mode,
+  a real user systemd, the kernel and podman's runtime are part of the test),
+* once per dzo release line (0.8, 0.9, …), and
+* when a distribution release joins or leaves the matrix (a new Fedora, a new
+  Ubuntu LTS, the next Debian stable).
+
+1. **Install from the repository**, with the commands of that distribution's
+   section in :doc:`installation`, as a user would: the package the repository
+   serves for the release, its dependencies from the distribution, ``dzo version``
+   and ``dzo --help``.
+2. **``dzo setup``** as ``dayz`` (not ``--dry-run``): the directories, both
+   container images, the site clone and the image-refresh timer. Every step must
+   report ``ok``. A ``warn`` about a missing btrfs is expected on the RHEL 10
+   family; any ``error`` ends the checklist here.
+3. **The Steam login** with a real account, including Steam Guard:
+   ``dzo steam login --user <account>``, then ``dzo steam status``. On Fedora, the
+   RHEL 10 family and Arch this runs steamcmd in the ``localhost/dzo-steamcmd``
+   image through the pty of the wrapper, which has never been tried with a real
+   account. This step is what decides whether those distributions stay
+   "Supported", so it is also a release blocker.
+4. **A real server and a client.** ``dzo product install dayz-stable``, create an
+   instance (:doc:`quickstart`), ``dzo start <instance>``, ``dzo status`` and
+   ``dzo logs <instance>``, then join from a workstation with the DayZ client,
+   BattlEye on. This is the only check of the podman 6 quadlets (CentOS Stream
+   10, Arch) and of SELinux in enforcing mode (Fedora, RHEL).
+5. **A restart** while the client is connected: ``dzo restart <instance>
+   --minutes 1`` announces, locks, kicks and starts the server again, and the
+   client can rejoin.
+6. **Backup and restore** where btrfs exists (Debian, Ubuntu, Fedora, Arch):
+   ``dzo backup create <instance>``, ``dzo backup list <instance>``, then
+   ``dzo restore <instance> <snapshot>`` of one path and of the whole instance.
+   On the RHEL 10 family the kernel has no btrfs, so the step does not apply;
+   note that in the release notes instead of skipping it silently (the
+   distribution's own backup is the answer there).
+7. **The web interface**: ``dzo instance apply <instance>`` starts ``dzo-serve``
+   and ``dzo-web``; log in, and check the player list and the map with the client
+   from step 4 still connected (:doc:`web`).
+8. **An upgrade with a server running.** With the server from step 4 up, install
+   the next build the repository serves (``apt upgrade``, ``dnf upgrade dzo``,
+   ``pacman -Syu``). ``dzo version`` must print the new one, the exporter,
+   ``dzo serve`` and ``dzo web`` must come back by themselves, and the game
+   server must keep running on the old binary until its next restart and then
+   start on the new one. **A package upgrade never restarts a game server**; if
+   it does, or if a server does not come back, that is a bug, not a checklist
+   item.
+
+Note in the release's ``debian/changelog`` entry which distribution passed which
+step. A "Supported" distribution that fails a step drops to "Best effort" in the
+matrix (and in the README) until it passes again; a "Best effort" distribution
+that passes all eight steps for a release line can move up.
+
 Contributing
 ------------
 

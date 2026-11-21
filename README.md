@@ -7,7 +7,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
   <img src="assets/logo.svg" alt="dzo logo" width="160" height="160">
 
   <h1>dzo</h1>
-  <p><strong>Run DayZ dedicated servers on Debian with rootless podman.</strong></p>
+  <p><strong>Run DayZ dedicated servers with rootless podman.</strong></p>
 
   [![CI](https://github.com/bzed/dayz-server-operator/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/bzed/dayz-server-operator/actions/workflows/ci.yml)
   [![Codecov](https://codecov.io/gh/bzed/dayz-server-operator/branch/main/graph/badge.svg)](https://codecov.io/gh/bzed/dayz-server-operator)
@@ -20,10 +20,12 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 ---
 
 `dzo` installs, configures, updates and watches one or more DayZ dedicated
-servers on a single Debian machine. It is one static binary: no Node.js, no
+servers on a single Linux machine. It is one static binary: no Node.js, no
 shell-script fleet, no external RCon tool. Every server runs in a rootless
 podman container, started by systemd, and everything about your servers lives
-in a git repository you own.
+in a git repository you own. It installs from the native package of Debian,
+Ubuntu, Fedora, the RHEL 10 family and Arch; [how well each is tested](#supported-distributions)
+differs.
 
 **Built with**
 [![Debian](assets/built-with-debian.svg)](https://www.debian.org/)
@@ -63,6 +65,28 @@ The full documentation, including the quick start, the configuration reference
 and the operations guide, is at
 **<https://bzed.github.io/dayz-server-operator/>**. For the first setup there is
 also a [two-page cheat sheet (PDF)](docs/cheatsheet/dzo-cheatsheet.pdf).
+
+## Supported distributions
+
+Each of these installs from its own package manager. How much that means differs,
+and the level below is what was actually tested, not what might work:
+
+| Level | Distributions | Tested by |
+|---|---|---|
+| **Reference** | Debian 13 (trixie) | everything: the blocking CI jobs, the browser e2e suite, `make test-client` against a real DayZ client, and the author's servers |
+| **Supported** | Ubuntu 26.04 LTS, Fedora 43 and 44, the RHEL 10 family | a blocking CI install per distribution (`package-install`, `rpm-install`), podman's own generator over the rendered quadlets (`quadlet-check`), and the [manual release checklist](docs/development.rst) on a VM, once per dzo release line |
+| **Best effort** | Arch Linux, Ubuntu interim releases, Debian testing | CI smoke in a container only, and those jobs do not block a merge |
+
+The CI jobs install the package, run `dzo version` and `dzo setup --dry-run` as
+the `dayz` user the package creates, and feed the rendered quadlets to the
+distribution's own podman generator. They cannot start DayZ, so a few things are
+not verified yet: SELinux in enforcing mode on Fedora and the RHEL family (a
+container can hit an AVC denial), a real Steam login through the `steamcmd`
+container wrapper that those distributions use instead of a `steamcmd` package,
+and a server on podman 6 (CentOS Stream 10, Arch). The RHEL 10 family has no btrfs
+in its kernel, so the snapshot backups do not work there. Arch is container-tested
+only: no real host, no Steam login. The [installation guide](docs/installation.rst)
+has the matrix with the CI job names and says per distribution what is missing.
 
 ## Install
 
@@ -176,8 +200,9 @@ been checked yet.
 
 ### Run for real
 
-On a Debian 13 development host (rootless podman 5.4.2, a user systemd, btrfs)
-with a real Steam account, and on a workstation with the DayZ client:
+On a Debian 13 development host (the reference distribution; rootless podman
+5.4.2, a user systemd, btrfs) with a real Steam account, and on a workstation with
+the DayZ client:
 
 - **Servers.** DayZ 1.30 (stable) and the experimental build run in the runtime
   image from the generated quadlets, side by side, with workshop mods (CF-Test
@@ -239,6 +264,12 @@ with a real Steam account, and on a workstation with the DayZ client:
 
 Things that could not be checked yet, roughly in the order they would bite:
 
+- **The package outside Debian.** Ubuntu, Fedora, the RHEL 10 family and Arch have
+  only run in containers: no `dzo setup` that builds both images, no real Steam
+  login through the `steamcmd` wrapper, no SELinux-enforcing host (Fedora, RHEL)
+  and no server on podman 6 (CentOS Stream 10, Arch). The
+  [support matrix](docs/installation.rst) says who is expected to check what, and
+  the [release checklist](docs/development.rst) is the list itself.
 - **BattlEye's `Verified GUID` line.** The other player events (connect, GUID, chat,
   kick, disconnect) were captured from a real client with BattlEye and the patterns
   fixed; the verified-GUID line needs a BattlEye master that answers, which it did not

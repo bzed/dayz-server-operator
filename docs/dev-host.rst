@@ -10,6 +10,10 @@ subordinate uid/gid ranges, lingering, the data directories, the Containerfiles.
 This page lists all of them, on a fresh Debian 13 (trixie) host. Everything
 here is run as root unless it says otherwise.
 
+This page is Debian-specific and says how to build such a host by hand; it says
+nothing about which distributions dzo supports. That matrix, with the level each
+distribution is tested at, is at the top of :doc:`installation`.
+
 Packages
 --------
 

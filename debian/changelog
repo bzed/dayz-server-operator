@@ -35,6 +35,14 @@ dayz-server-operator (0.8.2-1) trixie; urgency=medium
     effort, for Arch Linux, built from the same binary and the same payload
     as the .deb, each with a signed repository next to the apt one (dnf and
     pacman); all three repositories are signed with the same key.
+  * README and the documentation now show which distributions dzo supports
+    and how well each is tested: Debian 13 is the reference, Ubuntu 26.04
+    LTS, Fedora 43/44 and the RHEL 10 family are supported (blocking CI
+    install jobs plus a manual release checklist on a VM), Arch, Ubuntu
+    interim releases and Debian testing are best effort. They also say what
+    is not verified yet: SELinux in enforcing mode on Fedora and the RHEL
+    family, a real Steam login through the steamcmd container wrapper, and
+    no btrfs snapshot backups on the RHEL 10 family.
 
  -- Bernd Zeimetz <bernd@bzed.de>  Sat, 21 Nov 2026 17:04:18 +0100
 
