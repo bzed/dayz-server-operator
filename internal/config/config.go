@@ -255,6 +255,29 @@ type MapSource struct {
 	Source string `yaml:"source"`
 }
 
+// PodmanMode selects how dzo runs an instance's game server: as a quadlet of
+// this host's podman, or as a supervised unit driving a remote podman.
+type PodmanMode string
+
+const (
+	// PodmanLocal runs each instance as a quadlet of this host's podman.
+	PodmanLocal PodmanMode = "local"
+	// PodmanRemote runs each instance as a plain unit supervised by
+	// "dzo instance supervise", through the podman of CONTAINER_HOST (the
+	// container appliance).
+	PodmanRemote PodmanMode = "remote"
+)
+
+// Podman configures how the game servers reach the container engine.
+type Podman struct {
+	// Mode is local (the default) or remote.
+	Mode PodmanMode `yaml:"mode"`
+}
+
+// Remote reports whether instances run as supervised units through a remote
+// podman instead of as quadlets of this host's podman.
+func (c *Config) Remote() bool { return c.Podman.Mode == PodmanRemote }
+
 // Config is the root of /etc/dzo/config.yaml.
 type Config struct {
 	// Binary is the dzo executable the units run and mount into the containers
@@ -262,6 +285,7 @@ type Config struct {
 	// it can write, so a new build is moved into place while the old one runs.
 	Binary   string             `yaml:"binary"`
 	Paths    Paths              `yaml:"paths"`
+	Podman   Podman             `yaml:"podman"`
 	Site     Site               `yaml:"site"`
 	Steam    Steam              `yaml:"steam"`
 	Serve    Serve              `yaml:"serve"`
@@ -292,6 +316,7 @@ func defaultsTemplated() *Config {
 			Site:      "${data}/site",
 		},
 		Serve:    Serve{Installation: "default", Listen: "127.0.0.1:8080", ModListen: "127.0.0.1:2400", GeoIPDir: "/var/lib/GeoIP", GeoIPLegacyDir: "/usr/share/GeoIP"},
+		Podman:   Podman{Mode: PodmanLocal},
 		Web:      Web{Listen: "127.0.0.1:8081", DocsDir: "/usr/share/doc/dzo/html"},
 		Exporter: Exporter{Listen: ":9464"},
 		Products: map[string]Product{
@@ -334,6 +359,10 @@ func Parse(data []byte) (*Config, error) {
 	c := defaultsTemplated()
 	if err := yaml.Unmarshal(data, c); err != nil {
 		return nil, fmt.Errorf("config: parse: %w", err)
+	}
+	// An empty podman.mode means local, like an absent key.
+	if c.Podman.Mode == "" {
+		c.Podman.Mode = PodmanLocal
 	}
 
 	c.resolvePaths()
@@ -407,6 +436,12 @@ func (c *Config) Validate() error {
 	}
 	if c.Site.Remote != "" && c.Site.Branch == "" {
 		errs = append(errs, "site.branch: required when site.remote is set")
+	}
+
+	switch c.Podman.Mode {
+	case "", PodmanLocal, PodmanRemote: // empty is local, like an absent key
+	default:
+		errs = append(errs, fmt.Sprintf("podman.mode: must be %q or %q, got %q", PodmanLocal, PodmanRemote, c.Podman.Mode))
 	}
 
 	if len(c.Products) == 0 {

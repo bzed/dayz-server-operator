@@ -37,6 +37,9 @@ built-in ones, and an entry of the same name replaces the built-in entry as a wh
      db: ${data}/db                  # default
      site: ${data}/site              # default
 
+   podman:
+     mode: local                     # default
+
    site:
      remote: ssh://git@<git host>/<you>/dayz-site.git   # default: empty (not configured)
      branch: main                                 # default: empty, required with remote
@@ -133,6 +136,14 @@ and print what is wrong. A key dzo does not know is ignored.
    ``cache`` holds downloaded server builds and mods, ``secrets`` holds the Steam session,
    RCon passwords and tokens (mode 0600), ``db`` the databases (bans, player sightings),
    ``site`` the checkout of the site repository.
+
+``podman.mode``
+   How the instances run. ``local`` (the default) runs each one as a quadlet of this host's podman.
+   ``remote`` (the container appliance, documented separately) runs them as plain systemd units
+   supervised by ``dzo instance supervise``, through the podman of ``CONTAINER_HOST``. Any other
+   value is refused when the configuration loads, with ``podman.mode: must be "local" or "remote",
+   got "<value>"``. A change takes effect at the next ``dzo units sync`` and, for a running instance,
+   at its next restart; nothing is lost.
 
 ``site``
    The site repository, see below.
