@@ -1,20 +1,20 @@
 # SPDX-FileCopyrightText: 2026 Bernd Zeimetz <bernd@bzed.de>
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-# Build the Sphinx documentation (warnings are errors) and the signed apt and
-# dnf repositories, and publish them on GitHub Pages from main (the docs at /,
-# the repositories at /apt/ and /rpm/). Pull requests only build the docs. The
-# site is built when CI has passed on main (workflow_run); the repositories hold
-# the packages that CI run built, which are not built a second time here. Needs
-# Settings > Pages > Source: "GitHub Actions" once, and the secret
-# APT_GPG_PRIVATE_KEY (see docs/installation.rst), which signs both repositories.
-# Only the commit that is the head of main when the deploy job runs updates the
-# site. Third-party actions are pinned by commit SHA.
+# Build the Sphinx documentation (warnings are errors) and the signed apt, dnf
+# and pacman repositories, and publish them on GitHub Pages from main (the docs
+# at /, the repositories at /apt/, /rpm/ and /arch/). Pull requests only build
+# the docs. The site is built when CI has passed on main (workflow_run); the
+# repositories hold the packages that CI run built, which are not built a second
+# time here. Needs Settings > Pages > Source: "GitHub Actions" once, and the
+# secret APT_GPG_PRIVATE_KEY (see docs/installation.rst), which signs all three
+# repositories. Only the commit that is the head of main when the deploy job runs
+# updates the site. Third-party actions are pinned by commit SHA.
 
 name: Docs
 
 on:
-  # After CI has passed on main: the apt and dnf repositories publish the packages CI built.
+  # After CI has passed on main: the apt, dnf and pacman repositories publish the packages CI built.
   workflow_run:
     workflows: [CI]
     types: [completed]
@@ -144,9 +144,53 @@ jobs:
           name: rpm-repo
           path: rpm-repo
 
+  arch-repo:
+    name: Build pacman repository
+    if: github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read # download the package from the CI run
+    # The same rolling container the arch job builds in, so repo-add and gpg match.
+    container:
+      image: docker.io/library/archlinux:latest
+    steps:
+      - name: Upgrade the image and install git and the repository tools
+        # The image is a snapshot of the archive; a partial upgrade fails on file
+        # conflicts. repo-add comes with pacman, gpg with gnupg.
+        run: pacman -Syu --noconfirm --needed git ca-certificates gnupg
+      # No ref: the head of main (see the build job). The deploy job checks it is the CI run's commit.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # The package the CI run built (a snapshot version) is published as it is, not built again.
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: dzo-arch-pkg
+          path: ci-arch
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+      - name: Build and sign the repository
+        env:
+          APT_GPG_PRIVATE_KEY: ${{ secrets.APT_GPG_PRIVATE_KEY }}
+        run: |
+          set -eu
+          [ -n "$APT_GPG_PRIVATE_KEY" ] || { echo "secret APT_GPG_PRIVATE_KEY is not set" >&2; exit 1; }
+          GNUPGHOME=$(mktemp -d)
+          export GNUPGHOME
+          printf '%s\n' "$APT_GPG_PRIVATE_KEY" | gpg --batch --quiet --import
+          mkdir pkgs
+          mv ci-arch/dzo-*.pkg.tar.zst pkgs/
+          scripts/build-arch-repo.sh pkgs arch-repo
+          # the key the repository is signed with must be the published one
+          gpg --armor --export | diff - arch/dzo-repo-keyring.asc
+          rm -rf "$GNUPGHOME"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: arch-repo
+          path: arch-repo
+
   publish:
     name: Assemble the site
-    needs: [build, apt, rpm-repo]
+    needs: [build, apt, rpm-repo, arch-repo]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -161,6 +205,10 @@ jobs:
         with:
           name: rpm-repo
           path: site/rpm
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: arch-repo
+          path: site/arch
       - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:

@@ -9,7 +9,8 @@ Requirements
 
 * Debian 13 (trixie) or Ubuntu 26.04 LTS or later, or Fedora 43 or later, or
   the RHEL 10 family (RHEL 10, CentOS Stream 10, AlmaLinux 10, Rocky Linux 10),
-  x86_64, with podman 5.4 and systemd 257 or newer from the distribution.
+  or Arch Linux (best effort, see `Arch Linux (best effort)`_), x86_64, with
+  podman 5.4 and systemd 257 or newer from the distribution.
   Ubuntu 26.04 LTS is the minimum; 24.04 LTS ships podman 4.9 and systemd 255.
 * Linux kernel 6.12 or newer (the trixie kernel, or a trixie-backports kernel).
 * A **btrfs** filesystem for the instance data and the snapshots, for the
@@ -136,8 +137,8 @@ Install the package
 -------------------
 
 dzo is shipped as a Debian package, ``dzo``, from the repository above or as a
-``.deb`` file from the CI artifacts, and as an rpm for Fedora and the RHEL 10
-family (see below). It pulls in ``podman``, ``passt``,
+``.deb`` file from the CI artifacts, as an rpm for Fedora and the RHEL 10
+family, and as a package for Arch Linux (see below). It pulls in ``podman``, ``passt``,
 ``git``, ``uidmap``, ``geoip-database`` and ``steamcmd:i386`` (prepare apt as described
 above first); the web interface's htmx, Leaflet, Fork Awesome and country flags are
 compiled in, so it needs no Debian package for them. The commands that download
@@ -240,6 +241,60 @@ available and ``dzo setup`` warns about it; use the distribution's backup for
 the data directory, or back up the instance and site directories another way.
 Fedora's default filesystem is btrfs, so the backups work there.
 
+Arch Linux (best effort)
+------------------------
+
+Arch is a rolling release, so its package is best effort: CI builds it and
+installs it in ``archlinux:latest`` on every run, and both jobs (``arch`` builds
+the package, ``arch-install`` installs it) are ``continue-on-error``. They show
+what the current archive, podman 6 and the next systemd release change, without
+failing the build for it. The package is published in a signed pacman repository
+next to the apt and dnf ones, and the packages and the repository database are
+signed with the same key (fingerprint
+``184C DDC4 96A9 C739 D10F  67B0 FE4E E034 4431 4050``):
+
+.. code-block:: sh
+
+   curl -fsSLo /etc/pacman.d/dzo.conf https://bzed.github.io/dayz-server-operator/arch/dzo.conf
+   printf '\nInclude = /etc/pacman.d/dzo.conf\n' >>/etc/pacman.conf
+   curl -fsSLo /tmp/dzo-repo-keyring.asc https://bzed.github.io/dayz-server-operator/arch/dzo-repo-keyring.asc
+   pacman-key --add /tmp/dzo-repo-keyring.asc
+   pacman-key --finger 184CDDC496A9C739D10F67B0FE4EE03444314050  # compare the fingerprint
+   pacman-key --lsign-key 184CDDC496A9C739D10F67B0FE4EE03444314050
+   pacman -Syu dzo
+
+``pacman-key --add`` imports the key, and ``pacman-key --lsign-key`` marks it as
+trusted on this host: pacman verifies the repository database (``dzo.db.sig``)
+and every package (``<package>.pkg.tar.zst.sig``) against the keys that are
+signed locally, and the repository's ``SigLevel`` requires both. The local
+master key that ``--lsign-key`` needed was created when Arch was installed
+(``pacman-key --init``); the trust itself is local to the host, and a key
+rotation means fetching the new keyring file and signing the new key the same
+way. The ``arch`` directory holds ``dzo.conf`` and ``dzo-repo-keyring.asc`` as
+they are served; ``pacman.conf`` reads the ``Include`` from the first command.
+
+The repository holds the latest build of ``main`` only, with the same snapshot
+versions as the Debian package. Arch versions are ``<pkgver>-<pkgrel>``: the
+upstream version from the top ``debian/changelog`` entry, then the Debian
+revision, and a build of ``main`` adds the number of commits since the last
+release tag to ``pkgrel``. ``0.8.2-1`` is a release, a build 43 commits later is
+``0.8.2-1.43``, and ``vercmp`` orders ``0.8.2-1`` < ``0.8.2-1.43`` <
+``0.8.2-1.44`` < ``0.8.2-2`` < ``0.8.3-1``, exactly like ``dpkg`` and ``dnf``
+order theirs (see :ref:`apt-repository`), so ``pacman -Syu`` picks up every
+snapshot that ``apt upgrade`` would. The commit is not part of the version (a
+``pkgrel`` holds integers only); ``dzo version`` prints it.
+
+The package carries the same files as the ``.deb`` and creates the same ``dayz``
+account: a regular user with a UID of 1000 or higher (from the packaged
+``sysusers.d`` file; 59999 on a fresh Arch host), its subordinate uid/gid range
+and lingering. It pulls in ``podman``, ``systemd``, ``git``, ``patch``,
+``shadow`` and ``passt``; ``btrfs-progs`` and ``geoipupdate`` are optional. The
+snapshot backups need btrfs for ``paths.instances`` and ``paths.snapshots``, so
+format with btrfs (the installer offers it) and not ext4.
+
+Arch packages no ``steamcmd``; dzo runs steamcmd from the
+``localhost/dzo-steamcmd`` image. See `steamcmd on Fedora, RHEL and Arch`_ below.
+
 steamcmd on Fedora, RHEL and Arch
 ---------------------------------
 
@@ -340,7 +395,7 @@ Upgrading
 ---------
 
 ``apt install ./dzo_<version>.deb`` (or ``apt upgrade``; ``dnf upgrade dzo`` on Fedora and the RHEL
-family) replaces ``/usr/bin/dzo`` by renaming, so
+family, ``pacman -Syu`` on Arch) replaces ``/usr/bin/dzo`` by renaming, so
 running processes keep the old build until they restart. The package then runs ``dzo units sync`` as
 ``dayz`` (it rewrites the generated units for the new version) and restarts the services that run from
 the binary: the exporter, ``dzo serve`` and ``dzo web``, when they are active. **A game server is

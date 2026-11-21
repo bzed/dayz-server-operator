@@ -101,6 +101,21 @@ $ sudo dnf install dzo
 
 It is signed with the same key and fingerprint as the apt repository.
 
+**From the pacman repository** (Arch Linux, amd64; best effort, signed, rebuilt from `main`):
+
+```console
+$ sudo curl -fsSLo /etc/pacman.d/dzo.conf https://bzed.github.io/dayz-server-operator/arch/dzo.conf
+$ printf '\nInclude = /etc/pacman.d/dzo.conf\n' | sudo tee -a /etc/pacman.conf
+$ sudo curl -fsSLo /tmp/dzo-repo-keyring.asc https://bzed.github.io/dayz-server-operator/arch/dzo-repo-keyring.asc
+$ sudo pacman-key --add /tmp/dzo-repo-keyring.asc
+$ sudo pacman-key --finger 184CDDC496A9C739D10F67B0FE4EE03444314050   # compare the fingerprint
+$ sudo pacman-key --lsign-key 184CDDC496A9C739D10F67B0FE4EE03444314050
+$ sudo pacman -Syu dzo
+```
+
+The pacman repository is signed with the same key as the apt and dnf repositories.
+Its two CI jobs are best effort: Arch is a rolling release.
+
 Other ways: a `.deb`, an `.rpm` or a static binary from the
 [CI artifacts](https://github.com/bzed/dayz-server-operator/actions/workflows/ci.yml),
 or build it yourself (a recent Go toolchain, see `go.mod`):

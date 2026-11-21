@@ -1,0 +1,27 @@
+# SPDX-FileCopyrightText: 2026 Bernd Zeimetz <bernd@bzed.de>
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# shellcheck shell=sh
+#
+# dzo's pacman install script: the account first, then the step every package
+# format shares (/usr/libexec/dzo/postinst: data directory, subordinate ids,
+# lingering, and the unit refresh on an upgrade).
+#
+# The account comes from the packaged /usr/lib/sysusers.d/dzo.conf, which keeps
+# dayz a regular user (UID 1000 or higher, on Arch measured as 59999, the top of
+# the 1000-59999 range): journald keeps a per-user journal only for regular
+# users, and `dzo logs` reads that one. Arch's own systemd-sysusers hook would
+# create the account from that file too, but it runs in the post-transaction
+# hooks, after post_install, so postinst would not find the user yet. post_install
+# therefore runs systemd-sysusers itself; the hook runs afterwards and changes
+# nothing, and an upgrade leaves an existing account (and its UID) alone.
+
+post_install() {
+	systemd-sysusers /usr/lib/sysusers.d/dzo.conf || return 1
+	/usr/libexec/dzo/postinst configure
+}
+
+post_upgrade() {
+	systemd-sysusers /usr/lib/sysusers.d/dzo.conf || return 1
+	/usr/libexec/dzo/postinst upgrade
+}

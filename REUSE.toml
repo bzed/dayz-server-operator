@@ -127,9 +127,10 @@ path = ["testmods/dzo-be-test/.dayzmod", "testmods/dzo-be-test/.gitignore", "tes
 SPDX-FileCopyrightText = "2026 Bernd Zeimetz <bernd@bzed.de>"
 SPDX-License-Identifier = "AGPL-3.0-or-later"
 
-# The apt and dnf repositories: reprepro configuration and the public signing key.
+# The apt, dnf and pacman repositories: reprepro configuration and the public
+# signing key, which the three share.
 [[annotations]]
-path = ["apt/conf/distributions", "apt/dzo-archive-keyring.asc", "rpm/dzo-repo-keyring.asc"]
+path = ["apt/conf/distributions", "apt/dzo-archive-keyring.asc", "rpm/dzo-repo-keyring.asc", "arch/dzo-repo-keyring.asc"]
 SPDX-FileCopyrightText = "2026 Bernd Zeimetz <bernd@bzed.de>"
 SPDX-License-Identifier = "AGPL-3.0-or-later"
 

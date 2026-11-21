@@ -31,6 +31,10 @@ dayz-server-operator (0.8.2-1) trixie; urgency=medium
     image at the same paths, so downloads and the Steam session persist; the
     new `dzo config get <paths.* key>` prints those resolved paths. dzo setup
     reports which steamcmd the downloads use.
+  * Packages for Fedora 43 and later and the RHEL 10 family (rpm) and, best
+    effort, for Arch Linux, built from the same binary and the same payload
+    as the .deb, each with a signed repository next to the apt one (dnf and
+    pacman); all three repositories are signed with the same key.
 
  -- Bernd Zeimetz <bernd@bzed.de>  Sat, 21 Nov 2026 17:04:18 +0100
 

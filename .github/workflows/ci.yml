@@ -401,6 +401,99 @@ jobs:
           grep -q '^dayz:' /etc/subuid || { echo "no subordinate uid range for dayz" >&2; exit 1; }
           grep -q '^dayz:' /etc/subgid || { echo "no subordinate gid range for dayz" >&2; exit 1; }
 
+  arch:
+    name: Build the Arch package (best effort)
+    needs: [build, deb]
+    runs-on: ubuntu-latest
+    # archlinux:latest is a rolling release, so neither this job nor arch-install
+    # may fail the build: they show what the current archive, podman 6 and the
+    # next systemd change, and the package is best effort.
+    # Nothing is compiled here (packaging/arch/PKGBUILD): like the rpm job, the
+    # package assembles the binary the build job made and the payload the deb job
+    # uploaded.
+    continue-on-error: true
+    container:
+      image: docker.io/library/archlinux:latest
+    steps:
+      - name: Upgrade the image and install the build tools
+        # The image is a snapshot of the archive: installing without the full
+        # upgrade it needs fails on file conflicts (openssl, say).
+        run: pacman -Syu --noconfirm --needed base-devel git ca-certificates zstd namcap
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # `git describe` for the pkgrel of a snapshot build
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: dzo-binaries
+          path: dist
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: dzo-payload
+          path: arch-payload
+      - name: Build the package
+        # makepkg refuses to run as root. --nodeps: nothing is compiled and the
+        # package's runtime dependencies are resolved by pacman in arch-install,
+        # not downloaded into this container.
+        run: |
+          useradd --create-home --shell /bin/bash builder
+          mkdir -p arch-out
+          chown -R builder:builder "$GITHUB_WORKSPACE"
+          su builder -c "cd '$GITHUB_WORKSPACE/packaging/arch' && PKGDEST='$GITHUB_WORKSPACE/arch-out' makepkg -f --nodeps"
+      - name: namcap
+        # Errors fail the job. The warnings it prints are inherent to the package:
+        # the prebuilt static binary (no PIE, no RELRO), /usr/libexec for the
+        # shared post-install script, and the dependencies of a package that ships
+        # no compiled code of its own.
+        run: |
+          namcap arch-out/dzo-*.pkg.tar.zst | tee namcap.log
+          ! grep -q ' E: ' namcap.log
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: dzo-arch-pkg
+          path: arch-out/*.pkg.tar.zst
+          if-no-files-found: error
+
+  arch-install:
+    name: Install the Arch package (best effort)
+    needs: [arch]
+    runs-on: ubuntu-latest
+    # The package as a user gets it, installed into a bare archlinux:latest with
+    # its dependencies from the Arch repositories and run as the service user the
+    # package creates. Best effort for the same reason as the arch job.
+    continue-on-error: true
+    container:
+      image: docker.io/library/archlinux:latest
+    steps:
+      - name: Upgrade the image
+        run: pacman -Syu --noconfirm
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: dzo-arch-pkg
+          path: pkg/
+      - name: Install the package
+        # git comes with the package as a dependency; it is named here because
+        # actions/checkout below needs it and must not depend on that.
+        run: pacman -U --noconfirm ./pkg/dzo-*.pkg.tar.zst
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: The rendered quadlets pass the installed podman's own generator
+        run: scripts/check-quadlet.sh internal/resolve/testdata
+      - name: dzo version
+        run: dzo version
+      - name: The dayz user is a regular user with subordinate ids
+        # Before the dry run: a namespace failure in a container (see the next
+        # step) must not hide the checks the package is responsible for.
+        run: |
+          uid=$(getent passwd dayz | cut -d: -f3)
+          [ -n "$uid" ] || { echo "the package did not create the dayz user" >&2; exit 1; }
+          [ "$uid" -ge 1000 ] || { echo "dayz has UID $uid, below 1000" >&2; exit 1; }
+          grep -q '^dayz:' /etc/subuid || { echo "no subordinate uid range for dayz" >&2; exit 1; }
+          grep -q '^dayz:' /etc/subgid || { echo "no subordinate gid range for dayz" >&2; exit 1; }
+      - name: dzo setup --dry-run as the service user
+        # Inside CI's container the nested user namespace can fail on newuidmap
+        # ("could not set caps"); that is the container, not the package. The
+        # job is continue-on-error, and the step prints what failed.
+        run: su dayz -s /bin/sh -c 'dzo setup --dry-run'
+
   quadlet-check:
     name: Quadlet check (${{ matrix.image }})
     runs-on: ubuntu-latest

@@ -85,7 +85,8 @@ commit of a release itself is built as it is.
 Signing: the key is the repository secret ``APT_GPG_PRIVATE_KEY`` (an
 ASCII-armored secret key without a passphrase). The public half is
 ``apt/dzo-archive-keyring.asc``; the workflow fails if the two do not match. It
-signs the dnf repository too (``rpm/dzo-repo-keyring.asc``, see below).
+signs the dnf and pacman repositories too (``rpm/dzo-repo-keyring.asc`` and
+``arch/dzo-repo-keyring.asc``, see below).
 
 To replace the key, create one in a throwaway GnuPG home, never in your own
 keyring:
@@ -96,6 +97,7 @@ keyring:
    gpg --batch --passphrase '' --quick-gen-key "dzo apt repository <bernd@bzed.de>" ed25519 sign never
    gpg --armor --export > apt/dzo-archive-keyring.asc
    cp apt/dzo-archive-keyring.asc rpm/dzo-repo-keyring.asc
+   cp apt/dzo-archive-keyring.asc arch/dzo-repo-keyring.asc
    gpg --armor --export-secret-keys | gh secret set APT_GPG_PRIVATE_KEY
    rm -rf "$GNUPGHOME"
 
@@ -138,6 +140,52 @@ the first free UID at or above 1000, the result the sysusers entry gives on
 Debian. ``rpmlint`` runs with ``packaging/rpm/dzo.rpmlintrc``, which filters only
 what a Go package cannot change (the statically linked binary, DayZ in rpmlint's
 spelling data) and says why.
+
+.. _pacman-repository:
+
+The pacman repository
+~~~~~~~~~~~~~~~~~~~~~
+
+The same ``Docs`` run publishes the pacman repository under ``/arch/`` from the
+``dzo-arch-pkg`` artifact, which CI's ``arch`` job builds. ``makepkg`` runs as a
+non-root build user in an ``archlinux:latest`` container and only assembles the
+binary and the payload the ``deb`` job uploads (``dzo-payload``), so
+``packaging/arch/PKGBUILD`` ships the same files as ``packaging/rpm/dzo.spec``
+and no Go toolchain is needed on an Arch build host. Both Arch jobs are
+``continue-on-error``: the distribution is a rolling release. To build the
+package locally, run ``make build-static``, assemble ``arch-payload`` as the
+``deb`` job does (``dist/servermods``, ``images``, ``contrib``, ``html``,
+``man`` and the cheat sheet; the PKGBUILD's header lists them) and run
+``cd packaging/arch && makepkg -f --nodeps``, which needs ``base-devel``.
+
+``scripts/build-arch-repo.sh`` signs every package with a detached signature, runs
+``repo-add --sign`` and publishes the database as ``dzo.db`` with its signature
+as ``dzo.db.sig``. (``repo-add`` writes both as links into ``dzo.db.tar.gz``, and
+GitHub Pages serves a static tree, so the script replaces them with regular
+files.) It also writes the public key as ``dzo-repo-keyring.asc`` and copies
+``arch/dzo.conf`` next to it: the ``[dzo]`` stanza that the installation guide
+makes users include from ``/etc/pacman.conf``, with
+``SigLevel = Required DatabaseRequired``. The workflow fails if the exported
+public key differs from ``arch/dzo-repo-keyring.asc``, which is the same key as
+``apt/`` and ``rpm/``.
+
+Versions: ``pkgver`` is the upstream version from the top ``debian/changelog``
+entry and ``pkgrel`` the Debian revision; a development build appends the commit
+count since the last tag to ``pkgrel`` (``0.8.2-1.43``). That is the only place
+where ``vercmp`` keeps a snapshot after the release and before the next Debian
+revision (``0.8.2-1`` < ``0.8.2-1.43`` < ``0.8.2-2`` < ``0.8.3-1``); the same
+snapshot in ``pkgver`` would sort after ``0.8.2-2``, and ``pkgrel`` accepts
+integers only, so the sha stays out of the package version (``dzo version``
+prints it).
+
+The account: Arch's ``systemd-sysusers`` hook creates users from
+``/usr/lib/sysusers.d`` in the post-transaction hooks, after ``post_install``,
+while ``postinst`` already needs the ``dayz`` user. ``packaging/arch/dzo.install``
+therefore runs ``systemd-sysusers`` itself before ``postinst``, which keeps
+``packaging/common/dzo.sysusers`` the one description of the account: it gives a
+regular UID from 1000-59999 (59999 on a fresh host), the result the .deb gets. The
+rpm cannot do that, because rpm's own sysusers handling allocates a system UID
+below 1000.
 
 Building and testing the servermod
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
