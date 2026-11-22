@@ -114,7 +114,7 @@ jobs:
       image: registry.fedoraproject.org/fedora:44
     steps:
       - name: Install git (actions/checkout needs it) and the repository tools
-        run: dnf install -y git ca-certificates rpm-sign createrepo_c gnupg2
+        run: dnf install -y git ca-certificates rpm-sign createrepo_c gnupg2 diffutils
       # No ref: the head of main (see the build job). The deploy job checks it is the CI run's commit.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # The package the CI run built (a snapshot version) is published as it is, not built again.
@@ -158,7 +158,7 @@ jobs:
       - name: Upgrade the image and install git and the repository tools
         # The image is a snapshot of the archive; a partial upgrade fails on file
         # conflicts. repo-add comes with pacman, gpg with gnupg.
-        run: pacman -Syu --noconfirm --needed git ca-certificates gnupg
+        run: pacman -Syu --noconfirm --needed git ca-certificates gnupg diffutils
       # No ref: the head of main (see the build job). The deploy job checks it is the CI run's commit.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # The package the CI run built (a snapshot version) is published as it is, not built again.
