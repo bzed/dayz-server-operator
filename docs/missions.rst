@@ -5,15 +5,15 @@ Missions, integrations and overlays
 ===================================
 
 The mission folder holds the Central Economy files and ``init.c``. dzo treats it
-with care: **the live mission is never wiped or recreated**.
+with care: **dzo never wipes or recreates the live mission**.
 
 The game world (the persistence, ``storage_1``) is not in the mission folder.
 dzo starts the server with ``-storage=/dayz/storage``, and ``/dayz/storage`` is
 ``<instances>/<name>/storage/<map>`` on the host. The server then writes
 ``storage_<instanceId>`` there and nothing into the mission, so the mission folder
-only holds files dzo and the mods manage. Keeping the world per map means that
-changing the map starts a fresh world instead of loading the old map's
-persistence; the old one stays in its directory. Mods that use the ``$storage:``
+only holds files dzo and the mods manage. dzo keeps one world per map. Changing
+the map starts a fresh world instead of loading the old map's persistence; the
+old one stays in its directory. Mods that use the ``$storage:``
 placeholder get the same directory.
 
 Pristine and live
@@ -26,8 +26,8 @@ Each instance has two copies:
    ``dzo mission update <name>`` fetches a new version. Nothing else changes it.
 
 ``mpmissions/<map>/`` — the live mission
-   What the server runs. It is created once from the pristine mission
-   (``dzo instance create`` or ``dzo mission init``) and then only updated in
+   What the server runs. dzo creates it once from the pristine mission
+   (``dzo instance create`` or ``dzo mission init``) and then only updates it in
    place.
 
 Which files dzo manages
@@ -45,12 +45,12 @@ Generated files
 
 Foreign files
    Everything else: ``storage_*``, files mods write at runtime, files you
-   placed by hand. **dzo never changes or deletes them.** Paths listed in
-   ``mission.unmanaged`` are treated as foreign even if the mission repository
+   placed by hand. **dzo never changes or deletes them.** dzo treats paths
+   listed in ``mission.unmanaged`` as foreign even if the mission repository
    ships them.
 
-If a managed file was changed in the live mission (by a mod or by hand), dzo
-warns, copies the changed file to ``filehistory/`` and overwrites it
+If a managed file changed in the live mission (by a mod or by hand), dzo warns.
+It copies the changed file to ``filehistory/`` and overwrites it
 (``drift: warn-backup-overwrite``). Recurring drift on the same file usually
 means it belongs in ``mission.unmanaged``.
 
@@ -67,7 +67,7 @@ Before every start dzo builds the mission in a staging area:
 #. only if everything is valid: take a snapshot if one is due, write the changes
    into the live mission atomically, update the manifest.
 
-If validation fails, the start is aborted and the live mission is untouched.
+If validation fails, dzo aborts the start and the live mission stays untouched.
 
 Preview a render at any time:
 
@@ -77,30 +77,37 @@ Preview a render at any time:
 
 ``dzo instance render <name>`` (without ``--dry-run``) is the same render, applied.
 It is what the unit runs before every start. The first render into an empty
-``mpmissions/<map>`` is the one-time initialisation from the pristine mission;
-every later render only touches files dzo manages (in the manifest, or new in
-the pristine mission). ``storage_*`` and everything matching
-``mission.unmanaged`` is never written.
+``mpmissions/<map>`` is the one-time initialisation from the pristine mission.
+Every later render only touches files dzo manages (in the manifest, or new in
+the pristine mission). dzo never writes ``storage_*``, and it never writes
+anything matching ``mission.unmanaged``.
 
-The render also prepares what the server needs besides the mission: the signature
-keys (``runtime/keys``: the server build's and those of every client mod, copied
-because the container cannot follow links into the cache, plus your own: ``*.bikey`` files in ``keys/`` of the site
-repository, in ``instances/<name>/keys/`` and at the top of the instance's overlays), ``runtime/serverDZ.cfg``
-from the site repository's ``instances/<name>/serverDZ.cfg``, and the BattlEye
-config with the RCon port and a password that dzo generates once and keeps below
-``paths.secrets``. In ``serverDZ.cfg`` dzo sets ``Missions/DayZ/template`` to the
+The render also prepares what the server needs besides the mission:
+
+- the signature keys in ``runtime/keys``: the server build's and those of every
+  client mod. dzo copies them because the container cannot follow links into the
+  cache;
+- your own signature keys: ``*.bikey`` files in ``keys/`` of the site
+  repository, in ``instances/<name>/keys/`` and at the top of the instance's
+  overlays;
+- ``runtime/serverDZ.cfg`` from the site repository's
+  ``instances/<name>/serverDZ.cfg``;
+- the BattlEye config with the RCon port and a password that dzo generates once
+  and keeps below ``paths.secrets``.
+
+In ``serverDZ.cfg`` dzo sets ``Missions/DayZ/template`` to the
 instance's ``map`` and ``steamQueryPort`` to ``ports.query``; everything else stays
 as you wrote it. A missing or unparsable ``serverDZ.cfg`` fails the render before
-the live mission is touched, also with ``--dry-run``.
+dzo touches the live mission, also with ``--dry-run``.
 
-The pristine mission is fetched from ``mission_source`` the first time it is missing, and never again on its own, so a start
-does not need the network. ``--update-pristine`` fetches it again; the live
-mission follows on that same render. A base file the map lacks (for example
-``cfgweather.xml``) is taken from ``fallback_mission`` in the installed server
-build, when a build is installed.
+dzo fetches the pristine mission from ``mission_source`` the first time it is
+missing, and never again on its own. A start does not need the network. ``--update-pristine`` fetches it again; the live
+mission follows on that same render. dzo takes a base file that the map lacks
+(for example ``cfgweather.xml``) from ``fallback_mission`` in the installed
+server build, when a build is installed.
 
 **The default source** is Bohemia Interactive's `Central Economy repository
-<https://github.com/BohemiaInteractive/DayZ-Central-Economy>`_: an instance without
+<https://github.com/BohemiaInteractive/DayZ-Central-Economy>`_. An instance without
 ``mission_source`` uses the folder named like its ``map`` (``dayzOffline.chernarusplus``,
 ``dayzOffline.enoch``, ``dayzOffline.sakhal``) at ``master``, not the files that ship
 inside the server build. ``ref`` and ``path`` alone change that default, for example
@@ -109,7 +116,7 @@ modded map) needs a ``mission_source`` of its own (``git``/``ref``/``path``, or 
 ``preset``). ``dzo instance render <name> --update-pristine`` fetches the repository
 again; the live mission follows, with the usual drift handling.
 
-How mod files are merged
+How dzo merges mod files
 ------------------------
 
 ``integrations/mods/<modid>/integration.yaml`` says which files a mod
@@ -131,16 +138,24 @@ contributes and where they come from:
      post_merge: [hooks/remove-static-trains.sh]   # default: none
 
 ``mod`` and ``name`` are required; ``mod`` is the workshop id the integration is for, and
-``aliases`` lists further workshop ids that use the same integration. Each entry of ``files`` has a ``source``, which is ``local`` (in the site repository,
-needs ``path``, relative to the integration's folder), ``url`` (downloaded, cached, needs
-``url``; ``sha256`` pins it by hash and is verified) or ``mod`` (a file shipped inside the mod,
-needs ``path``). ``maps`` restricts an entry to the listed maps (the ``map`` of the instance); the
-same file name may then appear for several maps. ``normalize`` is explained at the end of
-:ref:`the merge <merge-details>`. ``hooks.post_merge`` is a list of scripts, see Hooks below.
-dzo never changes the downloaded mod itself.
+``aliases`` lists further workshop ids that use the same integration.
+
+Each entry of ``files`` has a ``source``:
+
+- ``local``: in the site repository, needs ``path``, relative to the
+  integration's folder;
+- ``url``: downloaded, cached, needs ``url``; ``sha256`` pins it by hash and dzo
+  verifies it;
+- ``mod``: a file shipped inside the mod, needs ``path``.
+
+``maps`` restricts an entry to the listed maps (the ``map`` of the instance);
+the same file name can then appear for several maps. ``normalize`` is explained
+at the end of :ref:`the merge <merge-details>`. ``hooks.post_merge`` is a list
+of scripts, see Hooks below. dzo never changes the downloaded mod itself.
 
 An instance can replace an integration for itself with ``instances/<name>/integrations/<modid>/``
-(same file, same keys); it takes the place of the shared one as a whole, key by key not merged.
+(same file, same keys). It takes the place of the shared one as a whole, key by
+key, not merged.
 
 A map preset, ``integrations/maps/<name>.yaml``, is a mission source an instance refers to
 with ``mission_source: {preset: <name>}``. All three keys are required; ``ref`` and ``path``
@@ -191,30 +206,31 @@ spawners. Shared overlays live in ``site/overlays/``, instance overlays in
 EditorFiles
 -----------
 
-Files in ``instances/<name>/EditorFiles/`` (``*.dze`` for the `DayZ Editor Loader
+dzo copies the files in ``instances/<name>/EditorFiles/`` (``*.dze`` for the
+`DayZ Editor Loader
 <https://steamcommunity.com/sharedfiles/filedetails/?id=2276010135>`_
-servermod) are copied to ``EditorFiles/`` in the live mission on every render.
-They are generated files: dzo owns them. A file you remove from the site is
-removed from the mission at the next render (a copy goes to the file history
-first, and a folder that ends up empty is removed). Only files dzo wrote are
-removed; a file you put there yourself stays.
+servermod) to ``EditorFiles/`` in the live mission on every render.
+They are generated files: dzo owns them. If you remove a file from the site,
+dzo removes it from the mission at the next render. A copy goes to the file
+history first, and dzo removes a folder that ends up empty. dzo removes only
+files it wrote; a file you put there yourself stays.
 
 MapStreamDZE
 ------------
 
-Files in ``instances/<name>/MapStreamDZE/`` (``*.dze``, subfolders allowed) are
-mirrored to ``profiles/dzo/mapstream/DZE/`` of the instance, where the
-`dzo_mapstream
+dzo mirrors the files in ``instances/<name>/MapStreamDZE/`` (``*.dze``,
+subfolders allowed) to ``profiles/dzo/mapstream/DZE/`` of the instance, where
+the `dzo_mapstream
 <https://steamcommunity.com/sharedfiles/filedetails/?id=3812840035>`_ servermod reads them. It is not part of the mission: the sync
-runs on every render (so at every start), after the mission is applied. dzo
-owns that target folder: files are written when they differ, and files and
-folders that are not in the site any more are removed. The render prints the
+runs on every render (so at every start), after dzo applies the mission. dzo
+owns that target folder: it writes files when they differ, and it removes files
+and folders that are not in the site any more. The render prints the
 number of files written and removed when it changed anything.
 
-An instance without a ``MapStreamDZE`` folder is not touched, so files the mod
-wrote itself stay. Git does not keep an empty folder: to remove the last file,
-delete it and keep a placeholder such as ``.gitkeep`` in the folder (it is
-copied too, which is harmless). Symlinks and other non-regular files in the
+dzo does not touch an instance without a ``MapStreamDZE`` folder, so files the
+mod wrote itself stay. Git does not keep an empty folder: to remove the last
+file, delete it and keep a placeholder such as ``.gitkeep`` in the folder. dzo
+copies the placeholder too, which is harmless. Symlinks and other non-regular files in the
 folder fail the render. There is no ``config.yaml``, ``site.yaml`` or
 ``instance.yaml`` key for it.
 
@@ -227,19 +243,21 @@ dzo then adds the references with the right path:
    spawn_gear_presets: ["loadout-*.json"] # default: none
    restricted_areas: ["areas-*.json"]     # default: none
 
-Each key lists patterns of file names of the overlay that go into the list of that name in
-``cfggameplay.json``: ``object_spawners`` (``objectSpawnersArr``), ``spawn_gear_presets``
-(``spawnGearPresetFiles``) and ``restricted_areas`` (``playerRestrictedAreaFiles``).
+Each key lists file name patterns of the overlay. dzo puts them into the list of
+that name in ``cfggameplay.json``: ``object_spawners`` (``objectSpawnersArr``),
+``spawn_gear_presets`` (``spawnGearPresetFiles``) and ``restricted_areas``
+(``playerRestrictedAreaFiles``).
 
 Hooks
 -----
 
 For anything the strategies cannot express, a hook runs a script. A hook is an
-executable (a path relative to ``instances/<name>/`` in the site repository, or to the
-integration's folder for an integration's ``post_merge``) that gets a JSON context on stdin
-and these variables: ``DZO_INSTANCE``, ``DZO_HOOK_POINT``, ``DZO_MAP``,
-``DZO_LIVE_MISSION`` and, for ``post_merge``, ``DZO_STAGING``. One script runs for at most
-10 minutes.
+executable that gets a JSON context on stdin and these variables:
+``DZO_INSTANCE``, ``DZO_HOOK_POINT``, ``DZO_MAP``,
+``DZO_LIVE_MISSION`` and, for ``post_merge``, ``DZO_STAGING``. The path of the
+executable is relative to ``instances/<name>/`` in the site repository, or to
+the integration's folder for an integration's ``post_merge``. One script runs
+for at most 10 minutes.
 
 .. list-table::
    :header-rows: 1
@@ -282,28 +300,35 @@ and these variables: ``DZO_INSTANCE``, ``DZO_HOOK_POINT``, ``DZO_MAP``,
 The merge itself
 ~~~~~~~~~~~~~~~~
 
-The staging area is the pristine mission, then the instance's ``messages.xml`` (always empty: ``dzo serve`` sends the messages, see :doc:`configuration`), then the
-mods in list order, then the overlays in list order. After the merge every file it wrote must
-parse, and every ``<ce folder>`` must exist with the files it names, or the render stops before
-the live mission is touched. Notes on what is built:
+The staging area starts as the pristine mission. The instance's ``messages.xml``
+comes next; it is always empty (``dzo serve`` sends the messages, see
+:doc:`configuration`). Then the mods come in list order, then the overlays in
+list order. After the merge every file it wrote must parse, and every
+``<ce folder>`` must exist with the files it names. Otherwise the render stops
+before dzo touches the live mission. Notes on what is built:
 
-* ``init.c`` of an integration is a unified diff, applied with ``patch`` to the mission's
-  ``init.c``; a diff that does not apply fails the render.
-* ``messages.xml`` is always written empty by dzo; the ``messages.xml`` of a mod integration or an
-  overlay is accepted but replaced by the empty one, because ``dzo serve`` sends the server
-  messages itself.
-* ``globals.xml`` is not a Central Economy file type, so it is not registered: its ``<var>`` elements
-  are merged by ``name`` into ``db/globals.xml`` (the later contributor wins a variable).
-* Two contributors that replace the same file (``cfgweather.xml``, ``messages.xml``) are reported
-  as a conflict; the later one wins. Elements of the XML files that are merged by ``name`` are
-  replaced silently; in ``mapgrouppos.xml`` a group is identified by ``name`` and ``pos``, because the file
-  has many groups of one name (one per position).
-* ``normalize:`` in an integration repairs the quirks of mod files before they are merged:
-  ``eventposdef-root`` renames the root ``<events>`` of ``cfgeventspawns.xml`` to ``<eventposdef>``,
-  ``wrap-root`` wraps a file that is a bare list of elements into the root element of its kind (the
-  name of the file says which), and ``xml-decl`` adds the XML declaration. A JSON file is left alone.
-* A ``url`` source is downloaded once and kept in ``paths.cache``: by its ``sha256`` when it has
-  one (and verified), else by its URL (and never fetched again).
+* ``init.c`` of an integration is a unified diff; dzo applies it with ``patch``
+  to the mission's ``init.c``. A diff that does not apply fails the render.
+* dzo always writes ``messages.xml`` empty. It accepts the ``messages.xml`` of a
+  mod integration or an overlay but replaces it with the empty one. ``dzo serve``
+  sends the server messages itself.
+* ``globals.xml`` is not a Central Economy file type, so dzo does not register
+  it. dzo merges its ``<var>`` elements by ``name`` into ``db/globals.xml`` (the
+  later contributor wins a variable).
+* dzo reports two contributors that replace the same file (``cfgweather.xml``,
+  ``messages.xml``) as a conflict; the later one wins. dzo silently replaces the
+  elements of XML files merged by ``name``. In ``mapgrouppos.xml`` it identifies
+  a group by ``name`` and ``pos``, because the file has many groups of one name
+  (one per position).
+* ``normalize:`` in an integration repairs the quirks of mod files before dzo
+  merges them: ``eventposdef-root`` renames the root ``<events>`` of
+  ``cfgeventspawns.xml`` to ``<eventposdef>``. ``wrap-root`` wraps a file that is
+  a bare list of elements into the root element of its kind (the name of the
+  file says which). ``xml-decl`` adds the XML declaration. A JSON file is left
+  alone.
+* dzo downloads a ``url`` source once and keeps it in ``paths.cache``, keyed by
+  its ``sha256`` when it has one, else by its URL. It verifies the download when
+  a ``sha256`` is present; otherwise it never fetches the file again.
 
 Mission history and reset
 -------------------------

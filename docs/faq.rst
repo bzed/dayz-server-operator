@@ -12,42 +12,43 @@ Containers and servers
 
 Why does dzo mount the server build as an overlay and not read-only?
    With a ``:ro`` mount ``DayZServer`` silently skips every addon directory except ``addons/`` and
-   ``dta/``: the Sakhal DLC and every ``-mod`` and ``-servermod`` are not loaded, without an error. A
-   podman overlay (``:O``) is writable for the server and leaves the shared build untouched, so dzo
-   uses it for the build and for every mod. Do not add ``:ro`` to mounts that hold mods or the build.
+   ``dta/``. The Sakhal DLC and every ``-mod`` and ``-servermod`` do not load, and the server gives
+   no error. A podman overlay (``:O``) is writable for the server and leaves the shared build
+   untouched. dzo uses it for the build and for every mod. Do not add ``:ro`` to mounts that hold
+   mods or the build.
 
 Where does the server write its data?
-   Only below ``/dayz``: with ``-storage=/dayz/storage`` and ``-profiles=/dayz/profiles`` nothing is
-   written into the build. The live mission (``instances/<name>/mpmissions``) is a writable mount;
-   in our runs, with dzo-admin, it held only files dzo manages. Mods such as Expansion may write
-   other files there, which dzo reports as foreign files.
+   Only below ``/dayz``: with ``-storage=/dayz/storage`` and ``-profiles=/dayz/profiles`` the server
+   writes nothing into the build. The live mission (``instances/<name>/mpmissions``) is a writable
+   mount; in our runs, with dzo-admin, it held only files dzo manages. Mods such as Expansion can
+   write other files there, which dzo reports as foreign files.
 
 How long does a server take to start?
-   About 30 seconds from start to healthy on stable and 45 seconds on experimental, on a small
-   test host without many mods. A startup timeout of a few minutes is generous, but a server with
-   many mods will need more.
+   A server takes about 30 seconds to start and become healthy on stable, and 45 seconds on
+   experimental. These numbers come from a small test host without many mods. A startup timeout of
+   a few minutes is generous, but a server with many mods needs more.
 
 Can I use the network mode ``publish``?
    Not for RCon yet: RCon is not published, so dzo cannot reach it from the host. Use ``host``.
 
 Can I run several instances on one host?
-   Yes. With host networking each instance gets its own game, query and RCon ports from one range
-   and they start and stop independently.
+   Yes. With host networking each instance gets its own game, query and RCon ports from one range.
+   The instances start and stop independently.
 
 Why is ``dzo`` required at ``/usr/bin/dzo``?
    The generated units mount that binary into the container (the health check is ``dzo health``).
 
 Why did a unit fail with an unknown ``ContainerStopTimeout``?
-   There is no such quadlet key. The key is ``StopTimeout=`` (seconds), and dzo sets systemd's
-   ``TimeoutStopSec`` to the stop timeouts plus 30 seconds so that systemd does not kill podman
-   before its grace period is over. Current dzo versions generate the right keys.
+   There is no such quadlet key. The key is ``StopTimeout=`` (seconds). dzo sets systemd's
+   ``TimeoutStopSec`` to the stop timeouts plus 30 seconds, so systemd does not kill podman before
+   its grace period is over. Current dzo versions generate the right keys.
 
 Snapshots
 ---------
 
 Do snapshots need root?
-   No. As the service user, creating subvolumes, read-only snapshots, writable restores and deleting
-   snapshots work on Linux 7.2 and on Debian 13's 6.12.
+   No. As the service user, you can create subvolumes, make read-only snapshots, make writable
+   restores and delete snapshots. That works on Linux 7.2 and on Debian 13's 6.12.
 
 Why is the snapshot before an update skipped?
    Because the instance directory was created before it was a subvolume, so it is a plain directory.
@@ -58,20 +59,21 @@ BattlEye and RCon
 -----------------
 
 RCon was reachable from the whole network. Is that fixed?
-   Yes. A BattlEye server listens on every interface by default, so anyone who knew the password
-   could control the server. With host networking dzo writes ``RConIP 127.0.0.1`` into the BattlEye
+   Yes. A BattlEye server listens on every interface by default. Anyone who knows the password can
+   control the server. With host networking dzo writes ``RConIP 127.0.0.1`` into the BattlEye
    config.
 
 Why do RCon commands time out for about 40 seconds after a restart?
    After a restart of the game server the old connection reports "connection refused" within a
-   second. The new one can log in about 20 seconds after the restart began, while the mission is
-   still loading, and commands are answered about 20 seconds later, when the mission has loaded. dzo
-   reconnects with backoff, and commands in that window time out; that is expected.
+   second. The new one can log in about 20 seconds after the restart begins, while the mission
+   still loads. The server answers commands about 20 seconds later, when the mission has loaded.
+   dzo reconnects with backoff, and commands in that window time out; that is expected.
 
 Why does dzo send every command up to three times?
-   The answer travels over UDP and may never come. A command waits at most 15 seconds per try and is
-   tried three times. A real server also ignores some logins when connections follow each other
-   closely (13 % with no pause, 10 % after 0.3 s, 3 % after 1 s, none after 2 s). dzo keeps one
+   The answer travels over UDP and does not always arrive. A command waits at most 15 seconds per
+   try. dzo tries it three times. A real server also ignores some logins when connections follow
+   each other closely. The server ignores 13 % with no pause, 10 % after 0.3 s, 3 % after 1 s and
+   none after 2 s. dzo keeps one
    connection and dials again with backoff, so you do not notice.
 
 How do I kick a player?
@@ -101,11 +103,12 @@ Why is a player's GUID shown as unverified?
    native DayZ ``ban.txt`` (see :doc:`moderation`).
 
 What does BattlEye's bans.txt look like?
-   Captured from a real server (``internal/moderation/testdata/v1``): one ban per line,
-   ``<GUID or IP> <expiry> <reason>``, where the expiry is ``-1`` for a permanent ban and an absolute
-   Unix time otherwise. The reason is cut to 64 characters, and an IPv6 address is silently not
-   banned. A ``//`` comment line is ignored when loaded and not kept by ``writeBans``, which also
-   drops expired bans. ``addBan`` writes the file by itself. dzo writes this file itself; see
+   The format comes from a real server (``internal/moderation/testdata/v1``). There is one ban per
+   line: ``<GUID or IP> <expiry> <reason>``. The expiry is ``-1`` for a permanent ban and an
+   absolute Unix time otherwise. The reason is cut to 64 characters, and an IPv6 address is silently
+   not banned. A ``//`` comment line is ignored on load, and ``writeBans`` does not keep it;
+   ``writeBans`` also drops expired bans. ``addBan`` writes the file by itself. dzo writes this file
+   itself; see
    :doc:`moderation`.
 
 Missions and mod files
@@ -113,16 +116,16 @@ Missions and mod files
 
 How is dzo's merge different from the legacy ``xmlmerge``?
    ``xmlmerge`` does no merging: its output is the children of the mod file followed by the children
-   of the base file, so nothing is replaced and duplicates stay. dzo replaces an element of the same
+   of the base file. It replaces nothing, and duplicates stay. dzo replaces an element of the same
    ``name`` and appends the rest. ``mapgrouppos.xml`` is the exception: it holds many ``<group>``
-   elements of one name, so groups are matched by name and position. The result has the same
-   elements, in a different order (mod elements last), and duplicates inside one mod file collapse
-   into one. Whether DayZ takes the first or the last of two elements of one name is not known; dzo's
+   elements of one name, so dzo matches groups by name and position. The result has the same
+   elements in a different order (mod elements last). Duplicates inside one mod file collapse into
+   one. Nobody knows whether DayZ takes the first or the last of two elements of one name; dzo's
    way avoids the question.
 
 What did the legacy start get wrong that dzo does not?
-   * ``cfgeventspawns.xml`` could come out empty: ``xmlmerge`` failed on a mod file, ``xmlstarlet``
-     wrote nothing, and the empty file replaced the mission's.
+   * ``cfgeventspawns.xml`` sometimes came out empty: ``xmlmerge`` failed on a mod file,
+     ``xmlstarlet`` wrote nothing, and the empty file replaced the mission's.
    * It kept duplicate elements (for example ``HypeTrain_Myshkino`` twice).
    * ``INIT=local`` asks for an ``init.c`` that does not exist, and under ``set -e`` that stopped
      the legacy start before ``types.xml`` for one mod.
@@ -133,8 +136,8 @@ What did the legacy start get wrong that dzo does not?
    legacy one by design; compare it as data.
 
 Why was a mod's XML file rejected or not merged?
-   A mod file without a root element (a bare list of ``<event>``) cannot be merged. dzo does not
-   normalise such files yet: ``normalize:`` is ignored with a warning, so fix or wrap the file.
+   dzo cannot merge a mod file without a root element (a bare list of ``<event>``). It does not
+   normalise such files yet: it ignores ``normalize:`` with a warning, so fix or wrap the file.
 
 Why does the order of two mods replacing one file matter?
    Where two mods replace the same file (``cfgweather.xml``), dzo goes by the order of the mod
@@ -144,9 +147,9 @@ Map data
 --------
 
 Can dzo download the map data (``worlds_*_data.pbo``) for the map tiles by itself?
-   No. The file is in depot 221101 (25.6 GB) of app 221100, and ``steamcmd`` cannot download a single
+   No. The file is in depot 221101 (25.6 GB) of app 221100. ``steamcmd`` cannot download a single
    file of a depot: it does not know ``sDepotDownloadFileFilter``, and the following
    ``download_depot`` would fetch the whole depot. Give ``dzo map tiles build`` the path to the PBO
    from a client install. A tool that can filter a depot (DepotDownloader has ``-filelist``) would
-   do it, but is not a dependency. Whether the service account owns DayZ and may download the depot
-   was not tested.
+   do it, but is not a dependency. Whether the service account owns DayZ and can download the depot
+   stays untested.

@@ -4,15 +4,16 @@
 Setting up a host without the package
 =====================================
 
-The Debian package does a few things that you have to do yourself on a
-development or test host where the package is not installed: the user, the
-subordinate uid/gid ranges, lingering, the data directories, the Containerfiles.
+The Debian package does a few things for you: it creates the user, the
+subordinate uid/gid ranges, lingering, the data directories and the
+Containerfiles. On a development or test host without the package, you must do
+these things yourself.
 This page lists all of them, on a fresh Debian 13 (trixie) host. Everything
 here is run as root unless it says otherwise.
 
 This page is Debian-specific and says how to build such a host by hand; it says
-nothing about which distributions dzo supports. That matrix, with the level each
-distribution is tested at, is at the top of :doc:`installation`.
+nothing about which distributions dzo supports. That matrix, with the test level
+of each distribution, is at the top of :doc:`installation`.
 
 Packages
 --------
@@ -22,7 +23,7 @@ Packages
    apt install podman passt uidmap git btrfs-progs systemd-container \
        build-essential
 
-``btrfs-progs`` is not used by dzo (it talks to the kernel itself) but you need
+dzo does not use ``btrfs-progs`` (it talks to the kernel itself), but you need
 ``mkfs.btrfs`` and ``btrfs subvolume list`` to create and inspect the
 filesystem. For building dzo itself see :doc:`development`; the Go toolchain is
 the current upstream one, not Debian's.
@@ -47,8 +48,8 @@ which is enough; use the backports kernel if you want a newer btrfs.
    reboot
    uname -r        # the new kernel
 
-On a cloud image use ``linux-image-cloud-amd64`` instead. Packages from backports
-are only installed when you ask for them with ``-t trixie-backports``, so the
+On a cloud image use ``linux-image-cloud-amd64`` instead. apt installs packages
+from backports only when you ask for them with ``-t trixie-backports``, so the
 rest of the system stays on trixie.
 
 The service user and group
@@ -60,13 +61,13 @@ The service user and group
    useradd --gid dayz --home-dir /var/lib/dzo --no-create-home \
        --shell /bin/bash --comment "DayZ server operator" dayz
 
-(Not ``--system``: a system user, UID below 1000, has no journal of its own and
-``dzo logs`` could not read its services' logs. The package uses systemd-sysusers with
+(Not ``--system``: a system user, UID below 1000, has no journal of its own, and
+``dzo logs`` cannot read its services' logs. The package uses systemd-sysusers with
 ``r - 1000-59999`` and ``u dayz - "DayZ server operator" /var/lib/dzo -``, which picks a free
 UID from that range; the shell is ``nologin`` there. On a development host a real
-shell makes ``sudo -iu dayz`` and ``machinectl shell`` easier.) The home
-directory is not created here: it is the mount point of the btrfs filesystem
-below, so it is created once, empty, together with the mount.
+shell makes ``sudo -iu dayz`` and ``machinectl shell`` easier.) This command does
+not create the home directory. It is the mount point of the btrfs filesystem
+below, so you create it once, empty, together with the mount.
 
 Rootless podman needs a range of subordinate ids, and the user's services must
 keep running without a login:
@@ -77,16 +78,16 @@ keep running without a login:
    grep '^dayz:' /etc/subuid /etc/subgid
    loginctl enable-linger dayz
 
-Check that the ranges do not overlap with another user's in ``/etc/subuid``; if
+Check that the ranges do not overlap with another user's in ``/etc/subuid``. If
 they do, pick a free block of 65536 ids at or above 100000 instead (the package
 does that itself, see :doc:`installation`). To get a shell with a working user
 systemd session (``systemctl --user``), use
-``machinectl shell dayz@``, or ``sudo -iu dayz`` after enabling lingering and
+``machinectl shell dayz@``. Or use ``sudo -iu dayz`` after enabling lingering and
 setting ``XDG_RUNTIME_DIR=/run/user/$(id -u dayz)``.
 
 To work on the host as your own user as well, add yourself to the group
-(``usermod -aG dayz <you>``) and make what you need group-readable; do not run
-dzo as root, ``dzo setup`` refuses it.
+(``usermod -aG dayz <you>``). Also make what you need group-readable. Do not run
+dzo as root; ``dzo setup`` refuses it.
 
 The btrfs filesystem
 --------------------
@@ -117,7 +118,7 @@ A file on an existing filesystem is enough for a throw-away test:
    # mount with -o loop,... instead of the fstab line below
 
 Mount it on the data directory (the default is ``/var/lib/dzo``; the user's home
-is on it) with the options dzo wants:
+is on it). Use the options dzo wants:
 
 .. code-block:: sh
 
@@ -129,31 +130,31 @@ is on it) with the options dzo wants:
    chmod 0750 /var/lib/dzo
    findmnt -no FSTYPE,OPTIONS /var/lib/dzo
 
-If ``/var/lib/dzo`` already contains files (for example a home directory that
-was created earlier), mount on a temporary directory, copy them over with
-``cp -a`` and mount again.
+If ``/var/lib/dzo`` already contains files (for example an earlier home
+directory), mount on a temporary directory first. Then copy them over with
+``cp -a``. Then mount again.
 
 What the users need for snapshots
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 dzo creates, snapshots and deletes subvolumes as the unprivileged ``dayz`` user
-with the btrfs ioctls, so no sudo rule or helper is needed. What it relies on:
+with the btrfs ioctls. It needs no sudo rule or helper. What it relies on:
 
 * The user owns ``paths.instances`` and ``paths.snapshots`` (the ``chown``
   above, or the directories ``dzo setup`` creates below an owned data
   directory). Creating a subvolume or snapshot only needs write access to the
   directory it goes into.
 * ``user_subvol_rm_allowed`` in the mount options. Without it only the owner's
-  ``rmdir`` of an empty subvolume works, so dzo deletes a snapshot file by file,
-  which is slow for a big instance. Enable it without a reboot with
+  ``rmdir`` of an empty subvolume works. dzo then deletes a snapshot file by
+  file, which is slow for a big instance. Enable it without a reboot with
   ``mount -o remount,user_subvol_rm_allowed /var/lib/dzo``.
 * Both directories on the same filesystem, because a snapshot cannot cross
   filesystems. If you moved ``paths.snapshots`` elsewhere, ``dzo backup`` says
   so.
 
-Do not use ``noexec`` or ``nosuid`` options that stop the game server binary from
-running if you keep server builds on this filesystem. Quotas are not needed;
-leave them off, they slow snapshot deletion.
+Do not use ``noexec`` or ``nosuid`` options if you keep server builds on this
+filesystem. Such options stop the game server binary from running. You do not
+need quotas; leave them off, they slow snapshot deletion.
 
 Data directories and configuration
 ----------------------------------
@@ -165,8 +166,8 @@ Data directories and configuration
 
 ``/run`` is a tmpfs, so these two directories vanish at reboot. The package
 recreates them with a tmpfiles.d snippet; do the same. ``/var/lib/dzo`` is the
-user's home and the btrfs mount point, so it is not part of the snippet (it was
-created with the mount above):
+user's home and the btrfs mount point, so the snippet does not contain it (the
+mount above created it):
 
 .. code-block:: sh
 
@@ -176,8 +177,8 @@ created with the mount above):
    EOT
 
 Write ``/etc/dzo/config.yaml`` as described in :doc:`installation` and
-:doc:`configuration` (``site.remote`` points at your site repository; use a
-placeholder-free path of your own, or a local git directory for tests).
+:doc:`configuration`. ``site.remote`` points at your site repository; use a
+placeholder-free path of your own, or a local git directory for tests.
 
 The dzo binary and its files
 ----------------------------
@@ -201,15 +202,15 @@ and as root:
 ``dzo setup --images-dir <dir>`` takes another directory for the Containerfiles,
 so you can leave them in the checkout. The ``dzo-*`` timers and quadlets that
 dzo writes call the binary named by ``binary:`` in ``config.yaml`` (default
-``/usr/bin/dzo``), and the containers mount it.
+``/usr/bin/dzo``). The containers mount it.
 
-A running binary cannot be overwritten ("Text file busy"), but it can be replaced: write the
-new build next to it and ``mv`` it over the old one. That needs a directory you may write to, which
-``/usr/bin`` is not for the service user. So on a host where you deploy by hand, set
+You cannot overwrite a running binary ("Text file busy"), but you can replace it. Write the new
+build next to it. Then ``mv`` it over the old one. That needs a directory the service user can
+write to. ``/usr/bin`` is not such a directory. So on a host where you deploy by hand, set
 ``binary: /var/lib/dzo/bin/dzo`` in ``config.yaml``, run ``dzo units sync`` once, and
 deploy with ``install -m 0755 bin/dzo /var/lib/dzo/bin/dzo.new && mv /var/lib/dzo/bin/dzo.new /var/lib/dzo/bin/dzo``.
-Running processes (and the containers, which mount the old file) keep the old build until they are
-restarted.
+Running processes (and the containers, which mount the old file) keep the old build until you
+restart them.
 
 Check and continue
 ------------------
@@ -228,7 +229,7 @@ Testing in a virtual machine
 
 A Debian 13 cloud image under libvirt is a convenient test host. Create it with
 ``virt-install --osinfo debian13 --boot uefi`` (the image does not boot with
-BIOS), attach a second disk for the btrfs filesystem and bridge it to your
-network, then follow this page. A game server only accepts BattlEye connections
-from real players if the VM is reachable from the internet; local tests (boot
+BIOS). Attach a second disk for the btrfs filesystem. Bridge it to your
+network. Then follow this page. A game server only accepts BattlEye connections
+from real players if the VM is reachable from the internet. Local tests (boot
 test, A2S query, RCon) work from the host network alone.

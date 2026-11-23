@@ -11,8 +11,8 @@ with systemd as PID 1, the ``dzo`` package and ``steamcmd`` installed. This page
 calls it the *appliance*.
 
 The appliance does not run the game servers itself. It talks to the rootless
-podman of a host user through that user's podman socket, and every game server
-is an ordinary container of that podman, next to the appliance. That is what
+podman of a host user through that user's podman socket. Every game server is
+an ordinary container of that podman, next to the appliance. That is what
 makes the appliance replaceable: it can be restarted, updated or thrown away
 without stopping a server.
 
@@ -20,10 +20,11 @@ When to use it
 --------------
 
 Use the appliance when the host's distribution is not one of the
-:doc:`supported ones <installation>`, or when the host should run nothing but
-containers and keep its base system untouched. On Debian 13 and the other
-supported distributions the native package is the tested and simpler path; the
-commands and the behaviour inside the appliance are the same either way.
+:doc:`supported ones <installation>`. Use it also when you want the host to run
+nothing but containers and keep its base system untouched. On Debian 13 and the
+other supported distributions the native package is the tested and simpler
+path. The commands and the behaviour inside the appliance are the same either
+way.
 
 Requirements on the host
 ------------------------
@@ -61,17 +62,17 @@ Security: use a dedicated host user
 -----------------------------------
 
 Mounting the user's podman socket into the appliance gives everything inside it
-full control over that user's containers: start, stop, remove, inspect and
-``exec`` into any of them, and through their bind mounts read and write the
-files they see. That is dzo's job, but it also means that anything dzo runs -
-the hooks of your site repository, a Steam download, a command you type with the
-wrapper - acts with those rights.
+full control over that user's containers. It can start, stop, remove, inspect
+and ``exec`` into any of them. Through their bind mounts it can read and write
+the files they see. That is dzo's job. But anything dzo runs also acts with
+those rights: the hooks of your site repository, a Steam download, a command
+you type with the wrapper.
 
 Run the appliance as a dedicated host user that owns the servers and nothing
-else, not as your login account, and do not put containers into that user's
+else. Do not use your login account. Do not put containers into that user's
 podman that you would not hand dzo. The quadlet adds no capabilities and no
-devices; its only addition is the user mapping that lets systemd be PID 1 inside
-while the data directory stays yours.
+devices. Its only addition is the user mapping that lets systemd be PID 1
+inside while the data directory stays yours.
 
 Running it
 ----------
@@ -93,7 +94,7 @@ The quadlet starts ``ghcr.io/bzed/dzo:latest`` as the container ``dzo`` with:
 * systemd mode and the image's ``USER 0``, so systemd is PID 1;
   ``UserNS=keep-id:uid=1000,gid=1000`` maps the host user to the appliance's
   ``dayz`` (UID 1000) and back on the mounted data directory. Do **not** add a
-  ``User=`` line: ``keep-id`` would then run PID 1 as the unprivileged user and
+  ``User=`` line. ``keep-id`` then runs PID 1 as the unprivileged user and
   systemd cannot start at all.
 * host networking, so ``dzo serve`` (the API and the ``dzo-admin`` endpoint),
   ``dzo web`` and the exporter listen on the host's loopback as on a native
@@ -112,8 +113,8 @@ The quadlet starts ``ghcr.io/bzed/dzo:latest`` as the container ``dzo`` with:
   `Stopping and starting the appliance`_.
 
 The wrapper runs dzo inside the appliance as ``dayz``, with the user session's
-environment and a terminal when there is one, so the command line is the one of
-a native install:
+environment and a terminal when there is one. The command line is then the one
+of a native install:
 
 .. code-block:: sh
 
@@ -139,8 +140,8 @@ First run
 ---------
 
 ``dzo setup`` does what it does on a native host - directories, the two runtime
-images, the site checkout, the weekly image refresh timer - and adds the three
-checks of `The three remote checks`_. Then follow :doc:`quickstart`: the Steam
+images, the site checkout, the weekly image refresh timer. It also adds the
+three checks of `The three remote checks`_. Then follow :doc:`quickstart`: the Steam
 login, the product install, the site repository, ``dzo instance apply`` and
 ``dzo start``.
 
@@ -152,17 +153,17 @@ The same path on both sides
 The host's podman resolves every bind mount, and the game containers are its
 containers. Every path dzo mounts into a game container must therefore exist
 under the **same absolute path** on the host and in the appliance. The quadlet
-does that for the data directory (``Volume=/srv/dzo:/srv/dzo``), and everything
-dzo puts below it - server builds, mods, the instance directories, missions,
+does that for the data directory (``Volume=/srv/dzo:/srv/dzo``). Everything dzo
+puts below it - server builds, mods, the instance directories, missions,
 profiles - is visible on both sides.
 
 To use another data directory, change it in both places at once: the quadlet's
 ``Volume=`` source and ``paths.data`` in the appliance's ``config.yaml``. Then
 ``systemctl --user daemon-reload`` and ``systemctl --user restart dzo.service``;
 the restart stops the servers. The rule also applies to directories outside
-``paths.data``: a site checkout, download cache or secrets directory that is not
-below it must be mounted at its own path too. The boot test therefore runs below
-``<paths.data>/boottest`` in remote mode, where the host can see it.
+``paths.data``. A site checkout, download cache or secrets directory that is
+not below it must be mounted at its own path too. The boot test therefore runs
+below ``<paths.data>/boottest`` in remote mode, where the host can see it.
 
 .. _container-instances:
 
@@ -180,8 +181,8 @@ followed by the container's ``podman run`` arguments:
    Type=notify
    ExecStart=/usr/bin/dzo instance supervise deerisle -- run --name dzo-deerisle --replace --rm …
 
-The unit carries the arguments so that it holds the container it was rendered
-for, also across a crash restart - the way a quadlet's paths hold the
+The unit carries the arguments, so it holds the container it was rendered for.
+That also holds across a crash restart - the way a quadlet's paths hold the
 generations. ``dzo instance supervise`` is internal; there is nothing to run by
 hand. The supervisor
 
@@ -204,8 +205,8 @@ at its next restart. The same holds for a pending update - a running server
 keeps its unit, and with it its generations, until it restarts.
 
 The health check of a game container runs a copy of the dzo binary. The host's
-podman cannot see the appliance's ``/usr/bin/dzo``, so ``dzo units sync`` copies
-the ``binary`` to ``<paths.data>/bin/dzo`` - atomically, and only when the
+podman cannot see the appliance's ``/usr/bin/dzo``. Therefore ``dzo units sync``
+copies the ``binary`` to ``<paths.data>/bin/dzo`` - atomically, and only when the
 content changed - and the containers mount that copy. A running server keeps the
 copy it started with, as it keeps ``/usr/bin/dzo`` on a native install; its next
 restart uses the new one. ``dzo test boot`` runs its container below
@@ -224,7 +225,7 @@ What differs from a native install
 * **Read the server console on the host.** The console is the DayZ server
   process's stdout and stderr. The host's podman keeps all of it in the host
   user's journal (podman's default ``journald`` log driver), whatever happens in
-  the appliance, so use that:
+  the appliance. Use that:
 
   .. code-block:: sh
 
@@ -235,12 +236,12 @@ What differs from a native install
   passes on through its attached ``podman`` client, and that copy has gaps. It
   is missing while no supervisor is attached (between a supervisor's death and
   its restart). It also stops after a restart of the host's podman API service
-  (``systemctl --user restart podman.service``, a podman update for instance):
-  the attached stream is served by the old service process and is not resumed,
-  so nothing new arrives until the instance's next restart. Only that copy is
-  affected. podman has no daemon: the server keeps running, the supervisor's
+  (``systemctl --user restart podman.service``, a podman update for instance).
+  The old service process serves the attached stream and does not resume it, so
+  nothing new arrives until the instance's next restart. Only that copy is
+  affected. podman has no daemon: the server keeps running. The supervisor's
   short calls (health, running state, stop, the exit code) reconnect through the
-  socket, and ``dzo status``, ``dzo stop`` and the rest behave normally. The
+  socket. ``dzo status``, ``dzo stop`` and the rest behave normally. The
   profile logs (RPT, script and admin logs) and the event feed are files and
   are not affected either.
 * **Stopping the appliance stops the servers**, cleanly and one instance after
@@ -256,11 +257,11 @@ Stopping and starting the appliance
 
 ``systemctl --user stop dzo.service`` or ``podman stop dzo`` stops the
 appliance. Inside it systemd stops the instance units first, and each supervisor
-stops its game server with the instance's stop timeout; then the appliance shuts
-down. Both values in the quadlet must outlast that: every instance gets
+stops its game server with the instance's stop timeout. Then the appliance shuts
+down. Both values in the quadlet must outlast that. Every instance gets
 ``stop.timeout`` (30 s by default) plus the 30 s its supervised unit adds, and
 the instances stop one after another. The shipped ``StopTimeout=90`` and
-``TimeoutStopSec=150`` cover one instance with the defaults; raise both when you
+``TimeoutStopSec=150`` cover one instance with the defaults. Raise both when you
 raise ``stop.timeout`` or run several instances.
 
 The quadlet starts the container with ``--rm``, so ``podman stop dzo`` and
@@ -272,7 +273,7 @@ nothing to start. Use the unit instead:
    systemctl --user start dzo.service
 
 ``Restart=on-failure`` brings a crashed or killed appliance back by itself, with
-systemd's start limit as the brake; an appliance that exited cleanly, as after
+systemd's start limit as the brake. An appliance that exited cleanly, as after
 ``podman stop``, stays stopped.
 
 Updating
@@ -289,10 +290,10 @@ the image has dzo's apt repository configured:
 The package's post-install steps rewrite the units and restart the services that
 run from the binary (``dzo serve``, ``dzo web``, the exporter), but never a game
 server. A running server keeps the old binary, which is mounted into its
-container; the next restart, scheduled or ``dzo restart <name>``, uses the new
+container. The next restart, scheduled or ``dzo restart <name>``, uses the new
 one. No server has to stop for an update.
 
-A new image is only needed for a fresh Debian base (CI rebuilds it weekly) or a
+You only need a new image for a fresh Debian base (CI rebuilds it weekly) or a
 dzo version that apt does not offer. It replaces the whole container:
 
 .. code-block:: sh
@@ -323,21 +324,21 @@ of ``CONTAINER_HOST``. Each has its usual failure and what to do about it:
    The check writes a random file below ``paths.data``, starts the runtime image
    on the **host** with ``paths.data`` mounted read-only and reads the file
    back. ``error paths.data … is not mounted at the same path on the host``
-   means the appliance and the host see different directories: the quadlet's
-   ``Volume=`` is missing, or its source and ``paths.data`` are not the same
+   means the appliance and the host see different directories. The quadlet's
+   ``Volume=`` is missing, its source and ``paths.data`` are not the same
    absolute path, or one of them is a symlink that resolves differently. Make
    them the same path. ``error the runtime image … is missing`` means the image
    was not built; ``dzo setup --images-only`` builds it.
 
 ``ok the host's podman uses systemd cgroups``
-   The health checks are systemd units on the host; with the ``cgroupfs`` driver
+   The health checks are systemd units on the host. With the ``cgroupfs`` driver
    they never run, and no instance would ever become ready.
    ``error the host's podman does not use systemd: …`` means the host user's
-   podman uses ``cgroupfs``: set ``cgroup_manager = "systemd"`` in the user's
-   ``~/.config/containers/containers.conf`` (or in
-   ``/etc/containers/containers.conf``), make sure the host boots with cgroup v2
+   podman uses ``cgroupfs``. Set ``cgroup_manager = "systemd"`` in the user's
+   ``~/.config/containers/containers.conf`` or in
+   ``/etc/containers/containers.conf``. Make sure the host boots with cgroup v2
    (``/sys/fs/cgroup/cgroup.controllers`` exists) and that the user's cgroups are
-   delegated, then restart the socket.
+   delegated. Then restart the socket.
 
 A dry run (``dzo setup --dry-run``) runs the first and the third check and says
 ``info a dry run cannot check whether paths.data … is mounted at the same path
@@ -354,8 +355,8 @@ and at the server's own output on the host (``journalctl --user
 CONTAINER_NAME=dzo-<name>``), which is complete even when ``dzo logs`` is not.
 
 ``podman socket … unreachable`` means the socket was not there when the unit
-started: enable it on the host (``systemctl --user enable --now
-podman.socket``) and start the instance again.
+started. Enable it on the host (``systemctl --user enable --now
+podman.socket``). Start the instance again.
 
 Not verified yet
 ----------------

@@ -12,15 +12,15 @@ Teleporting by drag
 -------------------
 
 Press a player's icon (operators and admins only) and drag it. From the moment you press until you confirm or
-cancel, the icon does not follow the live updates, so it neither jumps away nor is replaced under the pointer; the
-latest report of the player is kept and applied afterwards. The icon sits exactly under the pointer, also when
-you move fast, and the drop point is where you let go (clamped to the world). Other icons ignore the pointer
+cancel, the icon does not follow the live updates. So it does not jump away, and nothing replaces it under the
+pointer. The latest report of the player is kept and applied afterwards. The icon sits exactly under the pointer,
+also when you move fast. The drop point is where you let go (clamped to the world). Other icons ignore the pointer
 while you drag, so crossing them neither opens their tooltips nor interrupts the drag. A confirmation asks
 ``Teleport <name>?`` with the coordinates. You can pan and zoom to check the drop point before you answer; the
-confirmation stays with the icon. Teleport sends the command and the icon goes to the player's reported position once it is
-done; if the game server refuses, or you cancel, the icon goes back to where the player is now, not to
-where the drag began. If the player disconnects while you decide, the confirmation closes and nothing is sent.
-A plain click on an icon opens its menu as before.
+confirmation stays with the icon. Teleport sends the command. When the teleport is done, the icon goes to the
+player's reported position. If the game server refuses, or you cancel, the icon goes back to where the player is
+now. It does not go back to where the drag began. If the player disconnects while you decide, the confirmation
+closes and nothing is sent. A plain click on an icon opens its menu as before.
 
 The dzo-admin server mod
 ------------------------
@@ -38,42 +38,47 @@ admin actions:
 * repair vehicles (including refuelling and fitting missing parts), flip them upright, move them (to get a stuck one out), or delete them,
 * raise a territory flag (fills its timer).
 
-The mod connects *out* to dzo: about once a second it posts what changed and the
+The mod connects *out* to dzo. About once a second it posts what changed and the
 results of finished actions to ``dzo serve``, and gets the next actions in the
 reply. Nothing connects into the game server. The mod knows persistent
 vehicles of the car type (``CarScript``, which includes most modded cars),
-motorbikes (``MotorbikeScript``) and boats (``BoatScript``); all of them can be spawned, repaired, flipped, moved and deleted.
+motorbikes (``MotorbikeScript``) and boats (``BoatScript``). All of them can be spawned, repaired, flipped, moved and deleted.
 Each vehicle has a kind, ``car``, ``motorbike``, ``boat``, ``bicycle`` or ``helicopter``, shown in the vehicle list, with an icon of its own on the map.
-With DayZ Expansion loaded the mod also reports the vehicle's owner (the name on its key chain), and the
-vehicles under an Expansion cover (``*_Cover``, stored by Expansion, not in the world as cars) as
-``covered`` vehicles (drawn in amber instead of white): they are on the map and in the list with their class, place and owner, but have no
-health, fuel or crew and no repair, flip or delete actions. Without Expansion nothing changes.
-Bicycles and the helicopters of mods are cars to the game; dzo gives a car the kind whose class list has its class:
-``bicycle`` for the DayZBicycle mod (``Old_Bike*``, ``Lady_Bicycle*``, ``MMTArma``, the classes of its event) and
-``helicopter`` for the helicopters of DayZ Expansion (``ExpansionMh6*``, ``ExpansionMerlin*``, ``ExpansionUh1h*``,
-``ExpansionGyrocopter*``) and the Mosquito of Deer Isle (``RFMosquito``). ``admin.vehicle_kinds`` adds the classes of
-other mods.
+With DayZ Expansion loaded the mod also reports the vehicle's owner (the name on its
+key chain). It also reports the vehicles under an Expansion cover (``*_Cover``)
+as ``covered`` vehicles (drawn in amber instead of white). Expansion stores these
+vehicles; they are not in the world as cars. They are on the map and in the list
+with their class, place and owner. They have no health, fuel or crew and no repair,
+flip or delete actions. Without Expansion nothing changes. Bicycles and the helicopters of mods are cars to the game;
+dzo gives a car the kind whose class list has its class. ``bicycle`` is the kind for
+the DayZBicycle mod (``Old_Bike*``, ``Lady_Bicycle*``, ``MMTArma``, the classes of its
+event). ``helicopter`` is the kind for the helicopters of DayZ Expansion
+(``ExpansionMh6*``, ``ExpansionMerlin*``, ``ExpansionUh1h*``, ``ExpansionGyrocopter*``)
+and the Mosquito of Deer Isle (``RFMosquito``). ``admin.vehicle_kinds`` adds the
+classes of other mods.
 
-Boats (vanilla ``Boat_01_*`` and the Expansion boats, whose Zodiac is a car to the game and Boat_01 a ``BoatScript``)
-are reported as kind ``boat`` by the mod itself, with a ship icon. A boat has fuel and parts but no wheels: ``wheels`` repairs
-nothing on it and ``fluids`` fills its tank. A spawned or moved boat is put on the surface of the water, not on the
-seabed (the height of the water above the ground is added where there is water). Boats need dzo-admin 0.7.0. ``vehicle_kinds: {boat: [...]}`` adds the boat classes of other mods that are cars to the game.
+Boats are vanilla ``Boat_01_*`` and the Expansion boats, whose Zodiac is a car to the game and
+Boat_01 a ``BoatScript``. The mod itself reports them as kind ``boat``, with a ship icon. A boat has fuel
+and parts but no wheels: ``wheels`` repairs nothing on it and ``fluids`` fills its tank.
+The mod puts a spawned or moved boat on the surface of the water, not on the seabed. (The height
+of the water above the ground is added where there is water.) Boats need dzo-admin 0.7.0.
+``vehicle_kinds: {boat: [...]}`` adds the boat classes of other mods that are cars to the game.
 
-Markers have no frame, so that the icon gets all the room, and are told apart by shape and edge: players are round dots
-in the colour of their health, with a white ring; vehicles are white icons with a dark edge; events and other markers are
+Markers have no frame, so that the icon gets all the room. The map tells them apart by shape and edge: players are round dots
+in the colour of their health, with a white ring. Vehicles are white icons with a dark edge. Events and other markers are
 icons in the colour of their layer with a light edge. Zoomed out they shrink, the players least.
 
 Installing it
 ~~~~~~~~~~~~~
 
 dzo-admin is a local server mod, not a Steam Workshop mod. The dzo package ships
-the packed mod in ``/usr/share/dzo/servermods/dzo-admin`` (a source checkout
-builds it with ``make servermods`` into ``dist/servermods/dzo-admin``; the
-output is reproducible, so the PBO hash is the same on every build). The
+the packed mod in ``/usr/share/dzo/servermods/dzo-admin``. A source checkout
+builds it with ``make servermods`` into ``dist/servermods/dzo-admin``. The
+output is reproducible, so the PBO hash is the same on every build. The
 directory also holds ``compat.yaml``, which records the commit of the dzo-admin
 source and the hash of every PBO that was built from it. ``dzo mod add`` and
 ``dzo mod update`` check the packed mod against it and refuse a PBO that
-differs; ``--ignore-compat`` uses it anyway, for example for a build of your
+differs. ``--ignore-compat`` uses it anyway, for example for a build of your
 own. Point ``site.yaml`` at it and enable it per instance:
 
 .. code-block:: yaml
@@ -103,14 +108,15 @@ Run ``dzo mod add dzo-admin --instance deerisle --server`` to install it, then
 start the instance. dzo recognises the mod by the name ``dzo-admin``.
 
 ``dzo instance render`` compares the installed copy of dzo-admin with the build in
-``compat.yaml`` next to the packaged mod and prints a warning, with the ``dzo mod update``
-to run, when they differ. A package upgrade does not touch the copies in the instances: an
-older mod can look for its config in another place and then sits idle without a word.
+``compat.yaml`` next to the packaged mod. When they differ, it prints a warning,
+with the ``dzo mod update`` to run. A package upgrade does not touch the copies
+in the instances. An older mod can then look for its config in another place
+and sit idle without a word.
 
-Every time the instance starts, ``dzo instance render`` writes the mod's
-configuration to ``profiles/dzo/admin/config.json`` with a **new token** (the
-file is readable by the owner only and is not part of the site repository). The
-token is the only protection of the endpoint, so keep ``serve.mod_listen`` on
+Every time the instance starts, ``dzo instance render``
+writes the mod's configuration to ``profiles/dzo/admin/config.json`` with a
+**new token**. The file is readable by the owner only and is not part of the
+site repository. The token is the only protection of the endpoint, so keep ``serve.mod_listen`` on
 the local host. With ``network: host`` the mod connects to ``127.0.0.1``; with
 ``network: publish`` to ``host.containers.internal``.
 
@@ -119,10 +125,10 @@ Settings in ``instance.yaml`` under ``admin`` (see :doc:`configuration`):
 * ``sync_ms``, ``players_s``, ``vehicles_s``, ``markers_s``, ``events_s``: how
   often the mod polls for actions and pushes each kind of state;
 * ``allow_spawn``, ``allow_classes``, ``deny_classes``: which item classes
-  admins may spawn. A class must be a valid class name, must not match a deny
+  admins can spawn. A class must be a valid class name, must not match a deny
   entry, and, if an allow list exists, must match it. dzo also rejects classes
   the server did not report;
-* ``move_occupied_max``: the farthest, in metres, a vehicle with players inside may be moved (see
+* ``move_occupied_max``: the farthest, in metres, the mod can move a vehicle with players inside (see
   *Moving vehicles*); default 200, 0 refuses those moves, negative values are refused. The mod reads it at the
   start of the server, so a change takes effect with the next ``dzo instance render`` and restart;
 * ``vehicle_kinds``: class names (one ``*`` allowed) by kind, ``bicycle``, ``boat`` or ``helicopter``, of other
@@ -130,51 +136,55 @@ Settings in ``instance.yaml`` under ``admin`` (see :doc:`configuration`):
   ``vehicle_kinds: {helicopter: ["MyHeli_*"], bicycle: ["Tandem*"]}``;
 * ``vehicle_forget_days``: how long ``dzo serve`` keeps the record of a vehicle that is no longer reported
   (default 7, at least 1). ``dzo serve`` keeps one record per vehicle in its database, taken from the vehicle
-  snapshots of the mod: the type, the last driver and the time of the last drive when the mod reports them, and
-  when the vehicle was first seen. A vehicle missing from a snapshot (a restart, a storage problem) is only hidden
-  and comes back with its record; it is forgotten after this many days. A vehicle back after longer starts a new
-  record. Nothing on the vehicles in the game changes. Records start once the mod reports drivers (``dzo-admin``
-  0.8.0, hello feature ``driver``): with an older mod nothing is recorded, so that the age of a vehicle does not
-  start long before the mod could tell who drove it, and recording begins when the mod is updated. The value is an
-  integer from 1 to 3650 (ten years). Taken up on the next ``dzo serve`` reload. The records of an instance that
-  was removed from the site are forgotten too, after the default of 7 days (its own setting is gone with it),
-  at the next reload or hourly sweep of ``dzo serve``.
+  snapshots of the mod. The record holds the type and, when the mod reports them, the last driver and the time
+  of the last drive. It also holds when the vehicle was first seen. A vehicle missing from a snapshot (a
+  restart, a storage problem) is only hidden and comes back with its record. ``dzo serve`` forgets
+  it after this many days. A vehicle back after longer starts a new record. Nothing on the vehicles in the game
+  changes. Records start once the mod reports drivers (``dzo-admin`` 0.8.0, hello feature ``driver``). With
+  an older mod nothing is recorded. So the age of a vehicle does not start long before the mod can tell who
+  drove it. Recording begins when you update the mod. The value is an integer from 1 to 3650 (ten years).
+  Taken up on the next ``dzo serve`` reload. ``dzo serve`` also forgets the records of an instance that was
+  removed from the site (its own setting is gone with it). It forgets them after the default of 7 days, at the
+  next reload or hourly sweep of ``dzo serve``.
 
 Without dzo-admin the web interface cannot show the map or run actions. Other
 features that do not need it (status, RCon) are unaffected.
 
 Check that it works: ``dzo player list <instance>`` shows the online players
-once the mod has connected, and the instance page shows "dzo-admin connected".
+once the mod has connected. The instance page shows "dzo-admin connected".
 
 ``dzo serve`` logs the connections (``journalctl --user -u dzo-serve``, or its stderr). At start and
 after a reload it says per instance whether the token file exists. While running it logs ``mod
 connected``, ``mod reconnected``, ``mod restarted`` (the server restarted and sent its hello) and
-``mod lost`` (no sync for 10 seconds), and the refusals, once a minute per address and reason: a
-token that matches no instance (the line names the instances without a token file), a protocol
-mismatch, an unreadable body. Tokens are never logged. An instance that stays silent in this log
-has a mod that does not reach the endpoint at all: check ``endpoint`` in the mod's
-``$profile:dzo/admin/config.json`` and that the instance really runs with the mod.
+``mod lost`` (no sync for 10 seconds). It also logs the refusals, once a minute per address and
+reason: a token that matches no instance, a protocol mismatch, an unreadable body. The line for
+a token that matches no instance names the instances without a token file. Tokens are never
+logged. An instance that stays silent in this log has a mod that does not reach the endpoint at
+all. Check ``endpoint`` in the mod's ``$profile:dzo/admin/config.json`` and that the instance
+really runs with the mod.
 
 Moving vehicles
 ---------------
 
-To get a stuck car out, press its icon (operators and admins only; not a covered Expansion vehicle) and drag it. A
-confirmation asks ``Move <class>?`` with the coordinates; as with players you can pan and zoom to check the drop point, and
+To get a stuck car out, press its icon and drag it. This is for operators and admins only,
+and not for a covered Expansion vehicle. A confirmation asks ``Move <class>?`` with the coordinates.
+As with players you can pan and zoom to check the drop point, and
 the icon stays where you dropped it until the answer. The vehicle menu also has **Move to coordinates…**, and
 ``dzo vehicle move`` and ``POST /vehicles/<id>/move`` do the same (:doc:`api`).
 
-The mod puts the vehicle at the point, one metre above the highest surface there so it settles on its wheels: the
-ground, or a road, rock or roof on top of it, because a vehicle put inside an object is thrown out or falls through
+The mod puts the vehicle at the point, one metre above the highest surface there,
+so it settles on its wheels. The highest surface there is the ground, or a road,
+rock or roof on top of it. A vehicle put inside an object is thrown out or falls through
 the world, where the game deletes it. A point on a building therefore puts the vehicle on its roof. A boat goes on
 the water instead, also under a bridge. A vehicle spawned at a point is placed the same way (half a metre above that
 surface). This needs dzo-admin 0.8.1; an older mod uses the terrain height alone. The vehicle stands upright, with its
 heading and with its speed and spin set to zero. Nothing else about it changes. A vehicle with
 **players inside** keeps them seated and moves them with it, under these rules:
 
-* the move may be at most ``admin.move_occupied_max`` metres (default 200, ground distance); a longer one is refused with
+* the move can be at most ``admin.move_occupied_max`` metres (default 200, ground distance); a longer one is refused with
   ``too far with players inside`` and 0 refuses every such move. An empty vehicle can go anywhere in the world;
-* the damage of the players and of the vehicle is switched off just before the move and back on three seconds
-  later, so the landing and the physics settling cannot hurt anyone. It is switched on again whatever happens to the
+* the mod switches the damage of the players and of the vehicle off just before the move and back on three seconds
+  later, so the landing and the physics settling cannot hurt anyone. The damage goes on again whatever happens to the
   players or the vehicle in between;
 * a position outside the world is refused.
 
@@ -183,16 +193,17 @@ This needs dzo-admin 0.7.0. The actions of the map show up in the audit log as `
 Links to a place
 ----------------
 
-The map page opens on a place when the link has the world coordinates in metres: ``/b/<backend>/i/<instance>/map?x=7500&z=7600&label=Kill``
-(``x`` east, ``z`` north, ``label`` optional, up to 80 characters). The place gets a marker with the label as its tooltip
+The map page opens on a place when the link has the world coordinates in metres: ``/b/<backend>/i/<instance>/map?x=7500&z=7600&label=Kill``.
+``x`` is east, ``z`` is north, ``label`` is optional, up to 80 characters. The place gets a marker with the label as its tooltip
 and the map zooms to it. Click the marker for "Remove marker", zoom and copy. The events page
 (:doc:`web`) links the position of every event this way, and the link can be shared. A link whose ``x`` and ``z`` are not plain numbers
 inside the world is ignored and the map opens as usual.
 
 The vehicle list links a stored vehicle this way too, with ``sv=<vehicle id>`` added: its marker is the
-garage's archive icon instead of the crosshairs, and its menu offers the two garage actions of the vehicle
-panel (**Retrieve to coordinates…** and **Move spawn point to coordinates…**, for people who may teleport
-players) beside "Remove marker". The marker is not moved by the vehicle stream: it stays until it is
+garage's archive icon instead of the crosshairs. Its menu offers, beside
+"Remove marker", the two garage actions of the vehicle panel: **Retrieve to coordinates…**
+and **Move spawn point to coordinates…**. They are for people who can teleport
+players. The marker is not moved by the vehicle stream: it stays until it is
 removed.
 
 Map background
@@ -202,18 +213,18 @@ The map shows the map's own satellite imagery, built by dzo from the game's
 data. Without it the map draws a plain 1 km grid; everything else works the
 same.
 
-Which imagery a map uses is decided by the world name: the dzo-admin mod reports the
-world of the running server (``chernarusplus``, ``enoch``, ``sakhal``, ``deerisle``, ...), and
-the web interface uses the tile set of that name, lower-cased, if one has been built
-(``dzo map tiles status`` lists them). Nothing is chosen per instance and nothing is built
-by itself: ``map_tiles.maps.<name>.source`` below only tells ``dzo map tiles build <name>``
-where the source file is. Until it has been run, the map shows the plain grid and the title
+The world name decides which imagery a map uses. The dzo-admin mod reports the
+world of the running server (``chernarusplus``, ``enoch``, ``sakhal``, ``deerisle``, ...). The
+web interface uses the tile set of that name, lower-cased, if one has been built
+(``dzo map tiles status`` lists them). The choice is not per instance and the
+tiles are not built by themselves. ``map_tiles.maps.<name>.source`` below only tells
+``dzo map tiles build <name>`` where the source file is. Until it has been run, the map shows the plain grid and the title
 says "no map imagery". The map needs the instance to be running with dzo-admin, because the world
 name comes from it.
 
 The imagery comes from the data PBO of the map, which holds the satellite tiles
 and, for each, the world rectangle it covers. dzo reads the position, the
-orientation and the overlap of every tile from that, so it does not matter which
+orientation and the overlap of every tile from that. So it does not matter which
 corner a map numbers its tiles from, or how large the map is. The PBO is:
 
 * **vanilla maps**: the DayZ *client's* ``worlds_<map>_data.pbo``
@@ -237,11 +248,11 @@ the mission) and run ``dzo map tiles build <map>``:
      maps:
        enoch: {source: /srv/dayz/mapsources/worlds_enoch_data.pbo}
 
-Building takes a few seconds and about 60 MB of disk per map. A
-source that was built before is skipped unless you pass ``--force``; ``dzo map
-tiles status`` says when the source file changed since. Tiles are kept below
-``paths.cache`` and served by ``dzo serve`` to authenticated users only, so
-the web interface shows them to everyone who may see the map, and to nobody
+Building takes a few seconds and about 60 MB of disk per map. dzo
+skips a source that was built before unless you pass ``--force``; ``dzo map
+tiles status`` says when the source file changed since. ``dzo serve`` keeps the tiles below
+``paths.cache`` and serves them to authenticated users only. So the web interface
+shows them to everyone who can see the map, and to nobody
 else. The imagery is Bohemia Interactive's artwork, which is why dzo builds
 it on your host from your own game files and does not ship it.
 
@@ -253,14 +264,14 @@ radius, and events that other mods publish through the marker API. They are show
 as a map layer and available at ``/events`` in the API.
 
 The events of the Central Economy are shown the way mods show theirs: by the class of
-an object that belongs to the event. An event places a distinct object in the world, the
-wreck of the helicopter, the police car, the tank, a locked container, and a class watch
+an object that belongs to the event. An event places a distinct object in the world: the
+wreck of the helicopter, the police car, the tank, a locked container. A class watch
 rule (see below) turns every object of such a class into a marker with an icon. dzo ships
 rules for the events of the vanilla missions, so nothing has to be configured, and no
-spawn positions or event files are involved: an event that a mission or a mod adds, or
-reconfigures through other files, is found as soon as a rule names its class. The
+spawn positions or event files are involved. dzo finds an event that a mission or a mod
+adds, or reconfigures through other files, as soon as a rule names its class. The
 watch covers items, vehicles and buildings (which is what the wrecks, crashes, containers and
-cisterns are), and a marker is gone when its object is.
+cisterns are). A marker is gone when its object is.
 
 The shipped rules, one layer each (the layer is switched on and off in the map's layer
 control):
@@ -322,22 +333,31 @@ control):
 
 The first rule that matches a class wins, so the specific rules stand before the
 catch-alls. A rule of your own with the same layer name (in ``admin_map: watch`` of an
-instance or ``defaults:``) replaces the shipped one; ``admin_map: {vanilla_events: false}``
+instance or ``defaults:``) replaces the shipped one. ``admin_map: {vanilla_events: false}``
 turns all of them off for an instance. Vehicles that events spawn are in the vehicle
 layer, and infected, animals and the berries and mushrooms are not shown.
 
-Contaminated areas are events of the mod itself: a static or dynamic gas zone (a thrown
-M18 smoke grenade) is reported as soon as it is created, with the radius of the zone
-(120 m for a dynamic one), and the map draws that circle around the icon.
+Contaminated areas are events of the mod itself. The mod reports a static or
+dynamic gas zone (a thrown M18 smoke grenade) as soon as it exists. It reports
+the radius of the zone (120 m for a dynamic one), and the map draws that circle
+around the icon.
 
 Event feed
 ----------
 
-From version 0.5.0 the mod also reports what happens in the game: kills (Expansion AI too, with the
-weapon and the distance), deaths and their cause, joins and leaves, base building and raids, combination
-locks cut, flags raised and lowered, and stashes buried and dug up. Which fields each kind has is in the
-mod's README; what dzo does with them is in :ref:`event-feed` (the API and the file kept on disk),
-the events page (:doc:`web`), ``dzo events`` (:doc:`cli`) and the ``killfeed`` of an instance
+From version 0.5.0 the mod also reports what happens in the game:
+
+* kills (Expansion AI too, with the weapon and the distance),
+* deaths and their cause,
+* joins and leaves,
+* base building and raids,
+* combination locks cut,
+* flags raised and lowered, and
+* stashes buried and dug up.
+
+Which fields each kind has is in the mod's README. What dzo does with them is in
+:ref:`event-feed` (the API and the file kept on disk). It is also in the events page
+(:doc:`web`), ``dzo events`` (:doc:`cli`) and the ``killfeed`` of an instance
 (:doc:`configuration`). The mod buffers at most 256 events while dzo cannot be reached and sends them with
 the next sync; dzo counts each event once. Chat and BattlEye kicks come from RCon, not from the mod. Cutting
 a combination lock is deprecated in 1.30 and no item offers it, so ``lock_cut`` appears only with a mod that brings
@@ -347,38 +367,43 @@ Flags and territories
 ---------------------
 
 Every territory flag (the flagpole of base building) is a marker on the **Flags** layer, drawn
-with the ``flag`` icon. Hovering over it shows how long the flag has left: *goes down in 23d 4h*
-is the time the flag's refresher still runs, which is what ``dzo-admin`` reads from the game
-(``TerritoryFlag.m_RefresherTimeRemaining``); the game adds one final refresh of 5 days after it,
-which is not counted. A flag whose refresher is used up says *goes down now*.
+with the ``flag`` icon. Hovering over it shows how long the flag has left. The hover text
+*goes down in 23d 4h* is the time the flag's refresher still runs; that is what ``dzo-admin``
+reads from the game (``TerritoryFlag.m_RefresherTimeRemaining``).
+The game adds one final refresh of 5 days after it, and dzo does not count it. A flag whose
+refresher is used up says *goes down now*.
 
-With DayZ Expansion loaded, a flag that is an Expansion territory also gets a thin circle of the
-territory's size (``TerritorySize`` of the Expansion territory settings) on the **Territories**
-layer. The circle is only an outline: it has no name or tooltip on the map and clicks pass through it.
+With DayZ Expansion loaded, a flag that is an Expansion territory also gets a thin circle on the
+**Territories** layer. The circle has the territory's size (``TerritorySize`` of the Expansion
+territory settings). The circle is only an outline: it has no name or tooltip on the map and clicks pass through it.
 The name of the territory is the title of the menu of its flag (right-click the flag).
 Without Expansion there is no Territories layer.
 
-Operators (and admins) can right-click a flag and choose **Raise flag (fills the timer)**: the flag
-goes to the top of its pole and its timer is filled to the full 40 days, as if a player had raised a new flag
-(``dzo flag raise``, ``POST /instances/<i>/flags/<id>/raise`` in the API, permission ``flag.raise``).
+Operators (and admins) can right-click a flag and choose **Raise flag (fills the timer)**. The
+flag goes to the top of its pole, and the action fills its timer to the full 40 days. That
+is as if a player had raised a new flag (``dzo flag raise``, ``POST /instances/<i>/flags/<id>/raise`` in
+the API, permission ``flag.raise``).
 The flag's id is the id of its marker; it is stable over restarts of the server.
 
 Both layers are visible to the roles ``operator`` and ``admin`` only, since they show where the
-bases are; they appear in ``/map/markers`` and ``/layers`` of the API for those roles and carry
+bases are. They appear in ``/map/markers`` and ``/layers`` of the API for those roles, and carry
 the remaining time as ``ttl`` (seconds). This needs dzo-admin 0.4.0; an older mod shows no flags.
 
 Rebuilt houses and wells
 ------------------------
 
 DayZ 1.30 lets players rebuild some map buildings (houses, and wells where the game has them) part by part with the
-rebuilding mechanic. Every such building with at least one part built is a marker on the **Rebuilt houses** layer (``home`` icon) or the **Rebuilt wells** layer (``tint`` icon), visible to ``operator`` and ``admin`` like the flags. Hovering
+rebuilding mechanic. Every such building with at least one part built appears as a marker.
+It sits on the **Rebuilt houses** layer (``home`` icon) or the **Rebuilt wells** layer
+(``tint`` icon), visible to ``operator`` and ``admin`` like the flags. Hovering
 over one shows:
 
 * ``worn down in 2h 3m``: the time until decay has worn the first of its parts down to its floor (the marker's ``ttl``, in
   seconds). **Decay does not remove the building or its parts.** A decaying part loses health until it reaches a fraction of
-  its full health (its floor) and then stays there, weakened. The time is for the weakest decaying part to get there. It is
+  its full health (its floor). Then it stays there, weakened. The time is for the weakest decaying part to get there. It is
   shorter while a sandstorm is active (decay runs 1.5 times as fast, and the marker says ``sandstorm: decaying faster``). It is
-  missing when nothing is left to decay: ``decay: worn down`` when every built part is at its floor, and ``decay: off`` when
+  missing when nothing is left to decay. That is ``decay: worn down`` when every built part is
+  at its floor, and ``decay: off`` when
   the server has ``disableBaseDecay`` set in ``cfggameplay.json``.
 * ``parts: 3/12``: built parts of all parts, ``weakest: wall_1 64%``: the built part with the lowest health, and ``floor: 40%``:
   the health at which its decay stops.
@@ -386,27 +411,29 @@ over one shows:
 * for a well, ``water: drinkable`` or ``water: none yet``: the brick well only gives water once its roof is built.
 
 A building with no part built is not shown. The map draws a house only while its decay timer runs (it has a ``worn down in``
-time): a house whose parts are all worn down already, one where only the rubble was cleared, and any house on a server
-with ``disableBaseDecay`` are left off the map, so that it stays readable (the API still lists them). A well is shown as long as a part is built. The first rebuildable well of the game is ``Land_WaterWell_Brick``, the houses
+time). A house whose parts are all worn down already gets no ``worn down in`` time. So do a
+house where only the rubble was cleared, and any house on a server with
+``disableBaseDecay``. The map leaves them off, so that it stays readable (the API still lists them). A well is shown as long as a part is built. The first rebuildable well of the game is ``Land_WaterWell_Brick``, the houses
 are the ``Land_House_*`` types. This needs dzo-admin 0.6.0; an older mod shows nothing on these layers.
 
 Tunnel entrances
 ~~~~~~~~~~~~~~~~
 
 The tunnel entrances of the irrigation tunnels (Nasdara) are holes a rope ladder can be built on. The **Tunnel entrances**
-layer marks every one of them for every role with a small dot without an outline, in blue, and in green with ``ladder: usable`` once a ladder is built on
+layer marks every one of them for every role with a small dot without an outline. The dot is
+blue, and green with ``ladder: usable`` once a ladder is built on
 it (``ladder: none`` otherwise). Needs dzo-admin 0.6.0.
 
 Sandstorms
 ----------
 
-While a sandstorm is active (DayZ 1.30, on maps that have them), the **Sandstorm** layer shows where it is as a thin
-sand-coloured wash under everything else, and one marker at its centre. The wash has two strengths: a light one where
+While a sandstorm is active (DayZ 1.30, on maps that have them), the **Sandstorm** layer shows where it is.
+It shows a thin sand-coloured wash under everything else, and one marker at its centre. The wash has two strengths: a light one where
 the storm is felt at all and a darker one where it is strong. It is sampled from the game on a grid of about 320 m, so its
-edge is approximate and blocky; it takes no clicks or hovers, so it never gets in the way of players and vehicles. The
-centre marker has an arrow that points the way the storm moves; hovering over it shows ``heading`` (a compass direction
-with the degrees), ``speed`` (km/h), ``strength`` (percent) and ``reaches its end in 25m``, the time until the storm arrives
-at the end of its path at its current speed (``arrived`` once it has). The layer is visible to every role and is empty
+edge is approximate and blocky. The wash takes no clicks or hovers, so it never gets in the way of players and vehicles.
+The centre marker has an arrow that points the way the storm moves. Hovering over it shows ``heading`` (a compass direction
+with the degrees), ``speed`` (km/h), ``strength`` (percent) and ``reaches its end in 25m``. That is the time
+until the storm arrives at the end of its path at its current speed (``arrived`` once it has). The layer is visible to every role and is empty
 when there is no storm. It needs dzo-admin 0.6.0; maps without sandstorms never show it.
 
 Markers from other mods
@@ -436,19 +463,20 @@ Configure per instance which object classes appear on the map:
 ``visibility`` (``viewer``, ``moderator``, ``operator`` or ``admin``) is the lowest role that sees the
 markers of the layer; without it they are admin-only. The shipped event rules use ``viewer``.
 Watch rules can also be set once for all instances, under ``defaults:`` in ``site.yaml``
-(``defaults: admin_map: watch: [...]``). They are merged with the rules of an instance **by layer
-name, and the instance wins**: a rule of the instance replaces the default rule of the same layer
-as a whole (its ``classes``, ``icon``, ``color`` and the rest are not mixed with the default's),
-default rules for other layers stay, and the instance's own layers are added after them. There is
-no way to remove a default rule for one instance; give the layer an instance rule that matches
-nothing you care about (for example ``classes: ["NoSuchClass"]``) if you have to.
+(``defaults: admin_map: watch: [...]``). dzo merges them with the rules of an instance
+**by layer name, and the instance wins**. A rule of the instance replaces the default rule
+of the same layer as a whole. Its ``classes``, ``icon``, ``color`` and the rest are not
+mixed with the default's. Default rules for other layers stay, and the instance's own
+layers come after them. There is
+no way to remove a default rule for one instance. If you have to, give the layer an
+instance rule that matches nothing you care about (for example ``classes: ["NoSuchClass"]``).
 ``dzo instance show <name>`` prints the merged list.
 
 Rules apply to items (including fireplaces) and cars; buildings, animals and
 players cannot be watched this way yet. Subclasses match too, and one ``*`` in a class name stands for any text (``Wreck_*``, ``*_DE``, ``StaticObj_Wreck_*_DE``).
 ``max`` limits the markers of a layer. ``cluster`` is a hint for the map
-display. ``only_if`` is not supported yet and is rejected, so that it is never
-silently ignored.
+display. dzo does not support ``only_if`` yet. It rejects ``only_if``, so that it
+is never silently ignored.
 
 2. Script API
 ~~~~~~~~~~~~~
@@ -510,13 +538,14 @@ Icons and colours
 
 A point marker is drawn as a round badge with an icon in it, in the marker's colour.
 The icons are those of `Fork Awesome <https://forkaweso.me/Fork-Awesome/icons/>`_ (a
-community fork of Font Awesome 4.7, SIL OFL), which is compiled into dzo with the
-rest of the web interface. ``icon`` is the icon's name without the ``fa-``
-prefix: ``fire``, ``car``, ``truck``, ``plane``, ``ambulance``, ``bus``, ``tree``,
-``bomb``, ``crosshairs``, ``user-secret``, ``rocket``, ``android``, ``flag``, ``home``,
-``medkit``, ``key``, ``gift``, ``trophy``, ``wrench``, ``star``, ``bolt``, ``eye``
-and about nine hundred more, plus ``helicopter`` (Fork Awesome has none; dzo ships the
-Font Awesome Free one, CC BY 4.0). Browse the gallery on the Fork Awesome site, or list
+community fork of Font Awesome 4.7, SIL OFL). dzo compiles that font with
+the rest of the web interface. ``icon`` is the icon's name without the ``fa-``
+prefix: for example ``fire``, ``car``, ``truck``, ``plane``, ``ambulance``, ``bus``,
+``tree``, ``bomb``, ``crosshairs``. There are more: ``user-secret``, ``rocket``,
+``android``, ``flag``, ``home``, ``medkit``, ``key``, ``gift``, ``trophy``, ``wrench``,
+``star``, ``bolt``, ``eye`` and about nine hundred more. Plus ``helicopter``:
+Fork Awesome has none; dzo ships the Font Awesome Free one, CC BY 4.0.
+Browse the gallery on the Fork Awesome site, or list
 the names of the ``fork-awesome.css`` of a dzo source tree or of a ``web.assets``
 directory:
 
@@ -535,6 +564,7 @@ Where the look comes from, first match wins:
 
 A marker with no icon, or with a name the font does not have, is a plain dot, and with no
 colour the default purple. ``dzo site validate`` warns about an icon name of a watch rule that
-the font dzo serves does not know (the built-in one, or the ``fork-awesome.css`` of a
-``web.assets`` directory), and rejects a malformed name or colour. Lines, circles and
+the font dzo serves does not know. The font is the built-in one, or the ``fork-awesome.css``
+of a ``web.assets`` directory. ``dzo site validate`` rejects a malformed name or colour.
+Lines, circles and
 polygons have no icon. Icons shipped inside mod PBOs are not supported.

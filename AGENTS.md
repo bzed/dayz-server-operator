@@ -71,6 +71,15 @@ both ways**. A change that adds an option without them is not done and is not me
 
 Review a change by searching the docs for the new key name: it has to turn up in an example and in prose.
 
+## Writing style
+
+Written documentation (`README.md`, `docs/`, the cheat sheet) follows the
+ASD-STE100 rules, Simplified Technical English, to 80%: short sentences, active
+voice, present tense, simple words, one instruction per sentence. The concrete
+rules are in `docs/development.rst` (Documentation writing style). When a rule
+fights accuracy, a technical name or a term of the trade, the technical side
+wins. The 20% margin is for those cases, not for laziness.
+
 ## Coverage
 
 - Keep total coverage at or above 85% (`COVERAGE_MIN` in the `Makefile`). Never

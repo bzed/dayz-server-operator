@@ -28,10 +28,9 @@ Setup and Steam
      - wipe steamcmd's working directory
 
 ``--steamcmd <program>`` (``dzo mod add | update | refresh`` and ``dzo product install | update``)
-and ``dzo steam login --command <program>`` choose the program that runs Steam's commands. The
-default is ``steamcmd`` when the host has it, and ``/usr/libexec/dzo/steamcmd-container`` when it
-does not (Fedora, RHEL, Arch): the wrapper runs the ``localhost/dzo-steamcmd`` image that
-``dzo setup`` built (see :doc:`installation`).
+and ``dzo steam login --command <program>`` choose the program that runs Steam's commands. The default is ``steamcmd`` when the host has it, and ``/usr/libexec/dzo/steamcmd-container``
+when it does not (Fedora, RHEL, Arch). The wrapper runs the ``localhost/dzo-steamcmd``
+image that ``dzo setup`` built (see :doc:`installation`).
 
 Site repository
 ---------------
@@ -217,8 +216,9 @@ Web interface and API
    * - ``dzo user reset <steamid|username>``
      - remove password, TOTP, passkeys, recovery codes and sessions (the username stays); the person signs in through Steam and sets up a second factor again
 
-``dzo user`` runs on the host of ``dzo serve`` and writes its database (``<paths.db>/dzo.sqlite``) directly,
-which is safe while ``dzo serve`` runs, like ``dzo token`` with the token file. So it works when nobody can
+``dzo user`` runs on the host of ``dzo serve`` and writes its database
+(``<paths.db>/dzo.sqlite``) directly. That is safe while ``dzo serve`` runs,
+like ``dzo token`` with the token file. So it works when nobody can
 log in. Every change is written to the audit log with the source ``cli`` and the actor ``cli:$USER``.
 
 Map tiles

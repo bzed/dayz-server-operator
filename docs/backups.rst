@@ -7,17 +7,16 @@ Backups and restores
 Every instance lives in its own btrfs subvolume. A backup is a read-only btrfs
 snapshot of that subvolume: it takes milliseconds and costs almost no space
 until files change. A snapshot of a running server is crash-consistent, like a
-power cut; the snapshots taken before a change are taken with the server
-stopped.
+power cut. Before a change, dzo takes the snapshot with the server stopped.
 
 dzo creates the instance directory as a subvolume on its first
 ``dzo instance render``, as the unprivileged service user, and everything below
 works without root. ``paths.instances`` and ``paths.snapshots`` must be on the
-same btrfs filesystem; on any other filesystem an instance runs, but
+same btrfs filesystem. On any other filesystem an instance runs, but
 ``dzo backup`` refuses it and says why. ``dzo setup`` reports whether the
 filesystem is mounted with ``user_subvol_rm_allowed``, which makes deleting
-snapshots instant; without it dzo clears the read-only flag and removes the tree
-file by file, which is slower but needs no privileges.
+snapshots instant. Without it dzo clears the read-only flag and removes the
+tree file by file. That is slower, but needs no privileges.
 
 Snapshots live in ``<paths.snapshots>/<instance>/<time>-<reason>``, and
 ``index.json`` next to them records each one (reason, time, state, pinned). dzo
@@ -57,20 +56,20 @@ When snapshots are taken
      - before ``mission reinit``, ``wipe`` and restores
      - always
 
-If a snapshot fails, the change is not applied, the server starts unchanged and
-you are alerted.
+If a snapshot fails, dzo does not apply the change, the server starts
+unchanged, and it alerts you.
 
 Retention
 ---------
 
 The backup policy is the ``backup:`` block in the site repository. Put it in
-``instances/<name>/instance.yaml`` for one instance, or under ``defaults:`` in
-``site.yaml`` for every instance that does not set its own (see
-:doc:`configuration`). A key the instance leaves unset is taken from the
-defaults, so the instance only needs the values that differ (``keep_by_reason``
-is taken as a whole, not per reason). Keys set in neither place get the
-built-in values. Commit the change
-and run ``dzo site pull`` on the host; ``dzo site validate`` checks the file.
+``instances/<name>/instance.yaml`` for one instance. Or put it under
+``defaults:`` in ``site.yaml`` for every instance that does not set its own
+(see :doc:`configuration`). A key the instance leaves unset is taken from the
+defaults, so the instance only needs the values that differ. This applies to
+``keep_by_reason`` as a whole, not per reason. Keys set in neither place get the
+built-in values. Commit the change. Then run ``dzo site pull`` on the host.
+``dzo site validate`` checks the file.
 
 .. code-block:: yaml
 
@@ -84,9 +83,9 @@ and run ``dzo site pull`` on the host; ``dzo site validate`` checks the file.
      min_keep: 3               # default; never fewer, regardless of age
      min_free_bytes: 50GiB     # default: none; prune the oldest first to keep this free
 
-``schedule`` takes the same entries as ``restarts.schedule``: ``HH:MM``, or
-``Mon,Thu HH:MM`` for some weekdays only, and ``*:MM`` for every hour at that
-minute (``hourly`` is short for ``*:00``). Each entry becomes a time of the
+``schedule`` takes the same entries as ``restarts.schedule``. Use ``HH:MM``,
+or ``Mon,Thu HH:MM`` for some weekdays only, and ``*:MM`` for every hour at
+that minute (``hourly`` is short for ``*:00``). Each entry becomes a time of the
 ``dzo-backup-<name>.timer`` that ``dzo instance apply`` writes. For example, a
 snapshot every six hours and an extra one on Saturday evening:
 
@@ -127,8 +126,8 @@ dzo only deletes snapshots it has recorded. Unknown directories in the snapshot
 folder are reported, not deleted, unless you pass ``--delete-orphans`` (or
 ``--adopt-orphans`` to enter them into the index). ``keep`` is the total per
 instance, pinned snapshots included; the newest snapshot and ``min_keep``
-snapshots are never removed, whatever the other limits say. A snapshot that is
-being restored from is protected for the duration of the restore.
+snapshots are never removed, whatever the other limits say. dzo protects a
+snapshot for the duration of a restore from it.
 
 Listing and comparing
 ---------------------
@@ -151,9 +150,9 @@ Full restore:
 
    dzo restore deerisle <id>      # stops the instance if it runs, starts it again afterwards
 
-The instance is stopped, a safety snapshot is taken, the current data is moved
-aside (and kept as a snapshot), the backup becomes the live instance, and the
-server starts.
+dzo stops the instance and takes a safety snapshot. It moves the current data
+aside and keeps it as a snapshot. Then it makes the backup the live instance
+and starts the server.
 
 Restore only part of an instance, for example the world or one mod's data (the
 world is below ``storage/<map>``):
@@ -163,7 +162,7 @@ world is below ``storage/<map>``):
    dzo restore deerisle <id> --path storage/empty.deerisle/storage_1
 
 A restore takes a ``pre_restore`` snapshot first, so restoring the wrong snapshot
-can be undone, and the data it replaces is kept as a snapshot of reason
+can be undone. The data it replaces is kept as a snapshot of reason
 ``replaced``. If the restore fails, the instance is left as it was.
 
 What is not there yet: the snapshot before a server or mod update (those
@@ -174,23 +173,24 @@ The database
 
 Bans, the player history, web users and the audit index live in
 ``<paths.db>/dzo.sqlite``, which is not part of an instance snapshot. ``dzo
-serve`` therefore writes a consistent copy of it every ``serve.db_backup_hours``
-(default 24, ``0`` turns it off) to ``<paths.db>/backup/dzo-<UTC time>.sqlite``
-and keeps the newest ``serve.db_backup_keep`` (default 7), see
-:doc:`configuration`. The copy is made while the server runs. Back up
-``<paths.db>/backup`` with the rest of ``paths.db``. Each copy is created
-``0600``, and the directory is set to ``0750`` on every copy, also when it
-existed before. Only files named exactly ``dzo-<UTC time>.sqlite`` (for
-example ``dzo-20261101T120000Z.sqlite``) count as copies: a file you saved there
-by hand, such as ``dzo-before-upgrade.sqlite``, is never offered as the newest
+serve`` therefore writes a consistent copy of it to
+``<paths.db>/backup/dzo-<UTC time>.sqlite``. The interval is
+``serve.db_backup_hours`` (default 24, ``0`` turns it off), and dzo keeps the
+newest ``serve.db_backup_keep`` (default 7), see :doc:`configuration`. The
+copy is made while the server runs. Back up ``<paths.db>/backup`` with the
+rest of ``paths.db``. Each copy is created ``0600``, and the directory is set
+to ``0750`` on every copy, also when it existed before. Only files named
+exactly ``dzo-<UTC time>.sqlite`` (for example
+``dzo-20261101T120000Z.sqlite``) count as copies. A file you saved there by
+hand, such as ``dzo-before-upgrade.sqlite``, is never offered as the newest
 copy and never deleted by the rotation.
 
 ``post_backup`` hooks get the newest copy in their stdin JSON as
 ``extra.db_backup`` (the key is absent when there is no copy yet), next to
-``extra.snapshot``, so a hook that ships snapshots offsite can ship the database
+``extra.snapshot``. A hook that ships snapshots offsite can ship the database
 too.
 
-To restore, stop ``dzo serve``, copy the chosen backup over
+To restore: stop ``dzo serve``, copy the chosen backup over
 ``<paths.db>/dzo.sqlite``, delete ``<paths.db>/dzo.sqlite-wal`` and
 ``<paths.db>/dzo.sqlite-shm`` if they exist, and start ``dzo serve`` again.
 Entries written after the copy was made are lost.
@@ -200,5 +200,5 @@ Offsite copies
 
 Snapshots stay on the same filesystem, so they do not protect against disk
 loss. Add a ``post_backup`` hook that copies new snapshots elsewhere, for
-example with restic or borg; example hooks are shipped in
+example with restic or borg. dzo ships example hooks in
 ``/usr/share/doc/dzo/examples/backup-hooks/``.

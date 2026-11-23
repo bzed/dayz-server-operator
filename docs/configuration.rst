@@ -20,8 +20,8 @@ Operator configuration
 only has to contain what you change. The example lists **every** key with its
 built-in value (``# default`` marks a value that is the default, other values are
 examples). Keys that are not set in the file keep the default; a key that is set
-replaces it. For the maps (``products``) the entries of the file are added to the
-built-in ones, and an entry of the same name replaces the built-in entry as a whole.
+replaces it. For the maps (``products``), dzo adds the entries of the file to the
+built-in ones. An entry of the same name replaces the built-in entry as a whole.
 
 .. code-block:: yaml
 
@@ -119,42 +119,44 @@ built-in ones, and an entry of the same name replaces the built-in entry as a wh
      allow: ["192.0.2.0/24"]         # default: none (every address may connect)
      bearer_token_file: /var/lib/dzo/secrets/exporter.token   # default: empty (no token)
 
-The settings of ``serve``, ``web`` and ``exporter`` are read when the service starts;
-the others when a command runs. ``dzo setup`` and ``dzo site validate`` check the file
-and print what is wrong. A key dzo does not know is ignored.
+dzo reads the settings of ``serve``, ``web`` and ``exporter`` when the service starts;
+it reads the others when a command runs. ``dzo setup`` and ``dzo site validate`` check
+the file and print what is wrong. A key dzo does not know is ignored.
 
 ``binary``
    The dzo executable the units run and mount into the containers. Must be an absolute path.
-   A host that deploys by hand points it at a directory it can write, so a new build is moved
-   into place while the old one runs.
+   A host that deploys by hand points it at a directory it can write. A new build then
+   moves into place while the old one runs.
 
 ``paths``
    Every directory dzo manages; all must be absolute. ``data`` is the root. The other paths
-   may contain ``${data}``, which is replaced by the value of ``paths.data``, so setting only
+   can contain ``${data}``; dzo replaces it with the value of ``paths.data``, so setting only
    ``data`` moves everything. ``instances`` and ``snapshots`` must be on the same btrfs
-   filesystem (see :doc:`installation`). ``logs`` is the archive of rotated profile logs,
-   ``cache`` holds downloaded server builds and mods, ``secrets`` holds the Steam session,
-   RCon passwords and tokens (mode 0600), ``db`` the databases (bans, player sightings),
-   ``site`` the checkout of the site repository.
+   filesystem (see :doc:`installation`). ``logs`` is the archive of rotated profile logs.
+   ``cache`` holds downloaded server builds and mods. ``secrets`` holds the Steam session,
+   RCon passwords and tokens (mode 0600). ``db`` holds the databases (bans, player
+   sightings). ``site`` holds the checkout of the site repository.
 
 ``podman.mode``
    How the instances run. ``local`` (the default) runs each one as a quadlet of this host's podman.
    ``remote`` (the :doc:`container appliance <container>`) runs them as plain systemd units
-   supervised by ``dzo instance supervise``, through the podman of ``CONTAINER_HOST``. Any other
-   value is refused when the configuration loads, with ``podman.mode: must be "local" or "remote",
-   got "<value>"``. A change takes effect at the next ``dzo units sync`` and, for a running instance,
-   at its next restart; nothing is lost.
+   supervised by ``dzo instance supervise``, through the podman of ``CONTAINER_HOST``. dzo refuses
+   any other value when the configuration loads, with ``podman.mode: must be "local" or "remote",
+   got "<value>"``. A change takes effect at the next ``dzo units sync`` and, for a running
+   instance, at its next restart; nothing is lost.
    In ``remote`` mode the game containers belong to the host's podman, which cannot see the
-   appliance's own binary, so ``dzo units sync`` copies the ``binary`` to
-   ``<paths.data>/bin/dzo`` and the containers mount that copy for their health checks. The copy is
-   replaced atomically and only when its content changed; a running container keeps the copy it
-   started with, as it keeps ``/usr/bin/dzo`` on a native install.
+   appliance's own binary. So ``dzo units sync`` copies the ``binary`` to
+   ``<paths.data>/bin/dzo`` and the containers mount that copy for their health checks.
+   ``dzo units sync`` replaces the copy atomically and only when its content changed. A running
+   container keeps the copy it started with, as it keeps ``/usr/bin/dzo`` on a native install.
 
 ``site``
    The site repository, see below.
 
    ``remote``
-      The git URL (``ssh://git@host/path.git``, ``https://...``) or a local path of the site repository. The scp-like form ``git@host:path`` is refused by the URL check; write it as ``ssh://git@host/path``. Empty means "not configured yet":
+      The git URL (``ssh://git@host/path.git``, ``https://...``) or a local path of the site
+      repository. The URL check refuses the scp-like form ``git@host:path``; write it as
+      ``ssh://git@host/path``. Empty means "not configured yet":
       ``dzo setup`` and the diagnostic commands still run without it.
    ``branch``
       The branch to check out. Required when ``remote`` is set.
@@ -166,33 +168,38 @@ and print what is wrong. A key dzo does not know is ignored.
       interface) to ``remote`` at once; ``false`` only commits them in the checkout.
 
 ``steam.account``
-   The Steam account steamcmd logs in with for downloads. The session itself is created with
-   ``dzo steam login`` and kept in the steamcmd home; the password is never in this file.
+   The Steam account steamcmd logs in with for downloads. ``dzo steam login`` creates the
+   session itself and keeps it in the steamcmd home; the password is never in this file.
 
 ``steam.profile_lookup``
-   Whether ``dzo serve`` asks Steam about the players in the player history (:ref:`player-history`): their Steam
-   name, whether the profile is private, VAC and community bans and account facts, shown on the player page. ``true``
+   Whether ``dzo serve`` asks Steam about the players in the player history
+   (:ref:`player-history`). The answers give their Steam name, whether the profile is private,
+   VAC and community bans and account facts, shown on the player page. ``true``
    (the default) or ``false``. Without a key (see below) dzo reads the public community profile page
-   (``https://steamcommunity.com/profiles/<id>?xml=1``), at most one request every 2 seconds and about one per
-   player per day, for players seen in the last 30 days. That page is not an official API and may change; when it
-   cannot be read the player page shows the profile link only. ``false`` sends nothing to Steam; the profile
+   (``https://steamcommunity.com/profiles/<id>?xml=1``). It sends at most one request every 2 seconds
+   and about one per player per day, for players seen in the last 30 days. That page is not an
+   official API and can change; when it cannot be read the player page shows the profile link
+   only. ``false`` sends nothing to Steam; the profile
    link is still shown, it is only a link. Takes effect when ``dzo serve`` starts.
 
 ``steam.web_api_key_file``
-   The path of a file with a Steam Web API key (32 hex digits; get one at https://steamcommunity.com/dev/apikey),
-   absolute, readable by ``dzo serve`` only (mode 0600; a group- or world-readable file stops ``dzo serve`` with an
-   error that names the file). Unset: no key. With a key the Web API replaces the community page and adds the number
-   of VAC and game bans, the days since the last ban, community and economy bans (also for private profiles), the
-   account's age and country, the Steam level, the DayZ playtime and the player's public friends who also played on
-   your servers. The key is sent to ``api.steampowered.com`` only, never written to a log or shown in an error, and
-   the file must stay out of version control (the repository's ``.gitignore`` lists ``*.key`` and ``secrets/``).
+   The path of a file with a Steam Web API key (32 hex digits; get one at
+   https://steamcommunity.com/dev/apikey). It must be absolute and readable by ``dzo serve`` only
+   (mode 0600). A group- or world-readable file stops ``dzo serve`` with an error that names the
+   file. Unset: no key. With a key the Web API replaces the community page. It adds the number of
+   VAC and game bans and the days since the last ban. It adds community and economy bans
+   (also for private profiles) and the account's age and country. It also adds the Steam level,
+   the DayZ playtime and the player's public friends who also played on your servers.
+   dzo sends the key to ``api.steampowered.com`` only, never writes it to a log and never shows it
+   in an error. The file must stay out of version control (the repository's ``.gitignore`` lists
+   ``*.key`` and ``secrets/``).
    Needs ``profile_lookup: true``. Takes effect when ``dzo serve`` starts.
    Required for every download (server builds and mods); empty makes those commands fail.
 
 ``products``
    The server builds an instance can run, by name (the ``product:`` of ``instance.yaml``).
-   ``dayz-stable`` and ``dayz-experimental`` are built in; add an entry for another
-   product, or give one of the two an entry of the same name to replace it. At least one
+   ``dayz-stable`` and ``dayz-experimental`` are built in. Add an entry for another product, or
+   give one of the two an entry of the same name to replace it. At least one
    product is needed.
 
    ``app_id``
@@ -219,8 +226,8 @@ and print what is wrong. A key dzo does not know is ignored.
    ``installation``
       The name of this installation in the API and in the web interface.
    ``listen``
-      The address of ``/api/v1``. Plain HTTP is only accepted on a loopback address unless
-      ``allow_insecure_http`` is set; put a reverse proxy with HTTPS in front otherwise.
+      The address of ``/api/v1``. dzo accepts plain HTTP only on a loopback address unless
+      ``allow_insecure_http`` is set. Otherwise put a reverse proxy with HTTPS in front.
    ``mod_listen``
       The address of ``/mod/v1/sync``, where the game servers' dzo-admin mods connect. The same
       loopback rule applies.
@@ -231,52 +238,55 @@ and print what is wrong. A key dzo does not know is ignored.
       ``cert_file`` and ``key_file`` go together and switch the API listener (``listen``) to HTTPS,
       with TLS 1.2 or later. ``client_ca_file`` (needs the other two) makes client certificates
       mandatory (mutual TLS), for example so that only the web host can reach the API. ``mod_listen``
-      stays plain HTTP: the game servers on this host call it. A non-loopback ``listen`` is accepted
-      without ``allow_insecure_http`` when ``tls`` is set. The files are checked on new connections
-      (every few seconds at most) and on ``systemctl reload``: a renewed certificate or CA takes
-      effect without a restart and without dropping connections, and a replacement that does not load
-      is logged and the old one stays active. Everything else in this block is read at start. Giving
-      only one of the two files, or ``client_ca_file`` alone, is refused when the configuration loads.
+      stays plain HTTP: the game servers on this host call it. dzo accepts a non-loopback ``listen``
+      without ``allow_insecure_http`` when ``tls`` is set. ``dzo serve`` checks the files on new
+      connections (every few seconds at most) and on ``systemctl reload``. A renewed certificate or
+      CA then takes effect without a restart and without dropping connections. ``dzo serve`` logs a
+      replacement that does not load and keeps the old one active. Everything else in this block is
+      read at start. If you give only one of the two files, or ``client_ca_file`` alone, dzo refuses
+      it when the configuration loads.
    ``web_url``
       The address people open the web interface at, as scheme and host (and port) only, for example
       ``https://dzo.example.invalid``. User logins (:doc:`web`) need it: it fixes the return address
       of the Steam sign-in and the relying party of passkeys. Unset: logins are off and the web
-      interface says so. It must be ``https``; plain ``http`` is only accepted for ``localhost``,
-      ``127.0.0.1`` and ``[::1]``. A path, query, fragment or user name is refused. ``dzo web`` learns
+      interface says so. ``web_url`` must be ``https``; dzo accepts plain ``http`` only for
+      ``localhost``, ``127.0.0.1`` and ``[::1]``. dzo refuses a path, query, fragment or user name.
+      ``dzo web`` learns
       the address from the API, so it is set once, on the host of ``dzo serve``. Changing it takes
       effect when ``dzo serve`` starts, and passkeys registered under the old name stop working.
    ``login``
-      ``session_idle_hours`` (unset: 12) is how long a web session may sit unused before it ends,
-      ``session_max_days`` (unset: 7) how long it lives at most however busy the person is. Both are
-      whole numbers and must be at least 1; ``0`` and negative values are refused when the
+      ``session_idle_hours`` (unset: 12) is how long a web session can sit unused before it ends.
+      ``session_max_days`` (unset: 7) is how long it lives at most however busy the person is. Both
+      are whole numbers and must be at least 1; dzo refuses ``0`` and negative values when the
       configuration loads. A change affects the sessions that exist as soon as ``dzo serve``
-      is restarted.
+      restarts.
    ``ip_retention_days``
       How many days the address of a player sighting is kept, unless a ban uses it. Unset: 90.
-      ``0``: for ever. Negative values are refused.
+      ``0``: for ever. dzo refuses negative values.
    ``vacuum_days``
       How often, in days, the ban database file is rebuilt. Unset: 7. ``0``: never.
    ``db_backup_hours``, ``db_backup_keep``
-      ``dzo serve`` writes a consistent copy of ``dzo.sqlite`` (SQLite ``VACUUM INTO``, so it is valid
-      while the server runs and needs no stop) to ``<paths.db>/backup/dzo-<UTC time>.sqlite``, mode
-      ``0600`` in a ``0750`` directory. ``db_backup_hours`` (unset: 24) is the interval in whole hours;
-      ``0`` turns the copies off, a negative value is refused with ``serve.db_backup_hours: must be 0
+      ``dzo serve`` writes a consistent copy of ``dzo.sqlite`` to
+      ``<paths.db>/backup/dzo-<UTC time>.sqlite``, mode ``0600`` in a ``0750`` directory.
+      SQLite's ``VACUUM INTO`` makes the copy, so it is valid while the server runs and needs no
+      stop. ``db_backup_hours`` (unset: 24) is the interval in whole hours; ``0`` turns the copies
+      off. dzo refuses a negative value with ``serve.db_backup_hours: must be 0
       (off) or a number of hours``, and more than 87600 (ten years) with ``serve.db_backup_hours: must be at
-      most 87600``. ``db_backup_keep`` (unset: 7) is how many copies stay; older ones
-      are deleted after each new copy. It must be at least 1, otherwise ``serve.db_backup_keep: must be
-      at least 1`` is reported when the configuration loads. The time of the last copy is kept in the
-      database, so a restart does not copy again early. A failed copy is logged and tried again at the
-      next minute's upkeep. Both are read when ``dzo serve`` starts; a change takes effect after a
-      restart. The newest copy is passed to ``post_backup`` hooks as ``extra.db_backup``, see
+      most 87600``. ``db_backup_keep`` (unset: 7) is how many copies stay; dzo deletes older ones
+      after each new copy. It must be at least 1, otherwise dzo reports ``serve.db_backup_keep: must be
+      at least 1`` when the configuration loads. The time of the last copy is kept in the
+      database, so a restart does not copy again early. dzo logs a failed copy and tries again at
+      the next minute's upkeep. ``dzo serve`` reads both when it starts; a change takes effect
+      after a restart. dzo passes the newest copy to ``post_backup`` hooks as ``extra.db_backup``, see
       :doc:`backups`.
    ``session_retention_days``
       How many days the sessions of the player history (who was on which instance, from when to when) are
-      kept. Unset: 365. ``0``: for ever. Negative values are refused. Only the sessions go: the players, the
+      kept. Unset: 365. ``0``: for ever. dzo refuses negative values. Only the sessions go: the players, the
       names they used and the times they were first and last seen stay (:ref:`player-history`). ``dzo serve``
       applies it every minute with the other upkeep; a change takes effect when ``dzo serve`` starts.
    ``audit_ip_retention_days``
       How many days an entry of the audit log keeps the browser address (``client``) of a web action.
-      Unset: 90. ``0``: for ever. Negative values are refused. Once a day ``dzo serve`` blanks the address
+      Unset: 90. ``0``: for ever. dzo refuses negative values. Once a day ``dzo serve`` blanks the address
       of older entries; the entries themselves stay, as does the rest of the log. The address is personal
       data, so it expires like the sightings of ``ip_retention_days``. A change takes effect when ``dzo
       serve`` starts. The login lines in the service log (journald) are subject to the host's log
@@ -302,23 +312,24 @@ and print what is wrong. A key dzo does not know is ignored.
    ``api``
       Where the installation's API is, when it is not this host's. ``url`` (``https``, or ``http`` for
       a loopback address) and ``token_file`` (an absolute path; a ``web`` token created on that
-      installation) go together: giving one without the other is refused, and so is ``ca_file``
-      without them. ``ca_file`` is a PEM file with the CA that signed the API's certificate, for a
-      private CA; unset, the system's CAs are used. It is read at start, unlike the other TLS files: after
-      the CA is replaced, restart ``dzo web`` (a renewed certificate from the same CA needs nothing). Without ``api`` the web interface uses this host's API (``serve.listen``) with
+      installation) go together. dzo refuses one without the other, and ``ca_file`` without them.
+      ``ca_file`` is a PEM file with the CA that signed the API's certificate, for a
+      private CA; unset, dzo uses the system's CAs. dzo reads it at start, unlike the other TLS
+      files. After you replace the CA, restart ``dzo web`` (a renewed certificate from the same CA
+      needs nothing). Without ``api`` the web interface uses this host's API (``serve.listen``) with
       ``${paths.secrets}/web.token``. Read at start.
    ``trusted_proxies``
-      Reverse proxies, as addresses or CIDR networks, whose ``X-Forwarded-For`` header is believed
-      when working out the browser's address for the login log and the audit log. Default: none, then
-      the address of the connection is used and forwarding headers are ignored. A value that is
-      neither an address nor a CIDR network is refused, naming it. Read at start.
+      Reverse proxies, as addresses or CIDR networks. dzo believes their ``X-Forwarded-For`` header
+      when it works out the browser's address for the login log and the audit log. Default: none,
+      then dzo uses the address of the connection and ignores forwarding headers. dzo refuses a
+      value that is neither an address nor a CIDR network, naming it. Read at start.
    ``assets``
-      An optional directory that overrides the web files compiled into dzo, file by file: htmx 2.0.4,
-      Leaflet 1.7.1 and Fork Awesome 1.2.0 are built in and served under ``/vendor/``. A file the
-      directory holds wins; a file it lacks comes from the binary, so a directory with only
+      An optional directory that overrides the web files compiled into dzo, file by file. htmx 2.0.4,
+      Leaflet 1.7.1 and Fork Awesome 1.2.0 are built in. They are served under ``/vendor/``. A file the
+      directory holds wins, and a file it lacks comes from the binary. So a directory with only
       ``htmx/htmx.min.js`` replaces htmx alone and keeps the rest. A directory that is not there, for
       example a stale ``/usr/share/javascript`` from an older configuration, is not an
-      error: ``dzo web`` logs one warning at start and serves the built-in copies. Read at start of
+      error. ``dzo web`` logs one warning at start and serves the built-in copies. Read at start of
       ``dzo web``; a change needs a restart. ``dzo site validate`` reads the same
       ``fork-awesome/css/fork-awesome.css``, so it warns about the admin-map icons of an override
       too (:ref:`map-icons`).
@@ -326,17 +337,17 @@ and print what is wrong. A key dzo does not know is ignored.
       The built documentation, served under ``/docs/``.
    ``flags_dir``
       The same for the country flags, ``<code>.svg``: the built-in set comes from
-      ``iso-country-flags-svg-collection`` (commit ``f2cf92f``) in the 4:3 shape and is served under
-      ``/flags/``. A directory overrides it file by file, a flag the directory lacks comes from the
+      ``iso-country-flags-svg-collection`` (commit ``f2cf92f``) in the 4:3 shape; dzo serves it
+      under ``/flags/``. A directory overrides it file by file, a flag the directory lacks comes from the
       binary, and a missing directory only logs the warning above. Read at start of ``dzo web``.
    ``backends``, ``user_header``
       Removed. One web interface serves one installation (use ``api``), and ``dzo web`` has its own
-      login. A configuration that still sets either key is refused with a pointer to the migration
+      login. dzo refuses a configuration that still sets either key, with a pointer to the migration
       notes (:doc:`migration`).
 
 ``map_tiles.maps``
    The data PBO each map's tiles are built from, by the name of the mission's world
-   (``chernarusplus``, ``enoch``, ``sakhal``, ``deerisle``): ``source`` is the DayZ client's
+   (``chernarusplus``, ``enoch``, ``sakhal``, ``deerisle``). ``source`` is the DayZ client's
    ``worlds_<map>_data.pbo``, or a modded map's ``data.pbo``. The dedicated server's copy is not
    enough. See :doc:`admin-map`.
 
@@ -346,12 +357,12 @@ and print what is wrong. A key dzo does not know is ignored.
    ``listen``
       The address to listen on. Plain HTTP unless ``tls`` is set.
    ``tls``
-      ``cert_file`` and ``key_file`` go together and switch on HTTPS; they are reloaded when
+      ``cert_file`` and ``key_file`` go together and switch on HTTPS; dzo reloads them when
       they change. ``client_ca_file`` (needs the other two) makes client certificates
-      mandatory (mutual TLS); it is reloaded the same way, so a replaced CA file takes effect
-      without a restart. A replacement that does not load is logged and the old one stays active.
+      mandatory (mutual TLS). dzo reloads it the same way, so a replaced CA file takes effect
+      without a restart. dzo logs a replacement that does not load, and the old one stays active.
    ``allow``
-      The networks (CIDR) that may connect. Empty allows every address.
+      The networks (CIDR) that can connect. Empty allows every address.
    ``bearer_token_file``
       If set, every request needs this token as ``Authorization: Bearer``.
 
@@ -382,8 +393,8 @@ Site repository layout
        MapStreamDZE/…               .dze files mirrored to profiles/dzo/mapstream/DZE (dzo_mapstream)
        hooks/…
 
-``dzo site pull`` updates the checkout. Uncommitted local edits block the pull
-and are reported instead of being overwritten. ``dzo site validate`` checks all
+``dzo site pull`` updates the checkout. Uncommitted local edits block the pull;
+dzo reports them instead of overwriting them. ``dzo site validate`` checks all
 files against their schemas.
 
 .. _site-yaml:
@@ -394,16 +405,16 @@ site.yaml
 ``site.yaml`` in the root of the site repository is optional. Its ``defaults:``
 block pre-fills settings for every instance. How it combines with an instance:
 
-* a setting the instance leaves unset is taken from ``defaults:``;
-* a setting the instance does set replaces the default. A nested block is filled
-  key by key, a list or a map is replaced as a whole (``[]`` clears it);
-* exceptions: ``logs.rotate`` is added to the instance's rules, and
-  ``admin_map.watch`` rules are merged by layer name (the instance's rule replaces the
-  default rule of the same layer as a whole, see :doc:`admin-map`);
+* dzo takes a setting the instance leaves unset from ``defaults:``;
+* a setting the instance does set replaces the default. dzo fills a nested block
+  key by key, and replaces a list or a map as a whole (``[]`` clears it);
+* exceptions: dzo adds ``logs.rotate`` to the instance's rules, and
+  merges ``admin_map.watch`` rules by layer name. The instance's rule
+  replaces the default rule of the same layer as a whole, see :doc:`admin-map`;
 * keys set in neither place get dzo's built-in values.
 
 A plain ``false``, ``0`` or empty string counts as "unset" for a setting that is not a
-pointer: an instance cannot switch a default ``true`` off by writing ``false`` (this
+pointer. An instance cannot switch a default ``true`` off by writing ``false`` (this
 affects ``container.core_dumps`` and ``updates.apply_with_scheduled_restart``). The
 settings that take an explicit value for that are ``stop.ignore_asserts``, ``welcome``
 (``""``), ``updates.restart_minute`` and ``admin_map.vanilla_events``.
@@ -475,9 +486,9 @@ explained there, see :ref:`instance-yaml`.
    ``localhost/dzo-runtime:latest``.
 
 ``defaults``
-   The settings that can be defaulted are ``rcon_bind``, ``params``, ``updates``,
+   These settings can be defaulted: ``rcon_bind``, ``params``, ``updates``,
    ``restarts``, ``health``, ``restart_limit``, ``stop``, ``notify``, ``container``,
-   ``backup``, ``logs``, ``admin_map``, ``welcome`` and ``messages``, with the same
+   ``backup``, ``logs``, ``admin_map``, ``welcome`` and ``messages``. They have the same
    keys as in ``instance.yaml`` below. The identity of an instance (``name``, ``product``,
    ``map``, ``mission_source``, ``fallback_mission``, ``mission``, ``ports``, ``network``,
    ``mods``, ``overlays``, ``hooks``, ``admin``, ``priority``) cannot be defaulted.
@@ -485,7 +496,7 @@ explained there, see :ref:`instance-yaml`.
    :doc:`resolved-instance`).
 
 ``local_mods``
-   Where a local servermod (``{local: <name>, server: true}`` in ``mods``) is imported from.
+   Where dzo imports a local servermod (``{local: <name>, server: true}`` in ``mods``) from.
    Each entry has exactly one of ``url`` (a release archive, which needs ``sha256``) or
    ``path`` (an absolute directory on the host). A local mod without an entry is read from
    ``localmods/<name>/`` in the site repository. See :doc:`mods-and-updates`.
@@ -500,8 +511,8 @@ instance.yaml
 One ``instances/<name>/instance.yaml`` per server. Unknown keys are errors. The example
 lists **every** key; ``# default`` marks the built-in value, other values are examples.
 Where a key can also be set under ``defaults:`` in ``site.yaml``, the instance's value
-replaces the site's (see :ref:`site-yaml` for the rules), which is said in the notes
-below as "site default".
+replaces the site's (see :ref:`site-yaml` for the rules). The notes below say
+"site default" for that.
 
 .. code-block:: yaml
 
@@ -649,16 +660,16 @@ Keys:
 
 ``map``, ``mission_source``, ``fallback_mission`` and ``mission``
    The mission folder name and where its pristine copy comes from. Without a
-   ``mission_source``, a ``dayzOffline.<map>`` folder is taken from Bohemia's Central
+   ``mission_source``, dzo takes a ``dayzOffline.<map>`` folder from Bohemia's Central
    Economy repository at ``master``. See :doc:`missions`. ``mission_source`` has either
    ``git`` (a repository URL, which needs ``ref`` and ``path``) or ``preset`` (the name of an
-   ``integrations/maps/<name>.yaml`` of the site repository), never both; ``ref`` and ``path``
+   ``integrations/maps/<name>.yaml`` of the site repository), never both. ``ref`` and ``path``
    override those of a preset and of the default. ``fallback_mission`` names the
-   ``dayzOffline.<map>`` folder of the installed server build that a base file the map lacks
-   is taken from. ``mission.unmanaged`` lists glob patterns of files dzo never manages, even
-   when the mission repository ships them; ``mission.drift`` says what happens to a managed
-   file changed on disk since dzo wrote it, and has one value, ``warn-backup-overwrite`` (the
-   default): warn, keep a copy, overwrite.
+   ``dayzOffline.<map>`` folder of the installed server build from which dzo takes a base
+   file the map lacks. ``mission.unmanaged`` lists glob patterns of files dzo never manages,
+   even when the mission repository ships them. ``mission.drift`` says what happens to a
+   managed file changed on disk since dzo wrote it. It has one value,
+   ``warn-backup-overwrite`` (the default): warn, keep a copy, overwrite.
 
 ``ports``
    ``game`` (required), ``rcon`` and ``query``: the game, BattlEye RCon and Steam query
@@ -667,15 +678,15 @@ Keys:
 ``rcon_bind``
    The address BattlEye's RCon (UDP, the ``ports.rcon`` port) is reachable on. The default is
    ``127.0.0.1``: only the host itself, which is all dzo needs (its own RCon client, the health
-   checks and ``dzo rcon`` connect there), so the password never has to protect a port on the
-   internet. Many hosts want external RCon tools (BERCon, web panels) to connect. Then set an
-   address of the host to bind to it only, or ``0.0.0.0`` (``::`` for IPv6) for every interface;
-   it can be set once under ``defaults:`` in ``site.yaml`` for all instances. It applies with
-   both ``network`` modes (with ``publish`` it is the host address the RCon port is published on),
-   and takes effect at the next start. dzo connects to the address you bound, or to ``127.0.0.1``
-   for ``0.0.0.0``. The RCon password is generated per instance and protects the port, but
-   BattlEye RCon has no encryption and no rate limit beyond its own: allow the port only from the
-   addresses that need it in your firewall.
+   checks and ``dzo rcon`` connect there). That way the password never has to protect a port on
+   the internet. Many hosts want external RCon tools (BERCon, web panels) to connect. Then set an
+   address of the host to bind to it only, or ``0.0.0.0`` (``::`` for IPv6) for every interface.
+   It can be set once under ``defaults:`` in ``site.yaml`` for all instances. It applies with
+   both ``network`` modes and takes effect at the next start. With ``publish`` it is the host
+   address that dzo publishes the RCon port on. dzo connects to the address you bound, or to
+   ``127.0.0.1`` for ``0.0.0.0``. dzo generates the RCon password per instance, and it protects
+   the port, but BattlEye RCon has no encryption and no rate limit beyond its own. Allow the port
+   only from the addresses that need it in your firewall.
 
 ``network``
    Required. ``host`` uses the host's network directly. ``publish`` gives the
@@ -684,7 +695,7 @@ Keys:
 ``params``
    Launch parameters of ``DayZServer`` that dzo does not derive from other settings.
    ``cpuCount`` is a number (``-cpuCount=``) or ``auto``, which passes nothing and leaves the
-   choice to the server; ``limitFPS`` is ``-limitFPS=``; ``extra`` is a list of further
+   choice to the server. ``limitFPS`` is ``-limitFPS=``. ``extra`` is a list of further
    command-line arguments, appended as they are. Site default.
 
 ``container``
@@ -707,18 +718,18 @@ Keys:
 ``container.core_dumps``
    ``false`` (default) sets ``Ulimit=core=0`` on the container. A DayZ server that
    crashes (or dies on shutdown) would otherwise write a core file of its whole memory,
-   several GB, and that disk load stalls every other server on the host for many seconds.
-   Set ``true`` only to debug a crash, and mind the disk space. The unit is rewritten at
+   several GB. That disk load stalls every other server on the host for many seconds.
+   Set ``true`` only to debug a crash, and mind the disk space. dzo rewrites the unit at
    the next render; a running server keeps its limit until it is restarted.
 
 ``mods``
    Workshop mods (``id``) and local servermods (``local``, a name, see ``local_mods`` in
    :ref:`site-yaml`); exactly one of the two per entry. ``server: true`` loads the mod
    with ``-servermod``; a local mod must set it. ``debug_client: true`` (local mods only,
-   instead of ``server``) loads a local mod as a client mod for debugging: players cannot
+   instead of ``server``) loads a local mod as a client mod for debugging. Players cannot
    download it and must install the same signed build by hand. The list
-   order is also the order of the ``-mod=`` and ``-servermod=`` arguments, and
-   decides which mod wins when two mods change the same mission file. dzo does
+   order is also the order of the ``-mod=`` and ``-servermod=`` arguments. It decides which
+   mod wins when two mods change the same mission file. dzo does
    not sort mods or check their dependencies: list a mod after the mods it needs.
 
 ``overlays``
@@ -727,91 +738,93 @@ Keys:
    mods. See :doc:`missions`.
 
 ``logs``
-   Which log files in ``profiles/`` are moved to the log archive (``paths.logs``), and how long the
-   archive is kept; site default. Details in :ref:`profile-log-rotation`.
+   The log files in ``profiles/`` that dzo moves to the log archive (``paths.logs``), and how
+   long dzo keeps the archive; site default. Details in :ref:`profile-log-rotation`.
 
    ``rotate``
-      A list of regular expressions matched against the path below ``profiles/``; a rule is a
-      plain string, or ``{match: ..., keep_newest: N, max_age: ...}`` for options (``keep_newest``
-      overrides the setting below for this rule, ``max_age`` how long its archived files are
-      kept instead of ``archive.max_age``). **The default is the server's own files**:
+      A list of regular expressions matched against the path below ``profiles/``. A rule is a
+      plain string, or ``{match: ..., keep_newest: N, max_age: ...}`` for options.
+      ``keep_newest`` overrides the setting below for this rule; ``max_age`` is how long its
+      archived files are kept instead of ``archive.max_age``. **The default is the server's own files**:
       ``^DayZServer(_x64)?_.*\.RPT$``, ``^script_.*\.log$``, ``^crash_.*\.log$``,
       ``^error_.*\.log$``, ``^warning_.*\.log$``, ``^DayZServer(_x64)?_.*\.ADM$`` and
-      ``\.mdmp$`` (``max_age: 14d``). The rules of an instance are added to those of ``defaults:``
-      in ``site.yaml``; as soon as one of them exists the default list is **not** used any
-      more, so repeat the server's own rules you still want. A mod's logs, which land anywhere in
+      ``\.mdmp$`` (``max_age: 14d``). dzo adds the rules of an instance to those of ``defaults:``
+      in ``site.yaml``. As soon as one of them exists the default list is **not** used any
+      more. So repeat the server's own rules you still want. A mod's logs, which land anywhere in
       ``profiles/``, need a rule. ``dzo logs rotate <name> --dry-run`` lists the large files no
       rule matches.
    ``keep_newest``
       How many of the newest files of a rule stay in place. Default 1; 0 archives all.
    ``min_age``
-      A file changed more recently is never touched. Default ``10m``.
+      dzo never touches a file changed more recently. Default ``10m``.
    ``archive``
-      ``compress`` is ``gzip`` (default) or ``none``; ``max_age`` how long archived files are kept
-      (default ``90d``); ``max_size`` the size of the archive above which the oldest files are
-      deleted (``50GiB``, ``500MiB``, ... default: no limit).
+      ``compress`` is ``gzip`` (default) or ``none``. ``max_age`` is how long archived files are
+      kept (default ``90d``). ``max_size`` is the size of the archive above which the oldest files
+      are deleted (``50GiB``, ``500MiB``, ... default: no limit).
 
 ``admin`` and ``admin_map``
    Settings of the :doc:`dzo-admin mod <admin-map>`, which an instance runs when
    ``{local: dzo-admin, server: true}`` is in ``mods``.
 
    ``admin.disabled``
-      ``true`` switches the integration off although the mod is listed.
+      ``true`` switches the integration off although ``mods`` lists the mod.
    ``admin.sync_ms``, ``players_s``, ``vehicles_s``, ``markers_s``, ``events_s``
-      How often the mod reports to ``dzo serve``: the sync in milliseconds (default 1000), players
-      (5 s), vehicles (60 s), map markers (10 s) and events (30 s). 0 is the default;
-      negative values are refused.
+      How often the mod reports to ``dzo serve``. The periods: the sync in milliseconds
+      (default 1000), players (5 s), vehicles (60 s), map markers (10 s) and events (30 s).
+      0 is the default; dzo refuses negative values.
    ``admin.allow_spawn``
-      Whether admins may spawn items (default true).
+      Whether admins can spawn items (default true).
    ``admin.move_occupied_max``
-      The farthest, in metres (ground distance), an operator may move a vehicle that has players inside, on the map
+      The farthest, in metres (ground distance), an operator can move a vehicle that has players inside, on the map
       or with ``dzo vehicle move``. Default 200; 0 refuses every move of an occupied vehicle; a negative value is an
       error. Empty vehicles can be moved anywhere in the world. A short move keeps the terrain the players' game
-      already has loaded; a long one can leave them looking at no world while it streams in. Needs dzo-admin 0.7.0
+      already has loaded. A long one can leave them looking at no world while it streams in. Needs dzo-admin 0.7.0
       (an older mod cannot move vehicles at all). Written to the mod's ``config.json`` by ``dzo instance render``, read when
       the server starts.
    ``admin.allow_classes``, ``admin.deny_classes``
-      Class names admins may or may not spawn; a trailing ``*`` is a prefix.
+      Class names admins can spawn or cannot spawn; a trailing ``*`` is a prefix.
    ``admin.vehicle_kinds``
       Class name patterns by kind, ``bicycle``, ``boat`` or ``helicopter``, of other mods, on top of the
-      classes dzo knows: the map and the vehicle list show them with the icon of the kind.
+      classes dzo knows. The map and the vehicle list show them with the icon of the kind.
    ``admin.vehicle_forget_days``
-      How many days ``dzo serve`` keeps the record of a vehicle (its last driver, the time of the last drive and
-      when it was first seen) after the vehicle stopped being reported by the mod, for instance because it was
-      destroyed, despawned or deleted. Default 7; an integer from 1 to 3650 (ten years), anything else is refused with
+      How many days ``dzo serve`` keeps a vehicle's record: its last driver, the time of the last drive
+      and when it was first seen. The record stays after the mod stops reporting the vehicle, for
+      instance because it was destroyed, despawned or deleted. Default 7; an integer from 1 to 3650
+      (ten years); dzo refuses anything else with
       ``admin.vehicle_forget_days must be at least 1`` or ``admin.vehicle_forget_days must be at most 3650``.
-      Records are only made while the mod reports drivers (``dzo-admin`` 0.8.0, hello feature ``driver``); with an
-      older mod none are kept, and they start once the mod is updated, so that no vehicle looks unused for longer
-      than dzo could have known. A vehicle that is reported again within that time gets its
-      record back; one that comes back later starts a new record (no driver, a new age). Not a site default (the
+      dzo makes records only while the mod reports drivers (``dzo-admin`` 0.8.0, hello feature ``driver``).
+      With an older mod it keeps none. They start once the mod is updated, so that no vehicle looks unused
+      for longer than dzo can know. A vehicle that the mod reports again within that time gets its
+      record back. One that comes back later starts a new record (no driver, a new age). Not a site default (the
       ``admin`` block is per instance). The records are kept in ``dzo.sqlite``; nothing on the vehicles in the game
-      changes. Taken up on the next ``dzo serve`` reload or restart; the sweep that forgets records runs hourly, and
-      records already forgotten are not restored by a longer value. The records of an instance removed from the
-      site are forgotten after the default 7 days, whatever this value was (the setting is removed with the
-      instance), at the next reload or hourly sweep.
+      changes. dzo takes a change up on the next ``dzo serve`` reload or restart. The sweep that forgets
+      records runs hourly, and dzo does not restore records already forgotten by a longer value.
+      If you remove an instance from the site, dzo forgets its records after the default 7 days,
+      whatever this value was. dzo removes the setting with the instance. That forgetting happens
+      at the next reload or hourly sweep.
    ``admin_map.vanilla_events``
       Whether the map shows the events of the Central Economy as marker layers (default true). A
       rule with the same ``layer`` replaces one. Site default.
    ``admin_map.watch``
-      Class watch rules, merged with those of the site by ``layer``, see :doc:`admin-map`. A rule has
-      ``layer`` and ``classes`` (required), and ``icon`` (a Fork Awesome name), ``color`` (``#rgb``,
-      ``#rrggbb`` or a colour name), ``visibility`` (the lowest role that sees the markers:
-      ``viewer``, ``moderator``, ``operator`` or ``admin``, default admin), ``label``, ``max`` (the
-      most markers), ``cluster`` (a hint for the web map). ``only_if`` is refused: it is not
-      supported yet.
+      Class watch rules, merged with those of the site by ``layer``, see :doc:`admin-map`. A rule
+      has ``layer`` and ``classes`` (required), and ``icon`` (a Fork Awesome name) and ``color``
+      (``#rgb``, ``#rrggbb`` or a colour name). ``visibility`` is the lowest role that sees the
+      markers: ``viewer``, ``moderator``, ``operator`` or ``admin``, default admin. The rule can
+      also have ``label``, ``max`` (the most markers) and ``cluster`` (a hint for the web map).
+      dzo refuses ``only_if``: it is not supported yet.
 
 ``updates``
    The mod update pipeline of the instance (:doc:`mods-and-updates`); site default.
 
    ``policy``
-      What happens when a mod update is found: ``auto`` (default) restarts the server
-      gracefully within the update windows, ``notify`` only reports, ``manual`` only
+      What happens when a mod update is found. ``auto`` (default) restarts the server
+      gracefully within the update windows, ``notify`` only reports, and ``manual`` only
       records it.
    ``check_interval``
       How often the update check runs. Default ``1h``.
    ``window``
-      Time ranges (``HH:MM-HH:MM``, a range may span midnight) in which an automatic update
-      restart may happen. Default: any time.
+      Time ranges (``HH:MM-HH:MM``, a range can span midnight) in which an automatic update
+      restart can happen. Default: any time.
    ``quiet_hours``
       Time ranges in which it never happens.
    ``min_restart_interval``
@@ -822,33 +835,34 @@ Keys:
       ``true`` uses the next maintenance restart (``restarts.schedule``) for the update instead of
       a restart of its own.
    ``max_delay``
-      An update pending this long is applied whatever ``window`` and ``quiet_hours`` say.
+      dzo applies an update pending this long whatever ``window`` and ``quiet_hours`` say.
    ``restart_minute``
       See below.
    ``restart_announce``
       The countdown of an update restart, the keys of ``restarts.announce``.
 
 ``welcome``
-   The message every player gets when joining. The default is ``Welcome to #name!``. Set your own
-   text (``#name``, the ``hostname`` of the instance's ``serverDZ.cfg`` (the instance name when it sets none), and ``#port``, the game port, work in it; up to 160
-   characters), or ``""`` for none. Can be set under ``defaults:`` in ``site.yaml``.
+   The message every player gets when joining. The default is ``Welcome to #name!``. Set your
+   own text, or ``""`` for none. ``#name``, the ``hostname`` of the instance's
+   ``serverDZ.cfg`` (the instance name when it sets none) and ``#port``, the game port, work in
+   it. The text can have up to 160 characters. Can be set under ``defaults:`` in ``site.yaml``.
 
 ``messages``
-   Further messages the server sends on its own. A message has ``text`` (up to 160 characters),
-   ``on_connect: true`` to send it once to a player who joins (``delay`` minutes after the player
-   is in the game, default at once) and/or ``repeat`` to send it to everybody every that many
-   minutes, and optionally ``color``: ``red`` (the default), ``green``, ``yellow`` or ``blue`` (the chat's own colour, hard to read).
-   All times are minutes. Good for the homepage and the rules. It can be set under ``defaults:`` in
-   ``site.yaml``; an instance's own list replaces it.
+   Further messages the server sends on its own. A message has ``text`` (up to 160 characters).
+   ``on_connect: true`` sends it once to a player who joins (``delay`` minutes after the player is
+   in the game, default at once). ``repeat`` sends it to everybody every that many minutes.
+   Optionally a message has ``color``: ``red`` (the default), ``green``, ``yellow`` or ``blue``
+   (the chat's own colour, hard to read). All times are minutes. Good for the homepage and the
+   rules. It can be set under ``defaults:`` in ``site.yaml``; an instance's own list replaces it.
 
-   The messages are sent by ``dzo serve`` while the server runs, not by DayZ: the server's own
-   ``messages.xml`` sends nothing on a 1.30 server, so dzo always writes it empty (which also
+   ``dzo serve`` sends the messages while the server runs, not DayZ. The server's own
+   ``messages.xml`` sends nothing on a 1.30 server, so dzo always writes it empty. That also
    keeps the example messages of the pristine mission, with their shutdown countdown, from
-   running), and an ``instances/<name>/messages.xml`` is refused. With the dzo-admin mod connected
-   (the default, see :doc:`admin-map`) a message goes out as a coloured chat line, to a joining
-   player as soon as the player is in the game. Without the mod it is sent over RCon (``say``):
-   without colour, and to a joining player 45 seconds after the connect, because the character is
-   still loading before. The messages are read when ``dzo serve`` starts and when the site is
+   running. dzo refuses an ``instances/<name>/messages.xml``. With the dzo-admin mod connected
+   (the default, see :doc:`admin-map`) a message goes out as a coloured chat line. A joining
+   player gets it as soon as the player is in the game. Without the mod dzo sends it over RCon (``say``):
+   without colour, and to a joining player 45 seconds after the connect. The character is still
+   loading before then. ``dzo serve`` reads the messages when it starts and when the site is
    reloaded. Restarts and stops are announced by dzo itself, see ``restarts.announce`` and
    :doc:`operations`; there is no countdown in ``messages:``.
 
@@ -860,25 +874,25 @@ Keys:
 ``updates.restart_minute``
    With ``policy: auto``, the minute of the hour at which update restarts happen: ``0`` is the
    full hour, ``30`` is XX:30. The update check then starts the announcement
-   ``restart_announce.minutes`` earlier (with 30 minutes, ``0`` is started at XX:30 and ``30`` at
-   XX:00), so the server restarts exactly at the slot; ``dzo instance apply`` adds those minutes to
-   ``dzo-update-check.timer``. A check that runs more than 10 minutes after the start of the slot
-   waits for the next hour. Without it an update restart starts at the first check that finds the
-   update. Together with ``min_restart_interval: 1h`` a server is restarted for updates at most once
-   an hour.
+   ``restart_announce.minutes`` earlier, so the server restarts exactly at the slot. With 30
+   minutes, the update check starts ``0`` at XX:30 and ``30`` at XX:00. ``dzo instance apply``
+   adds those minutes to ``dzo-update-check.timer``. A check that runs more than 10 minutes after
+   the start of the slot waits for the next hour. Without it an update restart starts at the first
+   check that finds the update. Together with ``min_restart_interval: 1h`` dzo restarts a server
+   for updates at most once an hour.
 
 ``stop``
    How the server is brought down, for ``dzo instance stop``, every restart (maintenance,
    updates, ``dzo restart``) and a reboot of the host. ``method: rcon`` (the default)
    sends ``#shutdown`` over RCon, waits up to ``timeout`` (default ``30s``) for the
-   process to exit, and kills it when it does not; the restart that follows is
-   immediate, players are not announced to (use ``dzo restart`` for a countdown).
-   ``method: kill`` skips the request and kills the server at once. ``ignore_asserts``
-   (default ``true``) starts the server with a stdin that answers "Ignore" to the
-   ``(A)bort (R)etry (I)gnore`` prompt of an assertion: the experimental builds raise one
-   at every shutdown ("Script is leaking!") and, with a stdin at end-of-file (any
-   container), spin forever waiting for the answer. Set it to ``false`` to start the
-   server unchanged. See :doc:`operations`.
+   process to exit, and kills it when it does not. The restart that follows is
+   immediate, and dzo does not announce it to players (use ``dzo restart``
+   for a countdown). ``method: kill`` skips the request and kills the server at once.
+   ``ignore_asserts`` (default ``true``) starts the server with a stdin that answers
+   "Ignore" to the ``(A)bort (R)etry (I)gnore`` prompt of an assertion. The experimental
+   builds raise one at every shutdown ("Script is leaking!"). With a stdin at end-of-file
+   (any container) they spin forever and wait for the answer. Set it to ``false`` to start
+   the server unchanged. See :doc:`operations`.
 
 ``restarts``
    Maintenance restarts; site default.
@@ -887,19 +901,19 @@ Keys:
       The times of day as ``HH:MM`` or ``Mon,Thu HH:MM``, see :doc:`operations`. Default: none.
    ``announce``
       The countdown before the restart: ``minutes``, ``lock`` and ``kick`` (minutes before the
-      restart, ``minutes`` >= ``lock`` >= ``kick``), ``text`` (the message) and ``ways`` (how and
-      when it reaches the players, with ``within``, ``way``, ``type``, ``every``, ``at`` and ``now``).
-      All of it is explained in :doc:`operations`.
+      restart, ``minutes`` >= ``lock`` >= ``kick``). ``text`` is the message. ``ways`` sets how
+      and when it reaches the players, with ``within``, ``way``, ``type``, ``every``, ``at`` and
+      ``now``. The explanation is in :doc:`operations`.
 
 ``health``
-   ``startup_timeout`` is how long a start may take (large mod lists load
+   ``startup_timeout`` is how long a start can take (large mod lists load
    slowly; default ``45m``). ``interval`` (default ``60s``) × ``retries`` (default 5) is how
-   long a hung server may stay hung before it is killed. Site default.
+   long a hung server can stay hung before dzo kills it. Site default.
 
 ``restart_limit``
    Crash-loop brake: after ``burst`` (default 5) starts within ``interval`` (default ``30m``)
-   the server stays stopped and you are alerted. ``cooldown`` is accepted for a retry after
-   that time but is not acted on yet. Site default.
+   the server stays stopped and dzo alerts you. dzo accepts ``cooldown`` for a retry after
+   that time but does not act on it yet. Site default.
 
 ``notify``
    ``discord`` lists the names of the webhooks of ``notify.discord`` in ``config.yaml``
@@ -909,22 +923,24 @@ Keys:
    Posts the kills of the instance to Discord, so a community can follow its server. Off unless
    ``discord`` names at least one webhook. It needs the :doc:`dzo-admin mod <admin-map>` (0.5.0 or
    newer) on the instance, because the mod reports the kills (see :ref:`event-feed`); without the
-   mod nothing is posted. Not a site default: set it per instance. The ``notify`` key is a different
-   thing: it routes the operator's notifications (updates, restarts, crashes), the killfeed has its own
-   targets, so a public channel can get the kills and a private one the operator messages.
+   mod dzo posts nothing. Not a site default: set it per instance. The ``notify`` key is a
+   different thing: it routes the operator's notifications (updates, restarts, crashes).
+   The killfeed has its own targets, so a public channel can get the kills and a private one the
+   operator messages.
 
    ``discord``
       The names of webhooks of ``notify.discord`` in ``config.yaml`` that get the kills; any number.
-      A name that is not there is an error when the instance is resolved (``dzo instance render``,
+      A name that is not there is an error when dzo resolves the instance (``dzo instance render``,
       ``dzo serve``), not a silent no-op. Unset or ``[]``: the killfeed is off.
    ``delay``
-      Holds every kill back for this long before it is posted (``10m``, ``1h``; default ``0``, at once;
+      Holds every kill back for this long before dzo posts it (``10m``, ``1h``; default ``0``, at once;
       at most ``24h``). It is meant for PvP servers: a kill posted at once tells everybody where a fight
-      is going on. The delay counts from the moment ``dzo serve`` receives the kill. A changed ``delay``
+      happens. The delay counts from the moment ``dzo serve`` receives the kill. A changed ``delay``
       applies to the kills that come after the change; the ones already waiting keep their time.
    ``ai_killers``
-      Include kills by DayZ Expansion AI (default ``true``). The killer is shown as ``AI "Name" (faction)``,
-      the AI's own name and its faction, each only when it has one (dzo-admin 0.6.1; older mods send only the faction).
+      Include kills by DayZ Expansion AI (default ``true``). The killer appears as
+      ``AI "Name" (faction)``: the AI's own name and its faction, each only when it has one
+      (dzo-admin 0.6.1). Older mods send only the faction.
    ``ai_victims``
       Include players killing AI (default ``false``).
    ``deaths``
@@ -940,16 +956,17 @@ Keys:
 
    A kill is one line, for example ``💀 **Alice** killed **Bob** with M4-A1 (123 m)``, ``🤖 **AI "Frida" (East)**
    killed **Bob** with AKM (54 m)`` (melee has no distance) or, with ``deaths``, ``☠️ **Bob** was killed by
-   infected``. Positions are never posted. Names and weapons come from players and mods, so Discord markup
-   and mentions in them are escaped: they show as text and ping nobody. Kills that are due together (a
-   grenade, a raid) are posted in as few messages as fit under Discord's limit of 2000 characters, in
-   order.
+   infected``. dzo never posts positions. Names and weapons come from players and mods, so dzo escapes
+   Discord markup and mentions in them: they show as text and ping nobody. dzo posts kills that are
+   due together (a grenade, a raid) in as few messages as fit under Discord's limit of 2000
+   characters, in order.
 
-   The killfeed is best effort and never slows the game: a post that fails, is refused with Discord's rate
-   limit (429) or takes longer than 5 seconds is dropped and logged, not retried, and the later kills go
-   out on time. At most 500 kills wait per instance; beyond that the oldest are dropped. Kills that wait
-   for their delay survive a reload of the site (``SIGHUP``) but not a restart of ``dzo serve``. Kills
-   that happened before ``dzo serve`` started are not posted. The same events, with chat and base
+   The killfeed is best effort and never slows the game. dzo drops and logs a post that fails,
+   that Discord refuses with its rate limit (429) or that takes longer than 5 seconds. It does
+   not retry it. The later kills go out on time. At most 500 kills wait per instance; beyond that
+   dzo drops the oldest. Kills that wait for their delay survive a reload of the site
+   (``SIGHUP``) but not a restart of ``dzo serve``. dzo does not post kills that happened before
+   ``dzo serve`` started. The same events, with chat and base
    building, are on the events page (:doc:`web`) and in ``dzo events`` (:doc:`cli`).
 
 ``hooks``
@@ -962,11 +979,11 @@ Keys:
    The snapshot policy, see :doc:`backups`; site default. ``before`` lists the changes that
    take a snapshot first (``update``, ``mod_update``, ``mission_update``, ``config_change``,
    ``render``; the first four are the default, ``[]`` none). ``schedule`` lists the times of the
-   periodic snapshots, like ``restarts.schedule``. After a snapshot the oldest are pruned:
+   periodic snapshots, like ``restarts.schedule``. After a snapshot dzo prunes the oldest.
    ``keep`` is the number kept (default 20), ``keep_by_reason`` a limit per reason
-   (``scheduled``, ``update``, ...), ``max_age`` how old a snapshot may get (``30d``, ``12h``),
-   ``min_keep`` the number never to go below (default 3), ``min_free_bytes`` the free space to
-   keep by pruning the oldest first (``50GiB``).
+   (``scheduled``, ``update``, ...). ``max_age`` is how old a snapshot can get
+   (``30d``, ``12h``). ``min_keep`` is the number never to go below (default 3).
+   ``min_free_bytes`` is the free space to keep by pruning the oldest first (``50GiB``).
 
 serverDZ.cfg
 ------------
