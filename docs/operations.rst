@@ -19,15 +19,15 @@ container runs. Under the hood these are plain systemd user units
 (``dzo-deerisle.service``), so ``systemctl --user`` and ``journalctl --user``
 work too.
 
-With ``podman.mode: remote`` (the :doc:`container appliance <container>`) the
-unit is not a quadlet but a plain unit of the same name: ``Type=notify``, and
-its ``ExecStart`` is ``dzo instance supervise <name>`` followed by the
-container's ``podman run`` arguments after ``--``. The supervisor starts the
+With ``podman.mode: remote`` (the :doc:`container appliance <container>`), the
+unit is not a quadlet. It is a plain unit of the same name: ``Type=notify``.
+Its ``ExecStart`` is ``dzo instance supervise <name>``, and the container's
+``podman run`` arguments follow after ``--``. The supervisor starts the
 container through the podman of ``CONTAINER_HOST``, reports the unit ready when
 the container is healthy and stops the container on ``SIGTERM``. ``dzo logs``,
 ``dzo status``, the timers and every other command are the same. The arguments
-belong to the unit, so a pending update stays pending through a crash restart,
-and a running server switches to a new unit at its next restart - also when
+belong to the unit, so a pending update stays pending through a crash restart.
+A running server switches to a new unit at its next restart - also when
 ``podman.mode`` changes.
 
 .. _stopping-the-server:
@@ -40,7 +40,7 @@ Every stop goes through the unit: ``dzo stop``, every restart, an update, a rebo
 
 ``rcon`` (default)
    ``dzo instance shutdown`` sends ``#shutdown`` over RCon and waits up to
-   ``stop.timeout`` (30 s) for the process to exit; then podman stops the container
+   ``stop.timeout`` (30 s) for the process to exit. Then podman stops the container
    (``SIGTERM``, ``SIGKILL`` after 120 s). The restart is immediate.
 ``kill``
    No request: ``SIGTERM`` and, one second later, ``SIGKILL``.
@@ -50,15 +50,15 @@ shutdown: ``Assertion failed ... enf_scriptmodule.cpp ... Script is leaking! Che
 log!`` followed by ``(A)bort (R)etry (I)gnore``. Vanilla leaks a script instance
 (``BunkerBroadcastManager``) at every shutdown, so this happens without any mod. The
 build waits for the answer on standard input. With stdin at end-of-file (a container, a
-systemd service, ``nohup``) the read never blocks and never ends: the process spins at
-100 % of a core after "Destroying game" and has to be killed. Seen on 1.30
+systemd service, ``nohup``), the read never blocks and never ends. The process spins at
+100 % of a core after "Destroying game"; you must kill it. Seen on 1.30
 experimental (1.30.164014); the stable 1.29 server shows no such prompt. Other builds
-or modded maps may raise assertions of their own at shutdown.
+or modded maps can raise assertions of their own at shutdown.
 
 dzo therefore starts every server with a stdin that holds the answer ``i`` (Ignore,
 ``stop.ignore_asserts``, default on). Measured on 1.30 experimental, a stop then takes
-3 seconds (``SIGTERM``) to 13 seconds (RCon ``#shutdown``) instead of hanging. A server
-that is stuck anyway is killed after the timeouts, and the unit does not stay "failed"
+3 seconds (``SIGTERM``) to 13 seconds (RCon ``#shutdown``) instead of hanging. dzo kills a server
+that is stuck anyway after the timeouts, and the unit does not stay "failed"
 after a clean stop.
 
 Graceful restarts
@@ -77,15 +77,16 @@ A graceful restart runs on a timeline. Every number is minutes before the restar
 ``lock``
    the server is locked against new logins (7)
 ``kick``
-   the players are kicked (3). The countdown ends here; the service is stopped
+   the players are kicked (3). The countdown ends here. dzo stops the service
    when the restart time is reached.
 
 The countdown: the first message when it starts, then at 20 and 15 minutes
-left over RCon (``say``), and from 10 minutes left on once a minute as an on-screen notification, plus
+left over RCon (``say``). From 10 minutes left on, a message comes once a minute
+as an on-screen notification, plus
 "<text> NOW" 10 seconds before the kick. All times count down to the kick. With 30/7/3 the first message reads "in 27 minutes".
-Each message is ``<text> in <time>``; the lock is announced as well (in the same notification when
-one is due then). The kick tries up to three passes, then kicks everyone. The countdown is dzo's own; the server's
-built-in countdown and shutdown of ``messages.xml`` are never used (see ``messages`` in
+Each message is ``<text> in <time>``. dzo announces the lock as well (in the same notification when
+one is due then). The kick tries up to three passes, then kicks everyone. The countdown is dzo's own. dzo never uses the server's
+built-in countdown and shutdown of ``messages.xml`` (see ``messages`` in
 :doc:`configuration`).
 
 How the countdown reaches the players is ``announce.ways`` (in ``restarts.announce`` and in ``updates.restart_announce``), a list of rules:
@@ -103,9 +104,11 @@ How the countdown reaches the players is ``announce.ways`` (in ``restarts.announ
          # or, with DayZ Expansion: {within: 10m, way: expansion, type: baguette, every: 1m, now: 10s}
 
 ``way``
-   ``rcon`` (BattlEye ``say``, works without ``dzo-admin``), ``chat`` (a red chat line through ``dzo-admin``),
-   ``notification`` (the on-screen notification of the game) or ``expansion`` (an Expansion notification;
-   ``type`` is ``toast``, ``baguette``, ``activity``, ``killfeed``, ``market`` or ``garage``).
+   * ``rcon``: BattlEye ``say``, works without ``dzo-admin``.
+   * ``chat``: a red chat line through ``dzo-admin``.
+   * ``notification``: the on-screen notification of the game.
+   * ``expansion``: an Expansion notification; ``type`` is ``toast``, ``baguette``,
+     ``activity``, ``killfeed``, ``market`` or ``garage``.
 ``within``
    the rule applies while at most this much is left until the kick. Without it, the rule covers the whole
    countdown, above the other rules' ``within``.
@@ -113,23 +116,30 @@ How the countdown reaches the players is ``announce.ways`` (in ``restarts.announ
    the interval, or the exact times left (not both). On screen (``notification``, ``expansion``) the
    announcements must be at least a minute apart.
 ``now``
-   one more announcement "<text> NOW" this long before the kick; only one rule may set it.
+   one more announcement "<text> NOW" this long before the kick; only one rule can set it.
 
 Notifications go through ``dzo-admin`` and the API of ``dzo serve``: the restart needs an API token, ``$DZO_TOKEN`` or
-the file ``announce.token`` in the secrets directory. ``dzo instance apply`` (and ``dzo units sync``) creates that file with a token of the ``announcer`` role (it can only read the instance's status and broadcast) whenever an instance runs ``dzo-admin`` and the file is missing, or its token was revoked or has expired (tokens last a year, so run ``apply`` again by then). If the mod is not
-connected, the API or the token is missing, or the message is refused, the same text goes out over RCon ``say`` and the
-restart continues on time. ``expansion`` becomes a plain notification when the mod does not report Expansion. A ``dzo-admin`` from before these ways (it runs until its instance is restarted onto the new mod) reports no features: the on-screen notifications still arrive, as plain notifications of ten seconds titled "Server", and the title and duration of a rule are ignored.
+the file ``announce.token`` in the secrets directory. ``dzo instance apply`` (and ``dzo units sync``)
+creates that file with a token of the ``announcer`` role; the token can only read the instance's status
+and broadcast. ``apply`` creates the file whenever an instance runs ``dzo-admin`` and the file is
+missing, or when its token is revoked or expired. Tokens last a year, so run ``apply`` again by then. If
+the mod is not connected, the API or the token is missing, or the message is refused, the same text goes
+over RCon ``say``. The restart continues on time. ``expansion`` becomes a plain notification when
+the mod does not report Expansion. A ``dzo-admin`` from before these ways reports no features; it runs
+until dzo restarts its instance onto the new mod. The on-screen notifications still arrive as plain
+notifications of ten seconds titled "Server"; dzo ignores the title and duration of a rule.
 
 dzo talks to the server over its own BattlEye RCon client. The restart itself
 goes through the unit's stop (see :ref:`stopping-the-server`). If RCon does not
-answer, the server is restarted through systemd right away. If a RCon command fails in the middle of the countdown (a timeout, a
-dropped connection), dzo logs it, skips that command and connects again for the next one; a failed
-lock or kick is tried once more on the new connection. The server is stopped at the time asked for
-in any case.
+answer, dzo restarts the server through systemd right away. If a RCon command fails in the middle
+of the countdown (a timeout, a dropped connection), dzo logs it and skips that command. It then
+connects again for the next one. dzo tries
+a failed lock or kick once more on the new connection. In any case, dzo stops the server at the
+time you asked for.
 
 The restart runs as its own systemd unit, so it continues if your SSH session
-ends. When a maintenance restart and an update restart fall together, they are
-merged into one.
+ends. When a maintenance restart and an update restart fall together, dzo merges them
+into one.
 
 .. _graceful-stop:
 
@@ -146,9 +156,9 @@ Stopping with a countdown
 
 Any of ``--graceful``, ``--minutes``, ``--lock``, ``--kick`` and ``--text`` turns the countdown on;
 the numbers you leave out come from the instance's ``restarts.announce``. The timeline, the
-messages and the RCon handling are those of the restart above, with the messages saying
-"Server shutdown" (or your ``--text``) instead of "restart". When the time is up the service is
-stopped and stays stopped. An instance that is not running is not announced to, and without RCon
+messages and the RCon handling are those of the restart above. The messages say
+"Server shutdown" (or your ``--text``) instead of "restart". When the time is up, the service stops
+and stays stopped. An instance that is not running gets no announcement, and without RCon
 the stop goes ahead at once. ``dzo stop <name> --cancel`` (and ``dzo restart <name> --cancel``)
 ends either countdown.
 
@@ -157,10 +167,10 @@ it ends with your session. For a long one, run it inside ``tmux``, or as
 ``systemd-run --user dzo stop deerisle --graceful``.
 
 ``dzo stop --all`` (and ``dzo start --all``) take every instance of the site. The stops run at
-the same time, so every server's graceful stop waits in parallel; with a countdown each instance
+the same time, so every server's graceful stop waits in parallel. With a countdown, each instance
 counts down with its own ``restarts.announce`` numbers — the flags override them for every
 instance — and all servers stop together. The log lines and the cancel notice carry the
-instance's name. An instance that fails (its unit cannot be stopped, or it does not resolve)
+instance's name. An instance that fails (dzo cannot stop its unit, or the instance does not resolve)
 does not stop the others; the command fails with ``N instance(s) failed``. ``dzo stop --all
 --cancel`` ends the countdown of every instance. ``dzo start --all`` starts the instances one
 after another.
@@ -168,7 +178,7 @@ after another.
 Scheduled restarts
 ------------------
 
-``restarts.schedule`` in ``instance.yaml`` lists the times of day the server restarts, as ``HH:MM``, or
+``restarts.schedule`` in ``instance.yaml`` lists the times of day the server restarts. Use ``HH:MM``, or
 ``Mon,Thu HH:MM`` for some weekdays only (Mon, Tue, Wed, Thu, Fri, Sat, Sun). ``*:MM`` restarts every
 hour at that minute, and ``hourly`` is short for ``*:00``:
 
@@ -183,16 +193,16 @@ hour at that minute, and ``hourly`` is short for ``*:00``:
        text: "Restart"      # the message; ways: is described above
 
 ``dzo instance apply <name>`` turns them into ``dzo-restart-<name>.timer``. The times are the
-restart itself: the timer fires ``announce.minutes`` earlier, when the countdown starts (04:00 with
-``minutes: 30`` fires at 03:30). Give every server its own times, so they do not go down together.
+restart itself: the timer fires ``announce.minutes`` earlier, when the countdown starts. For
+example, 04:00 with ``minutes: 30`` fires at 03:30. Give every server its own times, so they do not go down together.
 HTTPS for the web interface and the API, certificate renewal and port 443 are in :ref:`web-https`.
 
-One-off restarts ("today at 18:30") can be scheduled in the web interface; they
+One-off restarts ("today at 18:30"): you can schedule them in the web interface; they
 also become systemd timers.
 
 Before any planned restart dzo renders the instance in a dry run while the
-server is still running. If that fails, the restart is skipped, the server keeps
-running and you are alerted. A broken change in the site repository therefore
+server is still running. If that fails, dzo skips the restart, the server keeps
+running, and you get an alert. A broken change in the site repository therefore
 never takes a server down.
 
 Health checks and crash loops
@@ -208,7 +218,7 @@ liveness
    (default 5 minutes) the container is killed and systemd restarts it.
 
 When the render or a ``pre_start`` hook fails in ``ExecStartPre``, dzo prints a
-banner of ``!!!`` lines with the instance name and the error to stderr. Under
+banner of ``!!!`` lines to stderr. Each line has the instance name and the error. Under
 systemd the lines have the error priority, so ``journalctl -u <unit>`` and
 ``systemctl status`` show them prominently.
 
@@ -216,7 +226,7 @@ Three brakes stop endless restarts:
 
 * the pre-restart dry-run render described above;
 * a failed render during a crash restart marks the instance ``failed-render``.
-  It is not tried again until its inputs change or you run
+  dzo does not try it again until its inputs change or you run
   ``dzo instance ack-failure <name>``;
 * ``restart_limit``: after ``burst`` starts within ``interval`` the unit stays
   failed, Icinga turns critical and Discord reports the crash loop.
@@ -235,13 +245,13 @@ Console and RCon
    dzo rcon rotate deerisle --restart   # a new password; the server reads it at its start
 
 The console reconnects when the server restarts. A new RCon password takes effect at the next start, so
-``rotate`` refuses a running instance unless ``--restart`` is given. The password lives in
+``rotate`` refuses a running instance unless you give ``--restart``. The password lives in
 ``<paths.secrets>/rcon/<instance>``.
 
 The RCon password is generated per instance. RCon is reachable on the host only (127.0.0.1)
 unless ``rcon_bind`` in ``instance.yaml`` or in the site defaults says otherwise, see
 :doc:`configuration`. To let external RCon tools connect, set ``rcon_bind: 0.0.0.0`` (or one
-address of the host) and allow the RCon port in your firewall for those tools only.
+address of the host). Then allow the RCon port in your firewall for those tools only.
 
 Logs
 ----
@@ -257,14 +267,14 @@ Logs
 Audit log
 ~~~~~~~~~
 
-Every admin action (player and vehicle actions, bans, evidence, logins and logouts) is appended to
-``<paths.db>/audit.jsonl``, one JSON object per line, with the actor, where it came from, the instance and the
-result. Actions of the web interface name the person (``<token>:<Steam ID>``) and carry the browser's
-address in ``client``. That address is personal data and expires: ``serve.audit_ip_retention_days``
-(default 90, ``0`` keeps it) says how long; once a day ``dzo serve`` blanks the address of older entries and
-keeps the entries. The file is 0600. Next to it lies ``audit.jsonl.lock``, which the writers (``dzo serve``
+dzo appends every admin action (player and vehicle actions, bans, evidence, logins and logouts) to
+``<paths.db>/audit.jsonl``. Each line is one JSON object with the actor, where it came from, the
+instance and the result. Actions of the web interface name the person (``<token>:<Steam ID>``) and carry the browser's
+address in ``client``. That address is personal data and expires. ``serve.audit_ip_retention_days``
+(default 90, ``0`` keeps it) says how long. Once a day, ``dzo serve`` blanks the address of older
+entries and keeps them. The file is 0600. Next to it lies ``audit.jsonl.lock``, which the writers (``dzo serve``
 and ``dzo user``) take so that the daily rewrite never loses a line. Read the log in the web interface
-(admin) or with ``GET /api/v1/audit``; the login attempts are in the service log of ``dzo serve``.
+(admin) or with ``GET /api/v1/audit``. The login attempts are in the service log of ``dzo serve``.
 
 .. _profile-log-rotation:
 
@@ -292,17 +302,19 @@ the site defaults) is a list of regular expressions, matched against the path be
 
 A rule that needs no options can be a plain string: ``- '^RFMosquito_.*\.log$'`` is the same as ``- {match: '^RFMosquito_.*\.log$'}``.
 
-Per rule the newest ``keep_newest`` files stay (the server may still write them) and every older match is
-moved to ``<paths.logs>/<instance>/<date>/<path>.gz``: copied through gzip, synced, and only then removed.
-Only regular files below ``profiles/`` are touched, links are not followed, and ``serverDZ.cfg``, the
-BattlEye configs, ``dzo-admin/`` and every ``.json``/``.xml`` file are never moved, even if a rule matches
-them. The default rules are the ``*.RPT``, ``script_*.log``, ``crash_*.log``, ``error_*.log``, ``warning_*.log`` and ``*.ADM`` of the server and
+Per rule the newest ``keep_newest`` files stay; the server can still write them. dzo moves every
+older match to ``<paths.logs>/<instance>/<date>/<path>.gz``: it copies the file through gzip, syncs
+it, and only then removes it.
+dzo touches only regular files below ``profiles/`` and does not follow links. It never moves
+``serverDZ.cfg``, the BattlEye configs, ``dzo-admin/`` or any ``.json``/``.xml`` file, even if a rule
+matches it. The default rules are the ``*.RPT``, ``script_*.log``, ``crash_*.log``, ``error_*.log``, ``warning_*.log`` and ``*.ADM`` of the server and
 ``*.mdmp`` crash dumps (14 days).
 
 It runs before every start (``ExecStartPre``, a failure does not stop the start) and hourly for all
-instances (``dzo-logs.timer``), which also applies the archive's ``max_age`` and ``max_size`` (oldest
-first). ``dzo logs rotate <name> --dry-run`` lists what it would move and the large files no rule matches
-(new mod logs show up there, except those of ``dzo_logz`` in ``dzo/logz/logs/``); ``dzo logs archive <name> [--since 7d] [--match <regexp>]`` lists the archive.
+instances (``dzo-logs.timer``). The hourly run also applies the archive's ``max_age`` and ``max_size``
+(oldest first). ``dzo logs rotate <name> --dry-run`` lists what it would move and the large files no rule matches.
+New mod logs show up there, except those of ``dzo_logz`` in ``dzo/logz/logs/``.
+``dzo logs archive <name> [--since 7d] [--match <regexp>]`` lists the archive.
 
 Instances
 ---------
@@ -316,14 +328,15 @@ Instances
    dzo wipe <name>                    # wipe the world, after confirmation and a snapshot
 
 ``clone`` needs the new instance in the site repository (its own ports and settings) and the same map. It
-copies the old instance's directory with a btrfs snapshot, gives the copy its own profiles, keys and
-RCon password, and keeps the server build the old one runs. A running source needs ``--force`` (the copy
-is crash-consistent). ``remove`` deletes the data directory and, unless ``--keep-snapshots``, the
-snapshots, and removes the instance's units; then delete ``instances/<name>/`` from the site repository.
+copies the old instance's directory with a btrfs snapshot. It gives the copy its own profiles, keys
+and RCon password, and keeps the server build the old one runs. A running source needs ``--force`` (the copy
+is crash-consistent). ``remove`` deletes the data directory and the
+instance's units; unless ``--keep-snapshots``, it also deletes the snapshots. Then delete
+``instances/<name>/`` from the site repository.
 
-Development: ``dzo instance render`` (render only, nothing is started) and ``dzo shell`` (a container with
-the instance's mounts and a shell, without starting the server) are the "development mode"; a server is
-started only by ``dzo start``.
+Development mode: ``dzo instance render`` (render only, nothing is started) and ``dzo shell`` (a
+container with the instance's mounts and a shell, without starting the server). Only
+``dzo start`` starts a server.
 
-Instances cannot be renamed in place, because the name is part of unit names,
+You cannot rename an instance in place, because the name is part of unit names,
 paths and the database. Clone to the new name and remove the old instance.

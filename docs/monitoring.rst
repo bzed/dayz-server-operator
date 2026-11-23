@@ -4,7 +4,7 @@
 Monitoring and notifications
 ============================
 
-dzo is built to be watched from another machine: Prometheus scrapes metrics,
+You can watch dzo from another machine: Prometheus scrapes metrics,
 Icinga checks a status endpoint, and Discord gets notifications.
 
 The exporter
@@ -31,21 +31,20 @@ player IP addresses.
 
 **Certificates are reloaded without restarts.** Replace the files (for example
 from a certbot or lego deploy hook) and run
-``systemctl --user reload dzo-exporter``, or just wait: changed files are picked
-up automatically. Game servers are never involved, so a certificate change never
-restarts a server. An invalid new certificate is rejected and the old one stays
+``systemctl --user reload dzo-exporter``. Or just wait: the exporter picks up changed
+files automatically. A certificate change never involves game servers and never restarts a server.
+The exporter rejects an invalid new certificate, and the old one stays
 active.
 
-Run it with ``dzo exporter`` (the unit does that). It answers from a snapshot that is
-refreshed every 15 seconds in the background, so a scrape never waits for a game
-server; the expensive values, the size of the cache and the mission drift count, are
-refreshed every 10 minutes. ``dzo status [<instance>] [--json]`` prints what the
+Run it with ``dzo exporter`` (the unit does that). It answers from a snapshot that a background task
+refreshes every 15 seconds, so a scrape never waits for a game server. The exporter refreshes the
+expensive values, the size of the cache and the mission drift count, every 10 minutes. ``dzo status [<instance>] [--json]`` prints what the
 exporter would report, and ``dzo status --write /run/dzo/status`` also writes the
 local status files, one per instance, for debugging.
 
 What it reads: systemd (``ActiveState``, restart count, start time), podman (the
-container's health), the Steam query on the instance's query port (players, round
-trip), the manifest and the failed-render gate of the instance (last render), the
+container's health) and the Steam query on the instance's query port (players, round trip). It also
+reads the manifest and the failed-render gate of the instance (last render), the
 snapshot index (backups) and the Steam login status. The restart counter is
 systemd's own, reported as ``reason="all"``: the reasons ``crash``, ``health``,
 ``scheduled``, ``update`` and ``manual`` are not told apart yet. In-game metrics from
@@ -119,7 +118,7 @@ in ``/etc/dzo/config.yaml``. Each instance uses the default unless its
 
 Events include mod updates, available server builds, restarts, health changes,
 crash loops, failed renders, mission drift, Steam login required, and failed
-jobs. Bursts are combined into one message ("12 mods updated, 3 servers
+jobs. dzo combines bursts into one message ("12 mods updated, 3 servers
 restarting").
 
 No Discord message pings anyone: dzo sends ``allowed_mentions: {parse: []}``, so a player name or a
@@ -144,8 +143,8 @@ dzo does not ship logs itself. It writes them to stable places that a log agent
 
 For the game's own logs we recommend the
 `dzo_logz <https://steamcommunity.com/sharedfiles/filedetails/?id=3818110406>`_
-mod together with a Loki installation, so that the logs are searchable and kept
-for as long as you want. This is a setup you do yourself:
+mod together with a Loki installation. The logs stay searchable, and you can keep
+them for as long as you want. This is a setup you do yourself:
 
 * install and configure the dzo_logz mod as described on its Workshop page;
 * run Loki (with the retention and disk space that the log volume needs) and a
@@ -154,5 +153,5 @@ for as long as you want. This is a setup you do yourself:
 dzo does not configure the mod, does not generate any agent or Loki
 configuration, and does not read these logs.
 
-Operator jobs (update check, download, render, restart) can also be exported as
-OpenTelemetry traces if an OTLP endpoint is configured.
+If you configure an OTLP endpoint, dzo can also export operator jobs (update check, download,
+render, restart) as OpenTelemetry traces.

@@ -6,15 +6,15 @@ JSON API
 
 ``dzo serve`` provides a JSON API under ``/api/v1`` for scripts, bots, the
 ``dzo player`` and ``dzo vehicle`` commands, and the web interface. The API is
-the only interface of an installation that clients need: it contains nothing
-specific to the host, so a client can use several installations by keeping one
+the only interface of an installation that clients need. It contains nothing
+specific to the host: a client can use several installations and keeps one
 base URL and one token for each.
 
 Running it
 ----------
 
 ``dzo instance apply`` (``dzo units sync``) writes ``dzo-serve.service`` and enables it as soon as an
-instance runs the dzo-admin mod, which needs the endpoint; ``serve.enabled: true`` or ``false`` in
+instance runs the dzo-admin mod, which needs the endpoint. ``serve.enabled: true`` or ``false`` in
 ``config.yaml`` forces it on or off. ``systemctl --user reload dzo-serve`` re-reads the site (the same as
 ``SIGHUP``).
 
@@ -22,9 +22,10 @@ instance runs the dzo-admin mod, which needs the endpoint; ``serve.enabled: true
 API and on ``serve.mod_listen`` (default ``127.0.0.1:2400``) for the
 :doc:`dzo-admin mods <admin-map>`. Both refuse non-local addresses unless
 ``serve.allow_insecure_http`` is set: put a reverse proxy with HTTPS in front
-of the API. Send ``SIGHUP`` after changing the site repository; new instances
-appear, the live state of the others is kept, and an instance removed from the site is gone: its routes
-answer ``404``, its mod is turned away and its vehicle records are forgotten after 7 days.
+of the API. Send ``SIGHUP`` after changing the site repository. New instances
+then appear. The live state of the others is kept. An instance removed from the
+site is gone. Its routes answer ``404``, its mod is turned away, and its vehicle
+records are forgotten after 7 days.
 
 Tokens
 ------
@@ -37,19 +38,20 @@ Every request needs ``Authorization: Bearer <token>``. Create tokens on the host
    dzo token list
    dzo token revoke <id>
 
-A token has a role (:doc:`web`), optionally a list of instances it may touch,
+A token has a role (:doc:`web`), optionally a list of instances it can touch,
 and an expiry of at most one year. The secret is shown once; only a hash is
-stored. A token created with ``--delegate`` (for the web interface) may name the
+stored. A token created with ``--delegate`` (for the web interface) can name the
 person it acts for in the ``X-Dzo-Actor`` header, and the origin in
-``X-Dzo-Source``; both go into the audit log. For other tokens these headers are
+``X-Dzo-Source``. Both go into the audit log. For other tokens these headers are
 ignored.
 
 A token created with ``--web`` is for ``dzo web`` and the only kind that acts for logged-in people
 (:doc:`web`). On its own it can do nothing: every request must also carry the login session of a
-person in ``X-Dzo-Session``, and then acts as that person. Without the header the answer is ``403 this
-token needs a user session``, for an unknown or expired session ``401 session expired``, for a
-disabled person or one with no role on any existing instance ``403``, and while ``serve.web_url`` is
-not set (user logins are off) ``503 logins are not configured``. The audit actor is ``<token
+person in ``X-Dzo-Session``. The token then acts as that person. Without the header the answer
+is ``403 this token needs a user session``. The same ``403`` answers for a
+disabled person, or one with no role on any existing instance. An unknown or
+expired session answers ``401 session expired``. While ``serve.web_url`` is not
+set (user logins are off), the answer is ``503 logins are not configured``. The audit actor is ``<token
 name>:<Steam ID>``; ``X-Dzo-Actor`` is ignored. A token is either ``--delegate`` or ``--web``, and a web
 token has the role viewer, moderator, operator or admin.
 
@@ -58,11 +60,11 @@ Roles per instance
 
 A person has grants: a role on an instance, or on ``*`` (every instance, also later ones). Their
 effective role on an instance is the higher of the grant on the instance and the grant on ``*``,
-**capped by the web token**: it is the lower of that and the token's role, and nothing at all on
+**capped by the web token**. It is the lower of that and the token's role, and nothing at all on
 instances the token's list does not include. An instance without a role does not exist for them
 (``404``, and it is left out of lists). Being moderator on one instance never unlocks anything on
-another. A token without a person is checked against its own role on the instances it may touch, as it
-always was.
+another. A token without a person is checked against its own role on the
+instances it can touch, as before.
 
 Routes without an instance in the path check the permission like this:
 
@@ -84,7 +86,7 @@ Routes without an instance in the path check the permission like this:
        those bans. IP addresses in a ban are shown only with ``ip.history`` on every instance of it
    * - ``PUT /bans/<id>``, ``POST /bans/<id>/revoke``
      - as for creating, on the old and the new instances; only the creator or whoever holds
-       ``ban.revoke_any`` (installation-wide) may change a ban
+       ``ban.revoke_any`` (installation-wide) can change a ban
    * - ``GET|POST /evidence``, ``GET /evidence/<id>[/file]``
      - ``ban.view`` and ``evidence.add`` on the evidence's instance; lists keep the instances where it holds
    * - ``GET /players/<steamid>/identities``
@@ -97,7 +99,7 @@ Routes without an instance in the path check the permission like this:
 Login
 ~~~~~
 
-Only ``dzo web`` logs people in, with its web token and no session. Logging in is always two steps: a
+Only ``dzo web`` logs people in, with its web token and no session. A login is always two steps: a
 first factor (password or Steam) and a second factor (TOTP code, passkey or recovery code). A passkey is
 never a first factor. The routes need ``serve.web_url`` (``503`` without) and answer ``403`` to any
 other kind of token.
@@ -125,10 +127,10 @@ other kind of token.
    * - ``POST /auth/logout`` (with the session)
      - ``204``; the session is gone.
 
-Passkeys are a second factor, checked with the WebAuthn library (relying party ID: the host of
-``serve.web_url``; the only accepted origin is ``serve.web_url`` itself; the person's passkeys are listed in
-``allowCredentials``; user verification is ``preferred``). The options and the answers are the JSON the
-browser's ``navigator.credentials`` takes and gives:
+Passkeys are a second factor; dzo checks one with the WebAuthn library. The relying party ID is the
+host of ``serve.web_url``. The only accepted origin is ``serve.web_url`` itself. The person's passkeys
+are listed in ``allowCredentials``. User verification is ``preferred``. The options and the answers
+are the JSON the browser's ``navigator.credentials`` takes and gives:
 
 .. list-table::
    :header-rows: 1
@@ -142,9 +144,11 @@ browser's ``navigator.credentials`` takes and gives:
      - ``{"session","expires"}``. The ceremony is good for one answer; a signature counter that did not
        increase (a cloned key) is refused. The counter and the time of use are stored.
 
-A person who signs in and has **no second factor yet** gets ``"enrol": true`` and may only enrol one, with one
-of the following; each ``finish`` ends the login with a session and shows the 10 recovery codes once
-(``{"session","expires","recovery_codes":[…]}``). Any other pending login is refused with ``403``.
+A person who signs in and has **no second factor yet** gets ``"enrol": true``.
+That person can enrol only one factor, with one of the following. Each
+``finish`` ends the login with a session and shows the 10 recovery codes once
+(``{"session","expires","recovery_codes":[…]}``). Any other pending login is
+refused with ``403``.
 
 .. list-table::
    :header-rows: 1
@@ -161,23 +165,26 @@ of the following; each ``finish`` ends the login with a session and shows the 10
    * - ``POST /auth/enrol/passkey/finish`` ``{"pending","response","name"}``
      - the passkey is stored under ``name``
 
-The browser's address is sent in ``X-Dzo-Client`` (from a web token only; other tokens' header is ignored)
-and, behind a proxy, the proxy's address in ``X-Dzo-Proxy``; without ``X-Dzo-Client`` it is the connection's
-address. Failed first and second factors are counted per account and per address: five are free, then the
-wait doubles from one second to 15 minutes (a success clears the account, 1 hour without a failure
-clears all). While waiting a request gets ``429`` with ``Retry-After``, with the same message whether or
+A web token sends the browser's address in ``X-Dzo-Client``; dzo ignores the
+header of other tokens. Behind a proxy, the proxy's address goes into
+``X-Dzo-Proxy``. Without ``X-Dzo-Client`` dzo uses the connection's address.
+dzo counts failed first and second factors per account and per address. The
+first five are free; then the wait doubles from one second to 15 minutes. A
+success clears the account. 1 hour without a failure clears all. While waiting
+a request gets ``429`` with ``Retry-After``, with the same message whether or
 not the username exists. The counters live in the memory of ``dzo serve``.
 
-Every step writes one line to the service log, ``login: <step> <ok|failed|refused> steamid=<id|unknown>
-client=<addr> proxy=<addr|->``, never a secret, and a finished login or logout writes an audit entry
-(``auth.login``, ``auth.logout``) with the client address. Every audit entry of a web action has the
-client address in its ``client`` field.
+Every step writes one line to the service log, never a secret. The line is
+``login: <step> <ok|failed|refused> steamid=<id|unknown> client=<addr>
+proxy=<addr|->``. A finished login or logout writes an audit entry
+(``auth.login``, ``auth.logout``) with the client address. Every audit entry of
+a web action has the client address in its ``client`` field.
 
 Account
 ~~~~~~~
 
-What a logged-in person (a web token with a session) does with their own login. No role is needed beyond
-being logged in; every change is audited (``account.*``) without secrets.
+What a logged-in person (a web token with a session) does with their own login. The person needs no role
+beyond the login; every change goes to the audit log (``account.*``) without secrets.
 
 .. list-table::
    :header-rows: 1
@@ -239,18 +246,20 @@ Steam ID and the grants.
      - ``204``; password, TOTP, passkeys, recovery codes and sessions are removed (the username stays), the person
        and their grants stay. The person enrols again through Steam
 
-Nobody can change their own access through the API: a ``PUT`` for oneself that changes the grants (up or
-down) or the disabled flag, and a ``DELETE`` or ``reset`` for oneself, answer ``409 you cannot change your
-own access; another admin or dzo user on the serve host can``. Changing only the display name is fine. The
-rule also holds if ``users.manage`` is ever given to a lower role.
+Nobody can change their own access through the API. A ``PUT`` for oneself that changes the grants (up or
+down) or the disabled flag answers ``409 you cannot change your
+own access; another admin or dzo user on the serve host can``. A ``DELETE`` or
+``reset`` for oneself answers the same. Changing only the display name is fine.
+The rule also holds if a lower role ever gets ``users.manage``.
 
 ``GET /`` of a request that acts for a person has a ``user`` part: ``{"steam_id","name","username"(when set),"roles":{"<instance>":"<role>"},
 "installation":["audit.view",…]}``. ``roles`` is the effective role on each existing instance the person has
-one on (the web interface shows controls from it; the API checks every action regardless), ``installation``
-the installation-wide permissions they hold. ``role`` stays the highest role anywhere.
+one on. The web interface shows controls from it; the API checks every action regardless.
+``installation`` is the installation-wide permissions they hold. ``role`` stays the highest role anywhere.
 
-Streams (``/stream``) of a person are re-checked every 60 seconds: when the session ended, the person was
-disabled or lost the right to view the instance, the stream closes.
+dzo re-checks the streams (``/stream``) of a person every 60 seconds. When the
+session ended, the person was disabled or lost the right to view the instance,
+the stream closes.
 
 Reading
 -------
@@ -266,7 +275,7 @@ All paths start with ``/api/v1``. Responses are JSON.
    * - ``GET /``
      - installation name, dzo version, API version, your role
    * - ``GET /instances``
-     - instances you may see, each with the mod's connection state and counts
+     - instances you can see, each with the mod's connection state and counts
    * - ``GET /instances/<i>``
      - one instance's state, with ``next_restart`` when the instance has a ``restarts.schedule``
    * - ``GET /instances/<i>/players``
@@ -276,9 +285,9 @@ All paths start with ``/api/v1``. Responses are JSON.
    * - ``GET /instances/<i>/events``
      - active events (effect areas, markers from mods)
    * - ``GET /instances/<i>/layers``
-     - marker layers you may see
+     - marker layers you can see
    * - ``GET /instances/<i>/map/markers[?layer=<name>]``
-     - markers you may see
+     - markers you can see
    * - ``GET /instances/<i>/types[?q=<text>&limit=<n>]``
      - search the item classes the server reported: public (scope 2) items, weapons, magazines and clothing, without the classes that crash a vanilla server or raise script errors when they are created (found with ``scripts/test-spawnable.sh``; run it for a server with mods). The web interface offers them as you type, and ``spawn_item`` refuses any class that is not in the list
    * - ``GET /instances/<i>/vehicle-types[?q=<text>&limit=<n>]``
@@ -376,12 +385,12 @@ Acting
      - the preview of a cleanup: the vehicles nobody has driven for more than ``days`` days, oldest first, as ``{"days", "tracked_since", "vehicles"}``. ``days`` is a whole number from 1 to 3650; anything else answers ``400`` ``days must be a whole number from 1 to 3650``. A vehicle counts as unused from its ``last_driven`` time, or from ``first_seen`` when it was never seen driven (so a new vehicle is not offered before ``days`` days after dzo first saw it). Vehicles with someone inside, covered or garage-stored Expansion vehicles and vehicles without any recorded time are never listed. ``tracked_since`` is the oldest ``first_seen`` among the vehicles on the map: dzo cannot know about drives before it. Answers ``409`` ``the dzo-admin mod of this instance does not report drivers; update it to 0.8.0`` when the mod's hello lacks the ``driver`` feature, because every vehicle would look never driven; ``503`` when the mod is not connected; ``500`` when the records cannot be read. The list is not capped by the API (the web preview shows the 500 longest unused, as a cleanup takes at most 500 ids). Needs dzo-admin 0.8.0
    * - ``POST /instances/<i>/vehicles/cleanup`` ``{"days", "ids"}``
      - ``operator`` (``vehicle.delete``)
-     - delete the vehicles of a confirmed preview: ``ids`` holds 1 to 500 vehicle ids (``400`` ``at most 500 vehicles per cleanup`` otherwise), ``days`` is as above. Every id is checked again against the current vehicle list at this moment, and one that is no longer unused is skipped, the others are deleted. It never uses ``force``. The answer is ``{"deleted": [ids], "skipped": [{"id", "reason"}], "pending": [{"id", "command"}]}`` with the reasons ``not on the map``, ``stored in the Expansion garage``, ``crew inside``, ``covered by Expansion`` and ``used since the preview`` (driven or first seen again within ``days`` days); a command that cannot be queued is skipped with its error. The answer is the mod's: the request queues one ``vehicle_delete`` per remaining id and waits for all of the answers under one deadline of 25 seconds. A vehicle is in ``deleted`` only when the mod answered OK; one the mod refused (a player got in, the vehicle is in use) is in ``skipped`` with the mod's message as the reason, and one the mod did not answer in time is in ``pending`` with the id of its ``vehicle_delete`` command: it stays queued and may still be deleted, and ``GET /instances/<i>/commands/<command>`` tells the outcome later (the hub gives up on a command after 30 seconds unanswered and reports ``admin: the mod did not answer in time``). The request counts once against the rate limit of the token, not once per vehicle. Each id writes an audit entry with the action ``vehicle_delete``, the vehicle as target and the detail ``cleanup: not driven for <days> days``; each entry is written from the real answer: ``ok`` with the mod's message for a deleted vehicle, not ``ok`` with the reason (ours or the mod's) as result for a skipped one, and not ``ok`` with ``no answer yet, the mod may still delete it (command <command>)`` for a pending one. A request refused by the rate limit (``429``) writes one entry with the target ``<n> vehicles`` and the result ``rate limit reached, try again in a minute``. The ``409`` and ``503`` answers are as for the preview
+     - delete the vehicles of a confirmed preview: ``ids`` holds 1 to 500 vehicle ids (``400`` ``at most 500 vehicles per cleanup`` otherwise), ``days`` is as above. Every id is checked again against the current vehicle list at this moment, and one that is no longer unused is skipped, the others are deleted. It never uses ``force``. The answer is ``{"deleted": [ids], "skipped": [{"id", "reason"}], "pending": [{"id", "command"}]}`` with the reasons ``not on the map``, ``stored in the Expansion garage``, ``crew inside``, ``covered by Expansion`` and ``used since the preview`` (driven or first seen again within ``days`` days); a command that cannot be queued is skipped with its error. The answer is the mod's: the request queues one ``vehicle_delete`` per remaining id and waits for all of the answers under one deadline of 25 seconds. A vehicle is in ``deleted`` only when the mod answered OK; one the mod refused (a player got in, the vehicle is in use) is in ``skipped`` with the mod's message as the reason, and one the mod did not answer in time is in ``pending`` with the id of its ``vehicle_delete`` command: it stays queued and can still be deleted, and ``GET /instances/<i>/commands/<command>`` tells the outcome later (the hub gives up on a command after 30 seconds unanswered and reports ``admin: the mod did not answer in time``). The request counts once against the rate limit of the token, not once per vehicle. Each id writes an audit entry with the action ``vehicle_delete``, the vehicle as target and the detail ``cleanup: not driven for <days> days``; each entry is written from the real answer: ``ok`` with the mod's message for a deleted vehicle, not ``ok`` with the reason (ours or the mod's) as result for a skipped one, and not ``ok`` with ``no answer yet, the mod may still delete it (command <command>)`` for a pending one. A request refused by the rate limit (``429``) writes one entry with the target ``<n> vehicles`` and the result ``rate limit reached, try again in a minute``. The ``409`` and ``503`` answers are as for the preview
    * - ``DELETE /instances/<i>/vehicles/<id>[?force=1]``
      - ``operator``
      - delete a vehicle (``force``: even with crew inside)
 
-Actions are carried out by the game server, so the call waits for its answer:
+The game server carries out the actions, so the call waits for its answer:
 
 * ``200`` with ``{"id", "ok": true}``: done.
 * ``422`` with ``{"ok": false, "message"}``: the game server refused (for
@@ -393,11 +402,12 @@ Actions are carried out by the game server, so the call waits for its answer:
   target).
 * ``?wait=<seconds>`` changes how long to wait (default 10, at most 25).
   ``?wait=0`` returns ``202`` with a command ``id`` at once; poll
-  ``GET /instances/<i>/commands/<id>`` (``202`` while pending). A result can be read for 10 minutes
-  after the mod answered (or the command timed out after 30 seconds); after that, and for an id that was
-  never given out, the answer is ``404`` ``unknown command (results are kept for 10 minutes)``.
+  ``GET /instances/<i>/commands/<id>`` (``202`` while pending). A result stays
+  readable for 10 minutes after the mod answered (or the command timed out after
+  30 seconds). After that, and for an id that was never given out, the answer is
+  ``404`` ``unknown command (results are kept for 10 minutes)``.
 
-Every action, including refused and rate-limited ones, is written to the audit
+dzo writes every action, including refused and rate-limited ones, to the audit
 log (``${paths.db}/audit.jsonl``) with the actor, the source, the target and the
 result.
 
@@ -407,10 +417,10 @@ Event feed
 ----------
 
 ``dzo serve`` keeps the newest 1000 game events of every instance and serves them on
-``GET /instances/<i>/feed`` and the ``feed`` events of the stream. They are also written to
+``GET /instances/<i>/feed`` and the ``feed`` events of the stream. dzo also writes them to
 ``${paths.db}/feed/<instance>.jsonl`` (mode ``0600``, one JSON object per line), so the feed is not empty
-after ``dzo serve`` restarts. The file holds chat and positions, which is personal data: it keeps at most the
-newest 1000 events per instance and is safe to delete, the feed then starts empty.
+after ``dzo serve`` restarts. The file holds chat and positions, which is personal data. It keeps at most
+the newest 1000 events per instance, and it is safe to delete; the feed then starts empty.
 
 Every event has an ``id`` (dzo's, increasing per instance), a ``time`` and a ``kind``. The other fields are
 present when they apply:
@@ -462,8 +472,9 @@ The kinds:
 Bans and evidence
 -----------------
 
-These routes need the ban database of ``dzo serve`` (``503`` without it) and are described in
-:doc:`moderation`. A restricted token sees and changes only the bans that apply to its instances.
+These routes need the ban database of ``dzo serve`` (``503`` without it);
+:doc:`moderation` describes them. A restricted token sees and changes only the
+bans that apply to its instances.
 
 .. list-table::
    :header-rows: 1
@@ -485,7 +496,7 @@ These routes need the ban database of ``dzo serve`` (``503`` without it) and are
      - one ban
    * - ``PUT /bans/<id>`` (the full ban, as for ``POST``)
      - ``moderator``
-     - change a ban; only its creator or an ``admin`` may
+     - change a ban; only its creator or an ``admin`` can
    * - ``POST /bans/<id>/revoke`` ``{"reason"}``
      - ``moderator``
      - end a ban now; it stays in the list and the history
@@ -528,9 +539,11 @@ These routes need the ban database of ``dzo serve`` (``503`` without it) and are
 Errors
 ------
 
-Errors are ``{"error": "<text>"}`` with a matching status: ``401`` for a missing
-or invalid token, ``403`` for a role without the permission, ``404`` for an
-unknown instance or one the token may not use.
+Errors are ``{"error": "<text>"}`` with a matching status:
+
+* ``401`` for a missing or invalid token
+* ``403`` for a role without the permission
+* ``404`` for an unknown instance or one the token cannot use
 
 Markers and roles
 -----------------

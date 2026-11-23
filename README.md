@@ -37,8 +37,8 @@ differs.
 
 - **Servers as configuration.** One `instance.yaml` per server (map, ports, mods,
   restart schedule) in a git "site" repository. `dzo` renders the mission and
-  `serverDZ.cfg` from it, so a server can be rebuilt from git at any time, and
-  changes to the Central Economy files are applied in place without wiping
+  `serverDZ.cfg` from it, so a server can be rebuilt from git at any time.
+  Changes to the Central Economy files are applied in place without wiping
   your live mission.
 - **Server builds and workshop mods that never change under a running server.**
   Steam downloads go into immutable, shared "generations". A server switches to
@@ -69,7 +69,7 @@ also a [two-page cheat sheet (PDF)](docs/cheatsheet/dzo-cheatsheet.pdf).
 ## Supported distributions
 
 Each of these installs from its own package manager. How much that means differs,
-and the level below is what was actually tested, not what might work:
+and the level below is what was actually tested, not what can work:
 
 | Level | Distributions | Tested by |
 |---|---|---|
@@ -78,12 +78,12 @@ and the level below is what was actually tested, not what might work:
 | **Best effort** | Arch Linux, Ubuntu interim releases, Debian testing | CI smoke in a container only, and those jobs do not block a merge |
 
 The CI jobs install the package, run `dzo version` and `dzo setup --dry-run` as
-the `dayz` user the package creates, and feed the rendered quadlets to the
-distribution's own podman generator. They cannot start DayZ, so a few things are
-not verified yet: SELinux in enforcing mode on Fedora and the RHEL family (a
-container can hit an AVC denial), a real Steam login through the `steamcmd`
-container wrapper that those distributions use instead of a `steamcmd` package,
-and a server on podman 6 (CentOS Stream 10, Arch). The RHEL 10 family has no btrfs
+the `dayz` user the package creates. They feed the rendered quadlets to the
+distribution's own podman generator. They cannot start DayZ, so they do not verify a few things yet. One is SELinux
+in enforcing mode on Fedora and the RHEL family: a container can hit an AVC
+denial. Another is a real Steam login through the `steamcmd` container wrapper
+that those distributions use instead of a `steamcmd` package. The third is a
+server on podman 6 (CentOS Stream 10, Arch). The RHEL 10 family has no btrfs
 in its kernel, so the snapshot backups do not work there. Arch is container-tested
 only: no real host, no Steam login. The [installation guide](docs/installation.rst)
 has the matrix with the CI job names and says per distribution what is missing.
@@ -141,8 +141,8 @@ The pacman repository is signed with the same key as the apt and dnf repositorie
 Its two CI jobs are best effort: Arch is a rolling release.
 
 **In a container** (any Linux host with rootless podman 5.4 or newer and systemd;
-the game servers are containers of the host's podman): `ghcr.io/bzed/dzo` is a
-Debian 13 system with dzo and steamcmd, started by the host user's systemd with
+the game servers are containers of the host's podman). `ghcr.io/bzed/dzo` is a
+Debian 13 system with dzo and steamcmd. The host user's systemd starts it with
 the quadlet and wrapper in `contrib/appliance/`. See the
 [container guide](docs/container.rst) for the host requirements and the setup.
 
@@ -206,24 +206,27 @@ been checked yet.
 
 ### Run for real
 
-On a Debian 13 development host (the reference distribution; rootless podman
-5.4.2, a user systemd, btrfs) with a real Steam account, and on a workstation with
+On a Debian 13 development host with a real Steam account, and on a workstation with
 the DayZ client:
+
+The development host is the reference distribution. It runs rootless podman 5.4.2,
+a user systemd and btrfs.
 
 - **Servers.** DayZ 1.30 (stable) and the experimental build run in the runtime
   image from the generated quadlets, side by side, with workshop mods (CF-Test
   on experimental) and `dzo-admin`; builds and mods come from steamcmd by `dzo`.
   `@<workshop id>` directories work as mod folders, the Steam login and the
-  workshop path layout match what the code expects, and the process name the
-  health check looks for is `enfMain`.
+  workshop path layout match what the code expects. The process name the health
+  check looks for is `enfMain`.
 - **BattlEye player events** from a real client with BattlEye (a signed test mod
   sends chat lines): connect, GUID, chat, kick and disconnect.
 - **dzo-admin with a real client**, on 1.30
   (`scripts/test-client.sh`, a headless DayZ client against a local server and
-  `dzo serve`): the player list, messages in all three styles, teleport (and its
-  refusal in a vehicle), spawning an item into the inventory, the hands and the
-  ground, an unknown class, the crew of a vehicle, class watch rules on items,
-  vehicle repair and delete.
+  `dzo serve`). It tests the player list, messages in all three styles, and
+  teleport (and its refusal in a vehicle). It also tests spawning an item into
+  the inventory, the hands and the ground, and an unknown class. The remaining
+  tests cover the crew of a vehicle, class watch rules on items, and vehicle
+  repair and delete.
 - **The web interface and the map** against a live server with a player, with the
   built-in htmx 2.0.4 and Leaflet 1.7.1 (Debian trixie's versions).
 - **The Central Economy mission** is fetched from Bohemia's repository by branch or
@@ -268,31 +271,32 @@ the DayZ client:
 
 ### Needs live verification
 
-Things that could not be checked yet, roughly in the order they would bite:
+Things that nobody has checked yet, roughly in the order in which they bite:
 
 - **The package outside Debian.** Ubuntu, Fedora, the RHEL 10 family and Arch have
-  only run in containers: no `dzo setup` that builds both images, no real Steam
-  login through the `steamcmd` wrapper, no SELinux-enforcing host (Fedora, RHEL)
-  and no server on podman 6 (CentOS Stream 10, Arch). The
+  only run in containers. That means no `dzo setup` that builds both images, and
+  no real Steam login through the `steamcmd` wrapper. It also means no
+  SELinux-enforcing host (Fedora, RHEL), and no server on podman 6
+  (CentOS Stream 10, Arch). The
   [support matrix](docs/installation.rst) says who is expected to check what, and
   the [release checklist](docs/development.rst) is the list itself.
 - **BattlEye's `Verified GUID` line.** The other player events (connect, GUID, chat,
   kick, disconnect) were captured from a real client with BattlEye and the patterns
-  fixed; the verified-GUID line needs a BattlEye master that answers, which it did not
+  fixed. The verified-GUID line needs a BattlEye master that answers, which it did not
   from the development host or the workstation (`Ban check timed out`). See the
   [FAQ](docs/faq.rst).
 - **steamcmd's failure paths.** A real login, server install, workshop
   download and forced refresh have worked. The wording of the other prompts
   (wrong password, Steam Guard by mail or by mobile confirmation, rate
-  limiting) and of failed jobs is from community reports.
+  limiting) is from community reports. So is the wording of failed jobs.
 - **The weekly image refresh.** Its command rebuilds both images on podman
-  5.4.2, but the timer has not fired by itself yet, and the unit on the
-  development host predates a fix: the generated unit lacked `--images-dir` and
-  `--config`, which broke it on any host with a non-default layout.
+  5.4.2, but the timer has not fired by itself yet. The unit on the development
+  host predates a fix: the generated unit lacked `--images-dir` and `--config`.
+  That broke it on any host with a non-default layout.
 - **`dzo test boot` in some modes**: `--container`, `cfggameplay.json` (the
   server only reads it with `enableCfgGameplayFile = 1`) and Windows. It has
-  passed on 1.30, on a good instance, and fails on a mission script
-  error, an XML file that does not parse and a missing `<ce folder>`.
+  passed on 1.30, on a good instance. It fails on a mission script error, an
+  XML file that does not parse, and a missing `<ce folder>`.
 - **The web interface's buttons in a browser.** The pages, the map and the API
   actions behind the buttons work; the htmx forms were not clicked.
 - **Other podman versions** than 5.4.2 and 5.8 for the quadlet keys

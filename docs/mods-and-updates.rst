@@ -18,9 +18,9 @@ Adding and removing mods
    dzo mod remove <workshop id> --instance deerisle
 
 ``dzo mod add`` installs the mod first, and only then adds it to the instance's
-``instance.yaml`` in the site repository (the file's comments are kept; the
-change is left uncommitted for you to commit). It takes effect at the next
-restart.
+``instance.yaml`` in the site repository. The file's comments are kept. The
+change stays uncommitted, so you can commit it. The change takes effect at the
+next restart.
 
 .. _debug-client-mods:
 
@@ -28,8 +28,8 @@ Debugging a client mod you build yourself
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Players download client mods from the Steam Workshop, so dzo only allows local mods as
-servermods. To test a client mod that is not on the Workshop yet (a mod of your own, or one
-that needs a test client), you can load a **signed local mod on the clients as well**. This is
+servermods. To test a client mod that is not on the Workshop yet, load a **signed local mod on
+the clients as well**. It covers a mod of your own, or one that needs a test client. This is
 for debugging on a test server only, and dzo makes you say so:
 
 .. code-block:: sh
@@ -38,26 +38,26 @@ for debugging on a test server only, and dzo makes you say so:
 
 ``--client`` alone is refused with the reasons; ``--force`` confirms that you know them:
 
-* clients cannot download the mod. Every player has to install the same signed build by
-  hand, as ``@<name>`` in the game's folder, and start the game with it (``-mod=@<name>``);
+* clients cannot download the mod. Every player must install the same signed
+  build by hand, as ``@<name>`` in the game's folder, and start the game with it (``-mod=@<name>``);
 * the mod directory must carry ``keys/<authority>.bikey`` and, for every PBO,
   ``<pbo>.<authority>.bisign`` made with that key (see the ``dayz-mod-pack.sh`` of the dayz-dev
   tools, or armake2). dzo checks that the files are there and belong together, not the
-  signature itself; a server with ``verifySignatures`` kicks a client whose PBOs do not match;
+  signature itself. A server with ``verifySignatures`` kicks a client whose PBOs do not match;
 * the key goes into the server's ``keys/``, so it accepts every player who has that mod.
   Anyone holding the private key can then join; never do this on a public server.
 
-The entry in ``instance.yaml`` is ``{local: mytest, debug_client: true}``; the mod is read like
-any local mod (``localmods/<name>/`` or ``local_mods`` in ``site.yaml``), passed to the server as
-``-mod=@mytest``, and listed by ``dzo mod list`` as ``client (debug, local)``. ``dzo site
+The entry in ``instance.yaml`` is ``{local: mytest, debug_client: true}``. The mod is read like
+any local mod (``localmods/<name>/`` or ``local_mods`` in ``site.yaml``) and passed to the server
+as ``-mod=@mytest``. ``dzo mod list`` lists it as ``client (debug, local)``. ``dzo site
 validate``, ``dzo mod add`` and ``dzo instance apply`` print a warning for every such mod, so it
 is not forgotten. To go back, ``dzo mod remove`` it.
 
 **Load order is the order of the ``mods`` list.** dzo passes the mods to the
 server in exactly that order (``-mod=`` for client mods, ``-servermod=`` for
-server mods) and does not reorder them or check dependencies. Mods often
+server mods). It does not reorder them or check dependencies. Mods often
 provide the same content under different names, so a dependency declared by one
-mod can be met by another with a different name, and dzo cannot tell. Put
+mod can be met by another with a different name. dzo cannot tell. Put
 dependencies before the mods that need them, as you would on the command line.
 
 Reading ``config.bin`` (diagnostics only)
@@ -69,8 +69,8 @@ is refused because of them.
 
 Mods ship their config as a rapified (binary) ``config.bin``, usually inside
 an LZSS-compressed PBO entry. dzo decodes both itself, so no extra tools are
-needed: it looks for ``config.bin`` at the root of each addon PBO (falling back
-to a plain ``config.cpp``) and reads only the ``CfgPatches`` classes and their
+needed. It looks for ``config.bin`` at the root of each addon PBO (falling back
+to a plain ``config.cpp``). It reads only the ``CfgPatches`` classes and their
 ``requiredAddons``. The diagnostic commands accept a PBO, a bare
 ``config.bin`` or a ``config.cpp``::
 
@@ -85,9 +85,9 @@ Automatic mod updates
 ---------------------
 
 ``dzo-update-check.timer`` runs every hour. For each instance whose
-``check_interval`` is due, dzo asks Steam which mods changed, downloads them into
-new generations while the servers keep running, and then acts on the instance's
-``updates.policy``:
+``check_interval`` is due, dzo asks Steam which mods changed. It downloads
+them into new generations while the servers keep running, and then acts on the
+instance's ``updates.policy``:
 
 ``auto``
    graceful restart with the ``restart_announce`` countdown, a snapshot, the
@@ -130,8 +130,8 @@ Installing mods and server builds
 ---------------------------------
 
 Everything dzo downloads is stored as an immutable *generation*: a directory
-that is never changed after it appears, so a running server never sees files
-move under it. A new version is a new generation, and ``current`` is switched
+that never changes after it appears. A running server never sees files move
+under it. A new version is a new generation, and ``current`` is switched
 only after the new one is complete and validated. Re-running a command never
 touches an existing generation.
 
@@ -144,16 +144,17 @@ touches an existing generation.
 
 Workshop mods are named by Steam's ``time_updated`` (``<time_updated>`` or, after
 a forced refresh, ``<time_updated>-r<n>``) and the server build by its Steam
-build id. Steam downloads run one at a time: dzo holds a lock, and the Steam
+build id. Steam downloads run one at a time. dzo holds a lock, and the Steam
 session from ``dzo steam login`` must be valid (``steam.account`` in
 ``config.yaml`` names the account).
 
 Steam's public Web API, which dzo asks for a mod's version, does not show every
 Workshop item: unlisted or restricted ones are missing from it. dzo downloads such a mod with the
 Steam account anyway and takes its version from steamcmd's own manifest. Because the version is
-only known after the download, ``dzo mod update`` downloads these mods again on each run; steamcmd
-only fetches what changed, and an unchanged mod stays at its generation. If the account may not
-download the mod either, the error says so.
+only known after the download, ``dzo mod update`` downloads these mods again
+on each run. steamcmd only fetches what changed, and an unchanged mod stays at
+its generation. If the account cannot download the mod either, the error says
+so.
 
 A downloaded mod is checked before it becomes a generation: ``meta.cpp`` must be
 there and every PBO under ``addons/`` must parse. If a mod fails the check, the
@@ -162,21 +163,22 @@ error. Installing does not restart anything; running servers keep the
 generation they were started with.
 
 **Local servermods** (``{local: <name>, server: true}``) are imported the same
-way, from ``localmods/<name>/`` in the site repository, a host directory, or a
-release archive (``local_mods`` in ``site.yaml``, see :doc:`resolved-instance`).
+way. The sources are ``localmods/<name>/`` in the site repository, a host
+directory, or a release archive (``local_mods`` in ``site.yaml``, see
+:doc:`resolved-instance`).
 The generation is named after a sha256 over the mod's files, so unchanged
 content is never imported twice. Only regular files are accepted: a symlink is
 an error, and archives with absolute paths, ``..``, links or device files are
 rejected. An archive is checked against its sha256 before it is unpacked. The
 mod root is the directory holding ``addons/`` (directly, or in a single
 ``@<name>`` directory); a ``keys/`` directory is ignored. Every PBO of a local
-mod must carry a ``prefix`` header, because a PBO without one loads without an
-error but none of its scripts run.
+mod must carry a ``prefix`` header. A PBO without one loads without an error,
+but none of its scripts run.
 
 Broken or corrupted mod downloads
 ---------------------------------
 
-There is no rollback to an older mod version: if a correctly downloaded mod is
+There is no rollback to an older mod version. If a correctly downloaded mod is
 broken, the mod needs a fix, or you remove it from the instance.
 
 What dzo does offer is a **forced re-download**. Use it when a download is
@@ -187,10 +189,10 @@ incomplete or damaged, or when Steam's own cache serves a bad copy:
    dzo mod refresh <id> [<id>…] [--instance deerisle] --force
    dzo mod refresh --all --instance deerisle --force
 
-This deletes steamcmd's cached state for the mod, downloads it again even if
-Steam reports no change, checks the result (``meta.cpp`` present, every PBO
+It deletes steamcmd's cached state for the mod, and downloads it again even if
+Steam reports no change. It checks the result (``meta.cpp`` present, every PBO
 readable) and stores it as a new generation. Servers switch to it at their next
-restart. ``--force`` is required, to make it clear that this
+restart. You must pass ``--force`` to make it clear that this
 downloads regardless of Steam's version. The web interface has the same action
 per mod.
 
@@ -233,9 +235,9 @@ When a new build is available you get a Discord message, a warning from
       dzo instance upgrade deerisle --build <buildid> [--wipe]
 
    The instance is announced (``--now`` skips the countdown), stopped,
-   snapshotted, optionally wiped (after a ``destructive`` snapshot and a
-   confirmation, ``--yes`` answers it), pinned to the new build, rendered and
-   started. The mods' ``requiredAddons`` are checked against the new build first;
+   snapshotted, and optionally wiped (after a ``destructive`` snapshot and a
+   confirmation, ``--yes`` answers it). It is then pinned to the new build,
+   rendered and started. The mods' ``requiredAddons`` are checked against the new build first;
    a missing dependency stops the upgrade. If the unit cannot be switched, the
    instance stays on its old build. Upgrade each instance when it is ready;
    nothing forces all servers of a product to move at once.
@@ -287,7 +289,7 @@ Mods and the experimental server
 --------------------------------
 
 There are no experimental workshop mods. Both products use the stable workshop
-(``workshop_app_id: 221100``), so an experimental instance installs its mods from
+(``workshop_app_id: 221100``). An experimental instance therefore installs its mods from
 the same workshop items as a stable one and shares their cache generations.
 
 Running DayZ Expansion on 1.30
@@ -299,19 +301,19 @@ authors give two requirements:
 * Use **CF-Test** instead of CF, and **COT-Test** instead of COT if you use COT. These are
   separate workshop items: put their ids in the ``mods`` list of the experimental instance in
   place of the stable ones. A stable instance keeps the normal CF and COT.
-* The **profiles folder has to be inside the server executable's folder.** Vanilla 1.30 has a
-  ``FindFile`` bug: it ignores ``$profile:`` and searches the server folder instead, so a mod
+* The **profiles folder must be inside the server executable's folder.** Vanilla 1.30 has a
+  ``FindFile`` bug: it ignores ``$profile:`` and searches the server folder instead. A mod
   does not find its files when the profiles folder is somewhere else. A symlink or a bind mount
   into the server folder is fine.
 
 dzo already satisfies the second point for every instance. Everything
-a mod resolves through a placeholder lies below the server folder (``/dayz`` in the container):
-the instance's ``profiles/`` is mounted at ``/dayz/profiles`` (``$profile:``), the live mission at
+a mod resolves through a placeholder lies below the server folder (``/dayz`` in the container).
+The instance's ``profiles/`` is mounted at ``/dayz/profiles`` (``$profile:``), the live mission at
 ``/dayz/mpmissions`` (``$mission:``) and the persistence at ``/dayz/storage`` (``$storage:``). The server
 starts with ``-profiles=/dayz/profiles``, ``-config=/dayz/profiles/serverDZ.cfg``,
-``-BEpath=/dayz/profiles/battleye`` and ``-storage=/dayz/storage``; the engine reduces an absolute
+``-BEpath=/dayz/profiles/battleye`` and ``-storage=/dayz/storage``. The engine reduces an absolute
 ``-profiles=`` to its last component and looks it up in the server folder, which is where the mount is.
-Nothing has to be configured. Check it on a running instance:
+No configuration is needed. Check it on a running instance:
 
 .. code-block:: sh
 

@@ -25,7 +25,7 @@ GeoLite2 with geoipupdate (recommended for more detail)
 
 MaxMind's GeoLite2 City, Country and ASN databases (``*.mmdb``) give the country, city, location and provider.
 ``geoipupdate`` keeps them current. Every dzo package recommends it - the ``.deb`` and the rpm as a
-``Recommends``, the Arch package as an optional dependency (``optdepends``) - but no package pulls in the
+``Recommends``, the Arch package as an optional dependency (``optdepends``). No package pulls in the
 databases themselves: without ``geoipupdate`` and its account there are no GeoLite2 files.
 
 #. Create a **free MaxMind account** at https://www.maxmind.com/en/geolite2/signup and accept the GeoLite2 licence.
@@ -79,9 +79,9 @@ Which package brings them differs:
 
 The data is only as new as the package, and no job refreshes it between package updates. Debian 13's
 ``geoip-database`` was reverted to data from 2019 (the version is ``20250401+really20191224``); Ubuntu 26.04
-ships a current data set (``20260113``). For current results on Debian 13 **some apt configuration is
-needed**: take ``geoip-database`` from **trixie-backports**. Enable backports and pin the package so that it is
-always taken from there and upgraded with the system:
+ships a current data set (``20260113``). For current results on Debian 13 **apt needs
+configuration**: take ``geoip-database`` from **trixie-backports**. Enable backports and pin the package so
+that apt always takes it from there and upgrades it with the system:
 
 .. code-block:: console
 
@@ -108,7 +108,7 @@ release's package.
 Settings
 --------
 
-The directories can be changed in the :doc:`configuration <configuration>`:
+You can change the directories in the :doc:`configuration <configuration>`:
 
 .. code-block:: yaml
 
@@ -132,7 +132,7 @@ Flags
 
 The flags are built into dzo, from the ``iso-country-flags-svg-collection`` in the 4:3 shape, and the
 web interface serves them under ``/flags/``. A directory in ``web.flags_dir`` overrides them file by
-file: a flag it lacks comes from the built-in set, and a missing directory only logs a warning at the
+file. A flag it lacks comes from the built-in set, and a missing directory only logs a warning at the
 start of ``dzo web``. Without a flag for a country, for example for a code outside ISO 3166-1, the list
 shows the country code where the flag would be.
 

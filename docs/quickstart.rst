@@ -56,9 +56,9 @@ This is a minimal file; every key and its default is in :ref:`instance-yaml`.
 
 Without ``mission_source`` the mission comes from the ``dayzOffline.chernarusplus``
 folder of the Central Economy repository (see :doc:`missions`). Add a
-``serverDZ.cfg`` next to it (your usual server settings, with a ``password``;
-dzo sets the mission ``template`` and the Steam query port itself), commit,
-push, then:
+``serverDZ.cfg`` next to it (your usual server settings, with a
+``password``). dzo sets the mission ``template`` and the Steam query port
+itself. Commit, push, then:
 
 .. code-block:: sh
 
@@ -109,8 +109,9 @@ The web interface has real logins (:ref:`web-login`). On the host of ``dzo serve
    sudo -iu dayz dzo user grant <your Steam64 ID> --role admin --username <name>
    sudo -iu dayz dzo units sync
 
-(If Steam sign-in does not work yet, give yourself a password instead: ``dzo user password <name>``.) Then open the web interface, sign in through Steam and set up your second factor (an authenticator app or a
-passkey). Put it behind HTTPS: certificate files in ``web.tls`` or a reverse proxy (:ref:`web-https`).
+(If Steam sign-in does not work yet, give yourself a password instead:
+``dzo user password <name>``.) Then open the web interface. Sign in through
+Steam and set up your second factor (an authenticator app or a passkey). Put it behind HTTPS: certificate files in ``web.tls`` or a reverse proxy (:ref:`web-https`).
 
 What next
 ---------

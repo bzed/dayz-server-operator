@@ -44,9 +44,9 @@ Mission
    stores the world, and dzo never wipes it. See :doc:`missions`.
 
 Render
-   The step before every server start: dzo combines the pristine mission, the
-   mod integrations and your overlays into the files the server needs, checks
-   them, and only then writes them into the live mission.
+   The step before every server start. dzo combines the pristine mission, the
+   mod integrations and your overlays into the files the server needs. It
+   checks them, and only then writes them into the live mission.
 
 How a start works
 -----------------

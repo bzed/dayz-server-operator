@@ -5,17 +5,17 @@ dzo — DayZ server operator
 ==========================
 
 dzo runs and maintains DayZ dedicated servers on a Linux host. It installs the
-server and workshop mods, prepares each server's mission, runs every server as a
-rootless podman container managed by systemd, restarts servers gracefully, keeps
-mods up to date, takes btrfs snapshots before changes, and exports monitoring
-data. An optional web interface adds player management, moderation and a live
+server and workshop mods, and prepares each server's mission. Every server runs
+as a rootless podman container managed by systemd. dzo restarts servers
+gracefully and keeps mods up to date. It takes btrfs snapshots before changes,
+and exports monitoring data. An optional web interface adds player management, moderation and a live
 admin map. Debian 13 is the reference distribution; :doc:`installation` lists the
 other distributions and the level each one is tested at.
 
 .. note::
 
    dzo is under active development. These pages describe how dzo works and is
-   meant to be used. Commands and options may still change before the first
+   meant to be used. Commands and options can still change before the first
    release.
 
 Where to start
@@ -23,7 +23,7 @@ Where to start
 
 * New to dzo: read :doc:`overview`, then follow :doc:`installation` and
   :doc:`quickstart`.
-* On a host that should run nothing but containers:
+* On a host that runs nothing but containers:
   :doc:`container`.
 * In a hurry: the :download:`two-page cheat sheet (PDF) <cheatsheet/dzo-cheatsheet.pdf>` has
   the setup steps and the everyday commands.

@@ -4,11 +4,11 @@
 Bans and evidence
 =================
 
-dzo bans players by Steam ID, BattlEye GUID or IP address, for a time or for good, on one instance or on
-every instance of an installation. It keeps who banned whom and why, every change, and the evidence
+dzo bans players by Steam ID, BattlEye GUID or IP address. It can ban for a time or for good, on one
+instance or on every instance of an installation. It keeps who banned whom and why, every change, and the evidence
 (log lines, notes, screenshots) filed against a player. The tools are ``dzo ban`` and ``dzo evidence``,
-the :doc:`web interface <web>` and the :doc:`JSON API <api>`. They need ``dzo serve`` to be running; the
-bans themselves are enforced even when it is not (see below).
+the :doc:`web interface <web>` and the :doc:`JSON API <api>`. These tools need ``dzo serve`` to be running. The
+bans themselves still take effect when it is not (see below).
 
 Bans
 ----
@@ -21,24 +21,24 @@ A ban covers one person through several **targets**:
 * optional IPv4 addresses. BattlEye bans single addresses only, so there are no ranges and no IPv6.
 
 A ban lasts ``30m``, ``12h``, ``7d``, ``2w`` or ``permanent`` (at most ten years, longer means permanent).
-It has a **reason**, which only admins see (at most 1000 characters), and a **message** that the player
-is shown (default: ``You are banned from this server``). BattlEye keeps at most 64 bytes of the message,
+It has a **reason** that only admins see (at most 1000 characters) and a **message** that dzo shows the
+player (default: ``You are banned from this server``). BattlEye keeps at most 64 bytes of the message,
 so dzo refuses a longer one instead of cutting it silently. Put the details, the log lines and the
-screenshots in the reason and the evidence: those stay in the database and are never sent to the player.
+screenshots in the reason and the evidence. Those stay in the database and dzo never sends them to the player.
 
 **Scope**: ``instances`` lists the instances a ban applies to, ``global`` means every instance of this
 installation. A ban can be edited (reason, message, expiry, scope, targets, linked evidence) and revoked.
 A revoked ban stays in the list and in its history. Every change is recorded with who made it and the old
 and new values.
 
-When one person has several bans, the longest one decides: ``bans.txt`` has one line for each target, with
-the latest expiry, and revoking one ban leaves the others in force.
+When one person has several bans, the longest one decides. ``bans.txt`` has one line for each target, with
+the latest expiry. Revoking one ban leaves the others in force.
 
 Shared IP addresses
 -------------------
 
 dzo never bans an IP address by itself. Mobile networks put many players behind one address, so an IP ban
-is a blunt tool. The ban form lists the addresses a player was seen with, and warns when other players
+is a blunt tool. The ban form lists the addresses a player was seen with. It warns when other players
 were seen with the same address ("shared with N other players"). Add an IP only when you have a reason.
 
 IP addresses and privacy
@@ -68,12 +68,12 @@ only to those who need it:
      - ``player.history``
      - moderator, operator, admin
 
-Players are still matched by address without showing it: the ban form lists the addresses a player was
-seen with as "Address (name on instance, last seen), shared with N other players", and ticking one bans it.
+Players are still matched by address without showing it. The ban form lists the addresses a player was
+seen with as "Address (name on instance, last seen), shared with N other players". Ticking one bans it.
 The API gives each such address an opaque reference (``ref``, and ``ip_refs`` when a ban is made or edited)
-instead of the address, and a reference only works for the player being banned or the ban being edited. Without
+instead of the address. A reference only works for the player being banned or the ban being edited. Without
 ``ip.history`` a ban shows "address hidden", and editing it keeps its addresses. Addresses are never written to
-the audit log. They may be stored hashed in the future; the references keep that possible. Reading the
+the audit log. dzo can store them hashed in the future; the references keep that possible. Reading the
 history of a player's addresses is recorded in the audit log (``ip.history``, without the addresses).
 
 **Retention.** dzo keeps who was seen, under which name, on which instance and when, for good. It keeps the
@@ -90,30 +90,31 @@ Player history
 
 ``dzo serve`` keeps a database of every player who connected to one of its instances, in the same SQLite file as the
 bans. It is built from the live player list that ``dzo-admin`` reports, so it needs the mod. For each player (by
-Steam ID, with the BattlEye GUID derived from it) it records every name used and when, and each stay as a session:
-the instance, when the player joined and when the player left. If ``dzo serve`` stops, or the mod is not heard from
-for 10 seconds, the sessions end at the last time it was heard from or at the stop. Sessions are kept for a year
+Steam ID, with the BattlEye GUID derived from it) it records every name used and when. It records each stay as a session:
+the instance, when the player joined and when the player left. If ``dzo serve`` stops, or the mod sends nothing for
+10 seconds, the sessions end at the last contact or at the stop. Sessions are kept for a year
 (``serve.session_retention_days``); the players, their names and first-seen times are kept for good.
 
 BattlEye kicks are not recorded: they are dzo's own.
 
-**BattlEye's global bans.** ``dzo serve`` asks BattlEye's master server whether a player's GUID is globally banned, for
+**BattlEye's global bans.** ``dzo serve`` asks BattlEye's master server whether a player's GUID is globally banned. It asks for
 DayZ and, because it is the same Steam account, for Arma 3 and Arma 2: Operation Arrowhead. This is information for the
-player page only: the DayZ server enforces BattlEye's global bans itself when a player joins, and dzo neither enforces
-nor duplicates that, so there is no option for it and it is always on. BattlEye publishes no API for this; dzo uses the
-UDP query that game servers use (one datagram with the GUID to 57.129.90.115, the address of ``dayz1.battleye.com``, on
-port 2354 for DayZ, 2344 for Arma 3 and 2324 for Arma 2: OA; Arma Reforger has none). The game server already sends every
-joining player's GUID there, so nothing new is disclosed. dzo asks gently: a new player is asked once for each of the
-three games, an answer is kept for 7 days, only players seen in the last 30 days are asked again, never more than one
-packet a second, and after three rounds without any answer it leaves BattlEye alone for an hour. A silent master is
+player page only. The DayZ server enforces BattlEye's global bans itself when a player joins, and dzo neither enforces
+nor duplicates that. There is no option for it, and it is always on. BattlEye publishes no API for this. dzo uses the
+UDP query that game servers use: one datagram with the GUID to 57.129.90.115, the address of
+``dayz1.battleye.com``. The port is 2354 for DayZ, 2344 for Arma 3 and 2324 for Arma 2: OA. Arma Reforger has none. The game server already sends every
+joining player's GUID there, so nothing new is disclosed. dzo asks gently. It asks a new player once for each of the
+three games and keeps an answer for 7 days. It asks again only the players seen in the last 30 days, and never more
+than one packet a second. After three rounds without any answer, it leaves BattlEye alone for an hour. A silent master is
 "no answer" on the page, never "not banned".
 
 **Steam.** With ``steam.profile_lookup`` (default on) the player page also shows what Steam says: the link to the
-profile, the name, whether the profile is private and whether the account has a VAC or community ban. With a Web API key
-(``steam.web_api_key_file``, :doc:`configuration`) it adds the number of VAC and game bans, the days since the last ban,
-the account's age and country, the Steam level, the DayZ playtime and the player's public friends who also played on your
-servers. Answers are kept for 24 hours. A moderator can press **Check now** on a player's page to ask both sources at
-once; that works at most once per 10 minutes per player.
+profile and the name. It also shows whether the profile is private and whether the account has a VAC or
+community ban. With a Web API key
+(``steam.web_api_key_file``, :doc:`configuration`) it adds more: the number of VAC and game bans, and the days since the
+last ban. It also adds the account's age and country, the Steam level, the DayZ playtime and the player's public
+friends who also played on your servers. Answers are kept for 24 hours. A moderator can press **Check now** on a player's page to ask both sources at
+once. That works at most once per 10 minutes per player.
 
 How bans are enforced
 ---------------------
@@ -121,38 +122,38 @@ How bans are enforced
 Enforcement goes through BattlEye's ``bans.txt`` and a live check in ``dzo serve``.
 
 ``bans.txt``
-   One ban per line, ``<GUID or IP> <expiry> <message>``, where the expiry is ``-1`` for a permanent ban and a
-   Unix time otherwise (see the FAQ for what a real server was seen to do with it). dzo renders it from the
+   One ban per line: ``<GUID or IP> <expiry> <message>``. The expiry is ``-1`` for a permanent ban and a
+   Unix time otherwise. See the FAQ for what a real server was seen to do with it. dzo renders it from the
    database at **every start** of an instance (``dzo instance render``), so bans hold while ``dzo serve``
-   is down, and again in ``dzo serve`` after every change and once a minute, so that expired bans leave
-   the file. After writing, serve sends RCon ``loadBans``.
+   is down. It renders it again in ``dzo serve`` after every change and once a minute, so that expired
+   bans leave the file. After writing, serve sends RCon ``loadBans``.
 
 The enforcer
    For every instance with an RCon password, ``dzo serve`` keeps an RCon session. When a player connects,
-   the enforcer looks up the GUID and the IP in the active bans and kicks a banned one with the ban message.
-   When a ban is created or edited, the players who are online on the affected instances are checked at
+   the enforcer looks up the GUID and the IP in the active bans. It kicks a banned player with the ban
+   message. When dzo creates or edits a ban, it checks the players online on the affected instances at
    once. Every kick is written to the audit log (``ban.kick``).
 
 Pending instances
-   If an instance's server is down or RCon fails when a ban is made, the ban is stored anyway. The answer
+   If an instance's server is down or RCon fails when a ban is made, dzo stores the ban anyway. The answer
    says ``pending`` for that instance, and the next sweep (every minute) or the next start syncs it.
 
 Changes outside dzo
    dzo records the SHA-256 of what it wrote in ``profiles/battleye/.dzo-bans.sha256``. When ``bans.txt``
    differs from that (hand edits, or another tool's ``addBan``), ``dzo serve`` imports the active entries
-   that are not banned yet as instance bans created by ``import:bans.txt`` and renders again. The start
+   that are not banned yet. It makes them instance bans created by ``import:bans.txt`` and renders again. The start
    path never overwrites a file changed outside dzo. **Remove bans through dzo**: a line deleted from
    ``bans.txt`` by hand comes back at the next render.
 
 A new or rebuilt server
    The database is the source of truth, not ``bans.txt``. Copy ``dzo.sqlite`` (and the ``evidence``
-   directory next to it, or the newest copy from ``<paths.db>/backup``, see :doc:`backups`) to the new installation, and every start of an instance renders ``bans.txt`` from it,
+   directory next to it, or the newest copy from ``<paths.db>/backup``, see :doc:`backups`) to the new installation. Every start of an instance renders ``bans.txt`` from it,
    so the new server knows all active bans before the first player connects. Nothing needs to be exported from
    the old server's ``bans.txt``.
 
 DayZ's own ``ban.txt``
-   Not used. BattlEye enforces by GUID and by IP and is kept in sync from the database as described above,
-   so a second list that the game server reads would only be one more place to get out of step.
+   Not used. BattlEye enforces by GUID and by IP, and dzo keeps it in sync from the database as described above.
+   A second list that the game server reads would only be one more place to get out of step.
 
 Who may do what
 ---------------
@@ -177,9 +178,9 @@ Who may do what
    * - ``admin``
      - also global bans, and changing or revoking anyone's ban
 
-A token restricted to some instances (``--instance``) sees only the bans that apply to its instances,
-cannot create global bans, and gets the same "unknown instance" answer for an instance it may not use as
-for one that does not exist, so it cannot probe instance names.
+A token restricted to some instances (``--instance``) sees only the bans that apply to its instances, and cannot create global bans. It gets the same
+"unknown instance" answer for an instance it is not allowed to use as for one that does not exist. So it
+cannot probe instance names.
 
 Evidence
 --------
@@ -209,7 +210,7 @@ Several installations
 ---------------------
 
 The web interface can show several installations. The ban form offers "also send to" for every other
-backend; the same ban is then created on each of them. Evidence links stay with the first backend,
+backend; dzo then creates the same ban on each of them. Evidence links stay with the first backend,
 because the evidence lives in that installation's database.
 
 Where the data lives

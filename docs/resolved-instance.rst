@@ -1,11 +1,11 @@
 .. SPDX-FileCopyrightText: 2026 Bernd Zeimetz <bernd@bzed.de>
 .. SPDX-License-Identifier: AGPL-3.0-or-later
 
-How an instance is resolved
-===========================
+How dzo resolves an instance
+============================
 
-Every command that acts on an instance first *resolves* it: the operator
-configuration, the site repository and the download cache are combined into one
+Every command that acts on an instance first *resolves* it. dzo combines the
+operator configuration, the site repository and the download cache into one
 complete description. ``dzo instance show <name>`` prints it as YAML, and
 ``dzo config validate`` resolves every instance in the site checkout.
 
@@ -18,11 +18,12 @@ Defaults
 --------
 
 ``site.yaml`` can set ``image`` (the runtime image, default
-``localhost/dzo-runtime:latest``) and a ``defaults`` block. It may contain
+``localhost/dzo-runtime:latest``) and a ``defaults`` block. It can contain
 ``rcon_bind``, ``params``, ``updates``, ``restarts``, ``health``, ``restart_limit``, ``stop``,
 ``notify``, ``container``, ``backup``, ``logs``, ``admin_map``, ``welcome`` and ``messages``,
-with the keys of ``instance.yaml``; the complete file is in :ref:`site-yaml`. Whatever an instance leaves unset is taken from there, field
-by field; a value set in ``instance.yaml`` always wins.
+with the keys of ``instance.yaml``. The complete file is in :ref:`site-yaml`.
+dzo takes whatever an instance leaves unset from there, field by field; a value
+set in ``instance.yaml`` always wins.
 
 .. code-block:: yaml
 
@@ -46,8 +47,8 @@ An entry in ``mods`` is either a workshop id or a local servermod:
      - {local: dzo-admin, server: true}
 
 A local mod must set ``server: true`` (or, for debugging only,
-``debug_client: true``, see :ref:`debug-client-mods`) and have a name of letters, digits,
-``_``, ``.`` and ``-`` that is not purely numeric. It is read from
+``debug_client: true``, see :ref:`debug-client-mods`). Its name must have only
+letters, digits, ``_``, ``.`` and ``-``, and must not be purely numeric. It is read from
 ``localmods/<name>/`` in the site repository, or from a ``local_mods`` entry in
 ``site.yaml``:
 
@@ -63,10 +64,10 @@ mod as ``/dayz/@<name>``.
 What is not installed yet
 -------------------------
 
-Resolving never downloads anything. The server build and mod generations are
-looked up in the cache; whatever is missing is listed under ``missing`` in the
-output (and as a note by ``dzo config validate``). The container unit is only
-built once nothing is missing, because it mounts the exact generations.
+Resolving never downloads anything. dzo looks up the server build and mod
+generations in the cache and lists whatever is missing under ``missing`` in the
+output. ``dzo config validate`` reports it as a note. dzo builds the container
+unit only once nothing is missing, because it mounts the exact generations.
 
 Checks
 ------
