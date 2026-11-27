@@ -261,6 +261,44 @@ func (s *Store) PurgeSessions(ctx context.Context, cutoff time.Time) (int64, err
 	return res.RowsAffected()
 }
 
+// orphanPlayer selects the players nothing refers to: no session, no ban target, no evidence or
+// note, no web account, and not seen since the cutoff.
+const orphanPlayer = `SELECT p.steam_id FROM players p WHERE p.last_seen < ?
+	AND NOT EXISTS (SELECT 1 FROM player_sessions s WHERE s.steam_id = p.steam_id)
+	AND NOT EXISTS (SELECT 1 FROM ban_targets t WHERE (t.kind = 'steam' AND t.value = p.steam_id) OR (t.kind = 'guid' AND t.value = p.guid))
+	AND NOT EXISTS (SELECT 1 FROM evidence e WHERE e.steam_id = p.steam_id OR e.guid = p.guid)
+	AND NOT EXISTS (SELECT 1 FROM people x WHERE x.steam_id = p.steam_id)`
+
+// PurgeOrphanPlayers deletes the players last seen before cutoff that nothing refers to any more (no
+// session, ban target, evidence or note, and no web account), with their names and the cached BattlEye
+// and Steam answers about them. A mod that reports made-up Steam IDs cannot make the table grow for ever.
+func (s *Store) PurgeOrphanPlayers(ctx context.Context, cutoff time.Time) (int64, error) {
+	var n int64
+	err := s.tx(ctx, func(tx *sql.Tx) error {
+		c := cutoff.Unix()
+		for _, q := range []string{
+			`DELETE FROM be_status WHERE guid IN (SELECT p.guid FROM players p WHERE p.steam_id IN (` + orphanPlayer + `))`,
+			`DELETE FROM steam_info WHERE steam_id IN (` + orphanPlayer + `)`,
+			`DELETE FROM steam_friends WHERE steam_id IN (` + orphanPlayer + `)`,
+			`DELETE FROM player_names WHERE steam_id IN (` + orphanPlayer + `)`,
+		} {
+			if _, err := tx.ExecContext(ctx, q, c); err != nil {
+				return err
+			}
+		}
+		res, err := tx.ExecContext(ctx, `DELETE FROM players WHERE steam_id IN (`+orphanPlayer+`)`, c)
+		if err != nil {
+			return err
+		}
+		n, err = res.RowsAffected()
+		return err
+	})
+	if err != nil {
+		return 0, fmt.Errorf("moderation: purge orphan players: %w", err)
+	}
+	return n, nil
+}
+
 const activeBan = `EXISTS (SELECT 1 FROM ban_targets t JOIN bans b ON b.id = t.ban_id
 	WHERE ((t.kind = 'steam' AND t.value = p.steam_id) OR (t.kind = 'guid' AND t.value = p.guid))
 	AND b.revoked_at IS NULL AND (b.expires_at IS NULL OR b.expires_at > ?))`

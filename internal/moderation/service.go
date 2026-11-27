@@ -251,6 +251,11 @@ func (s *Service) maintain(ctx context.Context) {
 		} else if n > 0 {
 			s.logf("players: dropped %d sessions older than %s", n, keep)
 		}
+		if n, err := s.store.PurgeOrphanPlayers(ctx, now.Add(-keep)); err != nil {
+			s.logf("players: dropping old players: %v", err)
+		} else if n > 0 {
+			s.logf("players: dropped %d players not seen for %s that nothing refers to", n, keep)
+		}
 	}
 	if keep := cmp.Or(s.AuditClientRetention, DefaultAuditClientRetention); keep > 0 && now.Sub(s.lastAuditPass) >= 24*time.Hour {
 		s.lastAuditPass = now

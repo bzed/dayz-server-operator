@@ -93,7 +93,9 @@ bans. It is built from the live player list that ``dzo-admin`` reports, so it ne
 Steam ID, with the BattlEye GUID derived from it) it records every name used and when. It records each stay as a session:
 the instance, when the player joined and when the player left. If ``dzo serve`` stops, or the mod sends nothing for
 10 seconds, the sessions end at the last contact or at the stop. Sessions are kept for a year
-(``serve.session_retention_days``); the players, their names and first-seen times are kept for good.
+(``serve.session_retention_days``). Once a player has no session left, has not been seen for that time, and no ban,
+evidence, note or web account refers to the player, dzo deletes the player and the names. Players that a ban,
+evidence, note or account refers to are kept for good. The mod can report at most 256 players in one sync.
 
 BattlEye kicks are not recorded: they are dzo's own.
 

@@ -385,3 +385,22 @@ func TestNegativeSessionRetentionKeepsSessions(t *testing.T) {
 	p, _ := e.st.Player(t.Context(), steamA)
 	require.Len(t, p.Sessions, 1)
 }
+
+func TestUpkeepDropsOldPlayersNothingRefersTo(t *testing.T) {
+	e := newSvc(t)
+	old := t0.Add(-400 * 24 * time.Hour)
+	require.NoError(t, e.st.PlayerJoined(t.Context(), "alpha", steamA, "alice", old))
+	require.NoError(t, e.st.PlayerLeft(t.Context(), "alpha", steamA, old.Add(time.Hour)))
+	e.tick <- t0
+	e.tick <- t0
+	_, err := e.st.Player(t.Context(), steamA)
+	require.ErrorIs(t, err, ErrNotFound)
+
+	e.svc.SessionRetention = -1
+	require.NoError(t, e.st.PlayerJoined(t.Context(), "alpha", steamB, "bob", old))
+	require.NoError(t, e.st.PlayerLeft(t.Context(), "alpha", steamB, old.Add(time.Hour)))
+	e.tick <- t0
+	e.tick <- t0
+	_, err = e.st.Player(t.Context(), steamB)
+	require.NoError(t, err, "retention off keeps everything")
+}

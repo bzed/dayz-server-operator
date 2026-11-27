@@ -170,7 +170,8 @@ func (h *Hub) Sync(req SyncRequest) SyncReply {
 		h.gameTime = fmt.Sprintf("%02d:%02d", req.Clock/60, req.Clock%60)
 	}
 	if req.Players != nil {
-		h.players = req.Players
+		// A server has far fewer slots; the rest is not a player list.
+		h.players = req.Players[:min(len(req.Players), maxSyncPlayers)]
 		h.linkVehiclesLocked()
 		h.emit("players", append([]Player(nil), h.players...))
 		// The status carries the player count and the next restart, which the map shows.
