@@ -21,8 +21,8 @@ import (
 // maxSyncBody is the largest sync body dzo reads. A sync at every count limit of CheckCounts, with
 // Expansion vehicles, is about 8.8 MB (TestTheBodyLimitHoldsAFullSync), so the count limits refuse a
 // sync before this does. It bounds what an unauthenticated request makes dzo read: the token is in the
-// body, and only the token is decoded before it matches.
-const maxSyncBody = 12 << 20
+// body, and only the token is decoded before it matches. It is the limit dzo always had.
+const maxSyncBody = 16 << 20
 
 // Registry holds the hubs of every instance and authenticates the mods: the
 // per-instance token is the only guard of the endpoint (§C13), so tokens are
