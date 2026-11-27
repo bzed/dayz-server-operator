@@ -350,3 +350,47 @@ func (r *SyncRequest) Normalise() {
 		r.VehicleTypes = nil
 	}
 }
+
+// Most elements of each list one sync may carry. A real mod sends far fewer (players up to the slot
+// count, at most 2000 markers, 256 feed events, 400 class names per chunk); the limits keep a
+// request from making dzo hold millions of elements.
+const (
+	maxSyncPlayers  = 256
+	maxSyncVehicles = 8192
+	maxSyncMarkers  = 8192
+	maxSyncLayers   = 256
+	maxSyncEvents   = 4096
+	maxSyncResults  = 1024
+	maxSyncFeed     = 1024
+	maxSyncNames    = 2048
+	maxSyncFeatures = 64
+	maxSyncHas      = 64
+)
+
+// CheckCounts refuses a request that has more elements in one list than a mod ever sends.
+func (r *SyncRequest) CheckCounts() error {
+	for _, c := range []struct {
+		name     string
+		n, limit int
+	}{
+		{"players", len(r.Players), maxSyncPlayers},
+		{"vehicles", len(r.Vehicles), maxSyncVehicles},
+		{"markers", len(r.Markers), maxSyncMarkers},
+		{"layers", len(r.Layers), maxSyncLayers},
+		{"events", len(r.Events), maxSyncEvents},
+		{"results", len(r.Results), maxSyncResults},
+		{"feed", len(r.Feed), maxSyncFeed},
+		{"features", len(r.Features), maxSyncFeatures},
+		{"has", len(r.Has), maxSyncHas},
+	} {
+		if c.n > c.limit {
+			return fmt.Errorf("sync has %d %s, the limit is %d", c.n, c.name, c.limit)
+		}
+	}
+	for name, t := range map[string]*TypesChunk{"types": r.Types, "vehicle_types": r.VehicleTypes} {
+		if t != nil && len(t.Names) > maxSyncNames {
+			return fmt.Errorf("sync has %d %s names, the limit is %d", len(t.Names), name, maxSyncNames)
+		}
+	}
+	return nil
+}

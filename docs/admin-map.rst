@@ -163,6 +163,18 @@ logged. An instance that stays silent in this log has a mod that does not reach 
 all. Check ``endpoint`` in the mod's ``$profile:dzo/admin/config.json`` and that the instance
 really runs with the mod.
 
+The mod endpoint limits what one sync may carry. These limits are fixed. They are far above what
+the mod sends.
+
+* A blocked address gets ``429`` before dzo reads the body. Ten wrong tokens block an address for a
+  minute.
+* A body is at most 4 MiB. A larger body gets ``413`` when its ``Content-Length`` says so, and
+  ``400`` otherwise.
+* dzo reads only the token first. A body with a wrong token gets ``401`` and is not decoded.
+* One sync carries at most 256 players, 8192 vehicles, 8192 markers, 256 layers, 4096 events,
+  1024 results, 1024 feed events and 2048 class names. A sync over one of these limits gets
+  ``400`` and dzo ignores all of it.
+
 Moving vehicles
 ---------------
 
