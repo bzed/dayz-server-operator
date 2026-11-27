@@ -92,6 +92,40 @@ var modFeedKinds = map[string]bool{
 	FeedDropped: true,
 }
 
+// Rune limits of the text fields of an event from the mod.
+const (
+	maxFeedText  = 512
+	maxFeedName  = 64
+	maxFeedClass = 128
+	maxFeedShort = 32
+)
+
+// clip cuts s to n runes, marking the cut with an ellipsis.
+func clip(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	i := 0
+	for pos := range s {
+		if i == n {
+			return s[:pos] + "\u2026"
+		}
+		i++
+	}
+	return s
+}
+
+// clipped returns the event with every text field cut to its limit, so an event from the mod
+// is small however large the sync body was.
+func (e FeedEvent) clipped() FeedEvent {
+	e.Text = clip(e.Text, maxFeedText)
+	e.Name, e.TargetName = clip(e.Name, maxFeedName), clip(e.TargetName, maxFeedName)
+	e.Weapon, e.Object, e.Cause = clip(e.Weapon, maxFeedClass), clip(e.Object, maxFeedClass), clip(e.Cause, maxFeedClass)
+	e.Kind, e.Channel = clip(e.Kind, maxFeedShort), clip(e.Channel, maxFeedShort)
+	e.SteamID, e.TargetSteamID = clip(e.SteamID, maxFeedShort), clip(e.TargetSteamID, maxFeedShort)
+	return e
+}
+
 // syncFeedLocked stores the events of a sync that were not stored before: the mod resends a batch it got
 // no reply for, and numbers its events from 1 after a restart (a hello).
 func (h *Hub) syncFeedLocked(req SyncRequest) {
@@ -108,7 +142,7 @@ func (h *Hub) syncFeedLocked(req SyncRequest) {
 		if !modFeedKinds[ev.Kind] {
 			continue
 		}
-		h.addFeedLocked(ev)
+		h.addFeedLocked(ev.clipped())
 	}
 }
 

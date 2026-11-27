@@ -172,7 +172,7 @@ the mod sends.
   ``400`` otherwise.
 * dzo reads only the token first. A body with a wrong token gets ``401`` and is not decoded.
 * One sync carries at most 256 players, 8192 vehicles, 8192 markers, 256 layers, 4096 events,
-  1024 results, 1024 feed events and 2048 class names. A sync over one of these limits gets
+  1024 results, 512 feed events and 2048 class names. A sync over one of these limits gets
   ``400`` and dzo ignores all of it.
 * A class list (spawnable items or vehicles) has at most 100000 names. Each name must be a class name
   (letters, digits and ``_``, at most 128 characters). A chunk that breaks a rule, or that holds more

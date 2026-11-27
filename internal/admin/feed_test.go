@@ -5,6 +5,8 @@ package admin
 
 import (
 	"context"
+	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -201,4 +203,23 @@ func TestSyncFeedDropsKindsOfDzo(t *testing.T) {
 	// The events dzo makes itself still go in.
 	h.AddFeed(FeedEvent{Kind: FeedAdmin, Name: "ops"})
 	require.Len(t, h.Feed(0, 0), 3)
+}
+
+func TestSyncFeedClipsFields(t *testing.T) {
+	h, _ := testHub()
+	long := strings.Repeat("\u00e4", 100000)
+	h.Sync(SyncRequest{Proto: 1, Hello: true, Feed: []FeedEvent{{Seq: 1, Kind: FeedBuild, Text: long, Name: long, TargetName: long,
+		Weapon: long, Object: long, Cause: long, Channel: long, SteamID: long, TargetSteamID: long}}})
+	got := h.Feed(0, 0)
+	require.Len(t, got, 1)
+	require.Equal(t, strings.Repeat("\u00e4", maxFeedText)+"\u2026", got[0].Text)
+	require.Len(t, []rune(got[0].Name), maxFeedName+1)
+	require.Len(t, []rune(got[0].Object), maxFeedClass+1)
+	require.Len(t, []rune(got[0].Channel), maxFeedShort+1)
+	require.Len(t, []rune(got[0].SteamID), maxFeedShort+1)
+	b, err := json.Marshal(got[0])
+	require.NoError(t, err)
+	require.Less(t, len(b), 4096)
+	require.Equal(t, "short", clip("short", 10))
+	require.Equal(t, "ab", clip("ab", 2))
 }

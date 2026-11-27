@@ -97,3 +97,43 @@ func TestRegistryAddKeepsFeed(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, got, 2)
 }
+
+func TestFeedLogSkipsLongLineAndKeepsTheRest(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "a.jsonl")
+	huge := `{"id":2,"kind":"chat","text":"` + strings.Repeat("x", 3*maxFeedLine) + `"}`
+	data := `{"id":1,"kind":"chat"}` + "\n" + huge + "\n" + `{"id":3,"kind":"chat"}` + "\n"
+	require.NoError(t, os.WriteFile(path, []byte(data), 0o600))
+	got, err := (&FeedLog{Path: path}).Load()
+	require.NoError(t, err)
+	require.Equal(t, []int64{1, 3}, ids(got))
+
+	// A long first line does not hide the events after it, and the line count includes it.
+	require.NoError(t, os.WriteFile(path, []byte(huge+"\n"+`{"id":3,"kind":"chat"}`+"\n"), 0o600))
+	l := &FeedLog{Path: path}
+	evs, lines, err := l.scan()
+	require.NoError(t, err)
+	require.Equal(t, []int64{3}, ids(evs))
+	require.Equal(t, 2, lines)
+
+	// A hub starting on that file keeps the events after the long line.
+	h, _ := testHub()
+	require.NoError(t, h.UseFeedLog(&FeedLog{Path: path}))
+	require.Equal(t, []int64{3}, ids(h.Feed(0, 0)))
+}
+
+func TestFeedLogCompactionKeepsEventsAfterAnUnreadableLine(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "a.jsonl")
+	huge := `{"id":1,"kind":"chat","text":"` + strings.Repeat("x", 2*maxFeedLine) + `"}`
+	require.NoError(t, os.WriteFile(path, []byte(huge+"\n"), 0o600))
+	l := &FeedLog{Path: path}
+	for i := int64(2); i <= 2*FeedKeep; i++ {
+		require.NoError(t, l.Append(FeedEvent{ID: i, Kind: FeedChat}))
+	}
+	got, err := l.Load()
+	require.NoError(t, err)
+	require.Len(t, got, FeedKeep)
+	require.EqualValues(t, 2*FeedKeep, got[len(got)-1].ID)
+	b, err := os.ReadFile(path)
+	require.NoError(t, err)
+	require.Less(t, len(b), 1<<20)
+}

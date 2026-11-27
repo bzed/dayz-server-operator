@@ -361,7 +361,7 @@ const (
 	maxSyncLayers   = 256
 	maxSyncEvents   = 4096
 	maxSyncResults  = 1024
-	maxSyncFeed     = 1024
+	maxSyncFeed     = 512
 	maxSyncNames    = 2048
 	maxSyncFeatures = 64
 	maxSyncHas      = 64

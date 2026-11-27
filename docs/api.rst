@@ -420,7 +420,11 @@ Event feed
 ``GET /instances/<i>/feed`` and the ``feed`` events of the stream. dzo also writes them to
 ``${paths.db}/feed/<instance>.jsonl`` (mode ``0600``, one JSON object per line), so the feed is not empty
 after ``dzo serve`` restarts. The file holds chat and positions, which is personal data. It keeps at most
-the newest 1000 events per instance, and it is safe to delete; the feed then starts empty.
+the newest 1000 events per instance, and it is safe to delete; the feed then starts empty. dzo cuts the
+text fields of an event from the mod to a fixed length and marks the cut with ``…``: ``text`` 512
+characters, ``name`` and ``target_name`` 64, ``weapon``, ``object`` and ``cause`` 128, and ``kind``,
+``channel`` and the Steam IDs 32. When dzo reads the file at start, it skips a line that is
+longer than 1 MiB or does not parse, and still reads the lines after it.
 
 Every event has an ``id`` (dzo's, increasing per instance), a ``time`` and a ``kind``. The other fields are
 present when they apply:
