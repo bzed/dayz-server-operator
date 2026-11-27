@@ -174,6 +174,9 @@ the mod sends.
 * One sync carries at most 256 players, 8192 vehicles, 8192 markers, 256 layers, 4096 events,
   1024 results, 1024 feed events and 2048 class names. A sync over one of these limits gets
   ``400`` and dzo ignores all of it.
+* A class list (spawnable items or vehicles) has at most 100000 names. Each name must be a class name
+  (letters, digits and ``_``, at most 128 characters). A chunk that breaks a rule, or that holds more
+  names than the list ``total``, empties the list. dzo then asks the mod to send the list again.
 
 Moving vehicles
 ---------------
