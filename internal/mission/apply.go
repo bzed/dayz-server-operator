@@ -4,8 +4,11 @@
 package mission
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -71,10 +74,19 @@ func Apply(plan Plan, stagingDir, liveDir, filehistoryDir string, manifest *Mani
 		return nil
 	}
 
-	for _, entry := range plan.Changed() {
-		livePath := filepath.Join(liveDir, entry.Path)
+	if plan.Empty() {
+		return report, nil
+	}
+	root, err := openLive(liveDir, true)
+	if err != nil {
+		return report, err
+	}
+	defer root.Close() //nolint:errcheck // the files are closed and renamed already
 
-		if existing, err := os.ReadFile(livePath); err == nil { //nolint:gosec // entry.Path comes from Classify's staging walk, constrained to the mission tree
+	for _, entry := range plan.Changed() {
+		// A live path that is a link, FIFO or the like is not backed up (it is never read); the
+		// write below replaces it.
+		if existing, err := readRootFile(root, entry.Path); err == nil {
 			if err := ensureHistoryDir(); err != nil {
 				return report, err
 			}
@@ -82,7 +94,7 @@ func Apply(plan Plan, stagingDir, liveDir, filehistoryDir string, manifest *Mani
 			if err := writeFileAtomic(backupPath, existing, 0o640); err != nil {
 				return report, fmt.Errorf("mission: back up %s: %w", entry.Path, err)
 			}
-		} else if !os.IsNotExist(err) {
+		} else if !errors.Is(err, fs.ErrNotExist) && !errors.Is(err, errNotRegular) {
 			return report, fmt.Errorf("mission: read live %s: %w", entry.Path, err)
 		}
 
@@ -90,7 +102,7 @@ func Apply(plan Plan, stagingDir, liveDir, filehistoryDir string, manifest *Mani
 		if err != nil {
 			return report, fmt.Errorf("mission: read staging %s: %w", entry.Path, err)
 		}
-		if err := writeFileAtomic(livePath, content, 0o640); err != nil {
+		if err := writeRootAtomic(root, entry.Path, content, 0o640); err != nil {
 			return report, fmt.Errorf("mission: write live %s: %w", entry.Path, err)
 		}
 
@@ -105,8 +117,7 @@ func Apply(plan Plan, stagingDir, liveDir, filehistoryDir string, manifest *Mani
 		// EditorFiles/ is dzo's: a file removed from the site is removed from the mission (after a
 		// backup). Everything else that became obsolete stays on disk.
 		if strings.HasPrefix(entry.Path, "EditorFiles/") && filepath.IsLocal(entry.Path) {
-			livePath := filepath.Join(liveDir, entry.Path)
-			existing, err := os.ReadFile(livePath) //nolint:gosec // entry.Path is from the manifest, checked with IsLocal
+			existing, err := readRootFile(root, entry.Path)
 			if err == nil {
 				if err := ensureHistoryDir(); err != nil {
 					return report, err
@@ -114,13 +125,13 @@ func Apply(plan Plan, stagingDir, liveDir, filehistoryDir string, manifest *Mani
 				if err := writeFileAtomic(filepath.Join(historyDir, entry.Path), existing, 0o640); err != nil {
 					return report, fmt.Errorf("mission: back up %s: %w", entry.Path, err)
 				}
-			} else if !os.IsNotExist(err) {
+			} else if !errors.Is(err, fs.ErrNotExist) && !errors.Is(err, errNotRegular) {
 				return report, fmt.Errorf("mission: read live %s: %w", entry.Path, err)
 			}
-			if err := os.Remove(livePath); err != nil && !os.IsNotExist(err) {
+			if err := root.Remove(entry.Path); err != nil && !errors.Is(err, fs.ErrNotExist) {
 				return report, fmt.Errorf("mission: remove live %s: %w", entry.Path, err)
 			}
-			removeEmptyParents(liveDir, filepath.Dir(livePath))
+			removeEmptyDirs(root, path.Dir(entry.Path))
 		}
 		delete(manifest.Entries, entry.Path)
 		report.Obsolete = append(report.Obsolete, entry)
@@ -187,14 +198,4 @@ func pruneFileHistory(filehistoryDir string, keep int) error {
 		}
 	}
 	return nil
-}
-
-// removeEmptyParents removes dir and its parents up to, but not including, root, as far as they are empty.
-func removeEmptyParents(root, dir string) {
-	for dir != root && strings.HasPrefix(dir, root+string(filepath.Separator)) {
-		if os.Remove(dir) != nil { // not empty (or gone): stop
-			return
-		}
-		dir = filepath.Dir(dir)
-	}
 }

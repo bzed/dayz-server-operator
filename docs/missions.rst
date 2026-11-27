@@ -33,7 +33,24 @@ Each instance has two copies:
 Which files dzo manages
 -----------------------
 
-dzo keeps a manifest of the files it owns in the live mission:
+dzo keeps a manifest of the files it owns in the live mission. The manifest is
+``instances/<name>/runtime/mission-manifest.json``. It is not in ``mpmissions/``,
+because the game container can write there and dzo must not trust what it finds
+there. dzo never reads the old ``mpmissions/.dzo-manifest.json`` of earlier
+versions. The first render after the upgrade deletes it. That render starts with
+an empty manifest. It treats every pristine file as new, backs up the live copy
+of each one in ``filehistory/`` and writes the pristine content. Files that
+older versions removed from ``EditorFiles/`` on a later render stay in place
+until you remove them.
+
+dzo reads and writes the live mission only below ``mpmissions/<map>``. It does
+not follow a link that leaves this folder. It stops with an error if
+``mpmissions/<map>`` itself is a link, or if a link in a path leaves the folder.
+If a managed file is a link, a FIFO or another file that is not a regular file,
+dzo does not read it. It counts the file as drift and replaces it with a regular
+file. dzo also rejects a link or a special file in the mission repository
+(``mission_source``) and in the fallback mission: ``dzo mission update`` and
+``dzo instance render`` stop with an error.
 
 Managed files
    Every file that comes from the pristine mission. dzo updates them on every

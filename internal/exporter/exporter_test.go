@@ -108,7 +108,7 @@ func (f *fixture) inst() monitor.InstanceStatus {
 func TestCollectsARunningInstance(t *testing.T) {
 	f := newFixture(t)
 	f.c.Updates = func() Updates { return Updates{PendingByInstance: map[string]int{"x": 2}, LastCheck: 1234} }
-	write(t, filepath.Join(f.data, "instances", "x", "mpmissions", ".dzo-manifest.json"), "{}")
+	write(t, filepath.Join(f.data, "instances", "x", "runtime", "mission-manifest.json"), "{}")
 	write(t, filepath.Join(f.data, "cache", "workshop", "big"), strings.Repeat("x", 5000))
 	now := time.Now()
 	err := os.MkdirAll(filepath.Join(f.data, "secrets"), 0o700)
@@ -195,7 +195,7 @@ func TestInstanceStates(t *testing.T) {
 
 func TestFailedRenderGateAndSiteErrors(t *testing.T) {
 	f := newFixture(t)
-	write(t, filepath.Join(f.data, "instances", "x", "mpmissions", ".dzo-manifest.json"), "{}")
+	write(t, filepath.Join(f.data, "instances", "x", "runtime", "mission-manifest.json"), "{}")
 	gate := instance.GateFile(filepath.Join(f.data, "instances", "x", "runtime"))
 	err := os.MkdirAll(filepath.Dir(gate), 0o750)
 	require.NoError(t, err)
@@ -224,7 +224,7 @@ func TestMissionDriftIsCounted(t *testing.T) {
 	pristine := filepath.Join(f.data, "instances", "x", "servermpmissions", "empty.m")
 	write(t, filepath.Join(pristine, "init.c"), "init")
 	write(t, filepath.Join(pristine, "db", "types.xml"), "types")
-	live, manifest := filepath.Join(f.data, "instances", "x", "mpmissions", "empty.m"), filepath.Join(f.data, "instances", "x", "mpmissions", ".dzo-manifest.json")
+	live, manifest := filepath.Join(f.data, "instances", "x", "mpmissions", "empty.m"), filepath.Join(f.data, "instances", "x", "runtime", "mission-manifest.json")
 	in := mission.RenderInput{PristineDir: pristine, LiveDir: live, ManifestPath: manifest, FileHistoryDir: filepath.Join(f.data, "instances", "x", "filehistory")}
 	_, _, err := mission.Render(in)
 	require.NoError(t, err)
@@ -259,7 +259,7 @@ func TestSnapshotIsCachedAndRefreshes(t *testing.T) {
 
 func TestMetricsEndToEnd(t *testing.T) {
 	f := newFixture(t)
-	write(t, filepath.Join(f.data, "instances", "x", "mpmissions", ".dzo-manifest.json"), "{}")
+	write(t, filepath.Join(f.data, "instances", "x", "runtime", "mission-manifest.json"), "{}")
 	write(t, filepath.Join(f.data, "logs", "x", "2026-10-01", "script_1.log.gz"), "12345")
 	write(t, filepath.Join(f.data, "instances", "x", "profiles", "huge.dat"), strings.Repeat("x", 2<<20))
 	write(t, filepath.Join(f.data, "snapshots", "x", "index.json"), `{"snapshots":[{"id":"a","reason":"manual","state":"complete","created":"2026-10-01T10:00:00Z"}]}`)

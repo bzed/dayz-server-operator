@@ -20,7 +20,7 @@ paths:
     root: /DATA/instances/alpha
     pristine: /DATA/instances/alpha/servermpmissions/dayzOffline.chernarusplus
     live: /DATA/instances/alpha/mpmissions/dayzOffline.chernarusplus
-    manifest: /DATA/instances/alpha/mpmissions/.dzo-manifest.json
+    manifest: /DATA/instances/alpha/runtime/mission-manifest.json
     filehistory: /DATA/instances/alpha/filehistory
     profiles: /DATA/instances/alpha/profiles
     storage: /DATA/instances/alpha/storage/dayzOffline.chernarusplus
