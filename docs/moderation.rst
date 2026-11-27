@@ -71,7 +71,9 @@ only to those who need it:
 Players are still matched by address without showing it. The ban form lists the addresses a player was
 seen with as "Address (name on instance, last seen), shared with N other players". Ticking one bans it.
 The API gives each such address an opaque reference (``ref``, and ``ip_refs`` when a ban is made or edited)
-instead of the address. A reference only works for the player being banned or the ban being edited. Without
+instead of the address. A reference only works for the player being banned or the ban being edited.
+For a ban that is not global, a sighting reference also needs a sighting on one of the ban's instances.
+Other references get the same error, ``unknown address reference``, as references that do not exist. Without
 ``ip.history`` a ban shows "address hidden", and editing it keeps its addresses. Addresses are never written to
 the audit log. dzo can store them hashed in the future; the references keep that possible. Reading the
 history of a player's addresses is recorded in the audit log (``ip.history``, without the addresses).

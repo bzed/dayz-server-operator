@@ -100,7 +100,8 @@ func (s *Store) CurrentIP(ctx context.Context, instance, steamID string) (ip str
 }
 
 // resolveIPRefs turns in.IPRefs into in.IPs. A sighting ref must belong to the GUID of the player being banned
-// and a target ref to the ban being edited (banID), so a ref cannot name any other address.
+// and a target ref to the ban being edited (banID), so a ref cannot name any other address. With
+// in.LimitSightings a sighting must also come from one of in.SightingInstances.
 func resolveIPRefs(ctx context.Context, q querier, in BanInput, banID int64) (BanInput, error) {
 	if len(in.IPRefs) == 0 {
 		return in, nil
@@ -119,7 +120,12 @@ func resolveIPRefs(ctx context.Context, q querier, in BanInput, banID int64) (Ba
 		var ip string
 		switch ref[0] {
 		case 's':
-			err = q.QueryRowContext(ctx, `SELECT ip FROM sightings WHERE id = ? AND ip IS NOT NULL AND guid IN (`+placeholders(len(guids))+`)`, append([]any{id}, anys(guids)...)...).Scan(&ip)
+			query, args := `SELECT ip FROM sightings WHERE id = ? AND ip IS NOT NULL AND guid IN (`+placeholders(len(guids))+`)`, append([]any{id}, anys(guids)...)
+			if in.LimitSightings { // a sighting from another instance is as unknown as one that does not exist
+				query += ` AND instance IN (` + placeholders(len(in.SightingInstances)) + `)`
+				args = append(args, anys(in.SightingInstances)...)
+			}
+			err = q.QueryRowContext(ctx, query, args...).Scan(&ip)
 		case 't':
 			err = q.QueryRowContext(ctx, `SELECT value FROM ban_targets WHERE id = ? AND ban_id = ? AND kind = 'ip'`, id, banID).Scan(&ip)
 		default:
