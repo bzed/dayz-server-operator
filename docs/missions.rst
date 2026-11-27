@@ -39,9 +39,13 @@ because the game container can write there and dzo must not trust what it finds
 there. dzo never reads the old ``mpmissions/.dzo-manifest.json`` of earlier
 versions. The first render after the upgrade deletes it. That render starts with
 an empty manifest. It treats every pristine file as new, backs up the live copy
-of each one in ``filehistory/`` and writes the pristine content. Files that
-older versions removed from ``EditorFiles/`` on a later render stay in place
-until you remove them.
+of each one in ``filehistory/`` and writes the pristine content. The
+``EditorFiles/`` folder stays in the live mission. That render copies every
+file in ``instances/<name>/EditorFiles/`` again and records it in the new
+manifest, so later deletions work as before. One case needs manual work. If
+you delete a file from ``instances/<name>/EditorFiles/`` after the last render
+of the old version and before the first render of the new version, its live
+copy stays in ``mpmissions/<map>/EditorFiles/``. Remove that copy by hand.
 
 dzo reads and writes the live mission only below ``mpmissions/<map>``. It does
 not follow a link that leaves this folder. It stops with an error if
