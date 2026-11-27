@@ -21,6 +21,13 @@ here=$(cd "$(dirname "$0")/.." && pwd)
 [ "$(gpg --list-secret-keys --with-colons | grep -c '^sec')" -eq 1 ] ||
 	{ echo "$GNUPGHOME must hold exactly one secret key" >&2; exit 2; }
 ls "$debs"/*.deb >/dev/null
+# Only the binary packages this repository builds (debian/control) are signed.
+built=$(awk '/^Package:/{print $2}' "$here/debian/control")
+for deb in "$debs"/*.deb; do
+	pkg=$(dpkg-deb -f "$deb" Package)
+	printf '%s\n' "$built" | grep -qx "$pkg" ||
+		{ echo "$deb: package '$pkg' is not built by this repository" >&2; exit 2; }
+done
 
 rm -rf "$out"
 mkdir -p "$out"
