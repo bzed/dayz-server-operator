@@ -4,7 +4,9 @@
 package mission
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 )
@@ -107,8 +109,8 @@ func fillFromFallback(fallbackDir, staging string) error {
 		if _, err := os.Stat(filepath.Join(staging, rel)); err == nil {
 			continue
 		}
-		data, err := os.ReadFile(filepath.Join(fallbackDir, rel)) //nolint:gosec // rel is from the fixed BaseFiles list
-		if os.IsNotExist(err) {
+		data, err := readFileSafe(filepath.Join(fallbackDir, rel), maxMissionFile)
+		if errors.Is(err, fs.ErrNotExist) {
 			continue
 		}
 		if err != nil {

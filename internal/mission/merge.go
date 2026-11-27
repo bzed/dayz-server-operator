@@ -30,7 +30,14 @@ func CopyPristine(pristineDir, stagingDir string) error {
 		if d.IsDir() {
 			return os.MkdirAll(dst, 0o750)
 		}
-		data, err := os.ReadFile(path) //nolint:gosec // path comes from WalkDir over the instance's own configured pristine dir
+		// The pristine mission is a checkout of an outside repository: git materialises its
+		// links, and a link must never be followed to a host file. Only directories and
+		// regular files are taken; readFileSafe opens without following a link and checks the
+		// opened descriptor, which closes the gap between this check and the open.
+		if !d.Type().IsRegular() {
+			return fmt.Errorf("mission: pristine %s is not a regular file or directory (links and special files are rejected)", rel)
+		}
+		data, err := readFileSafe(path, maxMissionFile)
 		if err != nil {
 			return fmt.Errorf("mission: read pristine %s: %w", rel, err)
 		}
