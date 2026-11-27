@@ -67,8 +67,10 @@ type Server struct {
 	// cleanupWait is how long a cleanup waits for the answers of the mod (default maxWait); tests shorten it.
 	cleanupWait time.Duration
 	login       *auth.Backoff
-	actions     *admin.Limiter
-	targets     *admin.Limiter
+	// hashSlots bounds the password hashes that run at once (64 MiB each).
+	hashSlots chan struct{}
+	actions   *admin.Limiter
+	targets   *admin.Limiter
 }
 
 // Accounts is what the API needs of the people and their sessions (moderation.Store).
@@ -130,6 +132,7 @@ func New(installation, version string, hubs *admin.Registry, tokens *TokenStore,
 		Installation: installation, Version: version, Hubs: hubs, Tokens: tokens, Audit: audit,
 		now: time.Now, actions: admin.NewLimiter(actionsPerMin, time.Minute), targets: admin.NewLimiter(perTargetPerMin, time.Minute),
 	}
+	s.hashSlots = make(chan struct{}, hashSlotCount())
 	s.login = auth.NewBackoff(func() time.Time { return s.now() }) // s.now is replaced by tests
 	return s
 }

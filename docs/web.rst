@@ -204,7 +204,10 @@ return answers with a small page that moves on by itself. The next request then 
 this site.
 
 **Guessing.** Five wrong passwords or codes per account and per client address are free. Every further
-attempt then makes the wait longer (one second, doubling, up to 15 minutes); a success clears the account. Waiting
+attempt then makes the wait longer (one second, doubling, up to 15 minutes); a success clears the account.
+Attempts that run at the same time all count. An IPv6 address counts as its ``/64`` network. dzo also
+limits how many password checks run at the same time; when all are busy, the login gets "too many failed
+logins" at once and the attempt does not count. Waiting
 logins get "too many failed logins" whether or not the username exists. Behind a reverse proxy, set
 ``web.trusted_proxies`` to the proxy's address. Only then is its ``X-Forwarded-For`` believed (the
 right-most address that is not a trusted proxy). The browser's real address is what the login log

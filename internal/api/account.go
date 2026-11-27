@@ -165,6 +165,27 @@ type passwordChange struct {
 	New     string `json:"new"`
 }
 
+// checkCurrent checks the current password of the logged-in person for a change of the password. A wrong
+// one counts like a failed login. It answers the request itself and returns false when the check fails.
+func (s *Server) checkCurrent(w http.ResponseWriter, c *call, hash, current string) bool {
+	keys := []string{"acct:" + c.who.User.SteamID, ipKey(c.client)}
+	if wait := s.login.Reserve(keys...); wait > 0 {
+		tooMany(w, wait)
+		return false
+	}
+	var matches bool
+	if !s.withHashSlot(w, func() { matches = auth.CheckPassword(hash, current) }) {
+		s.login.Refund(keys...)
+		return false
+	}
+	if !matches {
+		fail(w, http.StatusForbidden, "the current password is wrong")
+		return false
+	}
+	s.login.Refund(keys...)
+	return true
+}
+
 func (s *Server) setPassword(w http.ResponseWriter, r *http.Request, c *call) {
 	var body passwordChange
 	if !decode(w, r, &body) {
@@ -177,17 +198,8 @@ func (s *Server) setPassword(w http.ResponseWriter, r *http.Request, c *call) {
 		fail(w, http.StatusInternalServerError, "database error")
 		return
 	}
-	if creds.PasswordHash != "" {
-		keys := []string{"acct:" + id, "ip:" + c.client}
-		if wait := s.login.Wait(keys...); wait > 0 {
-			tooMany(w, wait)
-			return
-		}
-		if !auth.CheckPassword(creds.PasswordHash, body.Current) {
-			s.login.Fail(keys...)
-			fail(w, http.StatusForbidden, "the current password is wrong")
-			return
-		}
+	if creds.PasswordHash != "" && !s.checkCurrent(w, c, creds.PasswordHash, body.Current) {
+		return
 	}
 	if person.Username == "" {
 		fail(w, http.StatusConflict, "you have no username yet: ask an administrator to give you one")

@@ -173,6 +173,12 @@ first five are free; then the wait doubles from one second to 15 minutes. A
 success clears the account. 1 hour without a failure clears all. While waiting
 a request gets ``429`` with ``Retry-After``, with the same message whether or
 not the username exists. The counters live in the memory of ``dzo serve``.
+dzo counts a password attempt when it starts, so attempts that run at the same
+time count too. A client address in IPv6 counts as its ``/64`` network. Each
+password check needs 64 MiB of memory, so ``dzo serve`` runs only a few at the
+same time (the larger of 2 and the number of CPUs). When all are busy, a
+request gets ``429`` with ``Retry-After: 1`` at once, and the attempt does not
+count as a failure.
 
 Every step writes one line to the service log, never a secret. The line is
 ``login: <step> <ok|failed|refused> steamid=<id|unknown> client=<addr>

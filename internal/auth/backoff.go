@@ -105,3 +105,63 @@ func (b *Backoff) Success(key string) {
 	delete(b.keys, key)
 	b.mu.Unlock()
 }
+
+// Reserve checks and counts one attempt on each key in one step, so that attempts in flight at the same time
+// count too. It returns the wait that still applies, and counts nothing then. Otherwise it returns 0 and
+// the attempt is counted; the caller gives it back with Refund when the attempt succeeds. Like Fail, the
+// attempt after the free ones starts the wait.
+func (b *Backoff) Reserve(keys ...string) time.Duration {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	now := b.now()
+	b.sweep(now)
+	var wait time.Duration
+	for _, k := range keys {
+		if f, ok := b.keys[k]; ok && now.Sub(f.last) <= backoffForget {
+			wait = max(wait, f.until.Sub(now))
+		}
+	}
+	if wait > 0 {
+		return wait
+	}
+	for _, k := range keys {
+		f, ok := b.keys[k]
+		if !ok {
+			if len(b.keys) >= backoffMaxKeys {
+				continue // under a flood of new keys, keep what is tracked
+			}
+			f = &failures{}
+			b.keys[k] = f
+		}
+		if now.Sub(f.last) > backoffForget {
+			*f = failures{}
+		}
+		f.n++
+		f.last = now
+		if f.n > backoffFree {
+			d := backoffMax
+			if shift := f.n - backoffFree - 1; shift < 20 {
+				d = min(backoffFirst<<shift, backoffMax)
+			}
+			f.until = now.Add(d)
+		}
+	}
+	return 0
+}
+
+// Refund gives back the attempt that Reserve counted on each key, for an attempt that succeeded.
+func (b *Backoff) Refund(keys ...string) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	for _, k := range keys {
+		f, ok := b.keys[k]
+		if !ok {
+			continue
+		}
+		if f.n--; f.n <= 0 {
+			delete(b.keys, k)
+		} else if f.n <= backoffFree {
+			f.until = time.Time{} // the free attempts are back
+		}
+	}
+}

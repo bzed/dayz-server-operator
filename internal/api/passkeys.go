@@ -111,7 +111,7 @@ func (s *Server) pendingFor(w http.ResponseWriter, r *http.Request, lc *loginCal
 
 // waitFor refuses a request while the account or address has to wait.
 func (s *Server) waitFor(w http.ResponseWriter, lc *loginCall, step, steamID string) ([]string, bool) {
-	keys := []string{"acct:" + steamID, "ip:" + lc.client}
+	keys := []string{"acct:" + steamID, ipKey(lc.client)}
 	if wait := s.login.Wait(keys...); wait > 0 {
 		s.logStep(lc, step, "refused", steamID)
 		tooMany(w, wait)
