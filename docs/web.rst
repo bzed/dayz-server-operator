@@ -303,11 +303,20 @@ Instance
    time as "3d 0h ago" with the exact time (UTC) in the tooltip. Only the driver's
    seat counts, passengers do not. A vehicle nobody has been seen driving since dzo first saw it reads "not since" and that
    date (the day dzo first saw the vehicle). This needs a ``dzo-admin`` that reports drivers, and the column is
-   empty without a record database. The "Last driven" column sorts by that time. The position links to the map, which
+   empty without a record database. The position links to the map, which
    opens zoomed in on the vehicle
    with the class as the label. After the class, the label shows the owner (the Expansion keychain)
    and the last driver when they are known, for example
    ``Offroad_02 (owner Bob, last driver Dora)``. Owner and last driver are named apart, also when they are the same person.
+
+   Click a column header to sort a table in the browser. A second click on the same header reverses
+   the order. Until you click a header, the vehicle table sorts by owner, then class, and the player
+   table sorts by name. The table keeps the chosen order when it refreshes.
+   The player table sorts by Name, Health and Ping. The vehicle table sorts by Class, Kind, Health,
+   Fuel, Owner, Last driver, Last driven and Crew. Position and Actions do not sort.
+
+   "Last driven" sorts by the time itself. A vehicle with "not since" sorts by the date dzo first saw
+   it. A vehicle with "-" sorts first in ascending order.
 
    Vehicles in the virtual garage of DayZ Expansion are not in the world. The list shows them apart,
    under **Stored in the Expansion garage**: class, position with the map link, stored by, owners and
