@@ -12,7 +12,8 @@ import (
 
 // feedFromRCon puts the chat and the kicks BattlEye reports into the instance's event feed. The mod
 // reports joins and leaves itself, with Steam IDs, so those are ignored here. A chat line carries only the
-// name; the Steam ID is filled in when exactly one online player has it.
+// name; the Steam ID is filled in when exactly one online player has it and no other online
+// player's name could be the sender of the same line (see Hub.PlayerBySender).
 func feedFromRCon(reg *admin.Registry) func(string, battleye.Event) {
 	return func(instance string, ev battleye.Event) {
 		h, ok := reg.Hub(instance)
@@ -22,7 +23,7 @@ func feedFromRCon(reg *admin.Registry) func(string, battleye.Event) {
 		switch ev.Kind {
 		case battleye.EventChat:
 			fe := admin.FeedEvent{Kind: admin.FeedChat, Name: ev.PlayerName, Channel: ev.Channel, Text: ev.Message}
-			if p, ok := h.PlayerByName(ev.PlayerName); ok {
+			if p, ok := h.PlayerBySender(ev.PlayerName, ev.Message); ok {
 				fe.SteamID = p.SteamID
 			}
 			h.AddFeed(fe)

@@ -36,6 +36,26 @@ func TestFeedFromRConChat(t *testing.T) {
 	require.Empty(t, got[1].SteamID)
 }
 
+// "(Global) Victim: x: text" could come from the player "Victim" or from the player "Victim: x". The
+// feed keeps the text and links neither.
+func TestFeedFromRConChatWithAmbiguousSender(t *testing.T) {
+	reg := admin.NewRegistry(t.TempDir())
+	h := reg.Add(admin.NewHub("alpha"))
+	h.Sync(admin.SyncRequest{Proto: 1, Hello: true, Players: []admin.Player{
+		{SteamID: "76561198000000001", Name: "Victim"}, {SteamID: "76561198000000002", Name: "Victim: x"}, {SteamID: "76561198000000003", Name: "Bob"}}})
+	f := feedFromRCon(reg)
+	f("alpha", battleye.ParseEvent("(Global) Victim: x: dummy text"))
+	f("alpha", battleye.ParseEvent("(Global) Victim: hello: there"))
+	f("alpha", battleye.ParseEvent("(Global) Bob: Victim: x: hi"))
+	got := h.Feed(0, 0)
+	require.Len(t, got, 3)
+	require.Equal(t, "Victim", got[0].Name)
+	require.Equal(t, "x: dummy text", got[0].Text)
+	require.Empty(t, got[0].SteamID, "the sender may be Victim or Victim: x")
+	require.Equal(t, "76561198000000001", got[1].SteamID, "no online name starts the line: Victim sent it")
+	require.Equal(t, "76561198000000003", got[2].SteamID, "Bob is no prefix ambiguity")
+}
+
 func TestFeedFromRConKick(t *testing.T) {
 	reg, h := feedReg(t)
 	feedFromRCon(reg)("alpha", battleye.Event{Kind: battleye.EventKick, PlayerName: "Bob", Message: "Banned"})

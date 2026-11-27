@@ -470,7 +470,7 @@ The kinds:
    * - ``connect``, ``disconnect``
      - a player joined or left
    * - ``chat``, ``kick``
-     - in-game chat and BattlEye kicks, from BattlEye RCon (needs RCon, as bans do)
+     - in-game chat and BattlEye kicks, from BattlEye RCon (needs RCon, as bans do). BattlEye gives only the name of a chat sender, so a chat event has a ``steam_id`` only when one online player has that name. It has none when another online name could also have sent the line (for example the players ``Victim`` and ``Victim: x`` for the line ``Victim: x: text``)
    * - ``build``, ``dismantle``, ``destroy``, ``lock_cut``
      - base building and raiding: a part built, taken apart or destroyed, a combination lock cut
    * - ``flag_raised``, ``flag_lowered``
