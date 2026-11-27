@@ -7,9 +7,12 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/bzed/dayz-server-operator/internal/safefs"
 )
 
 const fileMarkerTTL = 5 * time.Second
@@ -24,26 +27,66 @@ type fileMarkers struct {
 	markers []Marker
 }
 
+// markerRel is the marker drop directory relative to profiles/ (see MarkerDir).
+const markerRel = "dzo/admin/markers"
+
 func (f *fileMarkers) load(dir string, now time.Time) []Marker {
 	if dir == "" {
 		return nil
 	}
 	f.mu.Lock()
-	defer f.mu.Unlock()
 	if f.dir == dir && now.Sub(f.read) < fileMarkerTTL {
-		return f.markers
+		m := f.markers
+		f.mu.Unlock()
+		return m
 	}
-	f.dir, f.read, f.markers = dir, now, nil
-	names, _ := filepath.Glob(filepath.Join(dir, "*.json"))
+	f.mu.Unlock()
+	// The directory is writable by the game container: read it without the lock, so that a
+	// stuck file cannot stall other callers.
+	markers := readMarkerDir(dir)
+	f.mu.Lock()
+	f.dir, f.read, f.markers = dir, now, markers
+	f.mu.Unlock()
+	return markers
+}
+
+// readMarkerDir reads the *.json files of dir through an os.Root on the profiles tree (or on
+// the parent of dir for a directory outside the usual layout). It skips links, anything that is
+// not a regular file and files above safefs.MaxFile.
+func readMarkerDir(dir string) []Marker {
+	base, rel := filepath.Dir(dir), filepath.Base(dir)
+	if clean := filepath.ToSlash(filepath.Clean(dir)); strings.HasSuffix(clean, "/"+markerRel) {
+		base, rel = filepath.FromSlash(strings.TrimSuffix(clean, "/"+markerRel)), markerRel
+	}
+	top, err := os.OpenRoot(base)
+	if err != nil {
+		return nil
+	}
+	defer func() { _ = top.Close() }() // handle only
+	root, err := top.OpenRoot(rel)
+	if err != nil {
+		return nil
+	}
+	defer func() { _ = root.Close() }() // handle only
+	d, err := root.Open(".")
+	if err != nil {
+		return nil
+	}
+	names, _ := d.Readdirnames(-1)
+	_ = d.Close()
+	sort.Strings(names)
+	var out []Marker
 	for _, name := range names {
-		b, err := os.ReadFile(name) //nolint:gosec // the marker drop directory is the instance's own profile dir
+		if !strings.HasSuffix(name, ".json") {
+			continue
+		}
+		b, err := safefs.ReadFile(root, name, safefs.MaxFile)
 		if err != nil {
 			continue
 		}
-		layer := strings.TrimSuffix(filepath.Base(name), ".json")
-		f.markers = append(f.markers, parseMarkerFile(layer, b)...)
+		out = append(out, parseMarkerFile(strings.TrimSuffix(name, ".json"), b)...)
 	}
-	return f.markers
+	return out
 }
 
 // parseMarkerFile accepts both file forms and drops markers without an id.

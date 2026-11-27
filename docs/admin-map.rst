@@ -504,6 +504,8 @@ markers or ``{"markers": [...]}``. The layer name defaults to the file name,
 and dzo re-reads the files every few seconds. This works for any mod or
 external tool, and also when the mod cannot use ``#ifdef``.
 
+dzo reads only regular files of at most 1 MiB. It skips symbolic links, FIFOs and larger files.
+
 Marker fields
 ~~~~~~~~~~~~~
 

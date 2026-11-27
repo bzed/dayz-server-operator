@@ -11,7 +11,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -154,16 +153,24 @@ func WriteBansFile(dir string, content []byte) (changed bool, err error) {
 }
 
 // ChangedOutside reports whether dir/bans.txt exists and is not what dzo last wrote, and returns its
-// content.
+// content. It reads without following links and refuses anything but a regular file of at most 1 MiB.
 func ChangedOutside(dir string) (bool, []byte, error) {
-	content, err := os.ReadFile(filepath.Join(dir, BansTxt)) //nolint:gosec // the instance's BattlEye directory
+	root, err := safefs.OpenDir(dir)
 	if errors.Is(err, os.ErrNotExist) {
 		return false, nil, nil
 	}
 	if err != nil {
 		return false, nil, fmt.Errorf("moderation: %w", err)
 	}
-	want, err := os.ReadFile(filepath.Join(dir, sidecar)) //nolint:gosec // dzo's own sidecar
+	defer func() { _ = root.Close() }() // handle only
+	content, err := safefs.ReadFile(root, BansTxt, 0)
+	if errors.Is(err, os.ErrNotExist) {
+		return false, nil, nil
+	}
+	if err != nil {
+		return false, nil, fmt.Errorf("moderation: %w", err)
+	}
+	want, err := safefs.ReadFile(root, sidecar, 0)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return false, nil, fmt.Errorf("moderation: %w", err)
 	}

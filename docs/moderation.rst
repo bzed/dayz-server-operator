@@ -145,6 +145,12 @@ Changes outside dzo
    path never overwrites a file changed outside dzo. **Remove bans through dzo**: a line deleted from
    ``bans.txt`` by hand comes back at the next render.
 
+   The game container can write to ``profiles/``. dzo therefore reads ``bans.txt`` as a regular file of at
+   most 1 MiB and never follows a symbolic link. A ``bans.txt`` that is a link, a FIFO or larger gives an
+   error in the log, and dzo does not import it. dzo writes the files in ``profiles/battleye`` with a
+   temporary file and a rename inside ``profiles/``. A link in the way is replaced, and a link that leads
+   out of ``profiles/`` makes the write fail.
+
 A new or rebuilt server
    The database is the source of truth, not ``bans.txt``. Copy ``dzo.sqlite`` (and the ``evidence``
    directory next to it, or the newest copy from ``<paths.db>/backup``, see :doc:`backups`) to the new installation. Every start of an instance renders ``bans.txt`` from it,
