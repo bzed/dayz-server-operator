@@ -478,7 +478,7 @@ The kinds:
    * - ``stash_buried``, ``stash_dug_up``
      - a stash buried or dug up
    * - ``admin``
-     - an action of an operator that changes the world, from the audit log: teleport, spawn, vehicle and flag actions, kill, heal, fix gear and broadcast. Bans, evidence, kicks and private messages are not in the feed, because the feed needs only ``view``. They stay in the audit log (``audit.view``)
+     - an action of an operator that changes the world, from the audit log: teleport, spawn, vehicle and flag actions, kill, heal and fix gear, and kicks and bans (create, edit, revoke) with their reasons. Messages (private and broadcast), evidence and lookups are not in the feed, because the feed needs only ``view``. They stay in the audit log (``audit.view``). A ban shows only on the feed of its instance; a ban on more than one instance, or a global ban, is only in the audit log
    * - ``dropped``
      - the mod's buffer overflowed; ``text`` is the number of events lost
 

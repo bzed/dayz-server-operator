@@ -77,7 +77,7 @@ func TestFeedFromAudit(t *testing.T) {
 	reg, h := feedReg(t)
 	f := feedFromAudit(reg)
 	f(admin.AuditEntry{Actor: "web:bernd", Instance: "alpha", Action: "teleport", Target: "76561198000000001", Detail: "to 100/200", OK: true})
-	f(admin.AuditEntry{Actor: "api", Instance: "alpha", Action: "message", Target: "all", Detail: "chat: hi", OK: false, Result: "offline"})
+	f(admin.AuditEntry{Actor: "api", Instance: "alpha", Action: "player.kick", Target: "bob", Detail: "afk", OK: false, Result: "offline"})
 	f(admin.AuditEntry{Actor: "dzo", Instance: "", Action: "ban.sync"})
 	f(admin.AuditEntry{Actor: "dzo", Instance: "nowhere", Action: "teleport"})
 	got := h.Feed(0, 0)
@@ -91,21 +91,24 @@ func TestFeedFromAudit(t *testing.T) {
 	require.Equal(t, "offline", got[1].Object)
 }
 
-// A viewer reads the feed and the stream with the view permission only. Ban reasons, kick reasons,
-// evidence and the text of a private message must stay in the audit log.
-func TestFeedFromAuditKeepsModerationOut(t *testing.T) {
+// A viewer reads the feed and the stream with the view permission only. A viewer may see bans and kicks
+// with their reasons, but no message (private or broadcast) and no evidence: those stay in the audit log.
+func TestFeedFromAuditKeepsMessagesOut(t *testing.T) {
 	reg, h := feedReg(t)
 	f := feedFromAudit(reg)
 	const id = "76561198000000001"
-	f(admin.AuditEntry{Actor: "mod", Instance: "alpha", Action: "ban.create", Target: id, Detail: "ban #1 instances: SECRET-BAN-REASON", OK: true})
-	f(admin.AuditEntry{Actor: "mod", Instance: "alpha", Action: "ban.revoke", Target: id, Detail: "SECRET-REVOKE", OK: true})
-	f(admin.AuditEntry{Actor: "mod", Instance: "alpha", Action: "ban.edit", Target: id, Detail: "SECRET-EDIT", OK: true})
-	f(admin.AuditEntry{Actor: "mod", Instance: "alpha", Action: "evidence.add", Target: id, Detail: "SECRET-EVIDENCE", OK: true})
-	f(admin.AuditEntry{Actor: "mod", Instance: "alpha", Action: "player.kick", Target: id, Detail: "SECRET-KICK-REASON", OK: true})
 	f(admin.AuditEntry{Actor: "mod", Instance: "alpha", Action: "message", Target: id, Detail: "chat: SECRET-PRIVATE-DM", OK: false, Result: "SECRET-RESULT"})
+	f(admin.AuditEntry{Actor: "mod", Instance: "alpha", Action: "message", Target: "all", Detail: "chat: SECRET-BROADCAST", OK: true})
+	f(admin.AuditEntry{Actor: "mod", Instance: "alpha", Action: "evidence.add", Target: id, Detail: "SECRET-EVIDENCE", OK: true})
 	f(admin.AuditEntry{Actor: "mod", Instance: "alpha", Action: "ip.history", Target: id, OK: true})
-	require.Empty(t, h.Feed(0, 0))
-	f(admin.AuditEntry{Actor: "mod", Instance: "alpha", Action: "message", Target: "all", Detail: "chat: restart soon", OK: true})
+	require.Empty(t, h.Feed(0, 0), "messages, evidence and lookups stay in the audit log")
+	f(admin.AuditEntry{Actor: "mod", Instance: "alpha", Action: "ban.create", Target: id, Detail: "ban #1 instance until never: cheating", OK: true})
+	f(admin.AuditEntry{Actor: "mod", Instance: "alpha", Action: "ban.edit", Target: id, Detail: "ban #1", OK: true})
+	f(admin.AuditEntry{Actor: "mod", Instance: "alpha", Action: "ban.revoke", Target: id, Detail: "ban #1: appeal", OK: true})
+	f(admin.AuditEntry{Actor: "mod", Instance: "alpha", Action: "player.kick", Target: id, Detail: "spawn camping", OK: true})
 	f(admin.AuditEntry{Actor: "mod", Instance: "alpha", Action: "vehicle_repair", Target: "v1", Detail: "scope all", OK: true})
-	require.Len(t, h.Feed(0, 0), 2)
+	feed := h.Feed(0, 0)
+	require.Len(t, feed, 5, "bans, kicks and world actions are in the feed")
+	require.Contains(t, feed[0].Text, "cheating", "a viewer sees the ban reason")
+	require.Contains(t, feed[3].Text, "spawn camping", "and the kick reason")
 }

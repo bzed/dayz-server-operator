@@ -33,22 +33,19 @@ func feedFromRCon(reg *admin.Registry) func(string, battleye.Event) {
 	}
 }
 
-// feedActions are the audit actions that go into the event feed: what an operator does to the world,
-// which players see happen. The feed and the stream need only the view permission, so everything else
-// (bans, evidence, kicks with their reasons, private messages) stays in the audit log.
+// feedActions are the audit actions that go into the event feed: what an operator does to the world and
+// to players (bans and kicks, with their reasons), which every viewer may see. Messages, private or
+// broadcast, evidence and lookups need more than the view permission of the feed, so they stay in the
+// audit log (audit.view).
 var feedActions = map[string]bool{
 	"teleport": true, "spawn_item": true, "spawn_vehicle": true,
 	"vehicle_repair": true, "vehicle_flip": true, "vehicle_move": true, "vehicle_delete": true,
 	"storedvehicle_retrieve": true, "storedvehicle_move": true, "flag_raise": true,
 	"player.kill": true, "player.heal": true, "player.fixgear": true,
+	"player.kick": true, "ban.create": true, "ban.edit": true, "ban.revoke": true,
 }
 
-// feedWorthy reports whether an audit entry may be shown to a viewer. A message is a broadcast
-// (target "all") or private: only the broadcast, which every player reads, goes in.
 func feedWorthy(e admin.AuditEntry) bool {
-	if e.Action == "message" {
-		return e.Target == "all"
-	}
 	return feedActions[e.Action]
 }
 
