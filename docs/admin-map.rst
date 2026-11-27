@@ -168,8 +168,9 @@ the mod sends.
 
 * A blocked address gets ``429`` before dzo reads the body. Ten wrong tokens block an address for a
   minute.
-* A body is at most 4 MiB. A larger body gets ``413`` when its ``Content-Length`` says so, and
-  ``400`` otherwise.
+* A body is at most 12 MiB. A larger body gets ``413`` when its ``Content-Length`` says so, and
+  ``400`` otherwise. A sync at every count limit below, with DayZ Expansion vehicles, is about
+  9 MB, so the count limits apply first.
 * dzo reads only the token first. A body with a wrong token gets ``401`` and is not decoded.
 * One sync carries at most 256 players, 8192 vehicles, 8192 markers, 256 layers, 4096 events,
   1024 results, 512 feed events and 2048 class names. A sync over one of these limits gets
