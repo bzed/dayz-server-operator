@@ -166,11 +166,12 @@ func (s *Server) clearSession(w http.ResponseWriter) {
 	}
 }
 
-func sessionOf(r *http.Request) string {
-	for _, name := range []string{hostSessionCookie, sessionCookie} {
-		if c, err := r.Cookie(name); err == nil && c.Value != "" {
-			return c.Value
-		}
+// sessionOf reads the session cookie under the one name this transport issues. Over HTTPS only the
+// __Host- name counts: another party can plant a plain cookie for the host (a sibling subdomain, or an answer
+// to a plain HTTP request), but not a __Host- one.
+func (s *Server) sessionOf(r *http.Request) string {
+	if c, err := r.Cookie(s.sessionCookieName(r)); err == nil && c.Value != "" {
+		return c.Value
 	}
 	return ""
 }
@@ -305,7 +306,7 @@ func (s *Server) toLogin(w http.ResponseWriter, r *http.Request, clear bool) {
 // requireSession lets only logged-in people through to next.
 func (s *Server) requireSession(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		session := sessionOf(r)
+		session := s.sessionOf(r)
 		if session == "" {
 			s.toLogin(w, r, false)
 			return

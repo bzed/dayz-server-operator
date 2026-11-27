@@ -195,7 +195,9 @@ and so does removing a second factor (an authenticator app or a
 passkey). That works in the browser or with ``dzo user
 password``. Every other session of that person ends, so a stolen session does not outlive the
 change. The session that made it stays (the command ends all of them). There is no limit on parallel sessions. The cookie is ``HttpOnly`` and ``SameSite=Strict``;
-on HTTPS (``serve.web_url`` starts with ``https://``) it is ``__Host-dzo_session``, ``Secure`` and host-only.
+on HTTPS (``serve.web_url`` starts with ``https://``) it is ``__Host-dzo_session``, ``Secure`` and host-only. dzo reads only the cookie of its own transport: on HTTPS it
+ignores a plain ``dzo_session`` cookie, which another party could plant, and on plain HTTP it ignores the
+``__Host-`` one. Logout clears both.
 The half-finished login between the two steps lives five minutes in a ``SameSite=Lax`` cookie
 (``dzo_login``). Steam sends the browser back with a navigation from another site, and a Strict cookie
 would not survive that navigation. The return from Steam carries a random state. The state must
