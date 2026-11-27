@@ -129,6 +129,9 @@
     var host = table.closest('[data-poll]');
     return host ? host.getAttribute('hx-get') : '';
   }
+  // The sort key of a cell is its data-sort attribute when it has one (a timestamp, a bare name), else its
+  // trimmed text. A column sorts as numbers (parseFloat, no number sorts first) when its header says
+  // data-sort="num", else as text. Columns without data-sort on the header cannot be sorted.
   // Until a header is clicked a table is sorted by the columns in its data-sort-default (column
   // indexes, most significant first); without one, by the first column, the name. A clicked column
   // goes first and the defaults break its ties.
@@ -140,7 +143,9 @@
     return sorts[key(table)] || {cols: defaults(table), dir: 1};
   }
   function cell(row, i) {
-    return row.cells[i] ? row.cells[i].textContent.trim() : '';
+    var c = row.cells[i];
+    if (!c) return '';
+    return c.hasAttribute('data-sort') ? c.getAttribute('data-sort') : c.textContent.trim();
   }
   function compare(a, b, col, num) {
     var x = cell(a, col), y = cell(b, col);

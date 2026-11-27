@@ -3,11 +3,11 @@
 {{define "players"}}
 {{if .Err}}<p class="flash err">{{.Err}}</p>{{else if not .Items}}<p>Nobody online.</p>{{else}}
 <div class="scroll"><table class="players">
-  <thead><tr><th data-sort="text">Name</th><th data-sort="num">Position</th><th data-sort="num">Health</th><th data-sort="num">Ping</th><th></th></tr></thead>
+  <thead><tr><th data-sort="text">Name</th><th>Position</th><th data-sort="num">Health</th><th data-sort="num">Ping</th><th></th></tr></thead>
   <tbody>
   {{range .Items}}
     <tr id="player-{{.SteamID}}">
-      <td class="who" hx-get="/b/{{$.Backend}}/i/{{$.Instance}}/players/{{.SteamID}}/info" hx-trigger="mouseenter once, focusin once" hx-target="find .pop" hx-swap="innerHTML">
+      <td class="who" data-sort="{{.Name}}" hx-get="/b/{{$.Backend}}/i/{{$.Instance}}/players/{{.SteamID}}/info" hx-trigger="mouseenter once, focusin once" hx-target="find .pop" hx-swap="innerHTML">
         <span class="flag">{{if .Country}}<img src="/flags/{{.Country}}.svg" alt="{{.Country}}" title="{{.Country}}" loading="lazy">{{end}}</span>{{.Name}}{{with index $.Flagged .SteamID}} <span class="flagged" title="{{.}}"><i class="fa fa-exclamation-circle" aria-hidden="true"></i><span class="sr">flagged: {{.}}</span></span>{{end}}{{if not .Alive}} <em>(dead)</em>{{else if .Unconscious}} <em>(unconscious)</em>{{end}}{{if .Vehicle}} <em>(in vehicle)</em>{{end}}
         <button type="button" class="info quiet" aria-label="Connection info for {{.Name}}" aria-expanded="false" data-info><i class="fa fa-info-circle" aria-hidden="true"></i></button>
         <div class="pop" role="status"></div>
@@ -44,7 +44,7 @@
 {{if .Err}}<p class="flash err">{{.Err}}</p>{{else}}
 {{if not .Items}}{{if not .Stored}}<p>No vehicles reported.</p>{{end}}{{end}}
 {{if .Items}}<div class="scroll"><table data-sort-default="5,0">
-  <thead><tr><th data-sort="text">Class</th><th data-sort="text">Kind</th><th data-sort="num">Position</th><th data-sort="num">Health</th><th data-sort="num">Fuel</th><th data-sort="text">Owner</th><th data-sort="text">Last driver</th><th data-sort="num">Last driven</th><th data-sort="num">Crew</th><th></th></tr></thead>
+  <thead><tr><th data-sort="text">Class</th><th data-sort="text">Kind</th><th>Position</th><th data-sort="num">Health</th><th data-sort="num">Fuel</th><th data-sort="text">Owner</th><th data-sort="text">Last driver</th><th data-sort="num">Last driven</th><th data-sort="num">Crew</th><th></th></tr></thead>
   <tbody>
   {{range .Items}}
     <tr>
