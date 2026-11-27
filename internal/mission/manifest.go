@@ -22,7 +22,9 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
@@ -44,7 +46,8 @@ type Entry struct {
 	WrittenHash string `json:"written_hash"` // hash of the bytes dzo actually wrote to the live path
 }
 
-// Manifest is instances/<name>/mpmissions/.dzo-manifest.json: every live
+// Manifest is instances/<name>/runtime/mission-manifest.json (outside the
+// container-writable mpmissions mount): every live
 // path dzo owns. Paths are slash-separated, relative to the mission root
 // (e.g. "db/types.xml", "mod_123456/events.xml").
 type Manifest struct {
@@ -61,9 +64,9 @@ func NewManifest() *Manifest {
 // returns a fresh empty manifest, matching a mission that has never been
 // rendered before.
 func LoadManifest(path string) (*Manifest, error) {
-	data, err := os.ReadFile(path) //nolint:gosec // path is the instance's own configured mission dir, not external input
+	data, err := readFileSafe(path, maxManifestFile)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, fs.ErrNotExist) {
 			return NewManifest(), nil
 		}
 		return nil, fmt.Errorf("mission: read manifest %s: %w", path, err)
@@ -129,9 +132,9 @@ func HashBytes(data []byte) string {
 // HashFile hashes a file's contents the same way. A missing file returns
 // ("", nil): callers treat that as "no prior content", not an error.
 func HashFile(path string) (string, error) {
-	data, err := os.ReadFile(path) //nolint:gosec // path is derived from the instance's own mission tree, not external input
+	data, err := readFileSafe(path, maxMissionFile)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, fs.ErrNotExist) {
 			return "", nil
 		}
 		return "", fmt.Errorf("mission: hash %s: %w", path, err)
