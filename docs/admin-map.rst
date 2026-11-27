@@ -374,7 +374,8 @@ Which fields each kind has is in the mod's README. What dzo does with them is in
 :ref:`event-feed` (the API and the file kept on disk). It is also in the events page
 (:doc:`web`), ``dzo events`` (:doc:`cli`) and the ``killfeed`` of an instance
 (:doc:`configuration`). The mod buffers at most 256 events while dzo cannot be reached and sends them with
-the next sync; dzo counts each event once. Chat and BattlEye kicks come from RCon, not from the mod. Cutting
+the next sync; dzo counts each event once. Chat and BattlEye kicks come from RCon, not from the mod.
+dzo drops every event of a sync with another kind than the ones listed above, so ``admin``, ``kick`` and ``chat`` events always come from dzo itself. Cutting
 a combination lock is deprecated in 1.30 and no item offers it, so ``lock_cut`` appears only with a mod that brings
 the action back.
 

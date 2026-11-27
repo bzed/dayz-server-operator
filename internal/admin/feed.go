@@ -82,6 +82,16 @@ func (h *Hub) addFeedLocked(ev FeedEvent) FeedEvent {
 	return ev
 }
 
+// modFeedKinds are the kinds the dzo-admin mod produces. A sync that carries another kind is not
+// believed: admin, kick and chat events come from dzo itself (AddFeed), and a mod token must not be
+// able to write them.
+var modFeedKinds = map[string]bool{
+	FeedKill: true, FeedDeath: true, FeedConnect: true, FeedDisconnect: true,
+	FeedBuild: true, FeedDismantle: true, FeedDestroy: true, FeedLockCut: true,
+	FeedFlagRaised: true, FeedFlagLowered: true, FeedStashBuried: true, FeedStashDugUp: true,
+	FeedDropped: true,
+}
+
 // syncFeedLocked stores the events of a sync that were not stored before: the mod resends a batch it got
 // no reply for, and numbers its events from 1 after a restart (a hello).
 func (h *Hub) syncFeedLocked(req SyncRequest) {
@@ -94,6 +104,9 @@ func (h *Hub) syncFeedLocked(req SyncRequest) {
 				continue
 			}
 			h.lastSeq = ev.Seq
+		}
+		if !modFeedKinds[ev.Kind] {
+			continue
 		}
 		h.addFeedLocked(ev)
 	}

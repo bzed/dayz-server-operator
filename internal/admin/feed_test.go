@@ -182,3 +182,23 @@ func TestAddFeedTranslatesAIFactionKeys(t *testing.T) {
 	ev = h.AddFeed(FeedEvent{Kind: FeedKill, Name: "AI (#STR_EXPANSION_AI_FACTION_MERCENARY_GUARDS)"})
 	require.Equal(t, "AI (Mercenary Guards)", ev.Name)
 }
+
+func TestSyncFeedDropsKindsOfDzo(t *testing.T) {
+	h, _ := testHub()
+	h.Sync(SyncRequest{Proto: 1, Hello: true, Feed: []FeedEvent{
+		{Seq: 1, Kind: FeedAdmin, Name: "web:76561198000000001", Text: "ban.create x"},
+		{Seq: 2, Kind: FeedKick, Name: "n"},
+		{Seq: 3, Kind: FeedChat, Text: "hi"},
+		{Seq: 4, Kind: "whatever"},
+		{Seq: 5, Kind: FeedKill, Name: "a", TargetName: "b"},
+		{Kind: FeedDropped, Text: "3"},
+	}})
+	got := h.Feed(0, 0)
+	require.Len(t, got, 2)
+	require.Equal(t, FeedKill, got[0].Kind)
+	require.Equal(t, FeedDropped, got[1].Kind)
+
+	// The events dzo makes itself still go in.
+	h.AddFeed(FeedEvent{Kind: FeedAdmin, Name: "ops"})
+	require.Len(t, h.Feed(0, 0), 3)
+}
