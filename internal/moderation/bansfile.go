@@ -18,6 +18,8 @@ import (
 	"time"
 	"unicode"
 	"unicode/utf8"
+
+	"github.com/bzed/dayz-server-operator/internal/safefs"
 )
 
 // BansTxt is BattlEye's ban list in the instance's BattlEye directory; sidecar holds the SHA-256 of
@@ -124,20 +126,29 @@ func hashOf(b []byte) string {
 }
 
 // WriteBansFile writes dir/bans.txt atomically (mode 0600) when its content differs, and records its
-// hash. changed reports whether it wrote.
+// hash. changed reports whether it wrote. dir is writable by the game container, so every access
+// goes through an os.Root: a planted symlink is replaced or refused, never followed.
 func WriteBansFile(dir string, content []byte) (changed bool, err error) {
-	path := filepath.Join(dir, BansTxt)
-	if old, err := os.ReadFile(path); err == nil && bytes.Equal(old, content) { //nolint:gosec // the instance's BattlEye directory
-		return false, os.WriteFile(filepath.Join(dir, sidecar), []byte(hashOf(content)+"\n"), 0o600)
-	}
 	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return false, fmt.Errorf("moderation: %w", err)
 	}
-	if err := writeAtomic(path, content); err != nil {
-		return false, err
+	root, err := safefs.OpenDir(dir)
+	if err != nil {
+		return false, fmt.Errorf("moderation: %w", err)
 	}
-	if err := writeAtomic(filepath.Join(dir, sidecar), []byte(hashOf(content)+"\n")); err != nil {
-		return false, err
+	defer func() { _ = root.Close() }() // handle only
+	side := []byte(hashOf(content) + "\n")
+	if old, err := safefs.ReadFile(root, BansTxt, 0); err == nil && bytes.Equal(old, content) {
+		if err := safefs.WriteFile(root, sidecar, side, 0o600); err != nil {
+			return false, fmt.Errorf("moderation: %w", err)
+		}
+		return false, nil
+	}
+	if err := safefs.WriteFile(root, BansTxt, content, 0o600); err != nil {
+		return false, fmt.Errorf("moderation: %w", err)
+	}
+	if err := safefs.WriteFile(root, sidecar, side, 0o600); err != nil {
+		return false, fmt.Errorf("moderation: %w", err)
 	}
 	return true, nil
 }

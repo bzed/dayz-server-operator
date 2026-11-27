@@ -11,6 +11,8 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+
+	"github.com/bzed/dayz-server-operator/internal/safefs"
 )
 
 // WatchRule is a class watch rule (§C16 path 1): entities of these classes
@@ -122,15 +124,18 @@ func NewToken() (string, error) {
 	return hex.EncodeToString(b[:]), nil
 }
 
-func writeFile0600(path string, data []byte) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
+// writeFile0600 writes name below dir atomically with mode 0600. It works through an os.Root on dir,
+// so a symlink planted by the game container in a profiles/ subtree cannot redirect the write.
+func writeFile0600(dir, name string, data []byte) error {
+	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return err
 	}
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o600); err != nil {
+	root, err := os.OpenRoot(dir)
+	if err != nil {
 		return err
 	}
-	return os.Rename(tmp, path)
+	defer func() { _ = root.Close() }() // handle only
+	return safefs.WriteFile(root, name, data, 0o600)
 }
 
 // WriteModConfig writes the mod's config.json under profilesDir and the
@@ -148,10 +153,10 @@ func WriteModConfig(profilesDir, tokenDir, instance string, cfg ModConfig) error
 	if err != nil {
 		return err
 	}
-	if err := writeFile0600(filepath.Join(tokenDir, instance+".token"), []byte(tok+"\n")); err != nil {
+	if err := writeFile0600(tokenDir, instance+".token", []byte(tok+"\n")); err != nil {
 		return err
 	}
-	return writeFile0600(filepath.Join(profilesDir, "dzo", "admin", "config.json"), append(b, '\n'))
+	return writeFile0600(profilesDir, "dzo/admin/config.json", append(b, '\n'))
 }
 
 // MarkerDir is where the file drop of an instance lives.
