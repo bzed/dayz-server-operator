@@ -101,7 +101,7 @@ Account and people pages
 The **account page** (your name in the header) is for everybody:
 
 * your username (the header shows it; only an administrator gives and changes it) and a password, so that you
-  can sign in without Steam (the second step stays). Changing a password asks for the current one, and a
+  can sign in without Steam (the second step stays). Changing or removing a password asks for the current one, and a
   wrong one counts like a failed login.
   Without a username there is no password login: an administrator gives you one;
 * the authenticator app: set up a new one with a QR code and prove it with a

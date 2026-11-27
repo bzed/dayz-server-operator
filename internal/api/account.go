@@ -222,7 +222,20 @@ func (s *Server) setPassword(w http.ResponseWriter, r *http.Request, c *call) {
 }
 
 func (s *Server) removePassword(w http.ResponseWriter, r *http.Request, c *call) {
-	if err := s.Accounts.ClearPassword(r.Context(), c.who.User.SteamID); err != nil {
+	var body passwordChange
+	if !decode(w, r, &body) {
+		return
+	}
+	ctx, id := r.Context(), c.who.User.SteamID
+	creds, err := s.Accounts.Credentials(ctx, id)
+	if err != nil {
+		fail(w, http.StatusInternalServerError, "database error")
+		return
+	}
+	if creds.PasswordHash != "" && !s.checkCurrent(w, c, creds.PasswordHash, body.Current) {
+		return
+	}
+	if err := s.Accounts.ClearPassword(ctx, id); err != nil {
 		fail(w, http.StatusInternalServerError, "database error")
 		return
 	}

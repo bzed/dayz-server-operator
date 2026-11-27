@@ -205,8 +205,9 @@ beyond the login; every change goes to the audit log (``account.*``) without sec
        login). The password is 12 to 256 bytes (``400``). A person without a username cannot have a
        password (``409``): an administrator gives the username, a person never changes it. The person's
        other sessions end
-   * - ``DELETE /account/password``
-     - ``204``; the other sessions end (the username stays)
+   * - ``DELETE /account/password`` ``{"current"}``
+     - ``204``; the other sessions end (the username stays). ``current`` is needed when a password
+       exists (``403`` if wrong, counted like a failed login)
    * - ``POST /account/totp/begin``
      - ``{"pending","secret","uri"}``; ``POST /account/totp/finish`` ``{"pending","code"}`` → ``204``
        once the code of the new secret is right; the old secret is replaced
