@@ -56,17 +56,36 @@ func TestFeedFromRConIgnoresConnect(t *testing.T) {
 func TestFeedFromAudit(t *testing.T) {
 	reg, h := feedReg(t)
 	f := feedFromAudit(reg)
-	f(admin.AuditEntry{Actor: "web:bernd", Instance: "alpha", Action: "player.kick", Target: "76561198000000001", Detail: "spam", OK: true})
-	f(admin.AuditEntry{Actor: "api", Instance: "alpha", Action: "message", Target: "all", Detail: "hi", OK: false, Result: "offline"})
+	f(admin.AuditEntry{Actor: "web:bernd", Instance: "alpha", Action: "teleport", Target: "76561198000000001", Detail: "to 100/200", OK: true})
+	f(admin.AuditEntry{Actor: "api", Instance: "alpha", Action: "message", Target: "all", Detail: "chat: hi", OK: false, Result: "offline"})
 	f(admin.AuditEntry{Actor: "dzo", Instance: "", Action: "ban.sync"})
-	f(admin.AuditEntry{Actor: "dzo", Instance: "nowhere", Action: "x"})
+	f(admin.AuditEntry{Actor: "dzo", Instance: "nowhere", Action: "teleport"})
 	got := h.Feed(0, 0)
 	require.Len(t, got, 2)
 	require.Equal(t, admin.FeedAdmin, got[0].Kind)
 	require.Equal(t, "web:bernd", got[0].Name)
-	require.Equal(t, "player.kick 76561198000000001 (spam)", got[0].Text)
+	require.Equal(t, "teleport 76561198000000001 (to 100/200)", got[0].Text)
 	require.Equal(t, "76561198000000001", got[0].TargetSteamID)
 	require.Empty(t, got[0].Object)
 	require.Empty(t, got[1].TargetSteamID)
 	require.Equal(t, "offline", got[1].Object)
+}
+
+// A viewer reads the feed and the stream with the view permission only. Ban reasons, kick reasons,
+// evidence and the text of a private message must stay in the audit log.
+func TestFeedFromAuditKeepsModerationOut(t *testing.T) {
+	reg, h := feedReg(t)
+	f := feedFromAudit(reg)
+	const id = "76561198000000001"
+	f(admin.AuditEntry{Actor: "mod", Instance: "alpha", Action: "ban.create", Target: id, Detail: "ban #1 instances: SECRET-BAN-REASON", OK: true})
+	f(admin.AuditEntry{Actor: "mod", Instance: "alpha", Action: "ban.revoke", Target: id, Detail: "SECRET-REVOKE", OK: true})
+	f(admin.AuditEntry{Actor: "mod", Instance: "alpha", Action: "ban.edit", Target: id, Detail: "SECRET-EDIT", OK: true})
+	f(admin.AuditEntry{Actor: "mod", Instance: "alpha", Action: "evidence.add", Target: id, Detail: "SECRET-EVIDENCE", OK: true})
+	f(admin.AuditEntry{Actor: "mod", Instance: "alpha", Action: "player.kick", Target: id, Detail: "SECRET-KICK-REASON", OK: true})
+	f(admin.AuditEntry{Actor: "mod", Instance: "alpha", Action: "message", Target: id, Detail: "chat: SECRET-PRIVATE-DM", OK: false, Result: "SECRET-RESULT"})
+	f(admin.AuditEntry{Actor: "mod", Instance: "alpha", Action: "ip.history", Target: id, OK: true})
+	require.Empty(t, h.Feed(0, 0))
+	f(admin.AuditEntry{Actor: "mod", Instance: "alpha", Action: "message", Target: "all", Detail: "chat: restart soon", OK: true})
+	f(admin.AuditEntry{Actor: "mod", Instance: "alpha", Action: "vehicle_repair", Target: "v1", Detail: "scope all", OK: true})
+	require.Len(t, h.Feed(0, 0), 2)
 }
