@@ -124,6 +124,8 @@ other kind of token.
    * - ``POST /auth/totp`` ``{"pending","code"}``, ``POST /auth/recovery`` ``{"pending","code"}``
      - ``{"session":"dzs_…","expires":"…"}``. A TOTP code and a recovery code work once. Recovery codes
        are compared ignoring case and dashes.
+       Only a ``pending`` from a first factor (password or Steam) works. The ``pending`` of an account
+       change (``/account/totp/begin``) gets ``401``.
    * - ``POST /auth/logout`` (with the session)
      - ``204``; the session is gone.
 

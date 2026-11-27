@@ -340,6 +340,10 @@ func (s *Server) loginSteam(w http.ResponseWriter, r *http.Request, lc *loginCal
 	s.startPending(w, r, lc, person, "steam")
 }
 
+// firstFactor reports whether a first factor (a password or Steam) made the pending login. Only such a
+// pending may end in a session; the pendings of the account changes (Via "account") belong to /account/*.
+func firstFactor(p moderation.PendingLogin) bool { return p.Via == "password" || p.Via == "steam" }
+
 type secondBody struct {
 	Pending string `json:"pending"`
 	Code    string `json:"code"`
@@ -361,6 +365,11 @@ func (s *Server) loginSecond(w http.ResponseWriter, r *http.Request, lc *loginCa
 	}
 	if err != nil {
 		fail(w, http.StatusInternalServerError, "database error")
+		return
+	}
+	if !firstFactor(pend) {
+		s.logStep(lc, kind, "failed", pend.SteamID)
+		fail(w, http.StatusUnauthorized, "this login has expired, start again")
 		return
 	}
 	if pend.Enrol {

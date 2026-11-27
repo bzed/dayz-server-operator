@@ -93,7 +93,7 @@ func (s *Server) pendingFor(w http.ResponseWriter, r *http.Request, lc *loginCal
 		fail(w, http.StatusInternalServerError, "database error")
 		return "", pend, moderation.Person{}, false
 	}
-	if pend.Via == "account" || pend.Enrol != enrol {
+	if !firstFactor(pend) || pend.Enrol != enrol {
 		if enrol {
 			fail(w, http.StatusForbidden, "this person already has a second factor")
 		} else {
