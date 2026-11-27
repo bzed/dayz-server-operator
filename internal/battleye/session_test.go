@@ -87,6 +87,19 @@ func TestSessionCommandsAndReconnect(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "echo:players", out)
 	assert.True(t, s.Connected(), "the session is connected")
+	reconnects := func() (n int) {
+		for {
+			select {
+			case ev := <-s.Events():
+				if ev.Kind == EventReconnect {
+					n++
+				}
+			default:
+				return n
+			}
+		}
+	}
+	require.Equal(t, 1, reconnects(), "no reconnect event for the first connection")
 
 	// The server goes silent: the liveness timeout notices, the session dials the next address.
 	a.dead.Store(true)
@@ -94,6 +107,7 @@ func TestSessionCommandsAndReconnect(t *testing.T) {
 	out, err = s.Command(ctx, "lock")
 	require.NoError(t, err)
 	require.Equal(t, "echo:lock", out)
+	require.Equal(t, 1, reconnects(), "no reconnect event after the second connection")
 }
 
 func TestSessionRetriesAfterAFailedDialAndForwardsEvents(t *testing.T) {
@@ -130,11 +144,18 @@ func TestSessionRetriesAfterAFailedDialAndForwardsEvents(t *testing.T) {
 	default:
 		require.Fail(t, "event channel full")
 	}
-	select {
-	case ev := <-s.Events():
-		assert.Equal(t, EventConnect, ev.Kind)
-	case <-time.After(2 * time.Second):
-		require.Fail(t, "no event forwarded")
+	for {
+		select {
+		case ev := <-s.Events():
+			if ev.Kind == EventReconnect { // made by the session itself, before any server event
+				continue
+			}
+			assert.Equal(t, EventConnect, ev.Kind)
+			return
+		case <-time.After(2 * time.Second):
+			require.Fail(t, "no event forwarded")
+			return
+		}
 	}
 }
 

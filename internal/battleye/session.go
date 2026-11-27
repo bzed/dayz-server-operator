@@ -146,6 +146,10 @@ func (s *Session) run() {
 		close(s.ready)
 		s.mu.Unlock()
 
+		select {
+		case s.events <- Event{Kind: EventReconnect}:
+		default: // nobody reads: drop, as for the others
+		}
 		fwdDone := make(chan struct{})
 		go func() {
 			defer close(fwdDone)
