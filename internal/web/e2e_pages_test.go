@@ -110,3 +110,29 @@ func TestE2EVehicleTableSortsByLastDriven(t *testing.T) {
 	b.run(t, chromedp.Evaluate(click, nil), chromedp.Evaluate(order, &got))
 	require.Equal(t, "Car30m,Car5h,Car3d,CarNever", got, "descending by time")
 }
+
+func TestE2EPlayerTableSortsByTheBareName(t *testing.T) {
+	e, st, _ := playerSetup(t, api.RoleModerator)
+	useRealAssets(t, e.assets)
+	// "Al" has a BattlEye ban, so the cell text reads "Al flagged: BattlEye global ban", which sorts after
+	// "Al b". The sort key is the bare name, so "Al" stays first.
+	seedPlayer(t, st, webSteam, "Al", time.Now())
+	g, _ := moderation.DeriveGUID(webSteam)
+	require.NoError(t, st.SaveBEStatus(t.Context(), g, moderation.BEStatus{Game: moderation.BEDayZ, State: moderation.LookupOK, Banned: true, Reason: "x", CheckedAt: time.Now()}))
+	e.hub.Sync(admin.SyncRequest{Proto: 1, Players: []admin.Player{
+		{SteamID: "3", Name: "Bo", Alive: true}, {SteamID: webSteam, Name: "Al", Alive: true}, {SteamID: "2", Name: "Al b", Alive: true}}})
+	b := newBrowser(t)
+	const order = `Array.from(document.querySelectorAll("table.players tbody tr")).map(function (r) { return r.id; }).join(",")`
+	var got string
+	b.run(t,
+		chromedp.Navigate(e.url("/b/main/i/alpha")),
+		chromedp.Poll(`document.querySelectorAll("table.players tbody tr").length === 3 && document.querySelector("table.players .flagged") !== null && document.querySelector("table.players th").getAttribute("aria-sort") === "ascending"`, nil),
+	)
+	b.run(t, chromedp.Evaluate(order, &got))
+	require.Equal(t, "player-"+webSteam+",player-2,player-3", got, "A to Z by the name alone before any click")
+	click := `document.querySelector("table.players th").click()`
+	b.run(t, chromedp.Evaluate(click, nil), chromedp.Evaluate(order, &got))
+	require.Equal(t, "player-3,player-2,player-"+webSteam, got, "a click on the sorted Name column reverses it")
+	b.run(t, chromedp.Evaluate(click, nil), chromedp.Evaluate(order, &got))
+	require.Equal(t, "player-"+webSteam+",player-2,player-3", got, "a second click restores A to Z")
+}
