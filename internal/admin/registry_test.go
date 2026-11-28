@@ -7,10 +7,12 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -355,4 +357,79 @@ func TestRetainDropsRemovedInstances(t *testing.T) {
 	require.Same(t, alpha, kept, "a kept instance keeps its hub and its state")
 	r.Retain(nil)
 	require.Empty(t, r.Names())
+}
+
+// countingBody counts the bytes the handler reads.
+type countingBody struct {
+	r io.Reader
+	n int
+}
+
+func (c *countingBody) Read(p []byte) (int, error) {
+	n, err := c.r.Read(p)
+	c.n += n
+	return n, err
+}
+
+func TestSyncBlockedAddressBodyIsNotRead(t *testing.T) {
+	r, _ := testRegistry(t)
+	for i := 0; i < 10; i++ {
+		require.Equal(t, 401, post(r, SyncRequest{Token: "bad", Proto: 1}, "10.0.0.1:1").Code)
+	}
+	body := &countingBody{r: strings.NewReader(`{"token":"bad","players":[` + strings.Repeat("{},", 100000) + `{}]}`)}
+	req := httptest.NewRequest(http.MethodPost, "/mod/v1/sync", body)
+	req.RemoteAddr = "10.0.0.1:2"
+	rec := httptest.NewRecorder()
+	r.ModHandler().ServeHTTP(rec, req)
+	require.Equal(t, http.StatusTooManyRequests, rec.Code)
+	require.Zero(t, body.n)
+}
+
+func TestSyncBadTokenDoesNotDecodeTheBody(t *testing.T) {
+	r, _ := testRegistry(t)
+	raw := `{"token":"bad","vehicles":[` + strings.Repeat("{},", 200000) + `{}]}`
+	var before, after runtime.MemStats
+	runtime.ReadMemStats(&before)
+	req := httptest.NewRequest(http.MethodPost, "/mod/v1/sync", strings.NewReader(raw))
+	req.RemoteAddr = "10.0.0.3:1"
+	rec := httptest.NewRecorder()
+	r.ModHandler().ServeHTTP(rec, req)
+	runtime.ReadMemStats(&after)
+	require.Equal(t, 401, rec.Code)
+	// The full decode of 200000 vehicles allocates about 70 MiB; the body itself is 0.6 MiB.
+	require.Less(t, after.TotalAlloc-before.TotalAlloc, uint64(8<<20))
+}
+
+func TestSyncLimits(t *testing.T) {
+	r, dir := testRegistry(t)
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "alpha.token"), []byte("tok-a\n"), 0o600))
+
+	big := `{"token":"tok-a","protocol":1,"vehicles":[` + strings.Repeat("{},", maxSyncBody/3) + `{}]}`
+	req := httptest.NewRequest(http.MethodPost, "/mod/v1/sync", strings.NewReader(big))
+	rec := httptest.NewRecorder()
+	r.ModHandler().ServeHTTP(rec, req)
+	require.Equal(t, http.StatusRequestEntityTooLarge, rec.Code)
+
+	many := `{"token":"tok-a","protocol":1,"vehicles":[` + strings.Repeat("{},", maxSyncVehicles) + `{}]}`
+	req = httptest.NewRequest(http.MethodPost, "/mod/v1/sync", strings.NewReader(many))
+	req.ContentLength = -1 // as with chunked transfer
+	rec = httptest.NewRecorder()
+	r.ModHandler().ServeHTTP(rec, req)
+	require.Equal(t, http.StatusBadRequest, rec.Code)
+
+	require.Equal(t, 200, post(r, SyncRequest{Token: "tok-a", Proto: 1, Vehicles: make([]Vehicle, 100)}, "127.0.0.1:1").Code)
+}
+
+func TestCheckCounts(t *testing.T) {
+	require.NoError(t, (&SyncRequest{}).CheckCounts())
+	for name, in := range map[string]SyncRequest{
+		"players":  {Players: make([]Player, maxSyncPlayers+1)},
+		"markers":  {Markers: make([]Marker, maxSyncMarkers+1)},
+		"feed":     {Feed: make([]FeedEvent, maxSyncFeed+1)},
+		"results":  {Results: make([]Result, maxSyncResults+1)},
+		"types":    {Types: &TypesChunk{Names: make([]string, maxSyncNames+1)}},
+		"features": {Features: make([]string, maxSyncFeatures+1)},
+	} {
+		require.Error(t, in.CheckCounts(), name)
+	}
 }

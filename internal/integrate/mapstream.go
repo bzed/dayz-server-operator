@@ -4,11 +4,16 @@
 package integrate
 
 import (
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
+	"strings"
+
+	"github.com/bzed/dayz-server-operator/internal/safefs"
 )
 
 // MapStreamSrc is the folder of an instance in the site repository that holds the DayZ Editor
@@ -34,37 +39,44 @@ func SyncMapStream(instDir, profiles string) (written, removed int, err error) {
 	if err != nil {
 		return 0, 0, err
 	}
-	dst := filepath.Join(profiles, MapStreamDst)
+	// profiles/ is writable by the game container: work through an os.Root, so that a planted
+	// symlink can neither redirect a write nor make the cleanup leave the tree.
+	if err := os.MkdirAll(profiles, 0o750); err != nil {
+		return 0, 0, fmt.Errorf("mapstream: %w", err)
+	}
+	root, err := os.OpenRoot(profiles)
+	if err != nil {
+		return 0, 0, fmt.Errorf("mapstream: %w", err)
+	}
+	defer func() { _ = root.Close() }() // handle only
+	dst := filepath.ToSlash(MapStreamDst)
 	want := map[string]bool{}
 	for _, f := range files {
 		want[f.Name] = true
-		p := filepath.Join(dst, filepath.FromSlash(f.Name))
-		if old, err := os.ReadFile(p); err == nil && string(old) == string(f.Data) { //nolint:gosec // below profiles/
+		p := path.Join(dst, f.Name)
+		if old, err := safefs.ReadFile(root, p, mapStreamReadMax); err == nil && string(old) == string(f.Data) {
 			continue
 		}
-		if err := os.MkdirAll(filepath.Dir(p), 0o750); err != nil {
-			return written, removed, fmt.Errorf("mapstream: %w", err)
-		}
-		if err := writeAtomic(p, f.Data); err != nil {
+		if err := safefs.WriteFile(root, p, f.Data, 0o600); err != nil {
 			return written, removed, fmt.Errorf("mapstream: %w", err)
 		}
 		written++
 	}
 
 	var stray, dirs []string
-	err = filepath.WalkDir(dst, func(p string, d fs.DirEntry, err error) error {
+	err = fs.WalkDir(root.FS(), dst, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
-			if os.IsNotExist(err) {
+			if errors.Is(err, fs.ErrNotExist) {
 				return nil
 			}
 			return err
 		}
-		rel, _ := filepath.Rel(dst, p)
+		rel := strings.TrimPrefix(strings.TrimPrefix(p, dst), "/")
 		switch {
-		case rel == ".":
+		case rel == "":
 		case d.IsDir():
 			dirs = append(dirs, p)
-		case !want[filepath.ToSlash(rel)]:
+		case !want[rel]:
 			stray = append(stray, p)
 		}
 		return nil
@@ -73,7 +85,7 @@ func SyncMapStream(instDir, profiles string) (written, removed int, err error) {
 		return written, removed, fmt.Errorf("mapstream: %w", err)
 	}
 	for _, p := range stray {
-		if err := os.Remove(p); err != nil {
+		if err := root.Remove(p); err != nil {
 			return written, removed, fmt.Errorf("mapstream: %w", err)
 		}
 		removed++
@@ -81,23 +93,10 @@ func SyncMapStream(instDir, profiles string) (written, removed int, err error) {
 	// deepest first, so a folder that only held removed files goes too; non-empty ones stay.
 	sort.Sort(sort.Reverse(sort.StringSlice(dirs)))
 	for _, d := range dirs {
-		_ = os.Remove(d) // fails while the folder still holds a wanted file, which is the point
+		_ = root.Remove(d) // fails while the folder still holds a wanted file, which is the point
 	}
 	return written, removed, nil
 }
 
-func writeAtomic(path string, data []byte) error {
-	f, err := os.CreateTemp(filepath.Dir(path), ".tmp-*")
-	if err != nil {
-		return err
-	}
-	defer func() { _ = os.Remove(f.Name()) }() // gone after the rename; cleans up after a failure
-	if _, err := f.Write(data); err != nil {
-		_ = f.Close()
-		return err
-	}
-	if err := f.Close(); err != nil {
-		return err
-	}
-	return os.Rename(f.Name(), path)
-}
+// mapStreamReadMax bounds the read of an existing file for the "unchanged" comparison.
+const mapStreamReadMax = 64 << 20

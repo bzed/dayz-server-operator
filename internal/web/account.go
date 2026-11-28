@@ -174,7 +174,7 @@ func (s *Server) accountRoutes(mux *http.ServeMux) {
 		return "Password saved.", nil, err
 	}))
 	mux.HandleFunc("POST /account/password/delete", s.accountAction(func(c *apiclient.Client, r *http.Request) (string, []string, error) {
-		return "The password was removed; you sign in through Steam.", nil, c.RemovePassword(r.Context())
+		return "The password was removed; you sign in through Steam.", nil, c.RemovePassword(r.Context(), r.PostFormValue("current"))
 	}))
 	mux.HandleFunc("GET /account/totp", s.accountTOTPSetup)
 	mux.HandleFunc("POST /account/totp", s.accountTOTPFinish)

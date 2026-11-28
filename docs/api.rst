@@ -124,6 +124,8 @@ other kind of token.
    * - ``POST /auth/totp`` ``{"pending","code"}``, ``POST /auth/recovery`` ``{"pending","code"}``
      - ``{"session":"dzs_…","expires":"…"}``. A TOTP code and a recovery code work once. Recovery codes
        are compared ignoring case and dashes.
+       Only a ``pending`` from a first factor (password or Steam) works. The ``pending`` of an account
+       change (``/account/totp/begin``) gets ``401``.
    * - ``POST /auth/logout`` (with the session)
      - ``204``; the session is gone.
 
@@ -173,6 +175,12 @@ first five are free; then the wait doubles from one second to 15 minutes. A
 success clears the account. 1 hour without a failure clears all. While waiting
 a request gets ``429`` with ``Retry-After``, with the same message whether or
 not the username exists. The counters live in the memory of ``dzo serve``.
+dzo counts a password attempt when it starts, so attempts that run at the same
+time count too. A client address in IPv6 counts as its ``/64`` network. Each
+password check needs 64 MiB of memory, so ``dzo serve`` runs only a few at the
+same time (the larger of 2 and the number of CPUs). When all are busy, a
+request gets ``429`` with ``Retry-After: 1`` at once, and the attempt does not
+count as a failure.
 
 Every step writes one line to the service log, never a secret. The line is
 ``login: <step> <ok|failed|refused> steamid=<id|unknown> client=<addr>
@@ -199,8 +207,9 @@ beyond the login; every change goes to the audit log (``account.*``) without sec
        login). The password is 12 to 256 bytes (``400``). A person without a username cannot have a
        password (``409``): an administrator gives the username, a person never changes it. The person's
        other sessions end
-   * - ``DELETE /account/password``
-     - ``204``; the other sessions end (the username stays)
+   * - ``DELETE /account/password`` ``{"current"}``
+     - ``204``; the other sessions end (the username stays). ``current`` is needed when a password
+       exists (``403`` if wrong, counted like a failed login)
    * - ``POST /account/totp/begin``
      - ``{"pending","secret","uri"}``; ``POST /account/totp/finish`` ``{"pending","code"}`` → ``204``
        once the code of the new secret is right; the old secret is replaced
@@ -420,7 +429,11 @@ Event feed
 ``GET /instances/<i>/feed`` and the ``feed`` events of the stream. dzo also writes them to
 ``${paths.db}/feed/<instance>.jsonl`` (mode ``0600``, one JSON object per line), so the feed is not empty
 after ``dzo serve`` restarts. The file holds chat and positions, which is personal data. It keeps at most
-the newest 1000 events per instance, and it is safe to delete; the feed then starts empty.
+the newest 1000 events per instance, and it is safe to delete; the feed then starts empty. dzo cuts the
+text fields of an event from the mod to a fixed length and marks the cut with ``…``: ``text`` 512
+characters, ``name`` and ``target_name`` 64, ``weapon``, ``object`` and ``cause`` 128, and ``kind``,
+``channel`` and the Steam IDs 32. When dzo reads the file at start, it skips a line that is
+longer than 1 MiB or does not parse, and still reads the lines after it.
 
 Every event has an ``id`` (dzo's, increasing per instance), a ``time`` and a ``kind``. The other fields are
 present when they apply:
@@ -457,7 +470,7 @@ The kinds:
    * - ``connect``, ``disconnect``
      - a player joined or left
    * - ``chat``, ``kick``
-     - in-game chat and BattlEye kicks, from BattlEye RCon (needs RCon, as bans do)
+     - in-game chat and BattlEye kicks, from BattlEye RCon (needs RCon, as bans do). BattlEye gives only the name of a chat sender, so a chat event has a ``steam_id`` only when one online player has that name. It has none when another online name could also have sent the line (for example the players ``Victim`` and ``Victim: x`` for the line ``Victim: x: text``)
    * - ``build``, ``dismantle``, ``destroy``, ``lock_cut``
      - base building and raiding: a part built, taken apart or destroyed, a combination lock cut
    * - ``flag_raised``, ``flag_lowered``
@@ -465,7 +478,7 @@ The kinds:
    * - ``stash_buried``, ``stash_dug_up``
      - a stash buried or dug up
    * - ``admin``
-     - an action of an operator (kick, ban, teleport, broadcast, ...), from the audit log
+     - an action of an operator that changes the world, from the audit log: teleport, spawn, vehicle and flag actions, kill, heal and fix gear, and kicks and bans (create, edit, revoke) with their reasons. Messages (private and broadcast), evidence and lookups are not in the feed, because the feed needs only ``view``. They stay in the audit log (``audit.view``). A ban shows only on the feed of its instance; a ban on more than one instance, or a global ban, is only in the audit log
    * - ``dropped``
      - the mod's buffer overflowed; ``text`` is the number of events lost
 

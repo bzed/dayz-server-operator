@@ -136,9 +136,9 @@ func (c *Client) SetPassword(ctx context.Context, current, newPassword string) e
 	return c.call(ctx, http.MethodPut, "/api/v1/account/password", map[string]string{"current": current, "new": newPassword}, http.StatusNoContent, nil)
 }
 
-// RemovePassword removes the password.
-func (c *Client) RemovePassword(ctx context.Context) error {
-	return c.call(ctx, http.MethodDelete, "/api/v1/account/password", nil, http.StatusNoContent, nil)
+// RemovePassword removes the password. current is needed when there is a password.
+func (c *Client) RemovePassword(ctx context.Context, current string) error {
+	return c.call(ctx, http.MethodDelete, "/api/v1/account/password", map[string]string{"current": current}, http.StatusNoContent, nil)
 }
 
 // TOTPBegin makes a secret for the app that is to replace or add the TOTP of the person.

@@ -118,8 +118,15 @@ func isHardExcluded(relPath string) bool {
 func Classify(stagingDir, liveDir string, manifest *Manifest, unmanaged []string) (Plan, error) {
 	observed := map[string]bool{}
 	var plan Plan
+	root, err := openLive(liveDir, false)
+	if err != nil {
+		return Plan{}, err
+	}
+	if root != nil {
+		defer root.Close() //nolint:errcheck // read-only use
+	}
 
-	err := filepath.WalkDir(stagingDir, func(path string, d fs.DirEntry, err error) error {
+	err = filepath.WalkDir(stagingDir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -147,7 +154,7 @@ func Classify(stagingDir, liveDir string, manifest *Manifest, unmanaged []string
 		}
 
 		entry, existed := manifest.Entries[rel]
-		liveHash, err := HashFile(filepath.Join(liveDir, rel))
+		liveHash, err := hashLive(root, rel)
 		if err != nil {
 			return err
 		}

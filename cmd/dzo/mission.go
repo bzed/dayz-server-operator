@@ -75,7 +75,7 @@ func newMissionDiffCmd() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&manifestPath, "manifest", "", "path to .dzo-manifest.json (required)")
+	cmd.Flags().StringVar(&manifestPath, "manifest", "", "path to the mission manifest file (required)")
 	cmd.Flags().StringVar(&unmanaged, "unmanaged", "", "comma-separated unmanaged glob patterns")
 	_ = cmd.MarkFlagRequired("manifest")
 	return cmd
@@ -108,7 +108,7 @@ func newMissionApplyCmd() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&manifestPath, "manifest", "", "path to .dzo-manifest.json (required)")
+	cmd.Flags().StringVar(&manifestPath, "manifest", "", "path to the mission manifest file (required)")
 	cmd.Flags().StringVar(&unmanaged, "unmanaged", "", "comma-separated unmanaged glob patterns")
 	cmd.Flags().StringVar(&filehistoryDir, "filehistory", "", "directory for pre-overwrite file backups (required)")
 	cmd.Flags().IntVar(&keepHistory, "keep-history", mission.DefaultKeepFileHistory, "number of filehistory generations to keep")

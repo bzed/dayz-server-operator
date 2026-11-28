@@ -4,6 +4,7 @@
 package moderation
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -397,4 +398,49 @@ func TestPlayersOnlySeenOnTheGivenInstances(t *testing.T) {
 	assert.Len(t, got, 2)
 	got, _, _ = s.Players(ctx, PlayerFilter{Only: []string{}})
 	assert.Len(t, got, 2, "no restriction")
+}
+
+func TestPurgeOrphanPlayers(t *testing.T) {
+	s, _ := newStore(t)
+	ctx := t.Context()
+	old := t0.Add(-400 * day)
+	ids := map[string]string{}
+	for _, name := range []string{"orphan", "session", "ban", "evidence", "account", "recent"} {
+		ids[name] = fmt.Sprintf("7656119800000%04d", len(ids)+1)
+	}
+	join := func(name string, at time.Time) {
+		require.NoError(t, s.PlayerJoined(ctx, "alpha", ids[name], name, at))
+		require.NoError(t, s.PlayerLeft(ctx, "alpha", ids[name], at.Add(time.Minute)))
+	}
+	for _, name := range []string{"orphan", "session", "ban", "evidence", "account"} {
+		join(name, old)
+	}
+	join("recent", t0)
+	// The sessions of the ones that are meant to go are purged first, as the upkeep does.
+	_, err := s.db.ExecContext(ctx, `DELETE FROM player_sessions WHERE steam_id <> ?`, ids["session"])
+	require.NoError(t, err)
+	_, err = s.CreateBan(ctx, "a", BanInput{SteamID: ids["ban"], Reason: "x", Scope: ScopeGlobal}, t0)
+	require.NoError(t, err)
+	_, err = s.AddEvidence(ctx, "test", EvidenceInput{SteamID: ids["evidence"], Instance: "alpha", Kind: EvidenceNote, Body: "n"}, nil, t0)
+	require.NoError(t, err)
+	require.NoError(t, s.PutPerson(ctx, Person{SteamID: ids["account"]}, t0))
+	_, err = s.db.ExecContext(ctx, `INSERT INTO steam_info (steam_id, state, data, checked_at) VALUES (?, 'ok', '{}', 1)`, ids["orphan"])
+	require.NoError(t, err)
+
+	n, err := s.PurgeOrphanPlayers(ctx, t0.Add(-365*day))
+	require.NoError(t, err)
+	require.EqualValues(t, 1, n)
+	for name, id := range ids {
+		_, err := s.Player(ctx, id)
+		if name == "orphan" {
+			require.ErrorIs(t, err, ErrNotFound)
+		} else {
+			require.NoError(t, err, name)
+		}
+	}
+	var rows int
+	require.NoError(t, s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM player_names WHERE steam_id = ?`, ids["orphan"]).Scan(&rows))
+	require.Zero(t, rows)
+	require.NoError(t, s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM steam_info WHERE steam_id = ?`, ids["orphan"]).Scan(&rows))
+	require.Zero(t, rows)
 }

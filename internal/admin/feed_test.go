@@ -5,6 +5,8 @@ package admin
 
 import (
 	"context"
+	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -181,4 +183,43 @@ func TestAddFeedTranslatesAIFactionKeys(t *testing.T) {
 	require.Equal(t, "fam.tonini", ev.Name)
 	ev = h.AddFeed(FeedEvent{Kind: FeedKill, Name: "AI (#STR_EXPANSION_AI_FACTION_MERCENARY_GUARDS)"})
 	require.Equal(t, "AI (Mercenary Guards)", ev.Name)
+}
+
+func TestSyncFeedDropsKindsOfDzo(t *testing.T) {
+	h, _ := testHub()
+	h.Sync(SyncRequest{Proto: 1, Hello: true, Feed: []FeedEvent{
+		{Seq: 1, Kind: FeedAdmin, Name: "web:76561198000000001", Text: "ban.create x"},
+		{Seq: 2, Kind: FeedKick, Name: "n"},
+		{Seq: 3, Kind: FeedChat, Text: "hi"},
+		{Seq: 4, Kind: "whatever"},
+		{Seq: 5, Kind: FeedKill, Name: "a", TargetName: "b"},
+		{Kind: FeedDropped, Text: "3"},
+	}})
+	got := h.Feed(0, 0)
+	require.Len(t, got, 2)
+	require.Equal(t, FeedKill, got[0].Kind)
+	require.Equal(t, FeedDropped, got[1].Kind)
+
+	// The events dzo makes itself still go in.
+	h.AddFeed(FeedEvent{Kind: FeedAdmin, Name: "ops"})
+	require.Len(t, h.Feed(0, 0), 3)
+}
+
+func TestSyncFeedClipsFields(t *testing.T) {
+	h, _ := testHub()
+	long := strings.Repeat("\u00e4", 100000)
+	h.Sync(SyncRequest{Proto: 1, Hello: true, Feed: []FeedEvent{{Seq: 1, Kind: FeedBuild, Text: long, Name: long, TargetName: long,
+		Weapon: long, Object: long, Cause: long, Channel: long, SteamID: long, TargetSteamID: long}}})
+	got := h.Feed(0, 0)
+	require.Len(t, got, 1)
+	require.Equal(t, strings.Repeat("\u00e4", maxFeedText)+"\u2026", got[0].Text)
+	require.Len(t, []rune(got[0].Name), maxFeedName+1)
+	require.Len(t, []rune(got[0].Object), maxFeedClass+1)
+	require.Len(t, []rune(got[0].Channel), maxFeedShort+1)
+	require.Len(t, []rune(got[0].SteamID), maxFeedShort+1)
+	b, err := json.Marshal(got[0])
+	require.NoError(t, err)
+	require.Less(t, len(b), 4096)
+	require.Equal(t, "short", clip("short", 10))
+	require.Equal(t, "ab", clip("ab", 2))
 }

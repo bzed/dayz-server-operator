@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -251,6 +252,11 @@ func (s *Service) maintain(ctx context.Context) {
 		} else if n > 0 {
 			s.logf("players: dropped %d sessions older than %s", n, keep)
 		}
+		if n, err := s.store.PurgeOrphanPlayers(ctx, now.Add(-keep)); err != nil {
+			s.logf("players: dropping old players: %v", err)
+		} else if n > 0 {
+			s.logf("players: dropped %d players not seen for %s that nothing refers to", n, keep)
+		}
 	}
 	if keep := cmp.Or(s.AuditClientRetention, DefaultAuditClientRetention); keep > 0 && now.Sub(s.lastAuditPass) >= 24*time.Hour {
 		s.lastAuditPass = now
@@ -372,6 +378,15 @@ type slot struct {
 	name, ip, guid string
 }
 
+// maxSlot bounds the slot numbers the enforcer tracks: a DayZ server has at most a few hundred. Events
+// for other numbers come from a broken or hostile RCon peer and are ignored, so the table stays small.
+const maxSlot = 1023
+
+// clipName copies a name, cut to maxName bytes, so a slot does not pin the payload it came from.
+func clipName(n string) string {
+	return strings.Clone(clip(n, maxName))
+}
+
 // enforce follows an instance's BattlEye events until ctx ends.
 func (s *Service) enforce(ctx context.Context, r *running) {
 	slots := map[int]*slot{}
@@ -384,6 +399,10 @@ func (s *Service) enforce(ctx context.Context, r *running) {
 			if !ok {
 				return
 			}
+			if ev.Kind == battleye.EventReconnect {
+				clear(slots) // the server may have restarted: no disconnect events will come for these
+				continue
+			}
 			s.handle(ctx, r, slots, ev)
 			if s.OnEvent != nil {
 				s.OnEvent(r.inst.Name, ev)
@@ -394,6 +413,10 @@ func (s *Service) enforce(ctx context.Context, r *running) {
 
 func (s *Service) handle(ctx context.Context, r *running, slots map[int]*slot, ev battleye.Event) {
 	name := r.inst.Name
+	if (ev.Kind == battleye.EventConnect || ev.Kind == battleye.EventGUID || ev.Kind == battleye.EventVerifiedGUID) &&
+		(ev.PlayerID < 0 || ev.PlayerID > maxSlot) {
+		return // no log line: a hostile peer could use it to flood the log
+	}
 	switch ev.Kind {
 	case battleye.EventConnect:
 		host, _, err := net.SplitHostPort(ev.Address)
@@ -401,12 +424,12 @@ func (s *Service) handle(ctx context.Context, r *running, slots map[int]*slot, e
 			s.logf("bans: %s: connect without an address: %q", name, ev.Raw)
 			return
 		}
-		slots[ev.PlayerID] = &slot{name: ev.PlayerName, ip: host}
+		slots[ev.PlayerID] = &slot{name: clipName(ev.PlayerName), ip: host}
 		s.check(ctx, r, ev.PlayerID, "", host)
 	case battleye.EventGUID, battleye.EventVerifiedGUID:
 		sl := slots[ev.PlayerID]
 		if sl == nil {
-			sl = &slot{name: ev.PlayerName}
+			sl = &slot{name: clipName(ev.PlayerName)}
 			slots[ev.PlayerID] = sl
 		}
 		sl.guid = ev.GUID

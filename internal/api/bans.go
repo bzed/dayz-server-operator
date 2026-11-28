@@ -120,6 +120,18 @@ func (s *Server) banRights(c *call, in moderation.BanInput) (code int, err error
 	return 0, nil
 }
 
+// limitSightings binds the sighting refs of a ban to the instances the ban applies to, where banRights
+// has checked ban.ip. A global ban needs every instance and stays unlimited. The caller's input cannot
+// set these fields (they have no JSON name).
+func limitSightings(in moderation.BanInput) moderation.BanInput {
+	in.LimitSightings = in.Scope != moderation.ScopeGlobal
+	in.SightingInstances = nil
+	if in.LimitSightings {
+		in.SightingInstances = slices.Clone(in.Instances)
+	}
+	return in
+}
+
 func targetsOf(b moderation.Ban) string {
 	var v []string
 	for _, t := range b.Targets {
@@ -212,7 +224,7 @@ func (s *Server) createBan(w http.ResponseWriter, r *http.Request, c *call) {
 		fail(w, code, "%v", err)
 		return
 	}
-	b, err := st.CreateBan(r.Context(), c.actor, in, s.now())
+	b, err := st.CreateBan(r.Context(), c.actor, limitSightings(in), s.now())
 	if err != nil {
 		storeFail(w, err)
 		return
@@ -249,7 +261,7 @@ func (s *Server) updateBan(w http.ResponseWriter, r *http.Request, c *call) {
 		fail(w, code, "%v", err)
 		return
 	}
-	b, err := st.UpdateBan(r.Context(), old.ID, c.actor, in, s.now())
+	b, err := st.UpdateBan(r.Context(), old.ID, c.actor, limitSightings(in), s.now())
 	if err != nil {
 		storeFail(w, err)
 		return

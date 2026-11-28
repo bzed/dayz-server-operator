@@ -266,7 +266,7 @@ func Resolve(cfg *config.Config, t *site.Tree, name string) (*Instance, error) {
 			Root:        root,
 			Pristine:    filepath.Join(root, "servermpmissions", raw.Map),
 			Live:        filepath.Join(root, "mpmissions", raw.Map),
-			Manifest:    filepath.Join(root, "mpmissions", ".dzo-manifest.json"),
+			Manifest:    filepath.Join(root, "runtime", "mission-manifest.json"),
 			FileHistory: filepath.Join(root, "filehistory"),
 			Profiles:    filepath.Join(root, "profiles"),
 			Storage:     filepath.Join(root, "storage", raw.Map),
@@ -507,7 +507,7 @@ func buildQuadlet(inst *Instance) quadlet.ContainerSpec {
 		// overlay is writable for the server and leaves the immutable generation untouched.
 		{Source: inst.Product.Dir, Destination: "/dayz", Overlay: true},
 		{Source: filepath.Join(rt, "keys"), Destination: "/dayz/keys", ReadOnly: true},
-		{Source: filepath.Dir(inst.Paths.Manifest), Destination: "/dayz/mpmissions"},
+		{Source: filepath.Dir(inst.Paths.Live), Destination: "/dayz/mpmissions"},
 		// Inside the server folder: vanilla 1.30's FindFile only finds files under $profile:
 		// when the profiles folder is below the server executable's folder (a bind mount is fine).
 		{Source: inst.Paths.Profiles, Destination: "/dayz/profiles"},

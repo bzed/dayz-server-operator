@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/netip"
 	"net/url"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -69,6 +70,34 @@ func addrOf(v string) string {
 		return ""
 	}
 	return a.WithZone("").Unmap().String()
+}
+
+// ipKey is the Backoff key of a client address. An IPv6 address counts as its /64, because one person can
+// pick any address inside it.
+func ipKey(client string) string {
+	if a, err := netip.ParseAddr(client); err == nil && a.Is6() {
+		if p, err := a.Prefix(64); err == nil {
+			return "ip:" + p.String()
+		}
+	}
+	return "ip:" + client
+}
+
+// hashSlotCount is how many password hashes may run at once: each one needs 64 MiB.
+func hashSlotCount() int { return max(2, runtime.NumCPU()) }
+
+// withHashSlot runs fn when a hash slot is free, and answers 429 at once when all are in use. It reports
+// whether fn ran.
+func (s *Server) withHashSlot(w http.ResponseWriter, fn func()) bool {
+	select {
+	case s.hashSlots <- struct{}{}:
+		defer func() { <-s.hashSlots }()
+		fn()
+		return true
+	default:
+		tooMany(w, time.Second)
+		return false
+	}
 }
 
 // clientHeader is the browser's address a web token reports in X-Dzo-Client, or "".
@@ -167,8 +196,9 @@ func (s *Server) loginPassword(w http.ResponseWriter, r *http.Request, lc *login
 	if !decode(w, r, &body) {
 		return
 	}
-	keys := []string{"acct:" + strings.ToLower(strings.TrimSpace(body.Username)), "ip:" + lc.client}
-	if wait := s.login.Wait(keys...); wait > 0 {
+	keys := []string{"acct:" + strings.ToLower(strings.TrimSpace(body.Username)), ipKey(lc.client)}
+	// The attempt is counted before it hashes, so attempts in flight at the same time count too.
+	if wait := s.login.Reserve(keys...); wait > 0 {
 		s.logStep(lc, "password", "refused", "")
 		tooMany(w, wait)
 		return
@@ -181,8 +211,14 @@ func (s *Server) loginPassword(w http.ResponseWriter, r *http.Request, lc *login
 			hash = creds.PasswordHash
 		}
 	}
-	matches := auth.CheckPassword(hash, body.Password)
+	var matches bool
+	if !s.withHashSlot(w, func() { matches = auth.CheckPassword(hash, body.Password) }) {
+		s.login.Refund(keys...) // nothing was tried
+		s.logStep(lc, "password", "refused", "")
+		return
+	}
 	if perr != nil && !errors.Is(perr, moderation.ErrNotFound) {
+		s.login.Refund(keys...)
 		fail(w, http.StatusInternalServerError, "database error")
 		return
 	}
@@ -191,11 +227,11 @@ func (s *Server) loginPassword(w http.ResponseWriter, r *http.Request, lc *login
 		if perr == nil {
 			id = person.SteamID
 		}
-		s.login.Fail(keys...)
-		s.logStep(lc, "password", "failed", id)
+		s.logStep(lc, "password", "failed", id) // Reserve counted it
 		fail(w, http.StatusUnauthorized, "invalid username or password")
 		return
 	}
+	s.login.Refund(keys...)
 	s.logStep(lc, "password", "ok", person.SteamID)
 	s.startPending(w, r, lc, person, "password")
 }
@@ -270,7 +306,7 @@ func (s *Server) loginSteam(w http.ResponseWriter, r *http.Request, lc *loginCal
 		fail(w, http.StatusBadRequest, "return_to must be an address under serve.web_url")
 		return
 	}
-	keys := []string{"ip:" + lc.client}
+	keys := []string{ipKey(lc.client)}
 	if wait := s.login.Wait(keys...); wait > 0 {
 		s.logStep(lc, "steam", "refused", "")
 		tooMany(w, wait)
@@ -304,6 +340,10 @@ func (s *Server) loginSteam(w http.ResponseWriter, r *http.Request, lc *loginCal
 	s.startPending(w, r, lc, person, "steam")
 }
 
+// firstFactor reports whether a first factor (a password or Steam) made the pending login. Only such a
+// pending may end in a session; the pendings of the account changes (Via "account") belong to /account/*.
+func firstFactor(p moderation.PendingLogin) bool { return p.Via == "password" || p.Via == "steam" }
+
 type secondBody struct {
 	Pending string `json:"pending"`
 	Code    string `json:"code"`
@@ -327,11 +367,16 @@ func (s *Server) loginSecond(w http.ResponseWriter, r *http.Request, lc *loginCa
 		fail(w, http.StatusInternalServerError, "database error")
 		return
 	}
+	if !firstFactor(pend) {
+		s.logStep(lc, kind, "failed", pend.SteamID)
+		fail(w, http.StatusUnauthorized, "this login has expired, start again")
+		return
+	}
 	if pend.Enrol {
 		fail(w, http.StatusForbidden, "set up a second factor first")
 		return
 	}
-	keys := []string{"acct:" + pend.SteamID, "ip:" + lc.client}
+	keys := []string{"acct:" + pend.SteamID, ipKey(lc.client)}
 	if wait := s.login.Wait(keys...); wait > 0 {
 		s.logStep(lc, kind, "refused", pend.SteamID)
 		tooMany(w, wait)

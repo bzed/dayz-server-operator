@@ -281,9 +281,11 @@ the file and print what is wrong. A key dzo does not know is ignored.
       :doc:`backups`.
    ``session_retention_days``
       How many days the sessions of the player history (who was on which instance, from when to when) are
-      kept. Unset: 365. ``0``: for ever. dzo refuses negative values. Only the sessions go: the players, the
-      names they used and the times they were first and last seen stay (:ref:`player-history`). ``dzo serve``
-      applies it every minute with the other upkeep; a change takes effect when ``dzo serve`` starts.
+      kept. Unset: 365. ``0``: for ever. dzo refuses negative values. The sessions go first. Then dzo deletes
+      the players (with their names) that were not seen for this time and that nothing refers to: no
+      session, ban, evidence, note or web account. The other players, their names and the times they were first
+      and last seen stay (:ref:`player-history`). ``dzo serve`` applies it every minute with the other upkeep; a
+      change takes effect when ``dzo serve`` starts.
    ``audit_ip_retention_days``
       How many days an entry of the audit log keeps the browser address (``client``) of a web action.
       Unset: 90. ``0``: for ever. dzo refuses negative values. Once a day ``dzo serve`` blanks the address

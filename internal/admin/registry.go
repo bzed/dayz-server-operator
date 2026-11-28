@@ -7,6 +7,7 @@ import (
 	"context"
 	"crypto/subtle"
 	"encoding/json"
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -17,6 +18,10 @@ import (
 	"time"
 )
 
+// maxSyncBody is the largest sync body dzo reads. A sync at every count limit of CheckCounts, with
+// Expansion vehicles, is about 8.8 MB (TestTheBodyLimitHoldsAFullSync), so the count limits refuse a
+// sync before this does. It bounds what an unauthenticated request makes dzo read: the token is in the
+// body, and only the token is decoded before it matches. It is the limit dzo always had.
 const maxSyncBody = 16 << 20
 
 // Registry holds the hubs of every instance and authenticates the mods: the
@@ -239,19 +244,34 @@ func (r *Registry) sync(w http.ResponseWriter, req *http.Request) {
 	if err != nil {
 		host = req.RemoteAddr
 	}
-	var in SyncRequest
-	body := http.MaxBytesReader(w, req.Body, maxSyncBody)
-	if err := json.NewDecoder(body).Decode(&in); err != nil {
-		r.refuse("bad", host, "unreadable sync body: %v", err)
-		writeReply(w, http.StatusBadRequest, SyncReply{Error: "bad request"})
-		return
-	}
+	// Turn a blocked address away before the body is read.
 	if r.fails.Blocked(host) {
 		r.refuse("blocked", host, "too many failed tokens, blocked for a minute")
 		writeReply(w, http.StatusTooManyRequests, SyncReply{Error: "too many failures"})
 		return
 	}
-	hub, ok := r.Authenticate(in.Token)
+	if req.ContentLength > maxSyncBody {
+		r.refuse("bad", host, "sync body of %d bytes is over the limit", req.ContentLength)
+		writeReply(w, http.StatusRequestEntityTooLarge, SyncReply{Error: "request too large"})
+		return
+	}
+	raw, err := io.ReadAll(http.MaxBytesReader(w, req.Body, maxSyncBody))
+	if err != nil {
+		r.refuse("bad", host, "unreadable sync body: %v", err)
+		writeReply(w, http.StatusBadRequest, SyncReply{Error: "bad request"})
+		return
+	}
+	// The token goes first: decoding only it costs a few bytes, the full decode costs hundreds of
+	// times the body size, so it waits until the token is known.
+	var auth struct {
+		Token string `json:"token"`
+	}
+	if err := json.Unmarshal(raw, &auth); err != nil {
+		r.refuse("bad", host, "unreadable sync body: %v", err)
+		writeReply(w, http.StatusBadRequest, SyncReply{Error: "bad request"})
+		return
+	}
+	hub, ok := r.Authenticate(auth.Token)
 	if !ok {
 		r.fails.Allow(host)
 		if missing := r.missingTokens(); len(missing) > 0 {
@@ -260,6 +280,17 @@ func (r *Registry) sync(w http.ResponseWriter, req *http.Request) {
 			r.refuse("token", host, "token matches no instance (stale mod config.json after a re-render?)")
 		}
 		writeReply(w, http.StatusUnauthorized, SyncReply{Error: "invalid token"})
+		return
+	}
+	var in SyncRequest
+	if err := json.Unmarshal(raw, &in); err != nil {
+		r.refuse("bad", host, "unreadable sync body: %v", err)
+		writeReply(w, http.StatusBadRequest, SyncReply{Error: "bad request"})
+		return
+	}
+	if err := in.CheckCounts(); err != nil {
+		r.refuse("bad", host, "instance %s: %v", hub.Name, err)
+		writeReply(w, http.StatusBadRequest, SyncReply{Error: "bad request"})
 		return
 	}
 	if in.Proto != ProtocolVersion {

@@ -25,14 +25,17 @@ on:
 permissions:
   contents: read
 
+# Only pull requests cancel each other. A workflow_run is never cancelled: its ref is refs/heads/main
+# also for a run from a fork, so a fork's run must not cancel or replace the publish of main.
 concurrency:
-  group: pages-${{ github.ref }}
-  cancel-in-progress: true
+  group: pages-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build:
     name: Build docs
-    if: github.event_name == 'pull_request' || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
+    # The workflow_run branch needs the trust test of the apt job (see there).
+    if: github.event_name == 'pull_request' || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_repository.full_name == github.repository && github.event.workflow_run.head_branch == 'main')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     # In a trixie container like the apt job: apt on the hosted Ubuntu runner hangs
@@ -56,9 +59,13 @@ jobs:
           name: docs-html
           path: docs/_build/html
 
+  # The jobs below sign with APT_GPG_PRIVATE_KEY and take the CI run's packages. They run only for a
+  # push to main of this repository, so a pull request from a fork whose branch is named main (its
+  # CI run has head_branch main) never reaches the key. The check is repeated in each job, before
+  # the key is imported, because a job runs on its own and the deploy job is too late.
   apt:
     name: Build apt repository
-    if: github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success'
+    if: github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_repository.full_name == github.repository && github.event.workflow_run.head_branch == 'main'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -73,6 +80,19 @@ jobs:
           apt-get install -y --no-install-recommends git ca-certificates
       # No ref: the head of main (see the build job). The deploy job checks it is the CI run's commit.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # Only the commit that is the head of main right now may be signed. A run that main has moved
+      # past (or a re-run of an old one) stops here, before the key is imported. The deploy job
+      # makes the same check. git ls-remote, not gh: the containers have no gh.
+      - name: Is this run's commit the head of main?
+        env:
+          SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -eu
+          head=$(git ls-remote origin refs/heads/main | cut -f1)
+          if [ "$head" != "$SHA" ]; then
+            echo "::error title=Not the head of main::$SHA is not the head of main ($head); nothing is signed" >&2
+            exit 1
+          fi
       - name: Install repository tools
         run: apt-get install -y --no-install-recommends reprepro gnupg
       # The package the CI run built (a snapshot version) is published as it is, not built again.
@@ -104,7 +124,7 @@ jobs:
 
   rpm-repo:
     name: Build dnf repository
-    if: github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success'
+    if: github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_repository.full_name == github.repository && github.event.workflow_run.head_branch == 'main'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -117,6 +137,16 @@ jobs:
         run: dnf install -y git ca-certificates rpm-sign createrepo_c gnupg2 diffutils
       # No ref: the head of main (see the build job). The deploy job checks it is the CI run's commit.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Is this run's commit the head of main?
+        env:
+          SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -eu
+          head=$(git ls-remote origin refs/heads/main | cut -f1)
+          if [ "$head" != "$SHA" ]; then
+            echo "::error title=Not the head of main::$SHA is not the head of main ($head); nothing is signed" >&2
+            exit 1
+          fi
       # The package the CI run built (a snapshot version) is published as it is, not built again.
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -146,7 +176,7 @@ jobs:
 
   arch-repo:
     name: Build pacman repository
-    if: github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success'
+    if: github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_repository.full_name == github.repository && github.event.workflow_run.head_branch == 'main'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -161,6 +191,16 @@ jobs:
         run: pacman -Syu --noconfirm --needed git ca-certificates gnupg diffutils
       # No ref: the head of main (see the build job). The deploy job checks it is the CI run's commit.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Is this run's commit the head of main?
+        env:
+          SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -eu
+          head=$(git ls-remote origin refs/heads/main | cut -f1)
+          if [ "$head" != "$SHA" ]; then
+            echo "::error title=Not the head of main::$SHA is not the head of main ($head); nothing is signed" >&2
+            exit 1
+          fi
       # The package the CI run built (a snapshot version) is published as it is, not built again.
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:

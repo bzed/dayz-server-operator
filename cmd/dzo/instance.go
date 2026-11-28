@@ -160,6 +160,11 @@ func renderInstance(cmd *cobra.Command, cfg *config.Config, inst *resolve.Instan
 		return nil
 	}
 	printReport(cmd, report)
+	// Older versions kept the manifest in mpmissions/, where the game container can write; it is
+	// never read now. Remove it.
+	if err := mission.RemoveLegacyManifest(filepath.Dir(inst.Paths.Live)); err != nil {
+		return err
+	}
 	if err := runfiles.Write(rf); err != nil {
 		return err
 	}

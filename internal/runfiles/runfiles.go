@@ -17,6 +17,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/bzed/dayz-server-operator/internal/safefs"
 	"github.com/bzed/dayz-server-operator/internal/servercfg"
 )
 
@@ -194,15 +195,35 @@ func Write(in Input) error {
 			return err
 		}
 	}
-	be := filepath.Join(in.ProfilesDir, "battleye")
-	if err := os.MkdirAll(be, 0o750); err != nil {
+	// profiles/ is writable by the game container, which can plant symlinks. Write through an
+	// os.Root so that no link leads out of the tree.
+	if err := os.MkdirAll(in.ProfilesDir, 0o750); err != nil {
 		return err
 	}
-	stale, _ := filepath.Glob(filepath.Join(be, "beserver_x64_active_*.cfg"))
-	for _, s := range stale {
-		_ = os.Remove(s)
+	root, err := os.OpenRoot(in.ProfilesDir)
+	if err != nil {
+		return fmt.Errorf("runfiles: %w", err)
 	}
-	return os.WriteFile(filepath.Join(be, "beserver_x64.cfg"), []byte(BattlEyeCfg(in.RConPass, in.RConPort, in.RConIP)), 0o600)
+	defer func() { _ = root.Close() }() // handle only
+	if err := root.MkdirAll("battleye", 0o750); err != nil {
+		return fmt.Errorf("runfiles: %w", err)
+	}
+	if be, err := root.OpenRoot("battleye"); err == nil {
+		if d, err := be.Open("."); err == nil {
+			names, _ := d.Readdirnames(-1)
+			_ = d.Close()
+			for _, n := range names {
+				if ok, _ := filepath.Match("beserver_x64_active_*.cfg", n); ok {
+					_ = be.Remove(n) // stale; best effort
+				}
+			}
+		}
+		_ = be.Close()
+	}
+	if err := safefs.WriteFile(root, "battleye/beserver_x64.cfg", []byte(BattlEyeCfg(in.RConPass, in.RConPort, in.RConIP)), 0o600); err != nil {
+		return fmt.Errorf("runfiles: %w", err)
+	}
+	return nil
 }
 
 // Hex is a short random identifier.

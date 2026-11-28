@@ -71,7 +71,9 @@ only to those who need it:
 Players are still matched by address without showing it. The ban form lists the addresses a player was
 seen with as "Address (name on instance, last seen), shared with N other players". Ticking one bans it.
 The API gives each such address an opaque reference (``ref``, and ``ip_refs`` when a ban is made or edited)
-instead of the address. A reference only works for the player being banned or the ban being edited. Without
+instead of the address. A reference only works for the player being banned or the ban being edited.
+For a ban that is not global, a sighting reference also needs a sighting on one of the ban's instances.
+Other references get the same error, ``unknown address reference``, as references that do not exist. Without
 ``ip.history`` a ban shows "address hidden", and editing it keeps its addresses. Addresses are never written to
 the audit log. dzo can store them hashed in the future; the references keep that possible. Reading the
 history of a player's addresses is recorded in the audit log (``ip.history``, without the addresses).
@@ -93,7 +95,9 @@ bans. It is built from the live player list that ``dzo-admin`` reports, so it ne
 Steam ID, with the BattlEye GUID derived from it) it records every name used and when. It records each stay as a session:
 the instance, when the player joined and when the player left. If ``dzo serve`` stops, or the mod sends nothing for
 10 seconds, the sessions end at the last contact or at the stop. Sessions are kept for a year
-(``serve.session_retention_days``); the players, their names and first-seen times are kept for good.
+(``serve.session_retention_days``). Once a player has no session left, has not been seen for that time, and no ban,
+evidence, note or web account refers to the player, dzo deletes the player and the names. Players that a ban,
+evidence, note or account refers to are kept for good. The mod can report at most 256 players in one sync.
 
 BattlEye kicks are not recorded: they are dzo's own.
 
@@ -144,6 +148,12 @@ Changes outside dzo
    that are not banned yet. It makes them instance bans created by ``import:bans.txt`` and renders again. The start
    path never overwrites a file changed outside dzo. **Remove bans through dzo**: a line deleted from
    ``bans.txt`` by hand comes back at the next render.
+
+   The game container can write to ``profiles/``. dzo therefore reads ``bans.txt`` as a regular file of at
+   most 1 MiB and never follows a symbolic link. A ``bans.txt`` that is a link, a FIFO or larger gives an
+   error in the log, and dzo does not import it. dzo writes the files in ``profiles/battleye`` with a
+   temporary file and a rename inside ``profiles/``. A link in the way is replaced, and a link that leads
+   out of ``profiles/`` makes the write fail.
 
 A new or rebuilt server
    The database is the source of truth, not ``bans.txt``. Copy ``dzo.sqlite`` (and the ``evidence``

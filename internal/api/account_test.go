@@ -305,10 +305,36 @@ func TestAccountRemovePassword(t *testing.T) {
 	l := newLoginEnv(t)
 	l.ann(g("alpha", RoleModerator))
 	session := l.loggedIn()
-	code, _ := l.call("DELETE", "/api/v1/account/password", session, "")
+	code, _ := l.call("DELETE", "/api/v1/account/password", session, `{"current":"`+password+`"}`)
 	assert.Equal(t, 204, code)
 	code, _, _ = l.passwordStep("ann", password)
 	assert.Equal(t, 401, code)
+}
+
+// A session alone does not remove the password: that would let its holder set a new one without the old.
+func TestAccountRemovePasswordNeedsCurrent(t *testing.T) {
+	l := newLoginEnv(t)
+	l.ann(g("alpha", RoleModerator))
+	session := l.loggedIn()
+	for _, body := range []string{`{}`, `{"current":""}`, `{"current":"wrong horse battery"}`} {
+		code, _ := l.call("DELETE", "/api/v1/account/password", session, body)
+		assert.Equal(t, 403, code, body)
+	}
+	code, _, _ := l.passwordStep("ann", password)
+	assert.Equal(t, 200, code, "the password still works")
+	code, _ = l.call("PUT", "/api/v1/account/password", session, `{"new":"attacker horse battery"}`)
+	assert.Equal(t, 403, code, "and it cannot be replaced without it")
+}
+
+func TestAccountRemovePasswordCountsFailures(t *testing.T) {
+	l := newLoginEnv(t)
+	l.ann(g("alpha", RoleModerator))
+	session := l.loggedIn()
+	for i := 0; i < 6; i++ {
+		l.call("DELETE", "/api/v1/account/password", session, `{"current":"wrong horse battery"}`)
+	}
+	code, _ := l.call("DELETE", "/api/v1/account/password", session, `{"current":"`+password+`"}`)
+	assert.Equal(t, 429, code, "wrong guesses slow the next one down, like a failed login")
 }
 
 func (l *loginEnv) accountPasskey(session string, a *authenticator) (int, map[string]any) {
@@ -442,7 +468,7 @@ func TestPasswordRemovalEndsOtherSessions(t *testing.T) {
 	l := newLoginEnv(t)
 	l.ann(g("alpha", RoleModerator))
 	other, current := l.otherSession(l.loggedIn())
-	code, _ := l.call("DELETE", "/api/v1/account/password", current, "")
+	code, _ := l.call("DELETE", "/api/v1/account/password", current, `{"current":"`+password+`"}`)
 	require.Equal(t, 204, code)
 	l.assertOnlyCurrent(other, current)
 }

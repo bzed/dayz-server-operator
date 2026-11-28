@@ -163,6 +163,22 @@ logged. An instance that stays silent in this log has a mod that does not reach 
 all. Check ``endpoint`` in the mod's ``$profile:dzo/admin/config.json`` and that the instance
 really runs with the mod.
 
+The mod endpoint limits what one sync may carry. These limits are fixed. They are far above what
+the mod sends.
+
+* A blocked address gets ``429`` before dzo reads the body. Ten wrong tokens block an address for a
+  minute.
+* A body is at most 16 MiB. A larger body gets ``413`` when its ``Content-Length`` says so, and
+  ``400`` otherwise. A sync at every count limit below, with DayZ Expansion vehicles, is about
+  9 MB, so the count limits apply first.
+* dzo reads only the token first. A body with a wrong token gets ``401`` and is not decoded.
+* One sync carries at most 256 players, 8192 vehicles, 8192 markers, 256 layers, 4096 events,
+  1024 results, 512 feed events and 2048 class names. A sync over one of these limits gets
+  ``400`` and dzo ignores all of it.
+* A class list (spawnable items or vehicles) has at most 100000 names. Each name must be a class name
+  (letters, digits and ``_``, at most 128 characters). A chunk that breaks a rule, or that holds more
+  names than the list ``total``, empties the list. dzo then asks the mod to send the list again.
+
 Moving vehicles
 ---------------
 
@@ -359,7 +375,8 @@ Which fields each kind has is in the mod's README. What dzo does with them is in
 :ref:`event-feed` (the API and the file kept on disk). It is also in the events page
 (:doc:`web`), ``dzo events`` (:doc:`cli`) and the ``killfeed`` of an instance
 (:doc:`configuration`). The mod buffers at most 256 events while dzo cannot be reached and sends them with
-the next sync; dzo counts each event once. Chat and BattlEye kicks come from RCon, not from the mod. Cutting
+the next sync; dzo counts each event once. Chat and BattlEye kicks come from RCon, not from the mod.
+dzo drops every event of a sync with another kind than the ones listed above, so ``admin``, ``kick`` and ``chat`` events always come from dzo itself. Cutting
 a combination lock is deprecated in 1.30 and no item offers it, so ``lock_cut`` appears only with a mod that brings
 the action back.
 
@@ -503,6 +520,8 @@ Write ``$profile:dzo/admin/markers/<layer>.json``, either a JSON list of
 markers or ``{"markers": [...]}``. The layer name defaults to the file name,
 and dzo re-reads the files every few seconds. This works for any mod or
 external tool, and also when the mod cannot use ``#ifdef``.
+
+dzo reads only regular files of at most 1 MiB. It skips symbolic links, FIFOs and larger files.
 
 Marker fields
 ~~~~~~~~~~~~~

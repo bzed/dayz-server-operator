@@ -57,6 +57,11 @@ func Rollback(filehistoryDir, liveDir string, m *Manifest, ts string) (string, [
 	}
 	root := filepath.Join(filehistoryDir, set)
 	var restored []string
+	live, err := openLive(liveDir, true)
+	if err != nil {
+		return "", nil, err
+	}
+	defer live.Close() //nolint:errcheck // the files are closed and renamed already
 	err = filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return err
@@ -64,14 +69,14 @@ func Rollback(filehistoryDir, liveDir string, m *Manifest, ts string) (string, [
 		rel, _ := filepath.Rel(root, p)
 		rel = filepath.ToSlash(rel)
 		e, managed := m.Entries[rel]
-		if !managed {
+		if !managed || !filepath.IsLocal(rel) {
 			return nil
 		}
 		data, err := os.ReadFile(p) //nolint:gosec // below dzo's own filehistory directory
 		if err != nil {
 			return err
 		}
-		if err := writeFileAtomic(filepath.Join(liveDir, rel), data, 0o640); err != nil {
+		if err := writeRootAtomic(live, rel, data, 0o640); err != nil {
 			return err
 		}
 		e.WrittenHash = HashBytes(data)

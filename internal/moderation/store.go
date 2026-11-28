@@ -135,6 +135,11 @@ type BanInput struct {
 	Scope     Scope      `json:"scope"`
 	Instances []string   `json:"instances,omitempty"`
 	Evidence  []int64    `json:"evidence,omitempty"`
+
+	// LimitSightings restricts the sighting refs in IPRefs to sightings recorded on SightingInstances. The
+	// API sets it for every ban that is not global; it never comes from a request body.
+	LimitSightings    bool     `json:"-"`
+	SightingInstances []string `json:"-"`
 }
 
 // normalise validates the input and returns it cleaned, with its targets.

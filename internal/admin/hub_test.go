@@ -620,3 +620,9 @@ func TestBoatsAreFlipped(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, id)
 }
+
+func TestHubSyncKeepsAtMostMaxSyncPlayers(t *testing.T) {
+	h := NewHub("a")
+	h.Sync(SyncRequest{Proto: 1, Players: make([]Player, 3*maxSyncPlayers)})
+	require.Len(t, h.Players(), maxSyncPlayers)
+}

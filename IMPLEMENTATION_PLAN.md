@@ -450,9 +450,8 @@ Default layout (with `paths.data = /var/lib/dzo`):
     servermpmissions/                     PRISTINE mission(s) for this instance (git worktree of its mission repo @ ref)
     mpmissions/                           LIVE missions, persistent, never wiped (D13), mounted rw
       <map>/                              incl. storage_1/, mod data, operator-managed files
-      .dzo-manifest.json                  files the operator owns + their last written hashes (lives outside <map>)
     profiles/                             DayZ -profiles dir (logs, BattlEye, mod configs e.g. VPPAdminTools)
-    runtime/                              generated per start: keys/, serverDZ.cfg, beserver cfg, args (mounted ro)
+    runtime/                              generated per start: keys/, serverDZ.cfg, beserver cfg, args (mounted ro), mission-manifest.json (not mounted)
     filehistory/                          copies of changed/drifted managed mission files (last N, §C6)
   snapshots/<name>/<ts>-<reason>/         read-only btrfs snapshots of the instance subvolume (§C20)
   snapshots/_db/                          database backups
@@ -692,7 +691,7 @@ Findings that the new implementation fixes:
 ```
 instances/<name>/servermpmissions/<map>/   PRISTINE, from the instance's mission git repo (replaceable any time)
 instances/<name>/mpmissions/<map>/         LIVE, owned by the game + mods; NEVER wiped or recreated
-instances/<name>/mpmissions/.dzo-manifest.json   every live path dzo owns: origin, source hash, hash last written
+instances/<name>/runtime/mission-manifest.json   every live path dzo owns: origin, source hash, hash last written (outside the container mount)
 ```
 
 **File classes in the live mission:**

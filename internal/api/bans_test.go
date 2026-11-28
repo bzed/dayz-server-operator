@@ -72,6 +72,39 @@ func banBody(scope string, instances []string, dur time.Duration, ips ...string)
 	return string(b)
 }
 
+func TestBanIPRefsStayOnTheBansInstances(t *testing.T) {
+	e, m := newBanEnv(t)
+	g, err := moderation.DeriveGUID(steamA)
+	require.NoError(t, err)
+	require.NoError(t, m.st.Seen(t.Context(), "beta", g, "203.0.113.44", "alice", banNow))
+	require.NoError(t, m.st.Seen(t.Context(), "alpha", g, "198.51.100.5", "alice", banNow))
+	ids, err := m.st.Identities(t.Context(), steamA)
+	require.NoError(t, err)
+	refs := map[string]string{}
+	for _, id := range ids {
+		refs[id.Instance] = id.Ref
+	}
+	body := func(ref string) string {
+		return `{"steam_id":"` + steamA + `","ip_refs":["` + ref + `"],"reason":"x","scope":"instances","instances":["alpha"]}`
+	}
+	for _, role := range []Role{RoleAdmin, RoleOperator} {
+		tok := e.token(role, []string{"alpha"}, false)
+		code, out := e.do("POST", "/api/v1/bans", tok, body(refs["beta"]))
+		require.Equal(t, 400, code, string(out))
+		require.Contains(t, string(out), "unknown address reference")
+		require.NotContains(t, string(out), "203.0.113.44")
+		code, _ = e.do("POST", "/api/v1/bans", tok, body("s99999"))
+		require.Equal(t, 400, code)
+	}
+	tok := e.token(RoleAdmin, []string{"alpha"}, false)
+	code, out := e.do("POST", "/api/v1/bans", tok, body(refs["alpha"]))
+	require.Equal(t, 201, code, string(out))
+	// The edit route goes through the same check.
+	code, out = e.do("PUT", "/api/v1/bans/1", tok, body(refs["beta"]))
+	require.Equal(t, 400, code, string(out))
+	require.NotContains(t, string(out), "203.0.113.44")
+}
+
 func TestBanRightsMatrix(t *testing.T) {
 	e, _ := newBanEnv(t)
 	day := 24 * time.Hour

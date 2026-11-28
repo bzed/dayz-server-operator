@@ -17,7 +17,7 @@ paths:
     root: /DATA/instances/beta
     pristine: /DATA/instances/beta/servermpmissions/empty.beta
     live: /DATA/instances/beta/mpmissions/empty.beta
-    manifest: /DATA/instances/beta/mpmissions/.dzo-manifest.json
+    manifest: /DATA/instances/beta/runtime/mission-manifest.json
     filehistory: /DATA/instances/beta/filehistory
     profiles: /DATA/instances/beta/profiles
     storage: /DATA/instances/beta/storage/empty.beta

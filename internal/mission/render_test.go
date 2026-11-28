@@ -42,7 +42,7 @@ func newTree(t testing.TB) tree {
 	root := t.TempDir()
 	return tree{
 		pristine: filepath.Join(root, "servermpmissions", "m"), fallback: filepath.Join(root, "fallback"),
-		live: filepath.Join(root, "mpmissions", "m"), manifest: filepath.Join(root, "mpmissions", ".dzo-manifest.json"),
+		live: filepath.Join(root, "mpmissions", "m"), manifest: filepath.Join(root, "runtime", "mission-manifest.json"),
 		history: filepath.Join(root, "filehistory"),
 	}
 }

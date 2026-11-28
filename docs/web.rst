@@ -101,7 +101,7 @@ Account and people pages
 The **account page** (your name in the header) is for everybody:
 
 * your username (the header shows it; only an administrator gives and changes it) and a password, so that you
-  can sign in without Steam (the second step stays). Changing a password asks for the current one, and a
+  can sign in without Steam (the second step stays). Changing or removing a password asks for the current one, and a
   wrong one counts like a failed login.
   Without a username there is no password login: an administrator gives you one;
 * the authenticator app: set up a new one with a QR code and prove it with a
@@ -195,7 +195,9 @@ and so does removing a second factor (an authenticator app or a
 passkey). That works in the browser or with ``dzo user
 password``. Every other session of that person ends, so a stolen session does not outlive the
 change. The session that made it stays (the command ends all of them). There is no limit on parallel sessions. The cookie is ``HttpOnly`` and ``SameSite=Strict``;
-on HTTPS (``serve.web_url`` starts with ``https://``) it is ``__Host-dzo_session``, ``Secure`` and host-only.
+on HTTPS (``serve.web_url`` starts with ``https://``) it is ``__Host-dzo_session``, ``Secure`` and host-only. dzo reads only the cookie of its own transport: on HTTPS it
+ignores a plain ``dzo_session`` cookie, which another party could plant, and on plain HTTP it ignores the
+``__Host-`` one. Logout clears both.
 The half-finished login between the two steps lives five minutes in a ``SameSite=Lax`` cookie
 (``dzo_login``). Steam sends the browser back with a navigation from another site, and a Strict cookie
 would not survive that navigation. The return from Steam carries a random state. The state must
@@ -204,7 +206,10 @@ return answers with a small page that moves on by itself. The next request then 
 this site.
 
 **Guessing.** Five wrong passwords or codes per account and per client address are free. Every further
-attempt then makes the wait longer (one second, doubling, up to 15 minutes); a success clears the account. Waiting
+attempt then makes the wait longer (one second, doubling, up to 15 minutes); a success clears the account.
+Attempts that run at the same time all count. An IPv6 address counts as its ``/64`` network. dzo also
+limits how many password checks run at the same time; when all are busy, the login gets "too many failed
+logins" at once and the attempt does not count. Waiting
 logins get "too many failed logins" whether or not the username exists. Behind a reverse proxy, set
 ``web.trusted_proxies`` to the proxy's address. Only then is its ``X-Forwarded-For`` believed (the
 right-most address that is not a trusted proxy). The browser's real address is what the login log

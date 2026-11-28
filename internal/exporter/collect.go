@@ -66,6 +66,8 @@ type Collector struct {
 	have   bool
 	slowAt time.Time
 	slow   slowData
+	// slowBusy is set while one goroutine computes the slow data, so two never run at once.
+	slowBusy bool
 }
 
 type slowData struct {
@@ -201,11 +203,25 @@ func (c *Collector) slowData(tree *site.Tree) slowData {
 	if iv == 0 {
 		iv = 10 * time.Minute
 	}
+	// c.mu guards only the cache and the flag: the computation reads files the game container
+	// can write and must never hold the lock a scrape needs.
 	c.mu.Lock()
-	defer c.mu.Unlock()
 	if c.slow.drift != nil && c.now().Sub(c.slowAt) < iv {
-		return c.slow
+		d := c.slow
+		c.mu.Unlock()
+		return d
 	}
+	if c.slowBusy {
+		// Another refresh is computing: serve what is cached (empty before the first result).
+		d := c.slow
+		c.mu.Unlock()
+		if d.drift == nil {
+			d.drift = map[string]int{}
+		}
+		return d
+	}
+	c.slowBusy = true
+	c.mu.Unlock()
 	d := slowData{drift: map[string]int{}}
 	_ = filepath.WalkDir(c.Cfg.Paths.Cache, func(_ string, e fs.DirEntry, err error) error {
 		if err != nil || e.IsDir() {
@@ -219,7 +235,10 @@ func (c *Collector) slowData(tree *site.Tree) slowData {
 	for _, n := range tree.InstanceNames() {
 		d.drift[n] = c.driftFiles(tree, n)
 	}
-	c.slow, c.slowAt = d, c.now()
+	now := c.now()
+	c.mu.Lock()
+	c.slow, c.slowAt, c.slowBusy = d, now, false
+	c.mu.Unlock()
 	return d
 }
 

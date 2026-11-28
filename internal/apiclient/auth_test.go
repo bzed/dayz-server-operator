@@ -162,7 +162,10 @@ func TestLoginAndAccountAgainstTheServer(t *testing.T) {
 
 	// account
 	require.NoError(t, u.SetPassword(ctx, secretPW, "another horse battery"))
-	require.NoError(t, u.RemovePassword(ctx))
+	err = u.RemovePassword(ctx, "wrong horse battery")
+	require.ErrorAs(t, err, &apiErr)
+	assert.Equal(t, 403, apiErr.Status, "removing needs the current password")
+	require.NoError(t, u.RemovePassword(ctx, "another horse battery"))
 	codes, err := u.NewRecoveryCodes(ctx)
 	require.NoError(t, err)
 	assert.Len(t, codes, 10)

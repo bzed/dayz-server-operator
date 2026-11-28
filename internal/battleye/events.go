@@ -20,6 +20,9 @@ const (
 	EventChat
 	EventKick
 	EventVerifiedGUID
+	// EventReconnect is made by Session, not parsed: the RCon connection was lost and is up again, so the
+	// players a reader knows from earlier events may be gone.
+	EventReconnect
 )
 
 // Event is a parsed Server Message.
